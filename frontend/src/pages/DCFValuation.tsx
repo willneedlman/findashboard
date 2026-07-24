@@ -8,8 +8,11 @@ import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
 import TickerInput from '../components/TickerInput'
 import { useChartColors } from '../hooks/useChartColors'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { T } from '../lib/theme'
 import {
-  INPUT, LABEL, HINT, RailSection, VerdictStrip, PANEL, ChartPanel, TH, TD,
+  INPUT, LABEL, HINT, TICK, RailSection, RangeTrack, VerdictStrip, PANEL, ChartPanel, TH, TD,
   fmtM, upsidePrimary, type VerdictTone,
 } from './valuationShared'
 
@@ -26,9 +29,13 @@ type YearRow = {
   capex_pct: number; da_pct: number; wc_pct: number; ebit: number; fcf: number; pv_fcf: number
 }
 
+type TornadoRow = { label: string; range: string; lo: number; hi: number }
+
 type DCFResult = {
   fcfs: YearRow[]; total_years: number; pv_fcfs: number; terminal_value: number
-  enterprise_value: number; equity_value: number; intrinsic_per_share: number; wacc_build: WaccBuild
+  enterprise_value: number; equity_value: number; intrinsic_per_share: number
+  wacc_build: WaccBuild; tornado: TornadoRow[]; tornado_base: number
+  market_price?: number
 }
 
 const MAX_HORIZON = 20
@@ -51,14 +58,66 @@ function CurveRow({ label, curve, onChange, focus, blur }: {
   )
 }
 
+// One-way sensitivity tornado: each driver as a horizontal bar diverging from
+// the base intrinsic value (red below base, green above), widest swing on top.
+function Tornado({ rows, base }: { rows: TornadoRow[]; base: number }) {
+  const LABEL_W = 150
+  const lo = Math.min(base, ...rows.map(r => r.lo))
+  const hi = Math.max(base, ...rows.map(r => r.hi))
+  const pad = (hi - lo) * 0.08 || 1
+  const dMin = lo - pad, dMax = hi + pad, span = dMax - dMin || 1
+  const pct = (v: number) => ((v - dMin) / span) * 100
+  const trackX = (v: number) => `calc(${LABEL_W}px + (100% - ${LABEL_W}px) * ${pct(v) / 100})`
+  const ticks = Array.from({ length: 5 }, (_, i) => dMin + (span * i) / 4)
+  const mono = 'var(--theme-mono)'
+  return (
+    <div style={{ position: 'relative', paddingTop: 14 }}>
+      <div style={{ position: 'absolute', top: 14, bottom: 34, left: trackX(base), width: 2, background: 'var(--theme-primary, #c9a84c)' }} />
+      <div style={{ position: 'absolute', top: 0, left: trackX(base), transform: 'translateX(-50%)', fontFamily: mono, fontSize: 9, color: 'var(--theme-primary, #c9a84c)', whiteSpace: 'nowrap' }}>base ${base.toFixed(2)}</div>
+      {rows.map((r, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', height: 30 }}>
+          <div style={{ width: LABEL_W, flex: 'none', paddingRight: 10 }}>
+            <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: 600, color: 'var(--theme-text, #d7e3fc)', lineHeight: 1.2 }}>{r.label}</div>
+            <div style={{ fontFamily: mono, fontSize: 8.5, color: 'var(--theme-secondary, #99907e)' }}>{r.range}</div>
+          </div>
+          <div style={{ position: 'relative', flex: 1, height: 13 }}>
+            <div style={{ position: 'absolute', top: 0, bottom: 0, left: `${pct(r.lo)}%`, width: `${Math.max(0, pct(base) - pct(r.lo))}%`, background: 'rgba(140,46,54,0.6)' }} />
+            <div style={{ position: 'absolute', top: 0, bottom: 0, left: `${pct(base)}%`, width: `${Math.max(0, pct(r.hi) - pct(base))}%`, background: 'rgba(47,107,75,0.6)' }} />
+            <span style={{ position: 'absolute', top: '50%', left: `${pct(r.lo)}%`, transform: 'translate(-102%,-50%)', fontFamily: mono, fontSize: 9, color: '#e08a83', whiteSpace: 'nowrap' }}>${r.lo.toFixed(0)}</span>
+            <span style={{ position: 'absolute', top: '50%', left: `${pct(r.hi)}%`, transform: 'translate(2%,-50%)', fontFamily: mono, fontSize: 9, color: '#6fbf8f', whiteSpace: 'nowrap' }}>${r.hi.toFixed(0)}</span>
+          </div>
+        </div>
+      ))}
+      <div style={{ display: 'flex', marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+        <div style={{ width: LABEL_W, flex: 'none' }} />
+        <div style={{ position: 'relative', flex: 1, height: 12 }}>
+          {ticks.map((t, i) => (
+            <span key={i} style={{ position: 'absolute', left: `${pct(t)}%`, transform: i === 0 ? 'none' : i === ticks.length - 1 ? 'translateX(-100%)' : 'translateX(-50%)', fontFamily: mono, fontSize: 9, color: 'var(--theme-secondary, #99907e)' }}>${t.toFixed(0)}</span>
+          ))}
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 18, justifyContent: 'center', marginTop: 8, fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary, #99907e)' }}>
+        {([['rgba(140,46,54,0.6)', 'Lower intrinsic value'], ['var(--theme-primary, #c9a84c)', 'Base case'], ['rgba(47,107,75,0.6)', 'Higher intrinsic value']] as [string, string][]).map(([c, l]) => (
+          <span key={l} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 10, height: 10, background: c }} />{l}</span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+type AiSuggested = { stages: Stage[]; target_margin: number; wacc: number; terminal_growth: number }
+
 export function DCFValuationContent() {
   const cc = useChartColors()
   const [searchParams, setSearchParams] = useSearchParams()
   const [ticker, setTickerRaw] = useState(searchParams.get('ticker') || 'AAPL')
   const setTicker = (v: string) => { setTickerRaw(v); setSearchParams(p => { p.set('ticker', v); return p }) }
   const [fetching, setFetching] = useState(false)
+  const [aiSuggesting, setAiSuggesting] = useState(false)
   const [betaInfo, setBetaInfo] = useState<{ beta: number; source: string } | null>(null)
   const [marketPrice, setMarketPrice] = useState<number | null>(null)
+  const [aiRationale, setAiRationale] = useState<{ growth: string; margin: string; wacc: string } | null>(null)
+  const [aiSuggested, setAiSuggested] = useState<AiSuggested | null>(null)
 
   const [revenue, setRevenue] = useState(0)
   const [opMargin, setOpMargin] = useState(15)
@@ -127,11 +186,107 @@ export function DCFValuationContent() {
         equity_risk_premium: erp, cost_of_debt_spread: debtSpread,
       }
       const { data } = await axios.post('/api/dcf/value', body)
-      return data
+      return { ...data, market_price: marketPrice ?? undefined }
     },
   })
 
+  // AI Suggest Assumptions — reuses the same endpoint the classic model used;
+  // its 3-tier growth suggestion (Yr1-3/4-7/8-10) maps directly onto a fresh
+  // 3-stage schedule here, and the suggested WACC is applied as a manual
+  // override (the AI gave an explicit number, so it should take effect
+  // exactly rather than being recomputed by the auto CAPM build).
+  const aiSuggest = async () => {
+    setAiSuggesting(true)
+    setAiRationale(null)
+    setAiSuggested(null)
+    try {
+      const { data: f } = await axios.get(`/api/dcf/fundamentals?ticker=${ticker}`)
+      const { data: r } = await axios.post('/api/ai/dcf-assumptions', {
+        ticker, revenue: revenue || f.revenue, op_margin: opMargin || f.op_margin,
+        rev_growth: stages[0]?.growth || f.rev_growth, beta: f.beta ?? 1, sector: f.sector ?? '',
+        wacc: data?.wacc_build.wacc ?? (waccMode === 'manual' ? waccManual : 10),
+      })
+      setAiSuggested({
+        stages: [
+          { years: 3, growth: r.rev_growth_1 ?? stages[0]?.growth ?? 15 },
+          { years: 4, growth: r.rev_growth_2 ?? stages[1]?.growth ?? 10 },
+          { years: 3, growth: r.rev_growth_3 ?? stages[2]?.growth ?? 5 },
+        ],
+        target_margin: r.target_margin ?? targetMargin,
+        wacc: r.wacc ?? waccManual,
+        terminal_growth: r.terminal_growth ?? terminalGrowth,
+      })
+      if (r.rationale) setAiRationale(r.rationale)
+    } catch (e) { console.error('AI suggest failed:', e) }
+    setAiSuggesting(false)
+  }
+
+  const applyAiSuggestions = () => {
+    if (!aiSuggested) return
+    setStages(aiSuggested.stages)
+    setTargetMargin(aiSuggested.target_margin)
+    setTerminalGrowth(aiSuggested.terminal_growth)
+    setWaccMode('manual')
+    setWaccManual(aiSuggested.wacc)
+    setAiSuggested(null)
+    setAiRationale(null)
+  }
+
   const canRun = revenue > 0 && shares > 0 && horizonOk
+
+  const captureDcf = (): ClipDraft[] => {
+    if (!data || data.intrinsic_per_share == null) return []
+    const tkr = ticker ? ` · ${ticker.toUpperCase()}` : ''
+    const pieces: ClipDraft[] = []
+    const price = data.market_price
+    const upside = price != null && price > 0 ? (data.intrinsic_per_share / price - 1) * 100 : null
+    const verdictLabel = upside == null ? undefined
+      : upside > 10 ? 'Undervalued' : upside > 2 ? 'Modestly undervalued'
+      : upside >= -2 ? 'Fairly valued' : upside >= -10 ? 'Modestly overvalued' : 'Overvalued'
+    pieces.push({ sourceTab: 'DCF Valuation', dataType: 'kpi', payload: { kind: 'kpi', title: `DCF Verdict${tkr}`, cells: [
+      { label: 'Intrinsic / Share', value: `$${data.intrinsic_per_share.toFixed(2)}` },
+      ...(price != null ? [{ label: 'Market Price', value: `$${price.toFixed(2)}` }] : []),
+      ...(upside != null ? [{ label: 'Upside', value: `${upside >= 0 ? '+' : '−'}${Math.abs(upside).toFixed(1)}%`, sub: verdictLabel }] : []),
+    ] } })
+    const termPct = data.enterprise_value > 0 ? (data.terminal_value / data.enterprise_value) * 100 : null
+    pieces.push({ sourceTab: 'DCF Valuation', dataType: 'kpi', payload: { kind: 'kpi', title: `Enterprise Value Bridge${tkr}`, cells: [
+      { label: 'Enterprise Value', value: fmtM(data.enterprise_value) },
+      { label: 'PV of Explicit FCFs', value: fmtM(data.pv_fcfs) },
+      { label: 'Terminal Value', value: fmtM(data.terminal_value) },
+      ...(termPct != null ? [{ label: 'Terminal % of EV', value: `${termPct.toFixed(0)}%` }] : []),
+    ] } })
+    pieces.push({ sourceTab: 'DCF Valuation', dataType: 'chart', payload: {
+      kind: 'chart', title: `Revenue Projection${tkr}`, chartType: 'bar', xKey: 'year',
+      data: data.fcfs.map(d => ({ year: `Y${d.year}`, revenue: d.revenue })),
+      series: [{ key: 'revenue', label: 'Revenue ($M)' }],
+    } })
+    pieces.push({ sourceTab: 'DCF Valuation', dataType: 'chart', payload: {
+      kind: 'chart', title: `Free Cash Flow Projection${tkr}`, chartType: 'line', xKey: 'year',
+      data: data.fcfs.map(d => ({ year: `Y${d.year}`, fcf: d.fcf, pv_fcf: d.pv_fcf })),
+      series: [{ key: 'fcf', label: 'Free Cash Flow' }, { key: 'pv_fcf', label: 'PV of FCF' }],
+    } })
+    if (data.tornado?.length) {
+      pieces.push({ sourceTab: 'DCF Valuation', dataType: 'table', payload: {
+        kind: 'table', title: `Value Drivers — one-way sensitivity${tkr}`,
+        columns: ['Driver', 'Range', 'Low $/sh', 'High $/sh', 'Swing $/sh'],
+        rows: data.tornado.map(t => [t.label, t.range, `$${t.lo.toFixed(2)}`, `$${t.hi.toFixed(2)}`, `$${(t.hi - t.lo).toFixed(2)}`]),
+      } })
+    }
+    pieces.push({ sourceTab: 'DCF Valuation', dataType: 'kpi', payload: { kind: 'kpi', title: `Key Assumptions${tkr}`, cells: [
+      { label: 'WACC', value: `${data.wacc_build.wacc}%` },
+      { label: 'Terminal Growth', value: `${terminalGrowth}%` },
+      { label: 'Target Margin', value: `${targetMargin}%` },
+      { label: 'Yr 1 Growth', value: `${stages[0]?.growth ?? 0}%` },
+      { label: 'Tax Rate', value: `${taxRate}%` },
+      { label: 'CapEx % Rev', value: `${capex.start_pct}% → ${capex.end_pct}%` },
+    ] } })
+    return pieces
+  }
+
+  useReportCapture(captureDcf, {
+    disabled: !data?.intrinsic_per_share,
+    sourceTab: 'DCF Valuation',
+  })
 
   return (
     <SidebarLayout sidebarWidth={230} sidebarTitle="" sidebar={<>
@@ -148,6 +303,65 @@ export function DCFValuationContent() {
             }}>
               {fetching ? 'Loading…' : 'Fetch Fundamentals'}
             </button>
+            <button onClick={aiSuggest} disabled={aiSuggesting || fetching} style={{
+              marginTop: 4, width: '100%', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)',
+              color: 'var(--theme-primary, #c9a84c)', fontFamily: 'inherit', fontSize: 10,
+              fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
+              padding: '5px 0', cursor: aiSuggesting ? 'default' : 'pointer', opacity: aiSuggesting ? 0.6 : 1,
+            }}>
+              {aiSuggesting ? 'AI Analyzing…' : 'AI Suggest Assumptions'}
+            </button>
+            {aiSuggested && (
+              <div style={{ marginTop: 6, background: 'color-mix(in srgb, var(--theme-primary) 5%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', padding: '8px' }}>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', marginBottom: 6 }}>
+                  AI Suggestions
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8, fontSize: 9, fontFamily: 'var(--theme-mono)' }}>
+                  {[
+                    ['Yr 1–3 / 4–7 / 8–10 Growth %', `${stages[0]?.growth ?? 0} / ${stages[1]?.growth ?? 0} / ${stages[2]?.growth ?? 0}`,
+                      `${aiSuggested.stages[0].growth} / ${aiSuggested.stages[1].growth} / ${aiSuggested.stages[2].growth}`],
+                    ['Target Margin %', targetMargin, aiSuggested.target_margin],
+                    ['WACC %', waccMode === 'manual' ? waccManual : (data?.wacc_build.wacc ?? '—'), aiSuggested.wacc],
+                    ['Terminal Growth %', terminalGrowth, aiSuggested.terminal_growth],
+                  ].map(([label, was, now]) => (
+                    <div key={label as string} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--theme-secondary, #99907e)' }}>{label}</span>
+                      <span>
+                        <span style={{ color: 'var(--theme-text-dim, rgba(255,255,255,0.3))', textDecoration: 'line-through', marginRight: 6 }}>{was}</span>
+                        <span style={{ color: 'var(--theme-primary, #c9a84c)', fontWeight: 700 }}>{now}</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {aiRationale && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 8, paddingTop: 6, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.06))' }}>
+                    {Object.entries(aiRationale).map(([k, v]) => (
+                      <div key={k} style={{ fontSize: 8, color: 'var(--theme-secondary, #99907e)', lineHeight: '12px' }}>
+                        <span style={{ color: 'var(--theme-primary, #c9a84c)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{k}: </span>{v as string}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <button onClick={applyAiSuggestions} style={{
+                    flex: 1, padding: '5px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
+                    textTransform: 'uppercase', fontFamily: 'inherit', cursor: 'pointer',
+                    background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)',
+                    border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
+                  }}>
+                    Apply Changes
+                  </button>
+                  <button onClick={() => { setAiSuggested(null); setAiRationale(null) }} style={{
+                    flex: 1, padding: '5px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
+                    textTransform: 'uppercase', fontFamily: 'inherit', cursor: 'pointer',
+                    background: 'transparent', border: '1px solid var(--theme-text-subtle, rgba(255,255,255,0.12))', color: 'var(--theme-text-dim, rgba(255,255,255,0.35))',
+                  }}>
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -279,9 +493,8 @@ export function DCFValuationContent() {
 
       {data && (() => {
         const intrinsic = data.intrinsic_per_share
-        const price = marketPrice
+        const price = data.market_price ?? null
         const upside = price != null && price > 0 ? (intrinsic - price) / price * 100 : null
-        const primary = upsidePrimary(upside, `$${intrinsic.toFixed(2)}`, price != null ? `$${price.toFixed(2)}` : null)
         const termPct = data.enterprise_value > 0 ? data.terminal_value / data.enterprise_value * 100 : null
         const cells = [
           { label: 'Enterprise Value', value: fmtM(data.enterprise_value) },
@@ -289,10 +502,38 @@ export function DCFValuationContent() {
           { label: 'Terminal % EV', value: termPct == null ? '—' : `${termPct.toFixed(0)}%`, tone: (termPct ?? 0) > 85 ? 'neg' : 'text' as VerdictTone },
           { label: 'WACC', value: `${data.wacc_build.wacc}%` },
         ]
+
+        // Valuation range: bear/bull bounds from the tornado's own low/high
+        // extremes across every driver, rather than a separate sensitivity
+        // sweep — the tornado already captures "how far could this move."
+        const tornadoVals = data.tornado.flatMap(t => [t.lo, t.hi])
+        const sensiMin = tornadoVals.length ? Math.min(...tornadoVals) : intrinsic
+        const sensiMax = tornadoVals.length ? Math.max(...tornadoVals) : intrinsic
+        let range: React.ReactNode = undefined
+        if (price != null) {
+          const bear = Math.min(sensiMin, intrinsic, price)
+          const bull = Math.max(sensiMax, intrinsic, price)
+          if (bull > bear) {
+            const clamp = (x: number) => Math.max(0, Math.min(100, x))
+            range = <RangeTrack title="Valuation range"
+              gradient={`linear-gradient(90deg, ${T.posTint(35)}, color-mix(in srgb, var(--theme-secondary) 22%, transparent), ${T.negTint(35)})`}
+              ticks={[{ pct: clamp((intrinsic - bear) / (bull - bear) * 100), tone: 'gold' }, { pct: clamp((price - bear) / (bull - bear) * 100), tone: 'text' }]}
+              labels={[
+                { text: `$${sensiMin.toFixed(0)} bear`, pct: clamp((sensiMin - bear) / (bull - bear) * 100), tone: 'muted' },
+                { text: `fair $${intrinsic.toFixed(2)}`, pct: clamp((intrinsic - bear) / (bull - bear) * 100), tone: 'gold' },
+                { text: `price $${price.toFixed(2)}`, pct: clamp((price - bear) / (bull - bear) * 100), tone: 'text' },
+                { text: `$${sensiMax.toFixed(0)} bull`, pct: clamp((sensiMax - bear) / (bull - bear) * 100), tone: 'muted' },
+              ]} />
+          }
+        }
+        const primary = price != null
+          ? upsidePrimary(upside, `$${intrinsic.toFixed(2)}`, `$${price.toFixed(2)}`)
+          : { label: 'Intrinsic / Share', value: `$${intrinsic.toFixed(2)}`, tone: 'gold' as VerdictTone }
+
         return (
           <>
             <div style={PANEL}>
-              <VerdictStrip primary={primary} cells={cells} />
+              <VerdictStrip primary={primary} range={range} cells={cells} />
             </div>
 
             {(data.pv_fcfs < 0 || data.enterprise_value <= 0 || (data.enterprise_value > 0 && termPct != null && termPct > 85)) && (
@@ -311,9 +552,9 @@ export function DCFValuationContent() {
               <ResponsiveContainer width="100%" height={240}>
                 <ComposedChart data={[...data.fcfs, { year: 'TV', revenue: data.terminal_value }]}>
                   <CartesianGrid strokeDasharray="3 3" stroke={cc.gridLine} />
-                  <XAxis dataKey="year" tick={{ fontSize: 9, fill: 'var(--theme-secondary, #99907e)' }} tickFormatter={(y: number | string) => y === 'TV' ? 'TV' : `Y${y}`} />
-                  <YAxis yAxisId="rev" orientation="left" tick={{ fontSize: 9, fill: 'var(--theme-secondary, #99907e)' }} tickFormatter={v => `$${(v / 1000).toFixed(0)}B`} width={44} />
-                  <YAxis yAxisId="fcf" orientation="right" tick={{ fontSize: 9, fill: 'var(--theme-secondary, #99907e)' }} tickFormatter={v => fmtM(v)} width={56} />
+                  <XAxis dataKey="year" tick={TICK} tickFormatter={(y: number | string) => y === 'TV' ? 'TV' : `Y${y}`} />
+                  <YAxis yAxisId="rev" orientation="left" tick={TICK} tickFormatter={v => `$${(v / 1000).toFixed(0)}B`} width={44} />
+                  <YAxis yAxisId="fcf" orientation="right" tick={TICK} tickFormatter={v => fmtM(v)} width={56} />
                   <Tooltip formatter={(v: number, name: string) => [fmtM(v), name]} contentStyle={cc.tooltipStyle} cursor={{ fill: 'var(--theme-hover, rgba(255,255,255,0.04))' }} />
                   <Legend wrapperStyle={{ fontSize: 10 }} payload={[
                     { value: 'Revenue', type: 'rect', id: 'rev', color: cc.c2 },
@@ -332,6 +573,13 @@ export function DCFValuationContent() {
                 </ComposedChart>
               </ResponsiveContainer>
             </ChartPanel>
+
+            {/* Value-driver tornado — one-way sensitivity of intrinsic $/share */}
+            {data.tornado.length > 0 && (
+              <ChartPanel title="Value Drivers — one-way sensitivity" height={252}>
+                <Tornado rows={data.tornado} base={data.tornado_base} />
+              </ChartPanel>
+            )}
 
             <div style={{ ...PANEL, position: 'relative', padding: '30px 0 0' }}>
               <div style={{

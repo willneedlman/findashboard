@@ -282,28 +282,27 @@ def _stage_schedule(stages: list[Stage]) -> list[float]:
     return out
 
 
-@router.post("/value")
-def dcf_value(req: DCFRequest):
-    wacc_build = _resolve_wacc(req)
-    wacc = wacc_build["wacc"]
-    if wacc <= req.terminal_growth:
-        raise HTTPException(400, "WACC must exceed terminal growth for a finite valuation")
-
-    growth_schedule = _stage_schedule(req.stages)
+def _run_dcf(revenue: float, op_margin: float, target_margin: float, shares: float, net_debt: float,
+             tax_rate: float, stages: list[Stage], capex: Curve, da: Curve, wc: Curve,
+             terminal_growth: float, wacc: float) -> dict:
+    """Core projection, factored out so the tornado sensitivity below can
+    re-run it cheaply (in-process, no HTTP round-trip) with one driver flexed
+    at a time."""
+    growth_schedule = _stage_schedule(stages)
     total_years = len(growth_schedule)
 
     fcfs = []
-    rev = req.revenue
+    rev = revenue
     for y in range(1, total_years + 1):
         g = growth_schedule[y - 1]
         rev = rev * (1 + g / 100)
-        margin = req.op_margin + (req.target_margin - req.op_margin) * ((y - 1) / max(total_years - 1, 1))
-        capex_pct = _glide(req.capex, y, total_years)
-        da_pct = _glide(req.da, y, total_years)
-        wc_pct = _glide(req.wc, y, total_years)
+        margin = op_margin + (target_margin - op_margin) * ((y - 1) / max(total_years - 1, 1))
+        capex_pct = _glide(capex, y, total_years)
+        da_pct = _glide(da, y, total_years)
+        wc_pct = _glide(wc, y, total_years)
 
         ebit = rev * (margin / 100)
-        nopat = ebit * (1 - req.tax_rate / 100)
+        nopat = ebit * (1 - tax_rate / 100)
         da_amt = rev * (da_pct / 100)
         capex_amt = rev * (capex_pct / 100)
         wc_amt = rev * (wc_pct / 100)
@@ -316,13 +315,13 @@ def dcf_value(req: DCFRequest):
             "ebit": round(ebit, 1), "fcf": round(fcf, 1), "pv_fcf": round(pv, 1),
         })
 
-    terminal_fcf = fcfs[-1]["fcf"] * (1 + req.terminal_growth / 100)
-    terminal_value = terminal_fcf / (wacc / 100 - req.terminal_growth / 100)
+    terminal_fcf = fcfs[-1]["fcf"] * (1 + terminal_growth / 100)
+    terminal_value = terminal_fcf / (wacc / 100 - terminal_growth / 100)
     pv_terminal = terminal_value / ((1 + wacc / 100) ** total_years)
     pv_fcfs = sum(f["pv_fcf"] for f in fcfs)
     enterprise_value = pv_fcfs + pv_terminal
-    equity_value = enterprise_value - req.net_debt
-    intrinsic_per_share = equity_value / req.shares if req.shares else 0.0
+    equity_value = enterprise_value - net_debt
+    intrinsic_per_share = equity_value / shares if shares else 0.0
 
     return {
         "fcfs": fcfs,
@@ -332,8 +331,54 @@ def dcf_value(req: DCFRequest):
         "enterprise_value": round(enterprise_value, 1),
         "equity_value": round(equity_value, 1),
         "intrinsic_per_share": round(intrinsic_per_share, 2),
-        "wacc_build": wacc_build,
     }
+
+
+@router.post("/value")
+def dcf_value(req: DCFRequest):
+    wacc_build = _resolve_wacc(req)
+    wacc = wacc_build["wacc"]
+    if wacc <= req.terminal_growth:
+        raise HTTPException(400, "WACC must exceed terminal growth for a finite valuation")
+
+    result = _run_dcf(req.revenue, req.op_margin, req.target_margin, req.shares, req.net_debt,
+                      req.tax_rate, req.stages, req.capex, req.da, req.wc, req.terminal_growth, wacc)
+
+    # One-way sensitivity (tornado): flex each key assumption low/high while
+    # everything else holds at base, re-running the same projection in-process.
+    def ips_with(**overrides) -> float:
+        return _run_dcf(
+            req.revenue, req.op_margin, overrides.get("target_margin", req.target_margin),
+            req.shares, req.net_debt, overrides.get("tax_rate", req.tax_rate),
+            overrides.get("stages", req.stages), overrides.get("capex", req.capex), req.da, req.wc,
+            overrides.get("terminal_growth", req.terminal_growth), overrides.get("wacc", wacc),
+        )["intrinsic_per_share"]
+
+    stage1_growth = req.stages[0].growth
+    def _stage1_flexed(g: float) -> list[Stage]:
+        return [Stage(years=req.stages[0].years, growth=g), *req.stages[1:]]
+
+    drivers = [
+        ("WACC", "%", 1.5, wacc, lambda x: ips_with(wacc=x)),
+        ("Terminal growth", "%", 1.0, req.terminal_growth, lambda x: ips_with(terminal_growth=x)),
+        ("Target margin", "%", 4.0, req.target_margin, lambda x: ips_with(target_margin=x)),
+        ("Yr 1 growth", "%", 4.0, stage1_growth, lambda x: ips_with(stages=_stage1_flexed(x))),
+        ("Tax rate", "%", 3.0, req.tax_rate, lambda x: ips_with(tax_rate=x)),
+        ("CapEx % rev", "%", 1.5, req.capex.start_pct, lambda x: ips_with(capex=Curve(start_pct=x, end_pct=req.capex.end_pct))),
+    ]
+    tornado = []
+    for label, unit, d, base, calc in drivers:
+        a, b = calc(base - d), calc(base + d)
+        tornado.append({
+            "label": label, "range": f"{base - d:.1f} – {base + d:.1f}{unit}",
+            "lo": round(min(a, b), 2), "hi": round(max(a, b), 2),
+        })
+    tornado.sort(key=lambda t: abs(t["hi"] - t["lo"]), reverse=True)
+
+    result["wacc_build"] = wacc_build
+    result["tornado"] = tornado
+    result["tornado_base"] = result["intrinsic_per_share"]
+    return result
 
 
 class ReverseDCFRequest(BaseModel):
