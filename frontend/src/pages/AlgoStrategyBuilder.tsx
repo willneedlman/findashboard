@@ -777,7 +777,7 @@ function SinglePositionCard({
 // The unified strategy controls surface: a horizontal panel that handles
 // both single-position and portfolio-position backtests.
 function StrategyControlsPanel({
-  mode, setMode, positions, saved, addPosition,
+  mode, setMode, positions, saved, addPosition, clearPositions,
   patchPosition, removePosition, patchComboLeg, addComboLegToPosition, removeComboLegFromPosition, applyInstrumentToAll,
   portfolioTradeSize, setPortfolioTradeSize,
   portfolioLeverage, setPortfolioLeverage, effectiveAnnualRate, setEffectiveAnnualRate,
@@ -799,7 +799,7 @@ function StrategyControlsPanel({
   sendToPaper,
 }: {
   mode: 'single' | 'portfolio'; setMode: (m: 'single' | 'portfolio') => void
-  positions: PortfolioPos[]; saved: CustomStrategyDef[]; addPosition: () => void
+  positions: PortfolioPos[]; saved: CustomStrategyDef[]; addPosition: () => void; clearPositions: () => void
   patchPosition: (id: string, patch: Partial<PortfolioPos>) => void
   portfolioTradeSize: number; setPortfolioTradeSize: (value: number) => void
   portfolioLeverage: number; setPortfolioLeverage: (value: number) => void
@@ -863,6 +863,7 @@ function StrategyControlsPanel({
     display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', fontFamily: 'inherit', fontSize: 9.5, fontWeight: 700,
     letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap',
   }
+  const [confirmClear, setConfirmClear] = useState(false)
   return (
     <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
       <div style={{
@@ -950,6 +951,22 @@ function StrategyControlsPanel({
             color: activeName ? 'var(--theme-secondary, #8099b0)' : 'var(--theme-text-faint, rgba(255,255,255,0.35))',
             opacity: !activeName ? 0.6 : 1,
           }}>↗ Monte Carlo</button>
+        )}
+        {mode === 'portfolio' && (
+          <button
+            onClick={() => {
+              if (confirmClear) { clearPositions(); setConfirmClear(false) }
+              else { setConfirmClear(true); setTimeout(() => setConfirmClear(false), 3000) }
+            }}
+            disabled={positions.length === 0}
+            title="Remove every position from this portfolio"
+            style={{
+              ...headerBtn, background: 'transparent',
+              border: `1px solid ${confirmClear ? 'var(--theme-negative)' : 'var(--theme-border, rgba(255,255,255,0.12))'}`,
+              color: positions.length === 0 ? 'var(--theme-text-faint, rgba(255,255,255,0.35))' : confirmClear ? 'var(--theme-negative)' : 'var(--theme-secondary, #8099b0)',
+              opacity: positions.length === 0 ? 0.6 : 1,
+            }}
+          >{confirmClear ? 'Confirm Clear?' : 'Clear Portfolio'}</button>
         )}
         <button onClick={onNewStrategy} title="Create a new strategy" style={{
           ...headerBtn, background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))',
@@ -1185,6 +1202,7 @@ export function AlgoStrategyBuilderContent() {
   const patchPosition = (id: string, patch: Partial<PortfolioPos>) =>
     setPositions(p => p.map(x => x.id === id ? { ...x, ...patch } : x))
   const removePosition = (id: string) => setPositions(p => p.filter(x => x.id !== id))
+  const clearPositions = () => setPositions([])
   // Clone one position's full config (strategy, side, instrument, combo legs —
   // everything but ticker/id) onto a batch of other tickers, so building a
   // strategy once (e.g. a short straddle) doesn't mean rebuilding it per ticker.
@@ -2061,7 +2079,7 @@ export function AlgoStrategyBuilderContent() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <StrategyControlsPanel
           mode={mode} setMode={setMode}
-          positions={positions} saved={saved} addPosition={addPosition}
+          positions={positions} saved={saved} addPosition={addPosition} clearPositions={clearPositions}
           patchPosition={patchPosition} removePosition={removePosition} patchComboLeg={patchComboLeg}
           portfolioTradeSize={portfolioTradeSize} setPortfolioTradeSize={setPortfolioTradeSize}
           portfolioLeverage={portfolioLeverage} setPortfolioLeverage={setPortfolioLeverage} effectiveAnnualRate={effectiveAnnualRate} setEffectiveAnnualRate={setEffectiveAnnualRate}
