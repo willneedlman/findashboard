@@ -13,7 +13,7 @@ import { useReportCapture } from '../hooks/useReportCapture'
 import { T } from '../lib/theme'
 import {
   INPUT, LABEL, HINT, TICK, RailSection, RangeTrack, VerdictStrip, PANEL, ChartPanel, TH, TD,
-  fmtM, upsidePrimary, type VerdictTone,
+  fmtM, upsidePrimary, Tornado, type VerdictTone, type TornadoRow,
 } from './valuationShared'
 
 type Stage = { years: number; growth: number }
@@ -28,8 +28,6 @@ type YearRow = {
   year: number; revenue: number; growth: number; margin: number
   capex_pct: number; da_pct: number; wc_pct: number; ebit: number; fcf: number; pv_fcf: number
 }
-
-type TornadoRow = { label: string; range: string; lo: number; hi: number }
 
 type DCFResult = {
   fcfs: YearRow[]; total_years: number; pv_fcfs: number; terminal_value: number
@@ -53,53 +51,6 @@ function CurveRow({ label, curve, onChange, focus, blur }: {
           onChange={e => onChange({ ...curve, start_pct: +e.target.value })} />
         <input type="number" step={0.25} style={INPUT} value={curve.end_pct} onFocus={focus} onBlur={blur}
           onChange={e => onChange({ ...curve, end_pct: +e.target.value })} />
-      </div>
-    </div>
-  )
-}
-
-// One-way sensitivity tornado: each driver as a horizontal bar diverging from
-// the base intrinsic value (red below base, green above), widest swing on top.
-function Tornado({ rows, base }: { rows: TornadoRow[]; base: number }) {
-  const LABEL_W = 150
-  const lo = Math.min(base, ...rows.map(r => r.lo))
-  const hi = Math.max(base, ...rows.map(r => r.hi))
-  const pad = (hi - lo) * 0.08 || 1
-  const dMin = lo - pad, dMax = hi + pad, span = dMax - dMin || 1
-  const pct = (v: number) => ((v - dMin) / span) * 100
-  const trackX = (v: number) => `calc(${LABEL_W}px + (100% - ${LABEL_W}px) * ${pct(v) / 100})`
-  const ticks = Array.from({ length: 5 }, (_, i) => dMin + (span * i) / 4)
-  const mono = 'var(--theme-mono)'
-  return (
-    <div style={{ position: 'relative', paddingTop: 14 }}>
-      <div style={{ position: 'absolute', top: 14, bottom: 34, left: trackX(base), width: 2, background: 'var(--theme-primary, #c9a84c)' }} />
-      <div style={{ position: 'absolute', top: 0, left: trackX(base), transform: 'translateX(-50%)', fontFamily: mono, fontSize: 9, color: 'var(--theme-primary, #c9a84c)', whiteSpace: 'nowrap' }}>base ${base.toFixed(2)}</div>
-      {rows.map((r, i) => (
-        <div key={i} style={{ display: 'flex', alignItems: 'center', height: 30 }}>
-          <div style={{ width: LABEL_W, flex: 'none', paddingRight: 10 }}>
-            <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: 600, color: 'var(--theme-text, #d7e3fc)', lineHeight: 1.2 }}>{r.label}</div>
-            <div style={{ fontFamily: mono, fontSize: 8.5, color: 'var(--theme-secondary, #99907e)' }}>{r.range}</div>
-          </div>
-          <div style={{ position: 'relative', flex: 1, height: 13 }}>
-            <div style={{ position: 'absolute', top: 0, bottom: 0, left: `${pct(r.lo)}%`, width: `${Math.max(0, pct(base) - pct(r.lo))}%`, background: 'rgba(140,46,54,0.6)' }} />
-            <div style={{ position: 'absolute', top: 0, bottom: 0, left: `${pct(base)}%`, width: `${Math.max(0, pct(r.hi) - pct(base))}%`, background: 'rgba(47,107,75,0.6)' }} />
-            <span style={{ position: 'absolute', top: '50%', left: `${pct(r.lo)}%`, transform: 'translate(-102%,-50%)', fontFamily: mono, fontSize: 9, color: '#e08a83', whiteSpace: 'nowrap' }}>${r.lo.toFixed(0)}</span>
-            <span style={{ position: 'absolute', top: '50%', left: `${pct(r.hi)}%`, transform: 'translate(2%,-50%)', fontFamily: mono, fontSize: 9, color: '#6fbf8f', whiteSpace: 'nowrap' }}>${r.hi.toFixed(0)}</span>
-          </div>
-        </div>
-      ))}
-      <div style={{ display: 'flex', marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
-        <div style={{ width: LABEL_W, flex: 'none' }} />
-        <div style={{ position: 'relative', flex: 1, height: 12 }}>
-          {ticks.map((t, i) => (
-            <span key={i} style={{ position: 'absolute', left: `${pct(t)}%`, transform: i === 0 ? 'none' : i === ticks.length - 1 ? 'translateX(-100%)' : 'translateX(-50%)', fontFamily: mono, fontSize: 9, color: 'var(--theme-secondary, #99907e)' }}>${t.toFixed(0)}</span>
-          ))}
-        </div>
-      </div>
-      <div style={{ display: 'flex', gap: 18, justifyContent: 'center', marginTop: 8, fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary, #99907e)' }}>
-        {([['rgba(140,46,54,0.6)', 'Lower intrinsic value'], ['var(--theme-primary, #c9a84c)', 'Base case'], ['rgba(47,107,75,0.6)', 'Higher intrinsic value']] as [string, string][]).map(([c, l]) => (
-          <span key={l} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 10, height: 10, background: c }} />{l}</span>
-        ))}
       </div>
     </div>
   )

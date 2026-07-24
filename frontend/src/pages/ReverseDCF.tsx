@@ -1,12 +1,16 @@
-import { useState, useRef, useLayoutEffect } from 'react'
-import { ComposedChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts'
+import { useState, useEffect, useRef } from 'react'
+import { ComposedChart, Area, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, Cell } from 'recharts'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
 import TickerInput from '../components/TickerInput'
 import { useChartColors } from '../hooks/useChartColors'
-import { INPUT, LABEL, HINT, SIDEBAR, SECTION, RailSection, PRIMARY_BTN, GHOST_BTN, READOUT_ROW, TOOLTIP_STYLE, TOOLTIP_LABEL, TOOLTIP_ITEM, TOOLTIP_CURSOR, TICK, PANEL, STACK, fmtM, ChartPanel, LabeledPanel, VerdictStrip, type VerdictTone } from './valuationShared'
+import {
+  INPUT, LABEL, HINT, SECTION, RailSection, PRIMARY_BTN, READOUT_ROW, TOOLTIP_STYLE, TOOLTIP_LABEL,
+  TOOLTIP_ITEM, TOOLTIP_CURSOR, TICK, PANEL, STACK, fmtM, ChartPanel, LabeledPanel, VerdictStrip,
+  SliderField, Tornado, type VerdictTone, type TornadoRow,
+} from './valuationShared'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip } from '../lib/reportCaptureRegistry'
@@ -15,19 +19,6 @@ const MONO = 'var(--theme-mono)', SANS = 'var(--theme-sans)'
 const TXT = 'var(--theme-text, #d7e3fc)', SEC = 'var(--theme-secondary, #99907e)', GOLD = 'var(--theme-primary, #c9a84c)'
 const NEG = 'var(--theme-negative, #ef4444)', TER = 'var(--theme-tertiary, #60a5fa)'
 const HAIR = '1px solid var(--theme-border, rgba(255,255,255,0.08))'
-
-// Element width via ResizeObserver, so the hand-built SVG stays crisp (no
-// viewBox scaling of strokes/text).
-function useWidth() {
-  const ref = useRef<HTMLDivElement>(null)
-  const [w, setW] = useState(0)
-  useLayoutEffect(() => {
-    const el = ref.current; if (!el) return
-    const ro = new ResizeObserver(([e]) => setW(e.contentRect.width))
-    ro.observe(el); return () => ro.disconnect()
-  }, [])
-  return [ref, w] as const
-}
 
 // Horizontal 0→scale demand track split into undemanding / reasonable /
 // demanding zones, with current-growth and implied-growth markers.
@@ -58,41 +49,42 @@ function DemandGauge({ current, implied, verdict }: { current: number | null; im
   )
 }
 
-// Two revenue trajectories from the same TTM revenue: what the price implies vs
-// the current run-rate, with the gap between them shaded.
-function ExpectationGap({ rev0, impliedG, currentG, years }: { rev0: number; impliedG: number; currentG: number; years: number }) {
-  const [ref, w] = useWidth()
-  const H = 172, PADL = 6, PADR = 52, PADT = 20, PADB = 8
-  const impl = Array.from({ length: years + 1 }, (_, t) => rev0 * Math.pow(1 + impliedG / 100, t))
-  const curr = Array.from({ length: years + 1 }, (_, t) => rev0 * Math.pow(1 + currentG / 100, t))
-  const yMax = Math.max(...impl, ...curr), yMin = Math.min(...impl, ...curr, rev0), spanY = (yMax - yMin) || 1
-  const innerW = Math.max(0, w - PADL - PADR), innerH = H - PADT - PADB
-  const X = (t: number) => PADL + (years === 0 ? 0 : t / years) * innerW
-  const Y = (v: number) => PADT + (1 - (v - yMin) / spanY) * innerH
-  const implPts = impl.map((v, t) => [X(t), Y(v)])
-  const currPts = curr.map((v, t) => [X(t), Y(v)])
-  const line = (pts: number[][]) => pts.map(p => p.join(',')).join(' ')
-  const gap = `M ${implPts.map(p => p.join(' ')).join(' L ')} L ${[...currPts].reverse().map(p => p.join(' ')).join(' L ')} Z`
+// Two revenue trajectories from the same TTM revenue — what the price implies
+// vs the current run-rate — as gradient-filled areas (matches the DCF tool's
+// chart language) instead of a hand-rolled SVG polyline pair.
+function ExpectationGapChart({ rev0, impliedG, currentG, years }: { rev0: number; impliedG: number; currentG: number; years: number }) {
+  const data = Array.from({ length: years + 1 }, (_, t) => ({
+    year: t,
+    implied: Math.round(rev0 * Math.pow(1 + impliedG / 100, t)),
+    current: Math.round(rev0 * Math.pow(1 + currentG / 100, t)),
+  }))
   return (
-    <div style={{ height: '100%' }}>
-      <div ref={ref} style={{ width: '100%' }}>
-        {w > 0 && (
-          <svg width={w} height={H} style={{ display: 'block' }}>
-            <path d={gap} fill={NEG} fillOpacity={0.1} />
-            <polyline points={line(currPts)} fill="none" stroke={TER} strokeWidth={2} />
-            <polyline points={line(implPts)} fill="none" stroke={NEG} strokeWidth={2} />
-            {currPts.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r={2.5} fill={TER} />)}
-            {implPts.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r={2.5} fill={NEG} />)}
-            <text x={implPts[years][0] + 5} y={implPts[years][1] - 4} fontFamily={MONO} fontSize={9} fill={NEG}>{fmtM(impl[years])}</text>
-            <text x={currPts[years][0] + 5} y={currPts[years][1] + 11} fontFamily={MONO} fontSize={9} fill={TER}>{fmtM(curr[years])}</text>
-          </svg>
-        )}
-      </div>
-      <div style={{ display: 'flex', gap: 18, justifyContent: 'center', marginTop: 2, fontFamily: SANS, fontSize: 9, color: SEC }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 12, height: 2, background: NEG }} />Price demands · {impliedG.toFixed(1)}%</span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 12, height: 2, background: TER }} />Current run-rate · {currentG.toFixed(1)}%</span>
-      </div>
-    </div>
+    <ResponsiveContainer width="100%" height="100%">
+      <ComposedChart data={data}>
+        <defs>
+          <linearGradient id="revGapImplied" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={NEG} stopOpacity={0.35} />
+            <stop offset="100%" stopColor={NEG} stopOpacity={0.02} />
+          </linearGradient>
+          <linearGradient id="revGapCurrent" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={TER} stopOpacity={0.35} />
+            <stop offset="100%" stopColor={TER} stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="2 4" stroke="var(--theme-border, rgba(255,255,255,0.08))" />
+        <XAxis dataKey="year" tick={TICK} tickFormatter={(y: number) => `Y${y}`} />
+        <YAxis tick={TICK} tickFormatter={(v: number) => fmtM(v)} width={56} />
+        <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL} itemStyle={TOOLTIP_ITEM} cursor={TOOLTIP_CURSOR}
+          formatter={(v: number, name: string) => [fmtM(v), name === 'implied' ? 'Price demands' : 'Current run-rate']}
+          labelFormatter={(y: number) => `Year ${y}`} />
+        <Legend wrapperStyle={{ fontSize: 10 }} payload={[
+          { value: `Price demands · ${impliedG.toFixed(1)}%`, type: 'line', id: 'implied', color: NEG },
+          { value: `Current run-rate · ${currentG.toFixed(1)}%`, type: 'line', id: 'current', color: TER },
+        ]} />
+        <Area type="monotone" dataKey="implied" name="implied" stroke={NEG} strokeWidth={2} fill="url(#revGapImplied)" />
+        <Area type="monotone" dataKey="current" name="current" stroke={TER} strokeWidth={2} fill="url(#revGapCurrent)" />
+      </ComposedChart>
+    </ResponsiveContainer>
   )
 }
 
@@ -106,6 +98,7 @@ type Reverse = {
   enterprise_value?: number
   equity_value?: number
   fcfs?: { year: number; revenue: number; fcf: number; pv_fcf: number }[]
+  sensitivity?: TornadoRow[]
   note?: string
   pre_profit?: boolean
   assumed_target_margin?: number | null
@@ -126,6 +119,12 @@ export function ReverseDCFContent() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Set right after a fresh ticker load so the debounced live-solve effect
+  // below doesn't immediately re-run the exact same solve a second time —
+  // loadAndSolve(false) already solves once with the just-fetched values.
+  const justLoadedRef = useRef(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
   async function loadAndSolve(useLoaded = false) {
     setLoading(true); setError(null)
     try {
@@ -134,6 +133,7 @@ export function ReverseDCFContent() {
         const res = await axios.get(`/api/dcf/fundamentals?ticker=${ticker.trim().toUpperCase()}`)
         f = res.data
         setFunda(f)
+        justLoadedRef.current = true
         if (f.op_margin != null) setOpMargin(Math.round(f.op_margin * 10) / 10)
         if (f.market_price) setMarketPrice(Math.round(f.market_price * 100) / 100)
       }
@@ -157,6 +157,18 @@ export function ReverseDCFContent() {
       setLoading(false)
     }
   }
+
+  // Live re-solve: any assumption tweak (slider drag, price override) re-runs
+  // the solve automatically after a short pause, instead of requiring an
+  // explicit "Re-solve" click.
+  useEffect(() => {
+    if (!funda) return
+    if (justLoadedRef.current) { justLoadedRef.current = false; return }
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => { loadAndSolve(true) }, 400)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opMargin, targetMargin, wacc, termGrowth, years, marketPrice])
 
   const implied = data?.implied_growth
 
@@ -199,33 +211,21 @@ export function ReverseDCFContent() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={SECTION}>Assumptions</div>
-            <div>
-              <label style={LABEL}>Operating margin (%)</label>
-              <input style={INPUT} type="number" value={opMargin} onChange={e => setOpMargin(Number(e.target.value))} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={SECTION}>Assumptions</div>
+              <span style={{ fontFamily: MONO, fontSize: 8.5, color: loading ? GOLD : SEC, letterSpacing: '0.06em' }}>
+                {loading ? 'solving…' : 'live'}
+              </span>
             </div>
+            <SliderField label="Operating margin" value={opMargin} onChange={setOpMargin} min={-100} max={60} step={0.5} />
             {opMargin < 0 && (
-              <div>
-                <label style={LABEL}>Maturity margin (%)</label>
-                <input style={INPUT} type="number" value={targetMargin} onChange={e => setTargetMargin(Number(e.target.value))} />
-                <div style={HINT}>This company runs at a loss. Margin is ramped from {opMargin.toFixed(1)}% to this target over the projection so cash flow can turn positive.</div>
-              </div>
+              <SliderField label="Maturity margin" value={targetMargin} onChange={setTargetMargin} min={0} max={40} step={0.5}
+                hint={`This company runs at a loss. Margin is ramped from ${opMargin.toFixed(1)}% to this target over the projection so cash flow can turn positive.`} />
             )}
-            <div>
-              <label style={LABEL}>Discount rate / WACC (%)</label>
-              <input style={INPUT} type="number" value={wacc} onChange={e => setWacc(Number(e.target.value))} />
-            </div>
-            <div>
-              <label style={LABEL}>Terminal growth (%)</label>
-              <input style={INPUT} type="number" value={termGrowth} onChange={e => setTermGrowth(Number(e.target.value))} />
-            </div>
-            <div>
-              <label style={LABEL}>Projection years</label>
-              <input style={INPUT} type="number" min={3} max={10} value={years} onChange={e => setYears(Number(e.target.value))} />
-            </div>
+            <SliderField label="Discount rate / WACC" value={wacc} onChange={setWacc} min={3} max={20} step={0.25} />
+            <SliderField label="Terminal growth" value={termGrowth} onChange={setTermGrowth} min={0} max={5} step={0.25} />
+            <SliderField label="Projection years" value={years} onChange={v => setYears(Math.round(v))} min={3} max={10} step={1} suffix="y" />
           </div>
-
-          <button onClick={() => loadAndSolve(true)} disabled={loading} style={GHOST_BTN}>Re-solve</button>
 
           <div style={{ paddingTop: 4, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
             <div style={READOUT_ROW}><span>Revenue (TTM)</span><span>{fmtM(funda.revenue)}</span></div>
@@ -282,12 +282,21 @@ export function ReverseDCFContent() {
             <DemandGauge current={data.current_growth} implied={implied} verdict={data.verdict} />
           </LabeledPanel>
 
+          {/* Sensitivity — how much the implied-growth answer moves if margin/
+              WACC/terminal growth were different, holding the price fixed */}
+          {data.sensitivity && data.sensitivity.length > 0 && (
+            <ChartPanel title="Growth Sensitivity — one-way" height={210}>
+              <Tornado rows={data.sensitivity} base={implied} fmt={v => `${v.toFixed(1)}%`}
+                legend={['Less demanding', 'More demanding']} />
+            </ChartPanel>
+          )}
+
           {/* Two-up: the expectation gap + the implied FCF path */}
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'stretch' }}>
             <div style={{ flex: '1 1 320px', minWidth: 0 }}>
               <ChartPanel title="The expectation gap" height={200}>
                 {funda?.revenue && data.current_growth != null
-                  ? <ExpectationGap rev0={funda.revenue} impliedG={implied} currentG={data.current_growth} years={years} />
+                  ? <ExpectationGapChart rev0={funda.revenue} impliedG={implied} currentG={data.current_growth} years={years} />
                   : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MONO, fontSize: 11, color: SEC }}>Current growth unavailable</div>}
               </ChartPanel>
             </div>

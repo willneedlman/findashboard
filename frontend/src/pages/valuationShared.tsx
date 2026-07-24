@@ -128,6 +128,32 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
   )
 }
 
+// Slider + number combo for an assumption meant to drive a live recompute as
+// it's dragged (paired with a debounced effect at the call site) — the
+// number field stays for precise entry, the slider for fast exploration.
+export function SliderField({ label, value, onChange, min, max, step, suffix = '%', hint }: {
+  label: string; value: number; onChange: (v: number) => void
+  min: number; max: number; step: number; suffix?: string; hint?: string
+}) {
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+        <label style={{ ...LABEL, marginBottom: 0 }}>{label}</label>
+        <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, color: 'var(--theme-primary, #c9a84c)' }}>{value}{suffix}</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <input type="range" min={min} max={max} step={step} value={value}
+          onChange={e => onChange(Number(e.target.value))}
+          style={{ flex: 1, accentColor: 'var(--theme-primary, #c9a84c)' }} />
+        <input type="number" min={min} max={max} step={step} value={value}
+          onChange={e => onChange(Number(e.target.value))}
+          style={{ ...INPUT, width: 60, padding: '4px 6px', textAlign: 'right', color: 'var(--theme-primary, #c9a84c)' }} />
+      </div>
+      {hint && <div style={HINT}>{hint}</div>}
+    </div>
+  )
+}
+
 // Accent-topped metric card with an optional hover ⓘ tooltip — the shared
 // readout used by the options/volatility tools (skew, GEX, implied probability).
 // `color` overrides the gold top-border and value color (e.g. red for crash skew).
@@ -419,6 +445,59 @@ export function ChartPanel({ title, height = 240, children }: { title: string; h
         borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
       }}>{title}</div>
       <div style={{ height }}>{children}</div>
+    </div>
+  )
+}
+
+export type TornadoRow = { label: string; range: string; lo: number; hi: number }
+
+// One-way sensitivity tornado: each driver as a horizontal bar diverging from
+// a base value (red below base, green above), widest swing on top. `fmt`
+// controls the value formatting ($/share for the forward DCF, growth % for
+// the reverse DCF) and `legend` the low/high labels — same visual shape,
+// different unit, shared by both tools.
+export function Tornado({ rows, base, fmt = (v: number) => `$${v.toFixed(0)}`, legend = ['Lower intrinsic value', 'Higher intrinsic value'] }:
+  { rows: TornadoRow[]; base: number; fmt?: (v: number) => string; legend?: [string, string] }) {
+  const LABEL_W = 150
+  const lo = Math.min(base, ...rows.map(r => r.lo))
+  const hi = Math.max(base, ...rows.map(r => r.hi))
+  const pad = (hi - lo) * 0.08 || 1
+  const dMin = lo - pad, dMax = hi + pad, span = dMax - dMin || 1
+  const pct = (v: number) => ((v - dMin) / span) * 100
+  const trackX = (v: number) => `calc(${LABEL_W}px + (100% - ${LABEL_W}px) * ${pct(v) / 100})`
+  const ticks = Array.from({ length: 5 }, (_, i) => dMin + (span * i) / 4)
+  const mono = 'var(--theme-mono)'
+  return (
+    <div style={{ position: 'relative', paddingTop: 14 }}>
+      <div style={{ position: 'absolute', top: 14, bottom: 34, left: trackX(base), width: 2, background: 'var(--theme-primary, #c9a84c)' }} />
+      <div style={{ position: 'absolute', top: 0, left: trackX(base), transform: 'translateX(-50%)', fontFamily: mono, fontSize: 9, color: 'var(--theme-primary, #c9a84c)', whiteSpace: 'nowrap' }}>base {fmt(base)}</div>
+      {rows.map((r, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', height: 30 }}>
+          <div style={{ width: LABEL_W, flex: 'none', paddingRight: 10 }}>
+            <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: 600, color: 'var(--theme-text, #d7e3fc)', lineHeight: 1.2 }}>{r.label}</div>
+            <div style={{ fontFamily: mono, fontSize: 8.5, color: 'var(--theme-secondary, #99907e)' }}>{r.range}</div>
+          </div>
+          <div style={{ position: 'relative', flex: 1, height: 13 }}>
+            <div style={{ position: 'absolute', top: 0, bottom: 0, left: `${pct(r.lo)}%`, width: `${Math.max(0, pct(base) - pct(r.lo))}%`, background: 'rgba(140,46,54,0.6)' }} />
+            <div style={{ position: 'absolute', top: 0, bottom: 0, left: `${pct(base)}%`, width: `${Math.max(0, pct(r.hi) - pct(base))}%`, background: 'rgba(47,107,75,0.6)' }} />
+            <span style={{ position: 'absolute', top: '50%', left: `${pct(r.lo)}%`, transform: 'translate(-102%,-50%)', fontFamily: mono, fontSize: 9, color: '#e08a83', whiteSpace: 'nowrap' }}>{fmt(r.lo)}</span>
+            <span style={{ position: 'absolute', top: '50%', left: `${pct(r.hi)}%`, transform: 'translate(2%,-50%)', fontFamily: mono, fontSize: 9, color: '#6fbf8f', whiteSpace: 'nowrap' }}>{fmt(r.hi)}</span>
+          </div>
+        </div>
+      ))}
+      <div style={{ display: 'flex', marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+        <div style={{ width: LABEL_W, flex: 'none' }} />
+        <div style={{ position: 'relative', flex: 1, height: 12 }}>
+          {ticks.map((t, i) => (
+            <span key={i} style={{ position: 'absolute', left: `${pct(t)}%`, transform: i === 0 ? 'none' : i === ticks.length - 1 ? 'translateX(-100%)' : 'translateX(-50%)', fontFamily: mono, fontSize: 9, color: 'var(--theme-secondary, #99907e)' }}>{fmt(t)}</span>
+          ))}
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 18, justifyContent: 'center', marginTop: 8, fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary, #99907e)' }}>
+        {([['rgba(140,46,54,0.6)', legend[0]], ['var(--theme-primary, #c9a84c)', 'Base case'], ['rgba(47,107,75,0.6)', legend[1]]] as [string, string][]).map(([c, l]) => (
+          <span key={l} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 10, height: 10, background: c }} />{l}</span>
+        ))}
+      </div>
     </div>
   )
 }

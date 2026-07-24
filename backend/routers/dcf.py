@@ -410,13 +410,29 @@ class ReverseDCFRequest(BaseModel):
     current_growth: float | None = None   # the company's actual growth, for context
 
 
+def _solve_growth(req: "ReverseDCFRequest"):
+    """Brentq-solve the revenue growth rate that matches req.market_price,
+    or None if no plausible rate does. Factored out so the sensitivity sweep
+    below can re-run it against tweaked copies of the request."""
+    from scipy.optimize import brentq
+
+    def gap(g: float) -> float:
+        return _project(req, g)[5] - req.market_price
+
+    lo, hi = -50.0, 150.0
+    try:
+        if gap(lo) * gap(hi) <= 0:
+            return brentq(gap, lo, hi, xtol=1e-3, maxiter=200)
+    except Exception:
+        pass
+    return None
+
+
 @router.post("/reverse")
 def dcf_reverse(req: ReverseDCFRequest):
     """Solve for the annual revenue growth rate the current market price implies,
     holding every other DCF assumption fixed. The classic reverse-DCF question:
     'what does the market expect this company to do?'"""
-    from scipy.optimize import brentq
-
     if req.market_price <= 0:
         raise HTTPException(400, "market_price must be positive")
     if req.wacc <= req.terminal_growth:
@@ -429,16 +445,7 @@ def dcf_reverse(req: ReverseDCFRequest):
     if pre_profit and req.target_margin is None:
         req.target_margin = 12.0
 
-    def gap(g: float) -> float:
-        return _project(req, g)[5] - req.market_price
-
-    lo, hi = -50.0, 150.0
-    implied = None
-    try:
-        if gap(lo) * gap(hi) <= 0:
-            implied = brentq(gap, lo, hi, xtol=1e-3, maxiter=200)
-    except Exception:
-        implied = None
+    implied = _solve_growth(req)
 
     if implied is None:
         return {
@@ -463,6 +470,30 @@ def dcf_reverse(req: ReverseDCFRequest):
         elif delta < -3: verdict = "undemanding"
         else:            verdict = "in-line"
 
+    # Sensitivity: how much does the IMPLIED GROWTH answer move if margin/WACC/
+    # terminal growth were different, holding the market price fixed? Re-solves
+    # brentq against a tweaked copy of the request for each driver's low/high —
+    # same {label, range, lo, hi} shape as the forward DCF's tornado (growth %
+    # instead of $/share), reusing the same chart component on the frontend.
+    sensitivity = []
+    drivers = [
+        ("Operating margin", "pts", 5.0, req.op_margin, "op_margin"),
+        ("WACC", "pts", 1.5, req.wacc, "wacc"),
+        ("Terminal growth", "pts", 1.0, req.terminal_growth, "terminal_growth"),
+    ]
+    for label, unit, d, base, field in drivers:
+        lo_val, hi_val = base - d, base + d
+        if field == "wacc" and lo_val <= req.terminal_growth:
+            lo_val = req.terminal_growth + 0.5
+        g_lo = _solve_growth(req.model_copy(update={field: lo_val}))
+        g_hi = _solve_growth(req.model_copy(update={field: hi_val}))
+        if g_lo is not None and g_hi is not None:
+            sensitivity.append({
+                "label": label, "range": f"{lo_val:.1f} – {hi_val:.1f}{unit}",
+                "lo": round(min(g_lo, g_hi), 2), "hi": round(max(g_lo, g_hi), 2),
+            })
+    sensitivity.sort(key=lambda t: abs(t["hi"] - t["lo"]), reverse=True)
+
     return {
         "implied_growth":      round(implied, 2),
         "market_price":        round(req.market_price, 2),
@@ -477,5 +508,6 @@ def dcf_reverse(req: ReverseDCFRequest):
         "fcfs":                fcfs,
         "pre_profit":          pre_profit,
         "assumed_target_margin": round(req.target_margin, 1) if pre_profit else None,
+        "sensitivity":         sensitivity,
         "note": (f"Pre-profit company: operating margin assumed to ramp from {req.op_margin:.1f}% to {req.target_margin:.1f}% by year {req.years}, holding revenue growth as the solved variable." if pre_profit else None),
     }
