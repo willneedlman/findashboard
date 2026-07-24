@@ -133,7 +133,7 @@ export const HUBS: Hub[] = [
     masthead: 'Pin down intrinsic value three ways and reverse-engineer exactly what the current price is pricing in.',
     icon: Calculator,
     tools: [
-      { title: 'DCF Valuation',     chip: 'DCF',         desc: 'Ten-year DCF with margin and growth glide paths',              route: '/dcf',         icon: Calculator },
+      { title: 'DCF Valuation',     chip: 'DCF',         desc: 'Adjustable growth stages and CapEx/D&A/WC glide paths',         route: '/dcf',         icon: Calculator },
       { title: 'Dividend Discount', chip: 'DDM',         desc: 'Gordon and multi-stage dividend discount models',              route: '/ddm',         icon: Coins },
       { title: 'Sum of the Parts',  chip: 'SOTP',        desc: 'Value each business segment, then sum the parts',              route: '/sotp',        icon: Boxes },
       { title: 'Multiples',         chip: 'Multiples',   desc: 'Implied price from target P/E, EV/Sales, and more',            route: '/multiples',   icon: Scale },

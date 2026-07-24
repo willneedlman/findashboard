@@ -275,6 +275,7 @@ export default function App() {
               <Route path="/portfolio-skills" element={<Navigate to="/backtest" replace />} />
               {/* Valuation tools — now standalone (legacy /valuation hub dismantled) */}
               <Route path="/dcf"         element={<DCFValuation />} />
+              <Route path="/dcf-pro"     element={<Navigate to="/dcf" replace />} />
               <Route path="/ddm"         element={<DividendDiscount />} />
               <Route path="/sotp"        element={<SOTP />} />
               <Route path="/multiples"   element={<Multiples />} />

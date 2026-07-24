@@ -2,7 +2,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 import sys, os, datetime as _dt
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import fmp
@@ -11,8 +11,10 @@ import factset
 import factor_models as fm
 from cache import get_info
 from validation import validate_ticker
+from routers.rates import risk_free_rate
 
 router = APIRouter()
+MAX_HORIZON = 20
 
 
 def _resolve_beta(ticker: str, vendor_beta, sector, industry) -> tuple[float, str]:
@@ -63,24 +65,6 @@ def get_fundamentals(ticker: str):
         except Exception:
             logger.info("FactSet fundamentals unavailable for %s, using base source", ticker)
     return base
-
-
-class DCFRequest(BaseModel):
-    ticker: str
-    revenue: float
-    op_margin: float = 15.0
-    # Maturity operating margin a loss-making company is assumed to reach by the
-    # final projection year. Drives the pre-profit margin ramp in _project.
-    target_margin: float | None = None
-    rev_growth: float = 10.0
-    wacc: float = 10.0
-    terminal_growth: float = 2.5
-    years: int = 5
-    shares: float = 100.0
-    net_debt: float = 0.0
-    tax_rate: float = 21.0
-    capex_pct: float = 5.0
-    da_pct: float = 4.0
 
 
 def _base_fundamentals(ticker: str):
@@ -184,22 +168,171 @@ def _project(req, rev_growth: float):
     return fcfs, pv_fcfs, pv_terminal, enterprise_value, equity_value, intrinsic_per_share
 
 
+# ── Forward DCF — adjustable growth stages + CapEx/D&A/WC glide paths ──────────
+# A moderate upgrade over a flat single-rate model: revenue growth is a
+# user-defined list of stages (each its own duration + rate) instead of a
+# hardcoded split, and CapEx/D&A/working-capital are each their own start->end
+# linear glide path instead of one flat %-of-revenue for the whole horizon.
+# Margin stays a single current->target linear ramp (same convention as
+# _margin_for_year above, generalized to any stage count). Full driver-level
+# detail (segment revenue, DSO/DPO/DIO working capital, a debt schedule) would
+# be a bigger rebuild, left for later.
+class Stage(BaseModel):
+    years: int = Field(gt=0, le=MAX_HORIZON)
+    growth: float   # revenue growth %, this stage
+
+
+class Curve(BaseModel):
+    """A metric expressed as %-of-revenue that glides linearly from start_pct
+    (year 1) to end_pct (final projection year) — e.g. CapEx starting high
+    during a growth phase and fading to a steady-state %."""
+    start_pct: float
+    end_pct: float
+
+
+class DCFRequest(BaseModel):
+    ticker: str
+    revenue: float
+    op_margin: float = 15.0
+    target_margin: float = 15.0
+    shares: float = 100.0
+    net_debt: float = 0.0
+    tax_rate: float = 21.0
+    stages: list[Stage]
+    capex: Curve = Curve(start_pct=5.0, end_pct=5.0)
+    da: Curve = Curve(start_pct=4.0, end_pct=4.0)
+    wc: Curve = Curve(start_pct=0.5, end_pct=0.5)
+    terminal_growth: float = 2.5
+
+    # WACC: pass `wacc` directly to override, or leave it unset to build one
+    # from CAPM cost of equity + after-tax cost of debt, weighted by D/E.
+    wacc: float | None = None
+    risk_free: float | None = None          # None = live Treasury curve
+    equity_risk_premium: float = 5.5
+    beta: float | None = None               # None = resolved from _base_fundamentals
+    cost_of_debt_spread: float = 2.0        # spread over risk-free for Kd
+    de_ratio: float | None = None           # None = resolved from _base_fundamentals
+
+    @model_validator(mode="after")
+    def _validate(self):
+        self.ticker = validate_ticker(self.ticker)
+        if not self.stages:
+            raise ValueError("At least one growth stage is required")
+        total_years = sum(s.years for s in self.stages)
+        if total_years > MAX_HORIZON:
+            raise ValueError(f"Total projection horizon ({total_years}y) exceeds the {MAX_HORIZON}-year cap")
+        return self
+
+
+def _resolve_wacc(req: DCFRequest) -> dict:
+    """Returns the WACC plus a breakdown of how it was built, so the UI can
+    show its work instead of a single opaque number."""
+    if req.wacc is not None:
+        return {"wacc": req.wacc, "mode": "manual", "risk_free": None, "cost_of_equity": None,
+                "cost_of_debt": None, "beta": req.beta, "equity_weight": None, "debt_weight": None}
+
+    beta = req.beta
+    de_ratio = req.de_ratio
+    if beta is None or de_ratio is None:
+        try:
+            base = _base_fundamentals(req.ticker)
+        except Exception:
+            base = {}
+        if beta is None:
+            beta = base.get("beta") or 1.0
+        if de_ratio is None:
+            de_ratio = base.get("de_ratio") or 0.0
+
+    if req.risk_free is not None:
+        rf = req.risk_free / 100.0
+    else:
+        try:
+            rf = risk_free_rate()["rate"]
+        except Exception:
+            rf = 0.045
+
+    erp = req.equity_risk_premium / 100.0
+    ke = rf + beta * erp                                    # cost of equity, CAPM
+    kd = rf + req.cost_of_debt_spread / 100.0                # cost of debt, risk-free + credit spread
+    ew = 1 / (1 + de_ratio) if de_ratio > 0 else 1.0
+    dw = de_ratio / (1 + de_ratio) if de_ratio > 0 else 0.0
+    wacc = (ke * ew + kd * (1 - req.tax_rate / 100.0) * dw) * 100
+    wacc = max(3.0, min(25.0, wacc))
+    return {
+        "wacc": round(wacc, 2), "mode": "auto", "risk_free": round(rf * 100, 2),
+        "cost_of_equity": round(ke * 100, 2), "cost_of_debt": round(kd * 100, 2),
+        "beta": round(beta, 2), "equity_weight": round(ew, 3), "debt_weight": round(dw, 3),
+    }
+
+
+def _glide(curve: Curve, y: int, total_years: int) -> float:
+    if total_years <= 1:
+        return curve.end_pct
+    t = (y - 1) / (total_years - 1)
+    return curve.start_pct + (curve.end_pct - curve.start_pct) * t
+
+
+def _stage_schedule(stages: list[Stage]) -> list[float]:
+    """Per-year growth rate, one entry per projection year, expanded from the
+    stage list (e.g. [{years:3,growth:15},{years:4,growth:10}] -> 3 years at
+    15% then 4 years at 10%)."""
+    out: list[float] = []
+    for s in stages:
+        out.extend([s.growth] * s.years)
+    return out
+
+
 @router.post("/value")
 def dcf_value(req: DCFRequest):
-    # The Gordon terminal value is only finite when WACC > terminal growth. Past
-    # that, (wacc - g) flips negative and a negative terminal FCF turns into a
-    # spuriously huge positive terminal value — a meaningless result, not a number
-    # worth returning.
-    if req.wacc <= req.terminal_growth:
+    wacc_build = _resolve_wacc(req)
+    wacc = wacc_build["wacc"]
+    if wacc <= req.terminal_growth:
         raise HTTPException(400, "WACC must exceed terminal growth for a finite valuation")
-    fcfs, pv_fcfs, pv_terminal, enterprise_value, equity_value, intrinsic_per_share = _project(req, req.rev_growth)
+
+    growth_schedule = _stage_schedule(req.stages)
+    total_years = len(growth_schedule)
+
+    fcfs = []
+    rev = req.revenue
+    for y in range(1, total_years + 1):
+        g = growth_schedule[y - 1]
+        rev = rev * (1 + g / 100)
+        margin = req.op_margin + (req.target_margin - req.op_margin) * ((y - 1) / max(total_years - 1, 1))
+        capex_pct = _glide(req.capex, y, total_years)
+        da_pct = _glide(req.da, y, total_years)
+        wc_pct = _glide(req.wc, y, total_years)
+
+        ebit = rev * (margin / 100)
+        nopat = ebit * (1 - req.tax_rate / 100)
+        da_amt = rev * (da_pct / 100)
+        capex_amt = rev * (capex_pct / 100)
+        wc_amt = rev * (wc_pct / 100)
+        fcf = nopat + da_amt - capex_amt - wc_amt
+        pv = fcf / ((1 + wacc / 100) ** y)
+
+        fcfs.append({
+            "year": y, "revenue": round(rev, 1), "growth": round(g, 2), "margin": round(margin, 2),
+            "capex_pct": round(capex_pct, 2), "da_pct": round(da_pct, 2), "wc_pct": round(wc_pct, 2),
+            "ebit": round(ebit, 1), "fcf": round(fcf, 1), "pv_fcf": round(pv, 1),
+        })
+
+    terminal_fcf = fcfs[-1]["fcf"] * (1 + req.terminal_growth / 100)
+    terminal_value = terminal_fcf / (wacc / 100 - req.terminal_growth / 100)
+    pv_terminal = terminal_value / ((1 + wacc / 100) ** total_years)
+    pv_fcfs = sum(f["pv_fcf"] for f in fcfs)
+    enterprise_value = pv_fcfs + pv_terminal
+    equity_value = enterprise_value - req.net_debt
+    intrinsic_per_share = equity_value / req.shares if req.shares else 0.0
+
     return {
         "fcfs": fcfs,
+        "total_years": total_years,
         "pv_fcfs": round(pv_fcfs, 1),
         "terminal_value": round(pv_terminal, 1),
         "enterprise_value": round(enterprise_value, 1),
         "equity_value": round(equity_value, 1),
         "intrinsic_per_share": round(intrinsic_per_share, 2),
+        "wacc_build": wacc_build,
     }
 
 
