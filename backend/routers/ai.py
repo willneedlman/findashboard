@@ -321,30 +321,49 @@ class StrategyChatRequest(BaseModel):
 
 def _draft_is_confirmed(messages: list[StrategyChatMessage]) -> bool:
     last_user = next((m.content.lower() for m in reversed(messages) if m.role == "user"), "")
-    if "not ready" in last_user:
+    if "not ready" in last_user or "not sure" in last_user:
         return False
     # Word-boundary match, not substring — "yes" as a bare `in` check also
     # matches "yesterday"/"yesteryear", misreading an unrelated message
     # (e.g. "use yesterday's close instead") as explicit build confirmation.
+    # Deliberately broad: this only runs on the user's reply to the model's
+    # own "ready to build?" confirmation question, where a short informal
+    # affirmative ("yeah", "sure", "ok") or a dismissal of a side-question
+    # back toward building ("just follow my parameters", "just use what I
+    # said") both mean the same thing — go ahead — and previously fell
+    # through to a confusing, context-blind fallback question instead.
     phrases = (
-        "yes", "confirm", "proceed", "go ahead", "build it", "build this", "create it", "draft it", "prepare the draft", "prepare draft",
-        "use your defaults", "use the defaults", "sounds good", "looks good",
-        "i'm ready", "im ready", "ready to build", "ready to create",
+        "yes", "yeah", "yep", "yup", "yea", "confirm", "proceed", "go ahead", "go for it",
+        "build it", "build this", "create it", "draft it", "prepare the draft", "prepare draft",
+        "use your defaults", "use the defaults", "sounds good", "sounds right", "looks good", "looks right",
+        "i'm ready", "im ready", "ready to build", "ready to create", "do it", "let's do it", "lets do it",
+        "that works", "works for me", "correct", "that's right", "thats right", "sure", "ok", "okay",
+        "just build it", "just go ahead",
     )
-    return any(re.search(rf"\b{re.escape(phrase)}\b", last_user) for phrase in phrases)
+    if any(re.search(rf"\b{re.escape(phrase)}\b", last_user) for phrase in phrases):
+        return True
+    # Lead-in fragments rather than full phrases — "just follow my
+    # paramaters" (a real user typo, "parameters" misspelled) wouldn't match
+    # an exact-phrase list; "just follow"/"just use"/"just go with" alone are
+    # distinctive enough dismiss-the-side-question-and-proceed signals not to
+    # need the rest of the sentence to match verbatim.
+    lead_ins = ("just follow", "just use", "just go with", "just stick with", "just do what i", "just proceed")
+    return any(re.search(rf"\b{re.escape(phrase)}", last_user) for phrase in lead_ins)
 
 
-def _next_discovery_question(user_turns: int) -> str:
-    questions = (
-        "Which ticker, index, or set of symbols would you like this strategy to target?",
-        "What historical backtest period should we use?",
-        "How would you like to express the trade: shares, single options, or a multi-leg options position?",
-        "What should be the primary entry signal for opening a trade?",
-        "What should cause the position to exit: a signal reversal, profit target, stop-loss, time limit, or a combination?",
-        "What risk posture should this use—conservative, moderate, or aggressive?",
-        "I have the key choices. Would you like me to build the complete strategy now?",
-    )
-    return questions[min(max(user_turns - 1, 0), len(questions) - 1)]
+def _confirmation_reprompt() -> str:
+    """Fallback text when the model attempted a draft but the user's last
+    reply didn't clearly read as confirmation (per _draft_is_confirmed).
+
+    Deliberately generic — it must never re-ask a decision already settled
+    earlier in the conversation. This replaced a hardcoded, turn-count-
+    indexed sequence of discovery questions (ticker, timeframe, entry,
+    exit, "risk posture", ...) that fired here regardless of what had
+    actually been discussed — it could and did resurface an already-
+    answered question, or even a question about a field that isn't part of
+    the strategy schema at all ("risk posture" is not a real parameter).
+    A single content-free re-ask can't be wrong the way that array could."""
+    return "Just to confirm — should I go ahead and build this strategy with everything we've covered so far?"
 
 
 def _requested_exit_summary(messages: list[StrategyChatMessage]) -> str | None:
@@ -775,9 +794,18 @@ def _fix_invalid_moneyness(draft: dict) -> None:
 
 
 def _requested_premium_pnl_exits(messages: list[StrategyChatMessage]) -> bool:
-    """Whether the author explicitly means option P&L thresholds, not price moves."""
+    """Whether the author means option P&L thresholds, not price moves — this
+    used to require literal jargon ("premium-based", "stopLossPct") that
+    essentially no real user types; a plain "50% profit target" or "close at
+    50% max profit" (exactly how people actually phrase this) went
+    undetected, so _remove_premium_exit_proxies below never ran and a
+    hallucinated sell-rule proxy for that percentage slipped through."""
     text = "\n".join(message.content.lower() for message in messages if message.role == "user")
-    return bool(re.search(r"(?:entry|initial)\s+premium|premium[-\s]based|modeled\s+(?:option|combo|straddle)\s+(?:p&l|profit|loss)|stoplosspct|takeprofitpct", text))
+    return bool(re.search(
+        r"(?:entry|initial)\s+premium|premium[-\s]based|modeled\s+(?:option|combo|straddle)\s+(?:p&l|profit|loss)"
+        r"|stoplosspct|takeprofitpct|profit\s+target|take[-\s]profit|max(?:imum)?\s+profit|%\s*profit|profit\s*%",
+        text,
+    ))
 
 
 def _remove_premium_exit_proxies(draft: dict, messages: list[StrategyChatMessage]) -> None:
@@ -878,7 +906,7 @@ _STRATEGY_CHAT_FULL_SYSTEM = """You are a highly experienced quantitative tradin
 The user describes a backtest setup, a portfolio, a multi-leg options strategy, or a set of entry/exit rules in plain English. Your job is to translate their plain-English ideas into a complete, executable backtest configuration.
 
 You can customize:
-1. Mode: "single" (single asset backtest) or "portfolio" (multiple assets with weights).
+1. Mode: "single" (one ticker, one structure) or "portfolio" (the same algorithm applied across multiple tickers/a universe). Default to "single" whenever the user names exactly one ticker and describes one structure on it — do not use "portfolio" just because it technically supports one position; "portfolio" is for when the user actually wants a basket, screened universe, or several named tickers sharing one strategy.
 2. Sizing / Leverage: a portfolio is a universe strategy, not a collection of capital sleeves. Every admitted trade uses one shared position_size_pct of the total portfolio, regardless of ticker; entries wait once simultaneous exposure reaches the leveraged gross cap. A portfolio can also set leverage (1x minimum, no ceiling — warn the user that high leverage risks a full wipeout) and effective_annual_rate (borrowing EAR); the backtest compounds that EAR into a daily financing charge on gross exposure above portfolio equity. For a single position, use risk sizing (sizingPct).
 3. Underlyings: tickers (e.g. AAPL, SPY, SVXY).
 4. Instrument Type: Shares (underlying), options (call/put), or combo options (multi-leg, e.g. selling straddles/strangles/condors/spreads).
@@ -903,7 +931,7 @@ COGNITIVE TASK:
 - Never multiply position_size_pct by the number of eligible tickers, ask the user to reduce it because of universe size, or describe the ticker universe as combined allocation. With a 10% trade size, the engine admits at most 10 concurrent trades and queues later signals; 60 eligible symbols do not mean 600% exposure.
 - All percentage fields use percentage points, never fractions: position_size_pct 1 means 1% (not 0.01), IV Rank 80 means 80% (not 0.8), and a 10% price drop is -10 (not -0.1).
 - When relevant to the user's risk appetite, ask one focused question about leverage and effective annual borrowing rate (EAR) before drafting. If the user does not want leverage, set leverage to 1 and effective_annual_rate to 0. Never imply leverage is free: state that interest is charged on borrowed gross exposure.
-- OPTION/COMBO RISK SEMANTICS: stopLossPct and takeProfitPct are evaluated against the modeled position's P&L relative to its entry premium basis. They are not underlying-price conditions. If the user requests a premium/P&L-based stop or target, put the values only in risk.stopLossPct and risk.takeProfitPct; do not add, retain, or describe matching PCT_CHANGE sell rules (for example, never translate a 50% take-profit into PCT_CHANGE(1-day) >= 50). maxHoldBars: 0 means no time-based exit; the option/combo must then close only on a real sell rule, a P&L risk control, or expiration and settlement at DTE.
+- OPTION/COMBO RISK SEMANTICS: stopLossPct and takeProfitPct are evaluated against the modeled position's P&L relative to its entry premium basis. They are not underlying-price conditions. A user's plain-English "profit target," "take profit," "close at N% profit," or "max profit" language for an option/combo ALWAYS means this premium-based threshold — put it ONLY in risk.takeProfitPct (same for a stated stop-loss -> risk.stopLossPct). NEVER invent a sell-rule condition to represent a profit/loss/time value: not PCT_CHANGE, not OPT_HV (realized volatility), not any other indicator — none of them measure the position's own P&L, and re-purposing a stated percentage or day-count as an unrelated indicator's threshold or period (e.g. turning "50% profit, 14 DTE" into an OPT_HV condition thresholded at 50 with period 14) is always wrong, not just a stylistic mismatch. If the user's exit is fully described by a profit target, stop-loss, and/or a hold-time limit, the sell rule block MUST stay EMPTY ({"logic":"OR","groups":[]}) — the position then closes only on those risk controls or option/combo expiration. Only add a real sell-rule condition when the user explicitly describes a genuine market/signal-based exit (e.g., "exit when IV Rank drops below 30," "exit on a trend reversal") distinct from the profit/loss/time controls. maxHoldBars: 0 means no time-based exit; the option/combo must then close only on a real sell rule, a P&L risk control, or expiration and settlement at DTE.
 - BARS ARE NOT CALENDAR DAYS — NEVER SET maxHoldBars TO A DTE NUMBER DIRECTLY: maxHoldBars counts trading-day BARS (there is no bar on a weekend or market holiday). dte, combo_dte, and any "N DTE" the user states are CALENDAR days. The two units are never numerically interchangeable, and the gap between them (roughly 2 calendar days out of every 7) is exactly what a naive 1:1 mapping gets wrong. When the user wants a position closed once it reaches N DTE remaining (e.g., "close at 14 DTE" on a structure entered at 30 DTE): first find the CALENDAR days elapsed at that point (entry dte − target dte, e.g. 30 − 14 = 16 calendar days), then convert that to an approximate trading-day bar count via calendar_days × 5/7, rounded to the nearest whole bar (16 × 5/7 ≈ 11 → maxHoldBars: 11) — and say in the summary that this is an approximation because market holidays aren't modeled, so the actual close may land a bar or two early/late versus the literal DTE target. If the user instead says "hold for N trading days" or "N bars," use maxHoldBars: N directly with no conversion. If the phrasing is genuinely ambiguous (e.g., "close after 2 weeks" with no calendar/trading-day cue), ask which they mean before drafting rather than guessing.
 - For a condition that should evaluate the traded symbol itself, omit IndicatorRef.ticker entirely. Never use $TICKER, TICKER, $SYMBOL, SYMBOL, or SELF as a ticker value; ticker is only for a real explicit cross-asset symbol such as SPY.
 - A Question response must contain only the conversational discovery/confirmation message; never include a partial draft or JSON inside its text.
@@ -1127,9 +1155,8 @@ def strategy_chat(req: StrategyChatRequest):
         if invalid_tickers:
             return {"type": "question", "text": f"The screen returned these eligible candidates: {', '.join(sorted(screened_tickers))}. Which of those should I use in the portfolio?"}
     if req.scope == "full" and result["type"] == "draft" and not _draft_is_confirmed(req.messages):
-        user_turns = sum(message.role == "user" for message in req.messages)
         logger.warning("Strategy chat attempted a draft before user confirmation")
-        return {"type": "question", "text": _next_discovery_question(user_turns)}
+        return {"type": "question", "text": _confirmation_reprompt()}
     return result
 
 
