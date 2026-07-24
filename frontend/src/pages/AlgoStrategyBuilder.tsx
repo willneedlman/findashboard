@@ -704,11 +704,11 @@ function SinglePositionCard({
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <div style={{ width: 120 }}>
               <div style={{ fontSize: 8, color: 'var(--theme-secondary, #8099b0)', marginBottom: 2 }}>% OTM (neg = ITM)</div>
-              <NumInput value={otmPct} min={-50} max={50} onCommit={v => setOtmPct(Math.round(v))} style={{ ...INPUT, fontSize: 10, height: 23 }} />
+              <NumInput value={otmPct} min={-50} max={50} onCommit={v => setOtmPct(Math.round(v))} style={{ ...INPUT, fontSize: 10, height: 23, padding: '2px 6px' }} />
             </div>
             <div style={{ width: 80 }}>
               <div style={{ fontSize: 8, color: 'var(--theme-secondary, #8099b0)', marginBottom: 2 }}>DTE (days)</div>
-              <NumInput value={dte} min={1} max={365} onCommit={v => setDte(Math.round(v))} style={{ ...INPUT, fontSize: 10, height: 23 }} />
+              <NumInput value={dte} min={1} max={365} onCommit={v => setDte(Math.round(v))} style={{ ...INPUT, fontSize: 10, height: 23, padding: '2px 6px' }} />
             </div>
             <div style={{ fontSize: 8, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', color: side === 'short' ? NEG : POS, marginLeft: 8 }}>
               {side === 'short' ? 'Short' : 'Long'} {otmPct === 0 ? 'ATM' : otmPct > 0 ? `${otmPct}% OTM` : `${-otmPct}% ITM`} {optType} · {dte}d
@@ -721,7 +721,7 @@ function SinglePositionCard({
             <div style={{ width: 150 }}>
               <div style={{ fontSize: 8, color: 'var(--theme-secondary, #8099b0)', marginBottom: 2 }}>Preset</div>
               <select value="" onChange={e => e.target.value && setComboLegs(legsToCombo(PRESETS[e.target.value] ?? []))}
-                style={{ ...INPUT, fontSize: 10, cursor: 'pointer', height: 23 }}>
+                style={{ ...INPUT, fontSize: 10, cursor: 'pointer', height: 23, padding: '2px 6px' }}>
                 <option value="">Load preset…</option>
                 {PRESET_GROUPS.map(g => (
                   <optgroup key={g.label} label={g.label}>
@@ -732,7 +732,7 @@ function SinglePositionCard({
             </div>
             <div style={{ width: 80 }}>
               <div style={{ fontSize: 8, color: 'var(--theme-secondary, #8099b0)', marginBottom: 2 }}>DTE</div>
-              <NumInput value={comboDte} min={1} max={365} onCommit={v => setComboDte(Math.round(v))} style={{ ...INPUT, fontSize: 10, height: 23 }} />
+              <NumInput value={comboDte} min={1} max={365} onCommit={v => setComboDte(Math.round(v))} style={{ ...INPUT, fontSize: 10, height: 23, padding: '2px 6px' }} />
             </div>
             <div style={{ fontSize: 8, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', color: 'var(--theme-primary, #c9a84c)', marginLeft: 8 }}>
               {comboLegs.length}-leg combo · {comboDte ?? 30}d
@@ -1921,7 +1921,10 @@ export function AlgoStrategyBuilderContent() {
                 <PinnedTradePanel pt={pinnedTrade} onClose={() => setPinnedTrade(null)} />
               </div>
             )}
-            <div style={{ paddingTop: 30, paddingLeft: 8, paddingRight: 8, paddingBottom: 8, height: 320 }}>
+            <div style={{
+              paddingTop: 30, paddingLeft: 8, paddingRight: 8, paddingBottom: 8, height: 320,
+              userSelect: 'none', WebkitUserSelect: 'none', MozUserSelect: 'none', msUserSelect: 'none',
+            } as React.CSSProperties}>
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart
                   data={chartData}
