@@ -887,7 +887,7 @@ export default function StockScreener() {
                       style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: C.sans, fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--theme-text-muted, #9fb0c7)', cursor: displayRows.length ? 'pointer' : 'default', opacity: displayRows.length ? 1 : 0.4 }}>
                       Send to Algo Builder <ArrowRight size={11} />
                     </span>
-                    <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
                       <span onClick={() => { setPmResult(null); setPmPickerOpen(v => !v) }}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: C.sans, fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', color: pmPickerOpen ? C.gold : 'var(--theme-text-muted, #9fb0c7)', cursor: displayRows.length ? 'pointer' : 'default', opacity: displayRows.length ? 1 : 0.4 }}>
                         Add to Portfolio <ChevronDown size={11} />
