@@ -8,6 +8,7 @@ import {
   Legend, LabelList, Customized,
 } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
+import EmptyState from '../components/EmptyState'
 import { fetchYieldCurve, fetchFedProjections, fetchSepDots, fetchCurveSpreads } from '../hooks/useApi'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../components/ChartTooltip'
 import { formatLocalTime, localTimeZone } from '../lib/time'
@@ -585,13 +586,11 @@ export function FedRatesContent() {
       </div>
 
       {failed ? (
-        <div style={{ ...band, borderTop: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320, fontFamily: T.label, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.neg }}>
-          Rate data is unavailable right now. Try again shortly.
-        </div>
+        <EmptyState variant="unavailable" title="Rate Engine"
+          hint="Rate data is unavailable right now. Try again shortly." />
       ) : !ready ? (
-        <div style={{ ...band, borderTop: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320, fontFamily: T.label, fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted }}>
-          Loading rate engine
-        </div>
+        <EmptyState variant="loading" title="Rate Engine"
+          hint="Fetching the Treasury curve, Fed funds path, and SEP dot plot." />
       ) : (
         <>
           {/* Band 2 — scenario. Rendered only once the engine has real data to
