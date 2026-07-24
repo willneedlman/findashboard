@@ -747,6 +747,33 @@ def _normalize_fractional_percentages(draft: dict) -> None:
         strategy(draft.get("strategy"))
 
 
+def _fix_invalid_moneyness(draft: dict) -> None:
+    """moneyness must be a positive strike/spot ratio (roughly 0.5-2.0) — the
+    prompt spells out the call/put sign formula, but a model still
+    occasionally confuses it with a signed OTM-percentage offset and emits a
+    non-positive or wildly out-of-range value, which would misprice every
+    leg. Clamp to ATM (1.0) rather than trying to reverse-engineer the
+    intended strike: a wrong-but-plausible-looking "fix" is worse than an
+    obviously-neutral one the user can see and adjust."""
+    def fix_legs(legs: object) -> None:
+        if not isinstance(legs, list):
+            return
+        for leg in legs:
+            if not isinstance(leg, dict):
+                continue
+            m = leg.get("moneyness")
+            if isinstance(m, (int, float)) and not isinstance(m, bool) and not (0.01 <= m <= 10):
+                logger.warning("Strategy chat emitted invalid moneyness %r, clamping to ATM", m)
+                leg["moneyness"] = 1.0
+
+    fix_legs(draft.get("combo_legs"))
+    positions = draft.get("positions")
+    if isinstance(positions, list):
+        for position in positions:
+            if isinstance(position, dict):
+                fix_legs(position.get("combo_legs"))
+
+
 def _requested_premium_pnl_exits(messages: list[StrategyChatMessage]) -> bool:
     """Whether the author explicitly means option P&L thresholds, not price moves."""
     text = "\n".join(message.content.lower() for message in messages if message.role == "user")
@@ -855,7 +882,7 @@ You can customize:
 2. Sizing / Leverage: a portfolio is a universe strategy, not a collection of capital sleeves. Every admitted trade uses one shared position_size_pct of the total portfolio, regardless of ticker; entries wait once simultaneous exposure reaches the leveraged gross cap. A portfolio can also set leverage (1x minimum, no ceiling — warn the user that high leverage risks a full wipeout) and effective_annual_rate (borrowing EAR); the backtest compounds that EAR into a daily financing charge on gross exposure above portfolio equity. For a single position, use risk sizing (sizingPct).
 3. Underlyings: tickers (e.g. AAPL, SPY, SVXY).
 4. Instrument Type: Shares (underlying), options (call/put), or combo options (multi-leg, e.g. selling straddles/strangles/condors/spreads).
-5. Expiry DTE: Days to expiration.
+5. Expiry DTE: Days to expiration, in CALENDAR days (not trading-day bars — see the maxHoldBars note under OPTION/COMBO RISK SEMANTICS).
 6. Option Legs: custom strikes (moneyness multiplier), action (buy/sell), type (call/put), qty.
 7. Custom Strategy Rules: custom buy/sell indicator rules and risk parameters (just like the standalone custom strategy rules).
 
@@ -877,6 +904,7 @@ COGNITIVE TASK:
 - All percentage fields use percentage points, never fractions: position_size_pct 1 means 1% (not 0.01), IV Rank 80 means 80% (not 0.8), and a 10% price drop is -10 (not -0.1).
 - When relevant to the user's risk appetite, ask one focused question about leverage and effective annual borrowing rate (EAR) before drafting. If the user does not want leverage, set leverage to 1 and effective_annual_rate to 0. Never imply leverage is free: state that interest is charged on borrowed gross exposure.
 - OPTION/COMBO RISK SEMANTICS: stopLossPct and takeProfitPct are evaluated against the modeled position's P&L relative to its entry premium basis. They are not underlying-price conditions. If the user requests a premium/P&L-based stop or target, put the values only in risk.stopLossPct and risk.takeProfitPct; do not add, retain, or describe matching PCT_CHANGE sell rules (for example, never translate a 50% take-profit into PCT_CHANGE(1-day) >= 50). maxHoldBars: 0 means no time-based exit; the option/combo must then close only on a real sell rule, a P&L risk control, or expiration and settlement at DTE.
+- BARS ARE NOT CALENDAR DAYS — NEVER SET maxHoldBars TO A DTE NUMBER DIRECTLY: maxHoldBars counts trading-day BARS (there is no bar on a weekend or market holiday). dte, combo_dte, and any "N DTE" the user states are CALENDAR days. The two units are never numerically interchangeable, and the gap between them (roughly 2 calendar days out of every 7) is exactly what a naive 1:1 mapping gets wrong. When the user wants a position closed once it reaches N DTE remaining (e.g., "close at 14 DTE" on a structure entered at 30 DTE): first find the CALENDAR days elapsed at that point (entry dte − target dte, e.g. 30 − 14 = 16 calendar days), then convert that to an approximate trading-day bar count via calendar_days × 5/7, rounded to the nearest whole bar (16 × 5/7 ≈ 11 → maxHoldBars: 11) — and say in the summary that this is an approximation because market holidays aren't modeled, so the actual close may land a bar or two early/late versus the literal DTE target. If the user instead says "hold for N trading days" or "N bars," use maxHoldBars: N directly with no conversion. If the phrasing is genuinely ambiguous (e.g., "close after 2 weeks" with no calendar/trading-day cue), ask which they mean before drafting rather than guessing.
 - For a condition that should evaluate the traded symbol itself, omit IndicatorRef.ticker entirely. Never use $TICKER, TICKER, $SYMBOL, SYMBOL, or SELF as a ticker value; ticker is only for a real explicit cross-asset symbol such as SPY.
 - A Question response must contain only the conversational discovery/confirmation message; never include a partial draft or JSON inside its text.
 - Every full DRAFT must include complete buy and sell rule definitions: a single draft needs a complete "strategy" object, and a portfolio draft needs a complete "strategies" entry for every position's "strategy_name". Never return positions or option legs alone as a draft; ask a question instead if the rules are not ready.
@@ -966,13 +994,15 @@ INDICATOR SCHEMA (for strategy rules):
 Condition = {"lhs": IndicatorRef, "op": "gt"|"lt"|"gte"|"lte"|"crosses_above"|"crosses_below", "rhs_type": "number"|"indicator", "rhs_num"?: number, "rhs_ind"?: IndicatorRef}
 Group = {"logic": "AND"|"OR", "conditions": [Condition, ...]}
 RuleBlock = {"logic": "AND"|"OR", "groups": [Group, ...]}
-StrategyRisk = {"sizingPct": number, "stopLossPct": number, "takeProfitPct": number, "trailingStopPct": number, "maxHoldBars": number}
+StrategyRisk = {"sizingPct": number, "stopLossPct": number, "takeProfitPct": number, "trailingStopPct": number, "maxHoldBars": number}  // maxHoldBars is a trading-day BAR count, not calendar days — see the BARS ARE NOT CALENDAR DAYS note above
 
 For portfolio drafts, StrategyRisk.sizingPct is ignored by execution; use root-level position_size_pct as the sole trade-size control.
 IndicatorRef = {"type": "PRICE"|"RSI"|"SMA"|"EMA"|"MACD_LINE"|"MACD_SIGNAL"|"BB_UPPER"|"BB_MID"|"BB_LOWER"|"ATR"|"MOMENTUM"|"PCT_CHANGE"|"OPT_HV"|"OPT_IVRANK", "period"?: number, "fast"?: number, "slow"?: number, "signal_period"?: number, "std"?: number, "ticker"?: string, "timeframe"?: string}
 
 MONEYNESS RULES:
-- In option legs, moneyness is the strike ratio (strike / spot). E.g., a call at spot is 1.0; a call 5% OTM is 1.05; a put 5% OTM is 0.95.
+- In option legs, moneyness is the STRIKE-TO-SPOT RATIO (strike / spot) — never a percentage offset — and MUST always be a positive number, typically between about 0.5 and 2.0. Negative or zero moneyness is invalid, misprices every leg, and must never be output under any circumstance.
+- Compute it as moneyness = 1 + (otm_pct / 100) for a CALL, and moneyness = 1 - (otm_pct / 100) for a PUT, where otm_pct is how far out-of-the-money the strike is (positive = OTM, negative = ITM). A call and a put move in OPPOSITE directions relative to 1.0 for the same OTM distance — do not subtract or negate a percentage against 1 without applying this call/put-specific sign.
+- Worked examples: call 5% OTM -> 1.05. call 5% ITM -> 0.95. put 5% OTM -> 0.95. put 5% ITM -> 1.05. ATM (either type) -> 1.0.
 - Preset combo legs:
   - Short Straddle: Sell 1.0 ATM Call, Sell 1.0 ATM Put.
   - Short Strangle: Sell 1.05 OTM Call, Sell 0.95 OTM Put.
@@ -1054,6 +1084,7 @@ def strategy_chat(req: StrategyChatRequest):
     if req.scope == "full" and result["type"] == "draft":
         result = _strip_self_ticker_placeholders(result)
         _normalize_fractional_percentages(result)
+        _fix_invalid_moneyness(result)
         _remove_premium_exit_proxies(result, req.messages)
         if parameter_request:
             return {"type": "question", "text": _draft_parameter_review(result)}
