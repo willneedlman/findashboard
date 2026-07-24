@@ -219,8 +219,7 @@ export function ReverseDCFContent() {
             </div>
             <SliderField label="Operating margin" value={opMargin} onChange={setOpMargin} min={-100} max={60} step={0.5} />
             {opMargin < 0 && (
-              <SliderField label="Maturity margin" value={targetMargin} onChange={setTargetMargin} min={0} max={40} step={0.5}
-                hint={`This company runs at a loss. Margin is ramped from ${opMargin.toFixed(1)}% to this target over the projection so cash flow can turn positive.`} />
+              <SliderField label="Maturity margin" value={targetMargin} onChange={setTargetMargin} min={0} max={40} step={0.5} />
             )}
             <SliderField label="Discount rate / WACC" value={wacc} onChange={setWacc} min={3} max={20} step={0.25} />
             <SliderField label="Terminal growth" value={termGrowth} onChange={setTermGrowth} min={0} max={5} step={0.25} />
