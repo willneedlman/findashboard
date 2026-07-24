@@ -1040,18 +1040,19 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
     def _fetch_one(p: PortfolioPosition):
         try:
             (buy_signal, sell_signal), close = _run_custom_rules(p.ticker, p.rules, start, end, tf)
-            # Leg admission (below) is a shared-exposure-budget gate across
-            # tickers, a different concept from multi-lot scale-in within one
-            # ticker — it still runs on the single-position 0/1 view of each
-            # leg's signal, same as before this leg's own P&L engine gained
-            # multi-lot support.
-            sig_arr = _legacy_signal_from_raw(buy_signal, sell_signal)
         except Exception as e:
             logger.warning("portfolio_backtest: signal fetch failed for %s: %s", p.ticker, e)
             return None
         if close is None or len(close) < 40:
             return None
-        return (p, pd.Series(sig_arr, index=close.index), close)
+        # Admission (below) needs the RAW per-bar entry/exit conditions, not
+        # _legacy_signal_from_raw's latched single-position view — that view
+        # only reverts to "flat" when the rule's own sell condition fires, so
+        # a strategy with no sell rule (risk controls alone are a valid exit,
+        # e.g. this one) would read as permanently in-trade the instant it
+        # first admits, masking every later bar the entry condition is
+        # (re-)true and permanently blocking re-entry for the rest of the run.
+        return (p, pd.Series(buy_signal, index=close.index), pd.Series(sell_signal, index=close.index), close)
 
     fetch_results: list = [None] * len(req.positions)
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(_PORTFOLIO_FETCH_WORKERS, len(req.positions)))) as pool:
@@ -1074,24 +1075,48 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
         base_size = position.position_size if position.position_size is not None else req.position_size
         return base_size * req.leverage
 
-    all_dates = sorted({date for _, signal, _ in candidates for date in signal.index})
-    controlled = [pd.Series(0.0, index=close.index) for _, _, close in candidates]
+    all_dates = sorted({date for _, buy, _, _ in candidates for date in buy.index})
+    controlled = [pd.Series(0.0, index=close.index) for _, _, _, close in candidates]
     active: set[int] = set()
-    for date in all_dates:
-        for i, (_, signal, _) in enumerate(candidates):
-            if i not in active or date not in signal.index:
+    # Admission runs on the RAW per-bar entry/exit conditions now (not a
+    # latched single-position reconstruction — see _fetch_one above): a
+    # flat ticker is admitted on any bar its own entry rule is freshly true
+    # and there's exposure room; an admitted ticker releases its slot on the
+    # rule's own sell condition OR (since risk-control exits are common and
+    # valid with no sell rule at all — this ticker's entry_bar's P&L engine
+    # will genuinely close on its own) once max_hold_bars elapses, mirroring
+    # the leg's own P&L engine's time-based control. max_hold_bars is the
+    # one risk control cheap to mirror here (pure bar-counting, no P&L
+    # needed); stop-loss/take-profit/trailing-stop can still close a
+    # position earlier than this without releasing the slot early — bounded
+    # staleness (at most max_hold_bars, when set), not a full fix for every
+    # risk-control combination.
+    entry_bar: dict[int, int] = {}
+    for bar_idx, date in enumerate(all_dates):
+        just_released: set[int] = set()
+        for i, (p, _, sell, _) in enumerate(candidates):
+            if i not in active or date not in sell.index:
                 continue
-            if signal.loc[date] == 0:
+            held_bars = bar_idx - entry_bar[i]
+            if sell.loc[date] or (p.max_hold_bars is not None and held_bars >= p.max_hold_bars):
                 active.remove(i)
+                entry_bar.pop(i, None)
+                just_released.add(i)
             else:
                 controlled[i].loc[date] = 1.0
-        for i, (_, signal, _) in enumerate(candidates):
-            if i in active or date not in signal.index or signal.loc[date] == 0:
+        for i, (_, buy, _, _) in enumerate(candidates):
+            # A release leaves this bar as the gap between the closed lot and
+            # any new one — admitting again on the SAME bar would collapse
+            # that gap and controlled[i] would never actually dip to 0 here,
+            # so downstream edge-detection (position_changes in _compute_leg)
+            # would never see the close/reopen as two separate trades.
+            if i in active or i in just_released or date not in buy.index or not buy.loc[date]:
                 continue
             open_exposure = sum(trade_size(candidates[active_i][0]) for active_i in active)
             if open_exposure + trade_size(candidates[i][0]) > req.max_exposure * req.leverage:
                 continue
             active.add(i)
+            entry_bar[i] = bar_idx
             controlled[i].loc[date] = 1.0
 
     # Same rationale as the fetch stage above: each leg's _instrument_metrics
@@ -1128,7 +1153,7 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(_PORTFOLIO_FETCH_WORKERS, len(pairs)))) as pool:
         futures = {
             pool.submit(_compute_leg, p, close, signal): i
-            for i, ((p, _raw_signal, close), signal) in enumerate(pairs)
+            for i, ((p, _buy, _sell, close), signal) in enumerate(pairs)
         }
         for fut in concurrent.futures.as_completed(futures):
             leg_results[futures[fut]] = fut.result()
