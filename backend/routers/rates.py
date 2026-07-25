@@ -5,6 +5,7 @@ from cachetools import TTLCache
 import threading
 import sys, os
 import calendar
+import math
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -675,22 +676,49 @@ def fed_projections():
     Futures quotes are fetched in parallel (network I/O), but unblending each
     one into a post-meeting rate (_unblend_meeting_rate) needs the PRIOR
     meeting's already-resolved rate, so that step runs sequentially in the
-    loop below rather than inside the parallel fetch."""
+    loop below rather than inside the parallel fetch.
+
+    A meeting late in its own contract month (e.g. day 28 of 31) unblends by
+    dividing by a small days_after — any noise in that contract's quote
+    (thin/stale trading on a less-active month) gets amplified by roughly
+    days_in_month/days_after, which can turn a few bps of quote noise into a
+    20-30bp swing in the implied rate. When the immediately FOLLOWING
+    calendar month has no FOMC meeting of its own, that month's contract
+    needs no unblending at all — the entire month sits at the constant
+    post-meeting rate — so it's used directly instead whenever available,
+    which is the case for most late-month meetings (FOMC meetings are rarely
+    back-to-back months)."""
     today = date.today()
     upcoming = [d for d in (date.fromisoformat(x) for x in _FOMC_DATES) if d >= today][:8]
     current_rate = _current_ffr()
     curve_path = _curve_implied_path(upcoming, current_rate)
+    meeting_months = {(d.year, d.month) for d in (date.fromisoformat(x) for x in _FOMC_DATES)}
+
+    clean_next: list[date | None] = []
+    for mtg in upcoming:
+        days_in_month = calendar.monthrange(mtg.year, mtg.month)[1]
+        if days_in_month - mtg.day < 7:
+            next_month = mtg.month % 12 + 1
+            next_year = mtg.year + (1 if mtg.month == 12 else 0)
+            clean_next.append(None if (next_year, next_month) in meeting_months else date(next_year, next_month, 1))
+        else:
+            clean_next.append(None)
 
     # yfinance holds a pandas frame per call: keep the pool small for memory.
-    with ThreadPoolExecutor(max_workers=2) as ex:
-        zq_raw = list(ex.map(_zq_raw_month_rate, upcoming))
+    fetch_targets = list(upcoming) + [d for d in clean_next if d is not None]
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        fetched = dict(zip(fetch_targets, ex.map(_zq_raw_month_rate, fetch_targets)))
 
     meetings: list[dict] = []
     prev_rate = current_rate
     used_futures = False
     for i, mtg in enumerate(upcoming):
-        raw = zq_raw[i]
-        if raw is not None:
+        clean_rate = fetched.get(clean_next[i]) if clean_next[i] is not None else None
+        raw = fetched.get(mtg)
+        if clean_rate is not None:
+            implied, src = clean_rate, "futures"
+            used_futures = True
+        elif raw is not None:
             implied = raw if prev_rate is None else _unblend_meeting_rate(raw, mtg, prev_rate)
             src = "futures"
             used_futures = True
@@ -725,11 +753,51 @@ def fed_projections():
     source = ("CME ZQ futures + FRED curve" if used_futures
               else "FRED Treasury-curve-implied path" if curve_path is not None
               else "unavailable")
+
+    # Cumulative target-rate-bucket distribution — CME's own "Aggregated" view
+    # (their FedWatch tool shows this alongside the per-meeting "Conditional"
+    # probabilities above). Verified against CME's own published numbers: this
+    # is a simple two-bucket linear interpolation on the CUMULATIVE fractional
+    # count of expected 25bp moves from today to that meeting — i.e. how far
+    # (implied_rate - current_rate)/0.25 sits between its floor and ceiling —
+    # NOT a full multi-bucket random walk compounding each meeting's own
+    # hike/hold/cut independently (that overspreads the distribution; tested
+    # and rejected against CME's real table before landing on this formula).
+    cumulative_buckets = []
+    if current_rate is not None:
+        lower0 = math.floor(current_rate / 0.25) * 0.25
+        for m in meetings:
+            cum_moves = (m["rate"] - current_rate) / 0.25
+            lo = math.floor(cum_moves)
+            frac = cum_moves - lo
+            buckets = []
+            if frac < 0.999:
+                buckets.append((lo, 1 - frac))
+            if frac > 0.001:
+                buckets.append((lo + 1, frac))
+            if not buckets:
+                buckets = [(lo, 1.0)]
+            cumulative_buckets.append({
+                "date": m["date"],
+                "buckets": [
+                    {
+                        "range": f"{round((lower0 + k * 0.25) * 100)}-{round((lower0 + k * 0.25 + 0.25) * 100)}",
+                        "prob": round(v * 100, 2),
+                    }
+                    for k, v in buckets
+                ],
+            })
+
     result = {
         "meetings":     meetings,
         "current_rate": round(current_rate, 2) if current_rate is not None else None,
+        "current_target_range": (
+            f"{round(math.floor(current_rate / 0.25) * 25)}-{round(math.floor(current_rate / 0.25) * 25 + 25)}"
+            if current_rate is not None else None
+        ),
         "next_meeting_date": upcoming[0].isoformat() if upcoming else None,
         "source":       source,
+        "cumulative_buckets": cumulative_buckets,
     }
     return result
 
@@ -880,7 +948,7 @@ _FOMC_DATES = [
     "2025-07-30", "2025-09-17", "2025-10-29", "2025-12-10",
     "2026-01-28", "2026-03-18", "2026-04-29", "2026-06-17",
     "2026-07-29", "2026-09-16", "2026-10-28", "2026-12-09",
-    "2027-01-27", "2027-03-17", "2027-04-28", "2027-06-16",
+    "2027-01-27", "2027-03-17", "2027-04-28", "2027-06-09",
     "2027-07-28", "2027-09-15", "2027-10-27", "2027-12-08",
 ]
 

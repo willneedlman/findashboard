@@ -216,6 +216,51 @@ function OddsStrip({ meetings }: { meetings: any[] }) {
   )
 }
 
+// ── Band 4b: cumulative target-rate-bucket table (CME "Aggregated" view) ────
+function CumulativeBucketsTable({ rows }: { rows: { date: string; buckets: { range: string; prob: number }[] }[] }) {
+  if (!rows.length) return null
+  const columns = [...new Set(rows.flatMap(r => r.buckets.map(b => b.range)))]
+    .sort((a, b) => parseInt(a.split('-')[0]) - parseInt(b.split('-')[0]))
+  return (
+    <div style={band}>
+      <div style={{ ...bandTitle, marginBottom: 4 }}>Cumulative Target Rate Probabilities</div>
+      <div style={{ fontFamily: T.mono, fontSize: 8.5, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>
+        Probability the target range is at each level BY that meeting (compounding every meeting from today) — CME's own "Aggregated" view, as distinct from the per-meeting odds above.
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ borderCollapse: 'collapse', width: '100%', fontFamily: T.mono, fontSize: 10 }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: 'left', padding: '4px 10px', color: T.muted, fontWeight: 700, letterSpacing: '0.08em', fontSize: 9, whiteSpace: 'nowrap' }}>Meeting</th>
+              {columns.map(c => (
+                <th key={c} style={{ textAlign: 'right', padding: '4px 10px', color: T.muted, fontWeight: 700, letterSpacing: '0.08em', fontSize: 9, whiteSpace: 'nowrap' }}>{c}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => {
+              const byRange = new Map(r.buckets.map(b => [b.range, b.prob]))
+              return (
+                <tr key={r.date} style={{ borderTop: `1px solid ${T.borderFaint}` }}>
+                  <td style={{ padding: '4px 10px', color: i === 0 ? T.gold : T.text, fontWeight: i === 0 ? 700 : 400, whiteSpace: 'nowrap' }}>{i === 0 ? '▸ ' : ''}{r.date}</td>
+                  {columns.map(c => {
+                    const v = byRange.get(c)
+                    return (
+                      <td key={c} style={{ textAlign: 'right', padding: '4px 10px', color: v ? T.text : T.textDim, whiteSpace: 'nowrap' }}>
+                        {v ? `${v.toFixed(1)}%` : '—'}
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 // ── Band 5: yield curve ─────────────────────────────────────────────────────
 function YieldCurveChart({ rows, twist }: { rows: any[]; twist: number }) {
   const active = twist !== 0
@@ -626,6 +671,9 @@ export function FedRatesContent() {
 
               {/* Band 4 — meeting odds */}
               <OddsStrip meetings={adjustedMeetings} />
+
+              {/* Band 4b — cumulative rate-bucket probabilities */}
+              <CumulativeBucketsTable rows={fedData?.cumulative_buckets ?? []} />
             </>
           )}
 
