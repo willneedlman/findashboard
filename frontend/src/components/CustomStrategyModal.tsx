@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect, type ReactNode } from 'react'
 import axios from 'axios'
+import useIsMobile from '../hooks/useIsMobile'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -845,6 +846,7 @@ interface Props {
 export default function CustomStrategyModal({ open, onClose, onSave, initialDef, allowAiAssist = true, aiAssistant, initialTab = 'manual' }: Props) {
   const [def, setDef] = useState<CustomStrategyDef>(() => initialDef ?? { ...DEFAULTS, buy: { ...DEFAULTS.buy }, sell: { ...DEFAULTS.sell }, name: '' })
   const [nameError, setNameError] = useState('')
+  const isMobile = useIsMobile()
   const [tab, setTab] = useState<'manual' | 'describe'>(initialTab)
   const aiAssistantOwnsSave = Boolean(aiAssistant) && tab === 'describe'
 
@@ -1051,7 +1053,7 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef,
             <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', color: T.muted, textTransform: 'uppercase', marginBottom: 8, fontFamily: T.mono }}>
               Risk Management
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)', gap: 8 }}>
               {([
                 ['Position Size %', 'sizingPct', 5, 0, Infinity],
                 ['Stop-Loss %', 'stopLossPct', 0.5, 0, Infinity],

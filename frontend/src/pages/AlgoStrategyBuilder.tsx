@@ -8,6 +8,7 @@ import EmptyState from '../components/EmptyState'
 import TickerInput from '../components/TickerInput'
 import { KpiCell } from '../components/mmCockpit'
 import { useChartColors } from '../hooks/useChartColors'
+import useIsMobile from '../hooks/useIsMobile'
 import { INPUT, LABEL, TOOLTIP_STYLE, TOOLTIP_LABEL, TOOLTIP_ITEM, TICK } from './valuationShared'
 import CustomStrategyModal, { type CustomStrategyDef, type StrategyRisk, DEFAULT_RISK, rulesForTicker, usesNonDailyTimeframe } from '../components/CustomStrategyModal'
 import { loadCustomStrategies, saveCustomStrategy, deleteCustomStrategy, duplicateCustomStrategy } from '../utils/customStrategies'
@@ -864,6 +865,7 @@ function StrategyControlsPanel({
     letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap',
   }
   const [confirmClear, setConfirmClear] = useState(false)
+  const isMobile = useIsMobile()
   return (
     <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
       <div style={{
@@ -1001,8 +1003,8 @@ function StrategyControlsPanel({
             </div>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 250px', gap: 16, padding: 10, alignItems: 'stretch' }}>
-            <div style={{ borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingRight: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) 250px', gap: 16, padding: 10, alignItems: 'stretch' }}>
+            <div style={isMobile ? undefined : { borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingRight: 16 }}>
               {mode === 'portfolio' ? (
                 <>
                   {positions.length === 0 && (
