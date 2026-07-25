@@ -197,12 +197,25 @@ function twoSidedTPValue(t: number, degreesOfFreedom: number): number | null {
   return regularizedBeta(degreesOfFreedom / (degreesOfFreedom + t ** 2), degreesOfFreedom / 2, 0.5)
 }
 
-export function quickRegression(curve: { x: number; y: number }[]): QuickRegression {
-  const x: number[] = [], y: number[] = []
+// Day-over-day % change pairs from a raw {x,y} value curve — the diffing
+// step quickRegression normally does internally, split out so a caller can
+// filter which DAYS' returns feed the regression (e.g. active-position-only)
+// without re-differencing already-differenced values.
+export function dailyReturnPairs(curve: { x: number; y: number }[]): { x: number; y: number }[] {
+  const pairs: { x: number; y: number }[] = []
   for (let i = 1; i < curve.length; i++) {
     const px = curve[i - 1].x, py = curve[i - 1].y
-    if (px > 0 && py > 0) { x.push(curve[i].x / px - 1); y.push(curve[i].y / py - 1) }
+    if (px > 0 && py > 0) pairs.push({ x: curve[i].x / px - 1, y: curve[i].y / py - 1 })
   }
+  return pairs
+}
+
+export function quickRegression(curve: { x: number; y: number }[]): QuickRegression {
+  return regressReturnPairs(dailyReturnPairs(curve))
+}
+
+export function regressReturnPairs(pairs: { x: number; y: number }[]): QuickRegression {
+  const x = pairs.map(p => p.x), y = pairs.map(p => p.y)
   const n = x.length
   if (n < 2) return { x, y, line: [], beta: 0, alpha: 0, correlation: 0, rSquared: 0, betaPValue: null, alphaPValue: null, observations: n }
   const mx = x.reduce((s, v) => s + v, 0) / n

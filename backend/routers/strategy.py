@@ -1270,6 +1270,13 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
 
     return {
         "equity_curve": curve,
+        # Portfolio-level "is any leg currently open" — gross_notional already
+        # sums each leg's own in_position across the shared timeline (see the
+        # financing-cost calc above), so > 0 means at least one position is
+        # live that day. Same shape/convention as the single-position route's
+        # top-level in_position array, for the regression view's active-days
+        # toggle to consume identically in both modes.
+        "in_position": [bool(v > 0) for v in gross_notional.reindex(port_eq.index).fillna(0.0)],
         "metrics": {
             "total_return": round(total_return, 2), "ann_return": round(ann_return, 2),
             "max_drawdown": round(max_drawdown, 2), "sharpe": round(sharpe, 3),

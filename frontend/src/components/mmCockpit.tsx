@@ -188,7 +188,7 @@ export function KpiCell({ label, value, color, valueSize = 13, grow = false, min
     <div style={{
       display: 'flex', flexDirection: 'column', justifyContent: align === 'top' ? 'flex-start' : 'center', gap: 3,
       padding: align === 'top' ? '11px 14px' : '6px 13px', borderRight: `1px solid ${V.border}`,
-      flex: grow ? 1 : '0 0 auto', minWidth,
+      flex: grow ? 1 : '0 0 auto', minWidth: minWidth ?? 0,
     }}>
       {help ? (
         <span style={{ display: 'inline-flex', alignItems: 'center' }}>
@@ -198,8 +198,8 @@ export function KpiCell({ label, value, color, valueSize = 13, grow = false, min
       ) : (
         <span style={{ ...EYEBROW, fontSize: 8 }}>{label}</span>
       )}
-      <span style={{ fontFamily: V.mono, fontSize: valueSize, fontWeight: 700, color: color || V.text, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
-      {sub && <span style={{ fontFamily: V.sans, fontSize: 9, color: subColor || V.sec, whiteSpace: 'nowrap', marginTop: 1 }}>{sub}</span>}
+      <span style={{ fontFamily: V.mono, fontSize: valueSize, fontWeight: 700, color: color || V.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+      {sub && <span style={{ fontFamily: V.sans, fontSize: 9, color: subColor || V.sec, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 1 }}>{sub}</span>}
     </div>
   )
 }

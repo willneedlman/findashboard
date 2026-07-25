@@ -321,7 +321,7 @@ function HousingMarketContent() {
 
         <section style={PANEL}>
           <PanelHead title="Mortgage Credit Risk" meta="national" />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
             <KpiCell label="SF Delinquency" value={pct(national.sf_default_rate)} valueSize={20} sub={signed(national.trends.sf_default_rate.yoy)} color={metricColor(pct(national.sf_default_rate), national.sf_default_rate > 2 ? T.neg : T.text)} />
             <KpiCell label="90+ Days Past Due" value={pct(national.serious_delinquency)} valueSize={20} color={metricColor(pct(national.serious_delinquency))} sub="serious delinquency" />
             <KpiCell label="Multifamily Default" value={pct(national.mf_default_rate)} valueSize={20} color={metricColor(pct(national.mf_default_rate))} sub="FRED series unavailable" />

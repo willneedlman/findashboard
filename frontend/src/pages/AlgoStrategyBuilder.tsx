@@ -13,7 +13,7 @@ import { INPUT, LABEL, TOOLTIP_STYLE, TOOLTIP_LABEL, TOOLTIP_ITEM, TICK } from '
 import CustomStrategyModal, { type CustomStrategyDef, type StrategyRisk, DEFAULT_RISK, rulesForTicker, usesNonDailyTimeframe } from '../components/CustomStrategyModal'
 import { loadCustomStrategies, saveCustomStrategy, deleteCustomStrategy, duplicateCustomStrategy } from '../utils/customStrategies'
 import { PRESETS, PRESET_GROUPS, type Leg } from './strategy-builder/shared'
-import { ReturnsScatter, quickRegression } from './regressionShared'
+import { ReturnsScatter, dailyReturnPairs, regressReturnPairs } from './regressionShared'
 import { readPMPortfolios, normalizeTicker, type PMPortfolio } from '../lib/pmImport'
 import { SCREENER_ALGO_HANDOFF_KEY, type ScreenerAlgoHandoff, loadScreens, type Preset as SavedScreen } from './StockScreener'
 import { screenerFilterToApi } from '../lib/format'
@@ -228,6 +228,7 @@ const POS = 'var(--theme-positive)', NEG = 'var(--theme-negative)'
 
 interface BacktestResult {
   equity_curve: { date: string; strategy: number; benchmark: number }[]
+  in_position?: boolean[]
   metrics: {
     total_return: number; ann_return: number; max_drawdown: number; sharpe: number
     num_trades: number; win_rate: number; initial_capital: number; final_capital: number; total_pnl: number; interest_paid?: number; leverage?: number; effective_annual_rate?: number; blown_up_at?: string | null
@@ -257,6 +258,7 @@ interface PortfolioPos {
 }
 interface PortfolioResult {
   equity_curve: { date: string; strategy: number; benchmark: number }[]
+  in_position?: boolean[]
   metrics: BacktestResult['metrics']
   positions: { ticker: string; side: string; instrument: string; opt_type?: string | null; weight_pct: number; return_pct: number; pnl: number; num_trades: number }[]
   trades?: BacktestTrade[]
@@ -1707,14 +1709,32 @@ export function AlgoStrategyBuilderContent() {
     enabled: !!R?.span,
     staleTime: 5 * 60_000,
   })
+  const [regressionActiveOnly, setRegressionActiveOnly] = useState(false)
   const reg = useMemo(() => {
     if (!R || !spyHist.data?.length) return null
     const spyByDate = new Map(spyHist.data.map(p => [p.date, p.value]))
+    // in_position tags each equity-curve point as active/flat — carried
+    // through so "Active Only" can drop flat-day return pairs (which are
+    // always exactly 0%, regardless of what SPY did that day) without
+    // breaking the day-over-day diffing that "All Days" still needs. Falls
+    // back to "always active" for an older cached result with no in_position
+    // field, so the toggle degrades to the same thing as "All Days" instead
+    // of silently returning nothing.
     const curve = R.equity_curve
-      .map(pt => ({ x: spyByDate.get(pt.date), y: pt.strategy }))
-      .filter((pt): pt is { x: number; y: number } => typeof pt.x === 'number')
-    return curve.length > 1 ? quickRegression(curve) : null
-  }, [R, spyHist.data])
+      .map((pt, i) => ({ x: spyByDate.get(pt.date), y: pt.strategy, active: R.in_position?.[i] ?? true }))
+      .filter((pt): pt is { x: number; y: number; active: boolean } => typeof pt.x === 'number')
+    if (curve.length < 2) return null
+    if (!regressionActiveOnly) return regressReturnPairs(dailyReturnPairs(curve))
+    // Inlined rather than filtering dailyReturnPairs' output post hoc — that
+    // helper can itself skip a pair (an invalid price on either side), which
+    // would desync a same-index filter against `curve` silently.
+    const pairs: { x: number; y: number }[] = []
+    for (let i = 1; i < curve.length; i++) {
+      const px = curve[i - 1].x, py = curve[i - 1].y
+      if (px > 0 && py > 0 && curve[i].active) pairs.push({ x: curve[i].x / px - 1, y: curve[i].y / py - 1 })
+    }
+    return pairs.length > 1 ? regressReturnPairs(pairs) : null
+  }, [R, spyHist.data, regressionActiveOnly])
   const formatPValue = (value: number | null) => value === null ? '—' : value < 0.001 ? '<0.001' : value.toFixed(3)
 
   // One hover marker per date+direction — a combo trade posts one row per leg
@@ -2062,6 +2082,18 @@ export function AlgoStrategyBuilderContent() {
             <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative', marginTop: 12 }}>
               <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10, background: 'var(--theme-surface, #142032)', padding: '3px 8px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>
                 Regression — Strategy vs Market (SPY) Daily Returns
+              </div>
+              <div style={{ position: 'absolute', top: 0, right: 0, zIndex: 10, display: 'flex' }}>
+                {([['all', 'All Days'], ['active', 'Active Only']] as const).map(([v, label]) => (
+                  <button key={v} onClick={() => setRegressionActiveOnly(v === 'active')}
+                    title={v === 'active' ? "Only days a position was open — how directional the strategy is when it's actually trading" : "Every day in the window, flat days included as 0% return — the strategy's realized exposure over the whole backtest"}
+                    style={{
+                      padding: '3px 8px', fontFamily: 'var(--theme-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
+                      border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderLeft: v === 'active' ? 'none' : undefined,
+                      background: regressionActiveOnly === (v === 'active') ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' : 'var(--theme-surface, #142032)',
+                      color: regressionActiveOnly === (v === 'active') ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)',
+                    }}>{label}</button>
+                ))}
               </div>
               <div style={{ paddingTop: 30, paddingLeft: 8, paddingRight: 8, paddingBottom: 8 }}>
                 <ReturnsScatter x={reg.x} y={reg.y} line={reg.line} xLabel="SPY" height={280} />
