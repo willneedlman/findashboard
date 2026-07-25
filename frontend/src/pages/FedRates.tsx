@@ -178,15 +178,21 @@ function OddsStrip({ meetings }: { meetings: any[] }) {
   const [hover, setHover] = useState<number | null>(null)
   return (
     <div style={band}>
-      <div style={{ ...bandTitle, marginBottom: 12 }}>Meeting Odds — Hike / Hold / Cut</div>
+      <div style={{ ...bandTitle, marginBottom: 4 }}>Meeting Odds — Hike / Hold / Cut</div>
+      <div style={{ fontFamily: T.mono, fontSize: 8.5, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>
+        Source: CME Fed Funds futures (ZQ), unblended for meeting-month timing. Falls back to the FRED Treasury curve when a contract has no data — meetings marked <span style={{ color: T.gold }}>†</span> below used that fallback.
+      </div>
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(meetings.length, 8)}, 1fr)`, gap: 14 }}>
       {meetings.slice(0, 8).map((m, i) => {
         const outcomes: [string, number, string][] = [['HIKE', m.prob_hike, C_HIKE], ['HOLD', m.prob_hold, C_HOLD], ['CUT', m.prob_cut, C_CUT]]
         const [domLabel, domVal, domCol] = outcomes.reduce((a, b) => b[1] > a[1] ? b : a)
+        const fellBack = m.source && m.source !== 'futures'
         return (
           <div key={m.date} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} style={{ position: 'relative', minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6, gap: 6 }}>
-              <span style={{ fontFamily: T.mono, fontSize: 9, color: i === 0 ? T.gold : T.muted, fontWeight: i === 0 ? 700 : 400, whiteSpace: 'nowrap' }}>{i === 0 ? '▸ ' : ''}{m.date}</span>
+              <span style={{ fontFamily: T.mono, fontSize: 9, color: i === 0 ? T.gold : T.muted, fontWeight: i === 0 ? 700 : 400, whiteSpace: 'nowrap' }}>
+                {i === 0 ? '▸ ' : ''}{m.date}{fellBack && <span style={{ color: T.gold }} title={`No CME futures data for this meeting — used ${m.source === 'curve' ? 'the FRED Treasury curve' : 'the prior meeting\'s rate'} instead`}> †</span>}
+              </span>
               <span style={{ fontFamily: T.mono, fontSize: 10, fontWeight: 700, color: domCol, whiteSpace: 'nowrap' }}>{domLabel} {Math.round(domVal)}</span>
             </div>
             <div style={{ display: 'flex', height: 8, background: 'rgba(255,255,255,0.05)' }}>
@@ -197,6 +203,9 @@ function OddsStrip({ meetings }: { meetings: any[] }) {
                 {outcomes.map(([lbl, v, c]) => (
                   <div key={lbl} style={{ display: 'flex', justifyContent: 'space-between', gap: 14, color: c }}><span>{lbl}</span><span>{Math.round(v)}%</span></div>
                 ))}
+                <div style={{ fontSize: 8, color: T.textDim, marginTop: 4, paddingTop: 4, borderTop: `1px solid ${T.border}` }}>
+                  {m.source === 'futures' ? 'CME ZQ futures' : m.source === 'curve' ? 'FRED Treasury curve (no futures data)' : 'carried from prior meeting (no data)'}
+                </div>
               </div>
             )}
           </div>

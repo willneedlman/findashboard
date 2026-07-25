@@ -4,6 +4,7 @@ from fastapi import APIRouter
 from cachetools import TTLCache
 import threading
 import sys, os
+import calendar
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -557,6 +558,15 @@ def _fred_latest(series_id: str) -> float | None:
     return None
 
 
+def _zq_symbol(month: int, year: int) -> str:
+    """Yahoo Finance ticker for a specific-month CME ZQ (30-Day Fed Funds)
+    contract. The generic continuous-front-month convention used elsewhere in
+    this codebase (TICKER=F) does NOT resolve for individual expiry months on
+    this product — Yahoo serves those under the CBOT-suffixed form instead
+    (confirmed live: ZQN26=F 404s, ZQN26.CBT returns real data)."""
+    return f"ZQ{_ZQ_MONTH[month]}{str(year)[-2:]}.CBT"
+
+
 def _current_ffr() -> float | None:
     """Current effective Fed Funds Rate from FRED (DFF), falling back to the
     front-month ZQ future. None if neither is reachable."""
@@ -565,8 +575,7 @@ def _current_ffr() -> float | None:
         return val
     try:
         today = date.today()
-        sym = f"ZQ{_ZQ_MONTH[today.month]}{str(today.year)[-2:]}=F"
-        h = get_history(sym, period="5d")
+        h = get_history(_zq_symbol(today.month, today.year), period="5d")
         if not h.empty:
             return round(100.0 - float(h["Close"].iloc[-1]), 4)
     except Exception:
@@ -574,17 +583,40 @@ def _current_ffr() -> float | None:
     return None
 
 
-def _zq_implied_rate(meeting: date) -> float | None:
-    """Market-implied average funds rate for a meeting's month, from the ZQ
-    future (price = 100 - rate). None if the contract has no data."""
+def _zq_raw_month_rate(meeting: date) -> float | None:
+    """Raw ZQ future quote for a meeting's contract month (price = 100 - rate).
+    This settles to the arithmetic average EFFECTIVE rate over the future's
+    ENTIRE contract month — NOT the post-meeting rate — so it needs unblending
+    (see _unblend_meeting_rate) before it means anything meeting-specific.
+    None if the contract has no data."""
     try:
-        sym = f"ZQ{_ZQ_MONTH[meeting.month]}{str(meeting.year)[-2:]}=F"
-        h = get_history(sym, period="5d")
+        h = get_history(_zq_symbol(meeting.month, meeting.year), period="5d")
         if h.empty:
             return None
         return round(100.0 - float(h["Close"].iloc[-1]), 4)
     except Exception:
         return None
+
+
+def _unblend_meeting_rate(avg_rate: float, meeting: date, prior_rate: float) -> float:
+    """Back the post-meeting funds rate out of a whole-month futures average.
+
+    A meeting on day 29 of a 31-day month means only 2 of those 31 days are
+    actually at the new (post-meeting) rate — the other 29 are still at the
+    already-known prior rate. Reading the raw monthly average as if it WERE
+    the post-meeting rate massively understates any expected move for a
+    meeting that falls late in its month (which is most of them), since the
+    signal is diluted by weeks of "no change yet". This unblends using the
+    same days-before/days-after convention CME's own FedWatch tool uses (rate
+    holds through the meeting day itself, changes the day after):
+        avg = (days_before/days_in_month) * prior_rate + (days_after/days_in_month) * post_rate
+    solved for post_rate."""
+    days_in_month = calendar.monthrange(meeting.year, meeting.month)[1]
+    days_before = meeting.day
+    days_after = days_in_month - days_before
+    if days_after <= 0:
+        return round(avg_rate, 4)
+    return round((avg_rate * days_in_month - days_before * prior_rate) / days_after, 4)
 
 
 def _curve_implied_path(upcoming: list[date], current_rate: float | None) -> list[float] | None:
@@ -638,7 +670,12 @@ def fed_projections():
     when available for true market-implied pricing. No hardcoded probabilities.
     Cached 5 min — matches the ZQ futures quote's own cache TTL (cache.py's
     get_history), so meeting odds track intraday futures moves rather than
-    sticking on a stale hourly snapshot."""
+    sticking on a stale hourly snapshot.
+
+    Futures quotes are fetched in parallel (network I/O), but unblending each
+    one into a post-meeting rate (_unblend_meeting_rate) needs the PRIOR
+    meeting's already-resolved rate, so that step runs sequentially in the
+    loop below rather than inside the parallel fetch."""
     today = date.today()
     upcoming = [d for d in (date.fromisoformat(x) for x in _FOMC_DATES) if d >= today][:8]
     current_rate = _current_ffr()
@@ -646,15 +683,16 @@ def fed_projections():
 
     # yfinance holds a pandas frame per call: keep the pool small for memory.
     with ThreadPoolExecutor(max_workers=2) as ex:
-        zq_rates = list(ex.map(_zq_implied_rate, upcoming))
+        zq_raw = list(ex.map(_zq_raw_month_rate, upcoming))
 
     meetings: list[dict] = []
     prev_rate = current_rate
     used_futures = False
     for i, mtg in enumerate(upcoming):
-        zq = zq_rates[i]
-        if zq is not None:
-            implied, src = zq, "futures"
+        raw = zq_raw[i]
+        if raw is not None:
+            implied = raw if prev_rate is None else _unblend_meeting_rate(raw, mtg, prev_rate)
+            src = "futures"
             used_futures = True
         elif curve_path is not None:
             implied, src = curve_path[i], "curve"
