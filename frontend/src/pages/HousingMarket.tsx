@@ -30,22 +30,18 @@ interface RegionRow {
   market: string
   rate_30y: number
   sf_default_rate: number
-  mf_default_rate: number
+  cre_delinquency_rate: number
   serious_delinquency: number
-  foreclosure_rate: number
-  negative_equity: number
-  avg_ltv: number
-  avg_fico: number
   trends: {
     median_price: Trend
     sales_volume: Trend
     affordability_index: Trend
     months_of_supply: Trend
     sf_default_rate: Trend
-    mf_default_rate: Trend
+    cre_delinquency_rate: Trend
     serious_delinquency: Trend
   }
-  history: { asof: string; median_price: number; sales_volume: number; months_of_supply: number; sf_default_rate: number; mf_default_rate: number; affordability_index: number }[]
+  history: { asof: string; median_price: number; sales_volume: number; months_of_supply: number; sf_default_rate: number; cre_delinquency_rate: number; affordability_index: number }[]
 }
 interface Report {
   available?: boolean
@@ -192,8 +188,7 @@ function HousingMarketContent() {
       kpiClip(TAB, 'Mortgage Credit Risk', [
         { label: 'SF Delinquency', value: pct(national.sf_default_rate) },
         { label: '90+ Days Past Due', value: pct(national.serious_delinquency) },
-        { label: 'Multifamily Default', value: pct(national.mf_default_rate) },
-        { label: 'Foreclosure Rate', value: pct(national.foreclosure_rate) },
+        { label: 'CRE Delinquency', value: pct(national.cre_delinquency_rate) },
       ]),
     ]
     if (rates?.history?.length) {
@@ -321,13 +316,10 @@ function HousingMarketContent() {
 
         <section style={PANEL}>
           <PanelHead title="Mortgage Credit Risk" meta="national" />
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)' }}>
             <KpiCell label="SF Delinquency" value={pct(national.sf_default_rate)} valueSize={20} sub={signed(national.trends.sf_default_rate.yoy)} color={metricColor(pct(national.sf_default_rate), national.sf_default_rate > 2 ? T.neg : T.text)} />
             <KpiCell label="90+ Days Past Due" value={pct(national.serious_delinquency)} valueSize={20} color={metricColor(pct(national.serious_delinquency))} sub="serious delinquency" />
-            <KpiCell label="Multifamily Default" value={pct(national.mf_default_rate)} valueSize={20} color={metricColor(pct(national.mf_default_rate))} sub="FRED series unavailable" />
-            <KpiCell label="Foreclosure Rate" value={pct(national.foreclosure_rate)} valueSize={20} color={metricColor(pct(national.foreclosure_rate))} sub="FRED series unavailable" />
-            <KpiCell label="Negative Equity" value={pct(national.negative_equity, 1)} valueSize={20} color={metricColor(pct(national.negative_equity, 1))} sub="FRED series unavailable" />
-            <KpiCell label="Origination FICO / LTV" value={national.avg_fico > 0 ? `${national.avg_fico.toFixed(0)} / ${national.avg_ltv.toFixed(1)}%` : 'Data unavailable'} valueSize={20} color={metricColor(national.avg_fico > 0 ? `${national.avg_fico.toFixed(0)} / ${national.avg_ltv.toFixed(1)}%` : 'Data unavailable')} sub="lending standards" />
+            <KpiCell label="CRE Delinquency" value={pct(national.cre_delinquency_rate)} valueSize={20} sub={signed(national.trends.cre_delinquency_rate.yoy)} color={metricColor(pct(national.cre_delinquency_rate), national.cre_delinquency_rate > 2 ? T.neg : T.text)} />
           </div>
         </section>
       </div>

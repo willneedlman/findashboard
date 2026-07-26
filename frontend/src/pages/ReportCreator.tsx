@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { Plus, Trash2, ChevronUp, ChevronDown, Eye, EyeOff, FileText, FileDown, Sparkles, RefreshCw, Loader2, AlertTriangle } from 'lucide-react'
+import { Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Eye, EyeOff, FileText, FileDown, Sparkles, RefreshCw, Loader2, AlertTriangle, Check, Clock, Download } from 'lucide-react'
 import { T } from '../lib/theme'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
@@ -12,10 +12,21 @@ import {
   useReportCreator, createProject, renameProject, deleteProject, updateScope,
   removeClip, updateClipDescription, moveClip, timeframeLabel, clipTitle, formatCaptured,
   setGenerated, updateGenerated, updateGeneratedSection, updateKeyResult, isGenerationStale, summarizeClipForAI,
-  type ReportProject, type ReportClip,
+  deleteSnapshot,
+  type ReportProject, type ReportClip, type ReportSnapshot,
 } from '../lib/reportCreator'
+import { ReportRevise, BlockRevise } from '../components/report/ReviseControls'
 
 const DTYPE_COLOR: Record<string, string> = { table: '#60a5fa', chart: '#c9a84c', kpi: '#34d399', text: '#c084fc' }
+
+// Short stable hash of a field's current value, mixed into the uncontrolled
+// input keys so an AI revision written to the store remounts the field with its
+// new text (defaultValue only reads on mount).
+const vh = (s: string): string => {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
+  return h.toString(36)
+}
 
 const SPIN_CSS = `@keyframes rc-spin { to { transform: rotate(360deg) } } .rc-spin { animation: rc-spin 0.8s linear infinite }`
 
@@ -39,10 +50,12 @@ function GeneratedEditor({ project }: { project: ReportProject }) {
   const kr = gen.keyResult
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div>
+      <ReportRevise project={project} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={subLabel}>Headline</div>
-        <input key={`hl-${gen.generatedAt}`} defaultValue={gen.headline ?? ''} onBlur={e => updateGenerated(project.id, { headline: e.target.value })}
+        <input key={`hl-${gen.generatedAt}-${vh(gen.headline ?? '')}`} defaultValue={gen.headline ?? ''} onBlur={e => updateGenerated(project.id, { headline: e.target.value })}
           placeholder="Research-note headline" style={{ ...genField, fontFamily: T.mono, fontSize: 14, fontWeight: 700, resize: 'none' }} />
+        <BlockRevise project={project} field="headline" />
       </div>
       {gen.stance && (
         <div style={{ border: `1px solid ${T.border}`, background: T.bg, padding: 12 }}>
@@ -70,10 +83,11 @@ function GeneratedEditor({ project }: { project: ReportProject }) {
             placeholder="Supporting context (optional)" style={{ ...genField, marginTop: 8, fontFamily: T.mono, fontSize: 10.5, resize: 'none' }} />
         </div>
       )}
-      <div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={subLabel}>Executive summary</div>
-        <textarea key={`es-${gen.generatedAt}`} defaultValue={gen.executiveSummary} rows={4}
+        <textarea key={`es-${gen.generatedAt}-${vh(gen.executiveSummary)}`} defaultValue={gen.executiveSummary} rows={4}
           onBlur={e => updateGenerated(project.id, { executiveSummary: e.target.value })} style={genField} />
+        <BlockRevise project={project} field="executiveSummary" />
       </div>
       {gen.sections.map((s, i) => {
         const clip = clipById.get(s.clipId)
@@ -81,12 +95,12 @@ function GeneratedEditor({ project }: { project: ReportProject }) {
           <div key={s.clipId} style={{ border: `1px solid ${T.border}`, background: T.bg, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontFamily: T.mono, fontSize: 11, color: T.gold }}>{String(i + 1).padStart(2, '0')}</span>
-              <input key={`h-${gen.generatedAt}-${s.clipId}`} defaultValue={s.heading}
+              <input key={`h-${gen.generatedAt}-${s.clipId}-${vh(s.heading)}`} defaultValue={s.heading}
                 onBlur={e => updateGeneratedSection(project.id, s.clipId, { heading: e.target.value })}
                 style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: `1px solid ${T.border}`, color: T.text, fontFamily: T.label, fontSize: 12.5, fontWeight: 700, padding: '3px 0', outline: 'none' }} />
               <span style={{ fontFamily: T.mono, fontSize: 8, color: clip ? T.muted : T.neg }}>{clip ? clip.sourceTab : 'clip removed'}</span>
             </div>
-            <textarea key={`a-${gen.generatedAt}-${s.clipId}`} defaultValue={s.analysis} rows={4}
+            <textarea key={`a-${gen.generatedAt}-${s.clipId}-${vh(s.analysis)}`} defaultValue={s.analysis} rows={4}
               onBlur={e => updateGeneratedSection(project.id, s.clipId, { analysis: e.target.value })} style={genField} />
             {s.keyFigures && s.keyFigures.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -98,13 +112,15 @@ function GeneratedEditor({ project }: { project: ReportProject }) {
                 ))}
               </div>
             )}
+            <BlockRevise project={project} field="section.analysis" clipId={s.clipId} />
           </div>
         )
       })}
-      <div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={subLabel}>Conclusion and recommendations</div>
-        <textarea key={`cc-${gen.generatedAt}`} defaultValue={gen.conclusion} rows={4}
+        <textarea key={`cc-${gen.generatedAt}-${vh(gen.conclusion)}`} defaultValue={gen.conclusion} rows={4}
           onBlur={e => updateGenerated(project.id, { conclusion: e.target.value })} style={genField} />
+        <BlockRevise project={project} field="conclusion" />
       </div>
       {gen.appendixClipIds.length > 0 && (
         <div>
@@ -118,14 +134,20 @@ function GeneratedEditor({ project }: { project: ReportProject }) {
   )
 }
 
-function Section({ label, meta, children }: { label: string; meta?: React.ReactNode; children: React.ReactNode }) {
+function Section({ label, meta, children, collapsible, defaultOpen = true }: { label: string; meta?: React.ReactNode; children: React.ReactNode; collapsible?: boolean; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen)
+  const showBody = !collapsible || open
   return (
     <section style={{ border: `1px solid ${T.border}`, background: T.surface }}>
-      <div style={{ minHeight: 34, padding: '0 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderBottom: `1px solid ${T.border}` }}>
-        <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.text }}>{label}</span>
+      <div onClick={collapsible ? () => setOpen(o => !o) : undefined}
+        style={{ minHeight: 34, padding: '0 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderBottom: showBody ? `1px solid ${T.border}` : 'none', cursor: collapsible ? 'pointer' : 'default', userSelect: 'none' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: T.label, fontSize: 9, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.text }}>
+          {collapsible && (open ? <ChevronDown size={12} color={T.muted} /> : <ChevronRight size={12} color={T.muted} />)}
+          {label}
+        </span>
         {meta != null && <span style={{ fontFamily: T.mono, fontSize: 8.5, color: T.muted }}>{meta}</span>}
       </div>
-      <div style={{ padding: 14 }}>{children}</div>
+      {showBody && <div style={{ padding: 14 }}>{children}</div>}
     </section>
   )
 }
@@ -171,6 +193,57 @@ function IconBtn({ children, onClick, title, disabled, danger }: { children: Rea
   )
 }
 
+function HistoryCard({ project, snap, isLatest }: { project: ReportProject; snap: ReportSnapshot; isLatest: boolean }) {
+  const navigate = useNavigate()
+  const [confirming, setConfirming] = useState(false)
+  const g = snap.generated
+  const lean = g.stance?.lean
+  const leanColor = lean === 'bullish' ? T.pos : lean === 'bearish' ? T.neg : T.muted
+  const verdict = g.keyResult?.value || g.headline || 'Report'
+  const previewPath = `/report-creator/print/${project.id}?snapshot=${snap.id}`
+  const btn: React.CSSProperties = {
+    display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: T.label, fontSize: 8.5, fontWeight: 700,
+    letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 9px', cursor: 'pointer',
+  }
+  return (
+    <div style={{ border: `1px solid ${isLatest ? T.gold : T.border}`, background: isLatest ? T.goldTint(6) : T.bg, padding: '10px 12px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {lean && <span style={{ fontFamily: T.mono, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: leanColor }}>{lean}</span>}
+            <span style={{ fontFamily: T.mono, fontSize: 12.5, fontWeight: 700, color: T.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{verdict}</span>
+            {isLatest && <span style={{ fontFamily: T.label, fontSize: 7.5, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.gold, border: `1px solid ${T.gold}`, padding: '1px 5px' }}>Latest</span>}
+          </div>
+          {g.headline && verdict !== g.headline && (
+            <div style={{ fontFamily: T.label, fontSize: 10.5, color: T.muted, marginTop: 3, lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.headline}</div>
+          )}
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: T.mono, fontSize: 8.5, color: T.muted, marginTop: 5 }}>
+            <Clock size={10} /> {formatCaptured(snap.generatedAt)}
+            <span style={{ color: T.borderFaint }}>·</span>
+            {g.sections.length} section{g.sections.length === 1 ? '' : 's'}
+          </div>
+        </div>
+        {confirming ? (
+          <span style={{ display: 'inline-flex', gap: 4, flexShrink: 0 }}>
+            <button onClick={() => { deleteSnapshot(project.id, snap.id); setConfirming(false) }} style={{ ...btn, background: 'transparent', border: `1px solid ${T.neg}`, color: T.neg }}>Delete</button>
+            <button onClick={() => setConfirming(false)} style={{ ...btn, background: 'transparent', border: `1px solid ${T.border}`, color: T.muted }}>No</button>
+          </span>
+        ) : (
+          <IconBtn onClick={() => setConfirming(true)} title="Delete this report" danger><Trash2 size={12} /></IconBtn>
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginTop: 9 }}>
+        <button onClick={() => navigate(previewPath)} style={{ ...btn, background: 'transparent', border: `1px solid ${T.border}`, color: T.text }}>
+          <Eye size={11} /> Preview
+        </button>
+        <button onClick={() => navigate(`${previewPath}&download=1`)} style={{ ...btn, background: T.goldTint(12), border: `1px solid ${T.gold}`, color: T.gold }}>
+          <Download size={11} /> Download PDF
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function ReportCreator() {
   const projects = useReportCreator()
   const navigate = useNavigate()
@@ -180,18 +253,21 @@ export default function ReportCreator() {
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
+  const [justDone, setJustDone] = useState(false)
 
   const active = projects.find(p => p.id === activeId) ?? projects[0]
 
   const generate = async () => {
     if (!active || active.clips.length === 0) return
-    setGenerating(true); setGenError(null)
+    setGenerating(true); setGenError(null); setJustDone(false)
     try {
       const payload = {
         projectName: active.name,
         timeframe: timeframeLabel(active.scope),
         purpose: active.scope.purpose,
         goal: active.scope.goal,
+        length: active.scope.length,
+        mustInclude: active.scope.mustInclude,
         clips: active.clips.map(c => ({ id: c.id, sourceTab: c.sourceTab, dataType: c.dataType, title: clipTitle(c), userDescription: c.userDescription ?? '', dataSummary: summarizeClipForAI(c) })),
       }
       const r = await axios.post('/api/ai/report', payload)
@@ -205,6 +281,8 @@ export default function ReportCreator() {
         appendixClipIds: Array.isArray(r.data.appendixClipIds) ? r.data.appendixClipIds : [],
         model: r.data.model,
       })
+      setJustDone(true)
+      window.setTimeout(() => setJustDone(false), 6000)
     } catch (e) {
       const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       setGenError(detail || 'The AI writer is unavailable right now. You can still export the data as a plain report.')
@@ -222,7 +300,7 @@ export default function ReportCreator() {
 
   const clips = active?.clips ?? []
   const canGenerate = !!active && clips.length > 0
-  const scopeIncomplete = !!active && (!active.scope.purpose.trim() || !active.scope.goal.trim())
+  const scopeIncomplete = !!active && !active.scope.goal.trim() && !active.scope.purpose.trim()
 
   return (
     <PageWrapper>
@@ -291,6 +369,11 @@ export default function ReportCreator() {
                 onFocus={e => { e.target.style.borderBottomColor = T.border }}
               />
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                {justDone && !generating && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.pos, border: `1px solid ${T.pos}`, background: T.posTint(8), padding: '6px 9px' }}>
+                    <Check size={12} /> Report ready
+                  </span>
+                )}
                 {active.generated && (
                   <button onClick={generate} disabled={generating || !canGenerate} title="Regenerate from the current clips and scope"
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent', border: `1px solid ${T.border}`, color: T.muted, fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '8px 12px', cursor: generating ? 'default' : 'pointer', opacity: generating ? 0.6 : 1 }}>
@@ -317,11 +400,11 @@ export default function ReportCreator() {
               </div>
             )}
 
-            <Section label="Report scope" meta={timeframeLabel(active.scope)}>
+            <Section label="Report scope" meta={timeframeLabel(active.scope)} collapsible defaultOpen={!active.generated}>
               <ReportWizardForm scope={active.scope} onChange={patch => updateScope(active.id, patch)} />
             </Section>
 
-            <Section label="Clips" meta={`${clips.length} in order`}>
+            <Section label="Clips" meta={`${clips.length} in order`} collapsible defaultOpen={!active.generated}>
               {clips.length === 0 ? (
                 <div style={{ padding: '20px 8px', textAlign: 'center', fontFamily: T.mono, fontSize: 10.5, color: T.muted, lineHeight: 1.6 }}>
                   No clips yet. Open any tool and click Send to Report to add its tables, charts, or metrics here.
@@ -335,12 +418,12 @@ export default function ReportCreator() {
 
             {!active.generated && canGenerate && scopeIncomplete && (
               <div style={{ fontFamily: T.mono, fontSize: 9.5, color: T.warn }}>
-                Add a purpose and goal so the AI can anchor the report to your intent.
+                Add an objective so the AI can anchor the report to your intent.
               </div>
             )}
 
             {active.generated && (
-              <Section label="Generated report" meta={`AI draft · ${formatCaptured(active.generated.generatedAt)}`}>
+              <Section label="Generated report" meta={`AI draft · ${formatCaptured(active.generated.generatedAt)}`} collapsible defaultOpen>
                 {isGenerationStale(active) && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12, fontFamily: T.mono, fontSize: 9.5, color: T.warn }}>
                     <AlertTriangle size={12} /> Clips or scope changed since this draft. Regenerate to refresh the analysis.
@@ -350,6 +433,19 @@ export default function ReportCreator() {
                   Edit any section below. Your edits are saved and used in the exported PDF.
                 </p>
                 <GeneratedEditor project={active} />
+              </Section>
+            )}
+
+            {!!active.history?.length && (
+              <Section label="Report history" meta={`${active.history.length} generated`} collapsible defaultOpen={!active.generated}>
+                <p style={{ fontFamily: T.mono, fontSize: 9.5, color: T.muted, lineHeight: 1.5, margin: '0 0 12px' }}>
+                  Every report you generate is kept here. Preview or download any past version.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {active.history.map((snap, i) => (
+                    <HistoryCard key={snap.id} project={active} snap={snap} isLatest={i === 0} />
+                  ))}
+                </div>
               </Section>
             )}
           </div>

@@ -49,14 +49,15 @@ function MacroEventHubContent() {
   const live = (data?.events?.length ?? 0) > 0
   const events = useMemo(() => (live ? data!.events : MOCK_EVENTS), [live, data])
 
-  // Default range spans the currently loaded events. Derived (not stored) so it
-  // tracks the live set once it replaces the seed; a user edit sets filters.from
-  // and takes over.
+  // Default range is today through one month out, not the full span of
+  // whatever's loaded — a user edit sets filters.from/.to and takes over.
   const defaultRange = useMemo(() => {
-    if (!events.length) return { from: '', to: '' }
-    const d = events.map(e => e.datetime.slice(0, 10)).sort()
-    return { from: d[0], to: d[d.length - 1] }
-  }, [events])
+    const from = new Date()
+    const to = new Date(from)
+    to.setMonth(to.getMonth() + 1)
+    const fmt = (d: Date) => d.toISOString().slice(0, 10)
+    return { from: fmt(from), to: fmt(to) }
+  }, [])
   const fromEff = filters.from || defaultRange.from
   const toEff = filters.to || defaultRange.to
 

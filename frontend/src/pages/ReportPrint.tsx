@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { Download, ArrowLeft } from 'lucide-react'
 import ClipRenderer from '../components/report/ClipRenderer'
-import SectionLayout, { FillGrid, assignBodyVisuals } from '../components/report/SectionLayout'
+import SectionLayout, { FillGrid } from '../components/report/SectionLayout'
 import {
   useReportCreator, timeframeLabel, clipTitle,
   type ReportClip, type ClipPayload,
@@ -37,6 +37,17 @@ function sanitizeFilePart(s: string): string {
 
 function pdfBaseName(reportName: string, d = new Date()): string {
   return `${sanitizeFilePart(reportName)} — ${fmtDateFile(d)}`
+}
+
+// keyResult.value ranges from a short "$280–$310" to a longer open-mode
+// verdict phrase — scale down instead of hard-truncating so long text still
+// reads cleanly in a box sized for short ones.
+function heroFontSize(value: string, base: number, min: number): number {
+  const len = (value || '').length
+  if (len <= 12) return base
+  if (len <= 24) return Math.round(base * 0.82)
+  if (len <= 40) return Math.round(base * 0.66)
+  return min
 }
 
 function AppendixBlock({ clip, palette }: { clip: ReportClip; palette: ReportPalette }) {
@@ -80,25 +91,59 @@ function AppendixBlock({ clip, palette }: { clip: ReportClip; palette: ReportPal
 
 export default function ReportPrint() {
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
+  const snapshotId = searchParams.get('snapshot')
+  const autoDownload = searchParams.get('download') === '1'
   const navigate = useNavigate()
   const { theme } = useTheme()
   const palette = useMemo(() => buildReportPalette(theme), [theme])
   const projects = useReportCreator()
   const project = projects.find(p => p.id === id)
-  const gen = project?.generated
+  // Render either the live report (project.generated + current clips) or a
+  // specific archived snapshot when ?snapshot= is passed. A snapshot carries
+  // its own frozen clips/scope/name so a past report renders as it was.
+  const snapshot = snapshotId ? project?.history?.find(h => h.id === snapshotId) : undefined
+  const gen = snapshot ? snapshot.generated : project?.generated
+  const renderName = snapshot ? snapshot.name : project?.name
+  const renderScope = snapshot ? snapshot.scope : project?.scope
+  const renderClips = useMemo(
+    () => (snapshot ? snapshot.clips : project?.clips) ?? [],
+    [snapshot, project?.clips],
+  )
   const pageRef = useRef<HTMLDivElement>(null)
   const [exporting, setExporting] = useState(false)
   const [exportErr, setExportErr] = useState<string | null>(null)
   const clipById = useMemo(
-    () => new Map((project?.clips ?? []).map(c => [c.id, c])),
-    [project?.clips],
+    () => new Map(renderClips.map(c => [c.id, c])),
+    [renderClips],
   )
-  const allClips = project?.clips ?? []
+  const allClips = renderClips
 
   const bodyVisuals = useMemo(() => {
-    if (!gen) return new Map<string, { visual: ReportClip | undefined; showKeyFigures: boolean }>()
-    return assignBodyVisuals(gen.sections, clipById, allClips)
-  }, [gen, clipById, allClips])
+    const map = new Map<string, { visual: ReportClip | undefined; showKeyFigures: boolean }>()
+    if (!gen) return map
+    // The site owns every section chart. A section either carries a site-built
+    // chart (s.chart) — wrapped as a synthetic clip so the existing renderer
+    // draws it — or it shows prose plus its key-figure strip and no chart. Raw
+    // clip charts are never pulled into the body, which is what kept the report
+    // from turning into a wall of the source tools' line/bar projections.
+    for (const s of gen.sections) {
+      map.set(s.clipId, s.chart
+        ? {
+          visual: {
+            id: `site-chart:${s.clipId}`,
+            sourceTab: 'Alphatape',
+            capturedAt: gen.generatedAt,
+            dataType: 'chart',
+            payload: s.chart,
+            projectId: project?.id ?? '',
+          },
+          showKeyFigures: true,
+        }
+        : { visual: undefined, showKeyFigures: true })
+    }
+    return map
+  }, [gen, project?.id])
 
   const chartsUsedInBody = useMemo(() => {
     const ids = new Set<string>()
@@ -113,10 +158,14 @@ export default function ReportPrint() {
     const raw = gen.appendixClipIds.map(cid => clipById.get(cid)).filter((c): c is ReportClip => !!c)
     const isStub = (c: ReportClip) =>
       c.payload.kind === 'text' && /no structured panels|add a note describing/i.test(c.payload.body)
+    // The appendix is supporting DATA — tables, KPI grids, and profile text.
+    // Raw chart clips (the source tools' own line/bar projections) are dropped:
+    // they read as a monotonous wall of near-identical charts, and the curated,
+    // varied section charts in the body already carry the visual story.
     const rank = (c: ReportClip) =>
-      c.payload.kind === 'chart' ? 0 : c.payload.kind === 'kpi' ? 2 : c.payload.kind === 'table' ? 3 : 4
+      c.payload.kind === 'kpi' ? 2 : c.payload.kind === 'table' ? 3 : 4
     return raw
-      .filter(c => !isStub(c) && !chartsUsedInBody.has(c.id))
+      .filter(c => c.payload.kind !== 'chart' && !isStub(c) && !chartsUsedInBody.has(c.id))
       .sort((a, b) => rank(a) - rank(b))
   })()
 
@@ -129,7 +178,7 @@ export default function ReportPrint() {
   }, [gen?.generatedAt])
 
   const dateLong = fmtDateLong(reportDate)
-  const fileName = project ? pdfBaseName(project.name, reportDate) : 'Report'
+  const fileName = renderName ? pdfBaseName(renderName, reportDate) : 'Report'
 
   const eyebrow: React.CSSProperties = {
     fontFamily: palette.sans, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em',
@@ -172,12 +221,25 @@ export default function ReportPrint() {
     }
   }
 
+  // Opened with ?download=1 (from the History list's Download button): kick off
+  // the PDF export once the page has painted, then never re-fire.
+  const autoRan = useRef(false)
+  useEffect(() => {
+    if (!autoDownload || autoRan.current || !gen || !pageRef.current) return
+    autoRan.current = true
+    const t = setTimeout(() => { handleDownloadPdf() }, 400)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoDownload, gen])
+
+  // No per-cell sub-caption here: keyResult.context duplicates the Investment
+  // Summary paragraph directly below and was the only cell tall enough to
+  // stretch the row, leaving blank space under every sibling metric.
   const keyData: { label: string; value: string; sub?: string }[] = []
   if (gen?.keyResult) {
     keyData.push({
       label: gen.keyResult.label,
       value: gen.keyResult.value,
-      sub: gen.keyResult.context,
     })
   }
   const seen = new Set(keyData.map(k => k.label.toLowerCase()))
@@ -257,7 +319,7 @@ export default function ReportPrint() {
                   fontFamily: palette.sans, fontSize: 24, fontWeight: 700, color: palette.onMasthead,
                   margin: 0, lineHeight: 1.2, letterSpacing: '-0.02em',
                 }}>
-                  {project.name}
+                  {renderName}
                 </h1>
                 {gen?.headline && (
                   <p style={{
@@ -282,19 +344,16 @@ export default function ReportPrint() {
                     {gen.keyResult.label}
                   </div>
                   <div style={{
-                    fontFamily: palette.mono, fontSize: 20, fontWeight: 700, color: palette.mastheadAccent,
-                    marginTop: 4, lineHeight: 1.15, wordBreak: 'break-word',
-                  }}>
+                    fontFamily: palette.mono, fontWeight: 700, color: palette.mastheadAccent,
+                    fontSize: heroFontSize(gen.keyResult.value, 20, 12),
+                    marginTop: 4, lineHeight: 1.35, minHeight: 28, wordBreak: 'break-word',
+                    overflow: 'visible',
+                  } as React.CSSProperties}>
                     {gen.keyResult.value}
                   </div>
-                  {gen.keyResult.context && (
-                    <div style={{
-                      fontFamily: palette.sans, fontSize: 9.5, color: palette.onMastheadDim,
-                      marginTop: 5, lineHeight: 1.35,
-                    }}>
-                      {gen.keyResult.context}
-                    </div>
-                  )}
+                  <div style={{ fontFamily: palette.sans, fontSize: 7.5, color: palette.onMastheadDim, marginTop: 4 }}>
+                    Research note · Not investment advice
+                  </div>
                 </div>
               )}
             </div>
@@ -315,7 +374,7 @@ export default function ReportPrint() {
             </div>
             <div>
               <span style={{ ...eyebrow, display: 'inline', marginRight: 8 }}>Horizon</span>
-              {timeframeLabel(project.scope)}
+              {renderScope ? timeframeLabel(renderScope) : ''}
             </div>
             {gen?.stance?.lean && (
               <div>
@@ -327,7 +386,7 @@ export default function ReportPrint() {
               </div>
             )}
             {gen?.stance?.baseCase && (
-              <div>
+              <div style={{ minWidth: 0, maxWidth: '100%', overflowWrap: 'anywhere' }}>
                 <span style={{ ...eyebrow, display: 'inline', marginRight: 8 }}>Base</span>
                 {gen.stance.baseCase}
               </div>
@@ -354,10 +413,17 @@ export default function ReportPrint() {
                           }}>
                             <div style={{ ...eyebrow, lineHeight: 1.25 }}>{k.label}</div>
                             <div style={{
-                              fontFamily: palette.mono, fontSize: 14, fontWeight: 700,
+                              fontFamily: palette.mono, fontWeight: 700,
                               color: hero ? palette.accent : palette.ink,
-                              marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                            }}>{k.value}</div>
+                              marginTop: 3, lineHeight: 1.25,
+                              fontSize: hero ? heroFontSize(k.value, 14, 10) : 14,
+                              ...(hero
+                                ? {
+                                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                                    overflow: 'hidden', textOverflow: 'ellipsis',
+                                  }
+                                : { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }),
+                            } as React.CSSProperties}>{k.value}</div>
                             {k.sub && (
                               <div style={{ fontFamily: palette.sans, fontSize: 9, color: palette.muted, marginTop: 2, lineHeight: 1.25 }}>
                                 {k.sub}
@@ -421,7 +487,7 @@ export default function ReportPrint() {
 
                 {appendixClips.length > 0 && (
                   <section style={{ marginTop: 20 }}>
-                    <h2 style={bandHead}>Appendix — Charts & Supporting Data</h2>
+                    <h2 style={bandHead}>Appendix — Supporting Data</h2>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 2 }}>
                       {appendixClips.map(c => (
                         <div key={c.id} className="rc-keep">
@@ -436,7 +502,7 @@ export default function ReportPrint() {
               </>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {project.clips.map((c, i) => (
+                {renderClips.map((c, i) => (
                   <section key={c.id} className="rc-section" style={{ breakInside: 'avoid' }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
                       <span style={{ fontFamily: palette.mono, fontSize: 11, fontWeight: 700, color: palette.accent }}>
@@ -462,7 +528,7 @@ export default function ReportPrint() {
                     )}
                   </section>
                 ))}
-                {project.clips.length === 0 && (
+                {renderClips.length === 0 && (
                   <p style={{ fontFamily: palette.mono, fontSize: 11, color: palette.muted }}>No clips in this report yet.</p>
                 )}
               </div>

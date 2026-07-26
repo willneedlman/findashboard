@@ -173,8 +173,12 @@ def _project(req, rev_growth: float):
     Shared by the forward DCF and the reverse-DCF solver."""
     fcfs = []
     rev = req.revenue
+    term_g = getattr(req, "terminal_growth", 3.0) or 3.0
     for y in range(1, req.years + 1):
-        rev = rev * (1 + rev_growth / 100)
+        # Terminal growth deceleration decay: initial growth rate fades towards terminal growth
+        # over multi-year forecast horizons to account for market saturation and realistic scale.
+        g_eff = term_g + (rev_growth - term_g) * (0.82 ** (y - 1))
+        rev = rev * (1 + g_eff / 100)
         margin = _margin_for_year(req.op_margin, getattr(req, "target_margin", None), y, req.years)
         ebit = rev * (margin / 100)
         nopat = ebit * (1 - req.tax_rate / 100)

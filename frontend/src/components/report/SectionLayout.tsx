@@ -1,5 +1,6 @@
 import ClipRenderer from './ClipRenderer'
 import type { ReportClip, KeyFigure, ClipPayload } from '../../lib/reportCreator'
+import { toTitleCase } from '../../lib/reportCreator'
 import type { ReportPalette, ClipPalette } from '../../lib/reportTheme'
 import { toClipPalette } from '../../lib/reportTheme'
 
@@ -81,7 +82,7 @@ function KeyFiguresStrip({
             <div style={{
               fontFamily: palette.sans, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em',
               textTransform: 'uppercase', color: palette.muted, lineHeight: 1.2,
-            }}>{f.label}</div>
+            }}>{toTitleCase(f.label)}</div>
             <div style={{
               fontFamily: palette.mono, fontSize: 12.5, fontWeight: 700, color: palette.ink, marginTop: 1,
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
@@ -119,7 +120,7 @@ function FigureFrame({
           background: palette.panel,
           color: palette.accent,
         }}>
-          {title}
+          {toTitleCase(title)}
         </figcaption>
       )}
       <div style={{ padding: '6px 8px 8px', background: palette.cellBg }}>
@@ -144,18 +145,24 @@ function chartTitle(c: ReportClip): string {
 function scoreChartForHint(chart: ReportClip, hint: string): number {
   const title = chartTitle(chart).toLowerCase()
   const hay = `${title} ${chart.sourceTab} ${chart.dataType}`.toLowerCase()
+  // A bare ticker (e.g. "NVDA") mentioned in the hint is not evidence this
+  // specific chart is on-topic — in a multi-subject comparison report every
+  // section names every subject, so every sibling chart for that subject
+  // would otherwise "match" regardless of what it actually shows. Strip
+  // ticker-looking tokens (all-caps runs in the ORIGINAL hint) before scoring.
+  const tickerLike = new Set((hint.match(/\b[A-Z]{2,5}\b/g) || []).map(t => t.toLowerCase()))
   const tokens = hint
     .toLowerCase()
     .replace(/[^a-z0-9%$.+\- ]+/g, ' ')
     .split(/\s+/)
-    .filter(w => w.length > 2 && !/^(the|and|for|with|from|that|this|near|sets|shows|signals)$/.test(w))
+    .filter(w => w.length > 2 && !tickerLike.has(w) && !/^(the|and|for|with|from|that|this|near|sets|shows|signals)$/.test(w))
   let score = 0
   for (const w of tokens) {
     if (title.includes(w)) score += w.length >= 5 ? 4 : 2
     else if (hay.includes(w)) score += 1
   }
   if (title.length >= 8) {
-    const titleWords = title.split(/[^a-z0-9]+/).filter(w => w.length > 3)
+    const titleWords = title.split(/[^a-z0-9]+/).filter(w => w.length > 3 && !tickerLike.has(w))
     const phraseHits = titleWords.filter(w => hint.toLowerCase().includes(w)).length
     score += phraseHits * 3
   }
@@ -256,16 +263,28 @@ export function assignBodyVisuals(
 
   candidates.sort((a, b) => b.score - a.score || (a.isOwn === b.isOwn ? 0 : a.isOwn ? -1 : 1))
 
+  // A bare ticker-symbol mention (e.g. "NVDA" appearing anywhere in the
+  // section's prose) alone scores 2 — trivially true in every section of a
+  // multi-subject comparison report, so on its own it is not evidence the
+  // chart is actually about this section's point. Require a real keyword
+  // match (a 5+ letter content word, or several short ones) before a sibling
+  // chart from another clip is allowed to stand in for this section.
+  const SIBLING_MIN_SCORE = 6
+
   const assigned = new Map<string, ReportClip>()
   for (const cand of candidates) {
     if (assigned.has(cand.sectionId)) continue
     if (used.has(cand.chart.id)) continue
-    if (!cand.isOwn && cand.score < 2) continue
+    if (!cand.isOwn && cand.score < SIBLING_MIN_SCORE) continue
     assigned.set(cand.sectionId, cand.chart)
     used.add(cand.chart.id)
   }
 
+  // Fill any section whose own clip IS a chart but lost the slot to a
+  // higher-scored competitor — never fall back to a weak/unrelated sibling
+  // here; an unmatched section just renders as prose + KPI strip instead.
   for (const cand of candidates) {
+    if (!cand.isOwn) continue
     if (assigned.has(cand.sectionId)) continue
     if (used.has(cand.chart.id)) continue
     assigned.set(cand.sectionId, cand.chart)

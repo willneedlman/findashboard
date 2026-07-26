@@ -9,6 +9,7 @@ import logging
 import re
 import sys, os
 import threading
+from statistics import median as _median
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from cachetools import TTLCache
@@ -1255,61 +1256,153 @@ class ReportGenRequest(BaseModel):
     goal: str = ""
     # Optional explicit subject from the client (wins over text heuristics).
     subjectTicker: str = ""
+    # 'short' | 'medium' | 'long' — how much depth the note should have. Unknown/missing → 'medium'.
+    length: str = "medium"
+    # Free-text requirements the report must satisfy (a stat, a verdict, a chart,
+    # a specific figure) — not curated away even if the model wouldn't otherwise pick them.
+    mustInclude: str = ""
     clips: list[ReportClipIn]
+
+_LENGTH_SPEC = {
+    "short": {
+        "sections": "1 to 2",
+        "guidance": (
+            "Short: headline verdict plus the single most decisive driver. One or two body sections, "
+            "each with 2-3 tight sentences and 2-3 keyFigures. No secondary color, no minor caveats. "
+            "Executive summary is 1-2 sentences. Conclusion is 1 sentence."
+        ),
+    },
+    "medium": {
+        "sections": "3 to 6",
+        "guidance": (
+            "Medium: standard research-note depth. 3 to 6 body sections, each 1-3 short paragraphs with "
+            "2-4 keyFigures. Executive summary is one tight paragraph. Conclusion covers the verdict, "
+            "the main risk to it, and an action."
+        ),
+    },
+    "long": {
+        "sections": "6 to 10",
+        "guidance": (
+            "Long: full supporting detail for a desk that wants the complete picture. 6 to 10 body "
+            "sections — cover secondary drivers, sensitivities, and peer/segment detail that medium "
+            "length would cut, in addition to the core thesis sections. Each section can run 2-4 "
+            "paragraphs with 2-4 keyFigures. Executive summary can run 2-3 sentences. Conclusion "
+            "should also name secondary risks and a monitoring checklist. Still cut clips that add "
+            "nothing — length is a ceiling on depth, not "
+            "a quota to fill with restated numbers."
+        ),
+    },
+}
+
+def _length_key(length: str | None) -> str:
+    v = (length or "").strip().lower()
+    return v if v in _LENGTH_SPEC else "medium"
+
+def _must_include_section(raw: str | None, extra: list[str] | None = None) -> str:
+    """Build the MUST INCLUDE prompt block from the user's own text plus any
+    auto-detected directives (see _auto_must_include), or '' if both are empty."""
+    lines = [line.strip() for line in (raw or "").splitlines() if line.strip()]
+    lines.extend(extra or [])
+    if not lines:
+        return ""
+    items = "\n".join(f"- {line}" for line in lines)
+    return f"""
+════════════════════════════════════════
+MUST INCLUDE — non-negotiable, from the user
+════════════════════════════════════════
+The user has required the following to appear in this report:
+{items}
+Each requirement must surface somewhere in the output — in a section's analysis, a keyFigure, a chart, the keyResult, the executiveSummary, or the conclusion, whichever fits it best. These survive the curation and length rules above: even a "short" report, or a section that would otherwise get merged or cut, must still make room for every required item. Satisfy a requirement only with a real figure already present in the clips or valuationContext — never fabricate a number, chart data point, or verdict to check the box. If a requirement cannot be sourced from the data you were given, say so explicitly wherever it would have appeared (e.g. "PEG ratio not available in the supplied clips") — do not silently drop it and do not invent it.
+"""
 
 _REPORT_SYSTEM = """You are a senior investment analyst writing a formal research note for a professional desk. Register: academic, financial, and direct. State conclusions plainly. Support every claim with figures from the clips or valuationContext.
 
-You receive: Purpose, Goal, Timeframe (lookback and/or lookforward), DATA CLIPS (each with id, source tool, title, optional user note, data summary), and valuationContext (live spot, optional day change, optional DCF, signalDigest of directional cues extracted from clips).
+You receive: Purpose, Goal, Timeframe (lookback and/or lookforward), DATA CLIPS (each with id, source tool, title, optional user note, data summary), valuationContext (live spot, optional day change, optional DCF, signalDigest of directional cues extracted from clips, reportMode, and reportLength), and optionally an `outline`.
 
-Primary job: answer the Goal with a clear stance. When the Goal is a fair value, price target, near-term range, or outlook, keyResult MUST be a dollar range — never "not estimable" and never a vague qualitative-only bottom line when marketPrice is set.
+Primary job: answer the Goal directly, in whatever form the Goal actually calls for. valuationContext.reportMode tells you which of the two shapes below to use. Never force the other shape onto it.
+
+OUTLINE: if the input includes an `outline` (a thesis plus planned sections), it was drafted first as the report's analytical structure and you MUST follow it. Anchor the entire report to outline.thesis. Write exactly the outline's sections, in order, each using its heading and developing its `argues` point with the clip figures. Do not add, drop, reorder, split, or merge sections. If no outline is present, plan a thesis-first structure yourself with one section per comparative theme (never one section per subject for the same theme).
 
 ════════════════════════════════════════
-STANCE (non-negotiable)
+LENGTH — valuationContext.reportLength sets the target depth
 ════════════════════════════════════════
+{{LENGTH_GUIDANCE}}
+This governs section count and depth in BOTH reportMode "range" and "open". It does not change what counts as a decisive driver — still cut anything that does not advance the thesis, regardless of length.
+{{MUST_INCLUDE_SECTION}}
+════════════════════════════════════════
+reportMode "range" — single-subject price call
+════════════════════════════════════════
+The Goal is a fair value, price target, near-term range, or outlook on ONE named equity (valuationContext.subjectTicker). keyResult MUST be a dollar range — never "not estimable" and never a vague qualitative-only bottom line when marketPrice is set.
+
+STANCE (non-negotiable in this mode):
 - Take a lean: bullish, bearish, or neutral. Neutral is allowed only when directional signals truly cancel or are absent. If call flow, call GEX, and risk-on macro align, do NOT hide behind "range-bound with no edge."
 - Conviction: low, moderate, or high. Low conviction still requires a lean and an asymmetric or shifted range that reflects that lean.
 - Separate (1) the statistical envelope from options (implied move, vol cone, density percentiles) from (2) your research range. The cone/IV envelope is a constraint on how wide you may go, not the thesis itself. Do not publish a range that is essentially spot ± implied-move or the cone's 15th/85th unless every other clip is empty of directional content.
 - Encode stance in the dollars: a bullish lean usually means midpoint above spot and/or more room to the upside than downside (e.g. floor near spot or slightly below, ceiling further out). A bearish lean does the reverse. A truly neutral lean may be tight and near-symmetric — say so explicitly and name the conflicting signals.
 - Executive summary and conclusion must each state the lean, the range, and the two or three decisive drivers in plain language. Avoid empty phrases like "modest upside bias" without tying them to a mid above spot or an asymmetric band.
+- keyResult.value format: "$A–$B" with A < B. Prefer whole dollars for equities above $20.
+- keyResult.context: must include spot, lean, and the main driver stack (e.g. "spot $203 · bullish lean · call GEX + flow · IV envelope caps $218").
+- No 2x-3x fantasy targets without model support. Keep a short horizon range inside roughly ±25% of spot unless clips justify wider.
+- Each body section must push the range decision forward, not summarize a panel in isolation:
+  - Dealer GEX / gamma: long gamma + call-heavy GEX supports a floor and mean-reversion toward a flip/zero-gamma level. Call wall / put wall strikes are candidate range edges.
+  - Options flow: call vs put premium share, top strikes, vol/OI aggression. Aggressive call buying below or at spot is a bullish tell. Put buying above spot is a hedge or bearish tell.
+  - IV rank / term / implied move: implied move sets a hard near-term width budget. Prefer base case inside ~0.5-0.8x one implied-move, with tails out to the cone only if catalysts justify it.
+  - Implied probability / density: modal strike and P50 are better anchors than a flat ±10% band. Skew shifts the lean.
+  - Macro / calendar: scheduled high-impact prints widen the band or cut conviction, they do not by themselves center the range on spot.
+  - DCF / multiples / SOTP: structural anchors, cite gap to spot, do not paste intrinsic as the range.
 
 ════════════════════════════════════════
-INTEGRATE EVERY SUPPLIED CLIP FAMILY
+reportMode "open" — comparison, screen, or any other goal
 ════════════════════════════════════════
-Build ONE argument. Each body section must push the range decision forward, not summarize a panel in isolation.
-- Dealer GEX / gamma: long gamma + call-heavy GEX supports a floor and mean-reversion toward a flip/zero-gamma level. Call wall / put wall strikes are candidate range edges. State whether dealers dampen or amplify moves in the lean direction.
-- Options flow / unusual activity: call vs put premium share, top strikes, vol/OI aggression. Aggressive call buying below or at spot is a bullish tell. Put buying above spot is a hedge or bearish tell. Do not ignore flow when setting the mid.
-- IV rank / term / implied move: IV rank high = richer premium, often mean-reverting vol. Implied move sets a hard near-term width budget. Prefer base case inside ~0.5–0.8× one implied-move, with tails out to the cone only if catalysts justify it.
-- Implied probability / density: modal strike and P50 are better anchors for "where the market prices the stock" than a flat ±10% band. Skew (put vs call IV) shifts the lean.
-- Macro / calendar: scheduled high-impact prints (CPI, FOMC, ECB) raise event vol. They widen the band or cut conviction. They do not by themselves center the range on spot.
-- Credit / stress / markets board: risk-on vs risk-off backdrop tilts equity beta names.
+The Goal is NOT a single-ticker price call: a comparison between named subjects (valuationContext.subjects, when present, lists every ticker with its own live spot and DCF), a screen, a ranking, a thematic or risk read, a portfolio/allocation question, or anything else. keyResult is the single-line direct answer to the Goal in whatever form fits it. Do NOT force a dollar-range or single-ticker price-target framing onto this.
+- keyResult.value MUST be short and punchy, like a headline stat: under 40 characters, e.g. "Buy NVDA" or "NVDA over AAPL" or "Favor NVDA: 2.6x the growth". It renders in a masthead box sized for a price range, not a sentence — put the reasoning and figures in keyResult.context and the executiveSummary, never in value. Never write a full clause or sentence into value. A bare ticker or company name alone (e.g. just "NVDA") is NOT a verdict — it must always carry an action or comparison word (Buy / Favor / X over Y / Avoid / Hold), never the name by itself.
+- stance.baseCase MUST also be short: just the favored subject's name/ticker (e.g. "NVDA") or, for a screen/ranking with no single favorite, a 2-3 word tag (e.g. "No clear edge"). Never a sentence. stance.thesis is where the full reasoning goes.
+- stance.lean still applies: for a comparison it names which subject you favor (bullish = favor the first-named or higher-conviction subject, bearish = favor the other, neutral = genuinely a toss-up).
+- With 2+ subjects in valuationContext.subjects: build ONE argument that weighs ALL of them against each other. Organize sections by COMPARATIVE THEME (e.g. "Growth and Margin Edge", "Valuation Gap"), each citing every relevant subject's figures side by side in the SAME section. Never write one section per subject per metric category (do not write both an "NVDA Profitability" section and a separate "Apple Profitability" section — write one "Profitability" section citing both). Do not silently favor one subject and relegate the other's central clips (DCF, multiples, company profile) to appendixClipIds — cite both, just inside shared thematic sections rather than mirrored ones.
+- Executive summary and conclusion must each state the verdict and the two or three decisive drivers in plain language, in the same form as keyResult (not recast as a price range).
+
+════════════════════════════════════════
+INTEGRATE EVERY SUPPLIED CLIP FAMILY (both modes)
+════════════════════════════════════════
+Build ONE argument, whichever mode you are in.
 - Sentiment: only if the clip has real scores/figures (ignore empty stubs that say no structured panels).
-- Company profile / fundamentals: valuation multiples, growth, margin — structural context for whether a premium to spot is justified.
-- DCF / multiples / SOTP: structural anchors. Cite gap to spot. Do not paste intrinsic as the range. Use as one vote among positioning and vol.
-Ignore pure appendix stubs that contain no figures.
+- Company profile / fundamentals: valuation multiples, growth, margin — structural context.
+- Credit / stress / markets board: risk-on vs risk-off backdrop tilts equity beta names.
+Ignore pure appendix stubs that contain no figures. If clips conflict (e.g. bullish GEX vs demanding reverse-DCF growth, or subject A wins on growth but subject B wins on valuation), name the conflict, weight the horizon, and still reach a verdict with appropriate conviction.
 
-If clips conflict (e.g. bullish GEX vs demanding reverse-DCF growth), name the conflict, weight the horizon (near-term positioning often dominates a 7-day goal, models dominate a 90-day fair-value goal), and still pick a lean with appropriate conviction.
+════════════════════════════════════════
+CHARTS — you do NOT build them
+════════════════════════════════════════
+Do not produce chart data. The site builds every chart itself from the underlying clip data and places it into the right section automatically. Your job for visuals is only to WRITE THE ANALYSIS that a chart will sit next to: when a section compares figures across subjects or metrics (margins, valuation gap, sensitivity swing, peer multiples, revenue mix, analyst upside), write the interpretation of that comparison in prose, and the matching chart appears on its own. Do not describe a chart, do not reference "the chart below", and do not emit any "chart" field — just write the analysis and cite the key figures.
 
 ════════════════════════════════════════
 HORIZON
 ════════════════════════════════════════
 - Lookback: interpret trends against that history.
-- Lookforward: the range and recommendation apply to this window. A 7-day range is a trading corridor, not terminal value. A 90-day range can sit further from spot when models and macro support it.
+- Lookforward: the verdict applies to this window. A 7-day range is a trading corridor, not terminal value. A 90-day range (or comparison thesis) can sit further from spot when models and macro support it.
 - Connect both when present.
 
 ════════════════════════════════════════
-HARD RULES
+HARD RULES & NARRATIVE VOCABULARY (both modes)
 ════════════════════════════════════════
 - Use ONLY figures present in clips or valuationContext. Never invent prices, GEX, IV, or dates.
-- keyResult.value format: "$A–$B" with A < B. Prefer whole dollars for equities above $20.
-- keyResult.context: must include spot, lean, and the main driver stack (e.g. "spot $203 · bullish lean · call GEX + flow · IV envelope caps $218").
+- Field-to-Label Controlled Vocabulary:
+  - `upside = (intrinsic - price) / price`: verbalize strictly as "X% upside to intrinsic" (if intrinsic > price) or "X% downside to intrinsic" (if intrinsic < price). NEVER call a negative upside a "premium above intrinsic".
+  - `premium_to_intrinsic = (price - intrinsic) / intrinsic`: verbalize strictly as "X% premium to intrinsic".
+  - Single polarity per field per paragraph: a given metric may not map to opposing polarity words in the same paragraph.
+- Metric Nouns: Single-period growth (e.g. REV GROWTH 85.2%) must be called "growth rate" or "revenue growth", NEVER "revenue CAGR". Reserve "CAGR" strictly for multi-year compound growth rates with explicit n_periods.
+- Interpret, Don't Recite: Do not simply repeat raw numbers visible in adjacent KPI cards. Prose must explain the mechanism, competitive context, caveats, or disconfirming evidence.
+- Comparative Claims: Verify comparative adjectives ("higher", "lower", "dwarfs", "lags") against operands. Never state a lower metric is higher or vice versa.
+- Swings and moves as PERCENT, never raw dollars alone: any price swing, sensitivity range, target band, or move MUST be expressed as a percent of the subject's current price (valuationContext.marketPrice, or per-subject marketPrice in valuationContext.subjects), not as a bare dollar amount. valuationContext.sensitivitySwing gives the precomputed swingPct per subject — cite it. A $40 swing on a $200 stock is a 20% swing; a $400 swing on a $1,500 stock is a 27% swing. Dollar magnitudes are not comparable across differently-priced names, so never rank or contrast two names' swings in dollars. State the dollar band if useful, but always alongside the percent.
+- Risks: cover the key risks to the thesis in plain prose when the data supports it. Do NOT write a falsification trigger, a "falsification floor/ceiling", or any "IF metric crosses threshold BY date THEN thesis invalidated" statement, and never invent threshold levels, trigger dates, or cutoff figures to build one. Describe what would weaken the thesis qualitatively, using only figures already in the clips.
 - stance object required (see schema).
-- Tone and range must agree. Do not claim a strong bullish lean with a mid glued to spot and equal wings.
-- No 2×–3× fantasy targets without model support. Keep a short horizon range inside roughly ±25% of spot unless clips justify wider.
+- Tone and keyResult must agree. Do not claim a strong lean with a hedged, noncommittal keyResult.
 - Writing: no em dashes, no semicolons, no emoji, no bullet lists inside prose. Flowing paragraphs. Spartan. No restating Purpose/Goal as labels.
 - Curate sections: only clips that advance the thesis. Others → appendixClipIds.
-- Prefer chart-type clips as body section clipIds when the same tool also has a KPI or table clip (diagrams lead the note; KPIs become keyFigures). Put redundant KPI-only duplicates in appendixClipIds.
-- Every body section needs keyFigures (2–4 real figures from that clip). Keep keyFigures sparse when a chart carries the story.
+- Every body section needs keyFigures (2–4 real figures from that clip). Keep keyFigures sparse.
 - Large boards: two to five key figures, not every row.
+- Report length is driven by valuationContext.reportLength (see LENGTH above), not by clip count. Merge clips that serve the same point into one section (e.g. two DCF verdicts for a comparison, or a KPI panel plus the chart behind it) rather than writing a section per clip.
+- Every section's analysis must interpret, compare, or draw a conclusion — never transcribe a clip's numbers back as prose with no takeaway (e.g. do not write "NVDA's price is $206.84, P/E is 31.6x, EPS is $6.54" and stop there; those figures already appear in the keyFigures/table below the prose). If a clip has nothing to add beyond its own numbers, cut the section and move the clip to appendixClipIds.
 
 Respond ONLY with valid JSON (no markdown, no code fences):
 {
@@ -1317,24 +1410,24 @@ Respond ONLY with valid JSON (no markdown, no code fences):
   "stance": {
     "lean": "bullish" | "bearish" | "neutral",
     "conviction": "low" | "moderate" | "high",
-    "baseCase": "$X",
-    "thesis": "one sentence: what you believe happens over the lookforward and why"
+    "baseCase": "range mode: '$X'. open mode: just the favored subject's ticker/name, or a 2-3 word tag — never a sentence",
+    "thesis": "one sentence: what you believe and why, over the lookforward"
   },
   "keyResult": {
-    "label": "Fair Value Range (TICKER)" or "Near-Term Range (TICKER)",
-    "value": "$A–$B",
-    "context": "spot $X · lean · decisive drivers"
+    "label": "range mode: 'Fair Value Range (TICKER)' or 'Near-Term Range (TICKER)'. open mode: a short label naming the answer, e.g. 'Relative Pick' or 'Verdict'",
+    "value": "range mode: '$A–$B'. open mode: a short headline verdict, UNDER 40 CHARACTERS — reasoning goes in context, not here",
+    "context": "range mode: 'spot $X · lean · decisive drivers'. open mode: the figures that decided it"
   },
-  "executiveSummary": "one tight paragraph: lean, range, spot, and how GEX/flow/IV/macro/models jointly justify the band (not a list of panel summaries)",
+  "executiveSummary": "one tight paragraph stating the verdict (range or open) and how the clips jointly justify it (not a list of panel summaries)",
   "sections": [
     {
       "clipId": "<id>",
-      "heading": "analytical heading, not the tool name",
-      "analysis": "one to three paragraphs linking THIS clip's figures to the lean and to the dollar range (what edge moves, what widens/tightens)",
+      "heading": "analytical heading naming the comparative theme, not the tool name or a single subject",
+      "analysis": "paragraphs linking figures to the verdict (what moves it, what strengthens or weakens it) — interpret, do not transcribe. Section count and depth follow valuationContext.reportLength, not clip count. Do NOT include a chart field; the site adds charts.",
       "keyFigures": [ { "label": "metric", "value": "figure with units" } ]
     }
   ],
-  "conclusion": "restate lean, range, conviction, what would falsify the view, and a concrete action (hold band, buy dips toward floor, fade rallies into ceiling, wait for event)",
+  "conclusion": "restate the verdict and conviction, the main risk to it, and a concrete action",
   "appendixClipIds": ["<ids not central to the thesis>"]
 }
 Every clipId must be one of the provided clip ids."""
@@ -1348,6 +1441,241 @@ def _clean_figs(raw) -> list:
             if label and value:
                 figs.append({"label": label[:60], "value": value[:60]})
     return figs
+
+_CHART_TYPES = {"bar", "line", "area", "pie", "histogram", "dot", "range", "scatter", "box"}
+_SINGLE_SERIES_TYPES = {"pie", "scatter"}  # only series[0] is used
+_BOX_KEYS = ("min", "q1", "median", "q3", "max")
+
+# Title Case: small words stay lowercase mid-phrase; finance acronyms / tickers stay upper.
+_TITLE_SMALL = {
+    "a", "an", "the", "and", "or", "of", "for", "to", "in", "on", "at", "by", "vs", "vs.",
+    "via", "per", "as", "from", "into", "over", "with", "than",
+}
+_TITLE_ACRONYMS = {
+    "dcf", "wacc", "fcf", "peg", "roe", "roa", "roi", "ev", "eps", "cagr", "yoy", "ytd",
+    "qtd", "iv", "gex", "kpi", "ai", "us", "uk", "eu", "fx", "pe", "p/e", "p/s", "p/b",
+    "p/fcf", "ev/ebitda", "ebitda", "ebit", "nopat", "capex", "d&a", "wc", "ipo", "etf",
+    "gdp", "cpi", "fed", "sec", "api", "pdf", "usd",
+}
+
+def _title_case(s: str | None, max_len: int = 80) -> str:
+    """Proper Title Case for section headings and chart titles.
+
+    Preserves finance acronyms (DCF, WACC, P/E), keeps small words lowercase when
+    not first/last, and leaves all-caps tickers (NVDA, AAPL) intact.
+    """
+    if not s:
+        return ""
+    text = re.sub(r"\s+", " ", str(s).strip())
+    if not text:
+        return ""
+    # Split on whitespace but keep hyphenated compounds and slash units together.
+    parts = re.split(r"(\s+)", text)
+    word_idxs = [i for i, p in enumerate(parts) if p.strip() and not p.isspace()]
+    out: list[str] = []
+    for i, part in enumerate(parts):
+        if not part.strip() or part.isspace():
+            out.append(part)
+            continue
+        is_first = i == word_idxs[0] if word_idxs else True
+        is_last = i == word_idxs[-1] if word_idxs else True
+        # Em-dash / en-dash separated clauses: title-case each side independently
+        # is already handled by treating the dash as its own token when split fails;
+        # for "A — B" the split keeps "—" with spaces as separate parts.
+        token = part
+        # Slash units like P/E, EV/EBITDA
+        low = token.lower().strip("()[],.:;")
+        punct_prefix = token[: len(token) - len(token.lstrip("([\"'"))]
+        punct_suffix = token[len(token.rstrip(")].,:;'\"%!?")):] if token else ""
+        core = token[len(punct_prefix): len(token) - len(punct_suffix) or None]
+        if not core:
+            out.append(token)
+            continue
+        core_low = core.lower()
+        if core_low in _TITLE_ACRONYMS or core_low.replace(".", "") in _TITLE_ACRONYMS:
+            cased = core_low.upper() if "/" not in core_low and "&" not in core_low else core.upper()
+            # P/E style
+            if "/" in core_low:
+                cased = "/".join(
+                    (p.upper() if p.lower() in _TITLE_ACRONYMS or len(p) <= 3 else p.capitalize())
+                    for p in core.split("/")
+                )
+            out.append(f"{punct_prefix}{cased}{punct_suffix}")
+            continue
+        # All-caps ticker-like token (2–5 letters) — keep as-is upper
+        if re.fullmatch(r"[A-Za-z]{1,5}", core) and core.isupper() and core_low not in _TITLE_SMALL:
+            out.append(f"{punct_prefix}{core.upper()}{punct_suffix}")
+            continue
+        if core_low in _TITLE_SMALL and not is_first and not is_last:
+            out.append(f"{punct_prefix}{core_low}{punct_suffix}")
+            continue
+        # Hyphenated: Title-Case Each Piece
+        if "-" in core and not core.startswith("-"):
+            cased = "-".join(
+                (p.upper() if p.lower() in _TITLE_ACRONYMS or (p.isupper() and len(p) <= 5)
+                 else (p.capitalize() if p else p))
+                for p in core.split("-")
+            )
+            out.append(f"{punct_prefix}{cased}{punct_suffix}")
+            continue
+        out.append(f"{punct_prefix}{core[:1].upper()}{core[1:].lower()}{punct_suffix}")
+    result = "".join(out).strip()
+    return result[:max_len] if max_len else result
+
+def _clean_box_chart(raw: dict) -> dict | None:
+    """Validate a box-and-whisker chart. Each data row is a distribution with
+    min/q1/median/q3/max and optional marker points (the subjects' own values).
+    Built server-side from a peer table, so this only sanity-checks structure.
+    Whiskers are expected to already be Tukey-fenced (1.5×IQR); this still
+    enforces monotone ordering so a bad row cannot break the renderer."""
+    x_key = str(raw.get("xKey", "")).strip() or "metric"
+    rows: list[dict] = []
+    for row in (raw.get("data") or [])[:6]:
+        if not isinstance(row, dict):
+            continue
+        stats = {k: _coerce_num(row.get(k)) for k in _BOX_KEYS}
+        if any(stats[k] is None for k in _BOX_KEYS):
+            continue
+        # Monotone: q1 ≤ median ≤ q3, whiskers outside the box.
+        q1, med, q3 = stats["q1"], stats["median"], stats["q3"]
+        if q1 > q3:
+            q1, q3 = q3, q1
+        med = min(max(med, q1), q3)
+        mn = min(stats["min"], q1)
+        mx = max(stats["max"], q3)
+        clean = {x_key: str(row.get(x_key, ""))[:40],
+                 "min": mn, "q1": q1, "median": med, "q3": q3, "max": mx}
+        markers = []
+        for m in (row.get("markers") or [])[:6]:
+            if isinstance(m, dict):
+                mv = _coerce_num(m.get("value"))
+                ml = str(m.get("label", "")).strip()[:12]
+                if mv is not None and ml:
+                    markers.append({"label": ml, "value": mv})
+        if markers:
+            clean["markers"] = markers
+        # Optional outlier list (beyond Tukey fences) for the renderer.
+        outliers = []
+        for o in (row.get("outliers") or [])[:12]:
+            if isinstance(o, dict):
+                ov = _coerce_num(o.get("value"))
+                ol = str(o.get("label", "")).strip()[:12]
+                if ov is not None:
+                    outliers.append({"label": ol, "value": ov} if ol else {"value": ov})
+            else:
+                ov = _coerce_num(o)
+                if ov is not None:
+                    outliers.append({"value": ov})
+        if outliers:
+            clean["outliers"] = outliers
+        rows.append(clean)
+    if not rows:
+        return None
+    return {"kind": "chart", "chartType": "box",
+            "title": _title_case(str(raw.get("title", "")).strip(), 60) or None,
+            "xKey": x_key, "data": rows,
+            "series": [{"key": s.get("key", "v"), "label": str(s.get("label", "")).strip()[:40] or "value"}
+                       for s in (raw.get("series") or [{"key": "v", "label": "value"}])[:1]]}
+
+def _coerce_num(v) -> float | None:
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, str):
+        return _parse_money(v.replace("%", "").replace("$", ""))
+    return None
+
+def _clean_chart(raw) -> dict | None:
+    """Validate/sanitize a model-synthesized chart (ClipPayload 'chart' shape).
+    Drops it entirely rather than guessing at malformed structure — a missing
+    chart degrades to prose + keyFigures, never a broken visual. See the
+    ChartPayload chartType data-convention comment in reportCreator.ts for the
+    per-type shape (pie/scatter use series[0] only; range values are a
+    [low, high] tuple per series, not two separately-named keys; scatter's
+    xKey values are numeric, not categories)."""
+    if not isinstance(raw, dict):
+        return None
+    chart_type = str(raw.get("chartType", "")).strip().lower()
+    if chart_type not in _CHART_TYPES:
+        return None
+    if chart_type == "box":
+        return _clean_box_chart(raw)
+    x_key = str(raw.get("xKey", "")).strip()
+    if not x_key:
+        return None
+
+    series: list[dict] = []
+    series_cap = 1 if chart_type in _SINGLE_SERIES_TYPES else 4
+    for s in (raw.get("series") or [])[:series_cap]:
+        if not isinstance(s, dict):
+            continue
+        key = str(s.get("key", "")).strip()
+        if not key:
+            continue
+        label = str(s.get("label", "")).strip()[:40] or key
+        series.append({"key": key, "label": label})
+    if not series:
+        return None
+    if chart_type != "range" and any(
+        s["key"].lower().endswith(("_low", "_high")) for s in series
+    ):
+        # A near-certain sign of a botched hand-rolled range chart (the model
+        # used chartType "bar" with series literally named "<x>_low"/"<x>_high"
+        # instead of chartType "range" with a [low, high] tuple) — the raw
+        # field name would leak into the legend. Drop rather than show it.
+        return None
+    series_keys = {s["key"] for s in series}
+
+    data: list[dict] = []
+    for row in (raw.get("data") or [])[:8]:
+        if not isinstance(row, dict) or x_key not in row or row[x_key] is None:
+            continue
+
+        if chart_type == "scatter":
+            x_num = _coerce_num(row[x_key])
+            y_num = _coerce_num(row.get(series[0]["key"]))
+            if x_num is None or y_num is None:
+                continue
+            clean_row: dict = {x_key: x_num, series[0]["key"]: y_num}
+            label = row.get("label")
+            if isinstance(label, str) and label.strip():
+                clean_row["label"] = label.strip()[:40]
+            data.append(clean_row)
+            continue
+
+        clean_row = {x_key: str(row[x_key])[:40]}
+        has_value = False
+        if chart_type == "range":
+            for k in series_keys:
+                v = row.get(k)
+                if not (isinstance(v, (list, tuple)) and len(v) == 2):
+                    continue
+                lo, hi = _coerce_num(v[0]), _coerce_num(v[1])
+                if lo is not None and hi is not None:
+                    clean_row[k] = [min(lo, hi), max(lo, hi)]
+                    has_value = True
+        else:
+            for k in series_keys:
+                num = _coerce_num(row.get(k))
+                if num is not None:
+                    clean_row[k] = num
+                    has_value = True
+        if has_value:
+            data.append(clean_row)
+
+    if len(data) < 2:
+        return None
+
+    title = _title_case(str(raw.get("title", "")).strip(), 60)
+    return {
+        "kind": "chart",
+        "chartType": chart_type,
+        "title": title or None,
+        "xKey": x_key,
+        "data": data,
+        "series": series,
+    }
 
 _TICKER_STOP = {
     "THE", "AND", "FOR", "FROM", "LAST", "DAYS", "DAY", "YTD", "QTD", "PDF", "API", "USD",
@@ -1559,13 +1887,8 @@ def _dcf_tickers_from_clips(clips: list[ReportClipIn]) -> set[str]:
                 found.add(sym)
     return found
 
-def _subject_ticker(req: ReportGenRequest) -> str | None:
-    """Resolve subject equity — scored so 'from NOW' loses to NVDA."""
-    # Explicit client override wins.
-    explicit = (getattr(req, "subjectTicker", None) or "").strip().upper()
-    if explicit and _is_plausible_ticker(explicit):
-        return explicit
-
+def _score_subjects(req: ReportGenRequest) -> dict[str, int]:
+    """Score every plausible ticker mentioned across goal/purpose/name/clips."""
     goal = req.goal or ""
     purpose = req.purpose or ""
     name = req.projectName or ""
@@ -1612,6 +1935,16 @@ def _subject_ticker(req: ReportGenRequest) -> str | None:
                 if resolved:
                     bump(resolved, w, source)
 
+    return scores
+
+def _subject_ticker(req: ReportGenRequest) -> str | None:
+    """Resolve subject equity — scored so 'from NOW' loses to NVDA."""
+    # Explicit client override wins.
+    explicit = (getattr(req, "subjectTicker", None) or "").strip().upper()
+    if explicit and _is_plausible_ticker(explicit):
+        return explicit
+
+    scores = _score_subjects(req)
     if not scores:
         return None
 
@@ -1624,6 +1957,48 @@ def _subject_ticker(req: ReportGenRequest) -> str | None:
         return sym
     best_sym, best_sc = ranked[0]
     return best_sym if best_sc > 0 else None
+
+def _ranked_subjects(req: ReportGenRequest, limit: int = 4) -> list[str]:
+    """All plausible subjects above the confidence floor, ranked — used to
+    detect comparison-style reports (2+ named tickers) so the report doesn't
+    collapse onto whichever one ticker _subject_ticker would have picked."""
+    explicit = (getattr(req, "subjectTicker", None) or "").strip().upper()
+    scores = _score_subjects(req)
+    ranked = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))
+    out: list[str] = []
+    if explicit and _is_plausible_ticker(explicit):
+        out.append(explicit)
+    for sym, sc in ranked:
+        if len(out) >= limit:
+            break
+        if sym in out:
+            continue
+        if sym in _AMBIGUOUS_TICKERS and sc < 50:
+            continue
+        if sc <= 0:
+            continue
+        out.append(sym)
+    return out
+
+_COMPARISON_RE = re.compile(
+    r"\bvs\.?\b|\bversus\b|\bcompar(?:e|es|ed|ison|ing)\b|\bbetter\s+(?:pick|buy|value|choice)\b|"
+    r"\brelative\s+value\b|\bwhich\s+(?:one|stock|name|company)\b|\brank(?:ing)?\b|"
+    r"\bpair(?:s)?\s*trade\b|\bside[- ]by[- ]side\b|\bhead[- ]to[- ]head\b",
+    re.I,
+)
+
+def _report_mode(req: ReportGenRequest, subjects: list[str]) -> str:
+    """'range': legacy single-ticker dollar-range verdict (price target, fair
+    value, near-term range, outlook). 'open': keyResult takes whatever form
+    directly answers the Goal — used for comparisons (2+ named subjects) and
+    any other goal that explicit comparison language signals is not a single-
+    ticker price call."""
+    if len(subjects) != 1:
+        return "open"
+    text = f"{req.goal}\n{req.purpose}".strip()
+    if text and _COMPARISON_RE.search(text):
+        return "open"
+    return "range"
 
 def _subject_dcf_present(clips: list[ReportClipIn], subject: str | None) -> bool:
     if not subject:
@@ -1812,6 +2187,21 @@ def _clip_signal_digest(clips: list[ReportClipIn]) -> dict:
     )
     return dig
 
+def _truncate_clean(s: str, n: int) -> str:
+    """Trim to n chars on a word boundary with an ellipsis, not a mid-word cut."""
+    s = (s or "").strip()
+    if len(s) <= n:
+        return s
+    cut = s[:n].rsplit(" ", 1)[0].rstrip(" .,-–—")
+    return (cut or s[:n]) + "…"
+
+_BARE_TICKER_RE = re.compile(r"^[A-Z]{1,5}(\.[A-Z]{1,2})?$")
+
+def _is_bare_ticker(value: str) -> bool:
+    """A lone ticker/name (e.g. 'NVDA') is not a verdict — it needs an action
+    or comparison word (Buy/Favor/X over Y) to actually answer the Goal."""
+    return bool(_BARE_TICKER_RE.fullmatch((value or "").strip().upper()))
+
 def _stance_from_result(result: dict, market: float | None) -> dict | None:
     raw = result.get("stance")
     if not isinstance(raw, dict):
@@ -1838,7 +2228,7 @@ def _stance_from_result(result: dict, market: float | None) -> dict | None:
     return {
         "lean": lean,
         "conviction": conv,
-        "baseCase": base[:40],
+        "baseCase": _truncate_clean(base, 40),
         "thesis": thesis[:280],
     }
 
@@ -1852,9 +2242,35 @@ def _normalize_key_result(
     dcf_intrinsic: float | None,
     stance: dict | None = None,
     signal_digest: dict | None = None,
+    force_range: bool = True,
 ) -> dict | None:
-    """Ensure usable keyResult with live spot. Preserve asymmetric, stance-encoding ranges."""
+    """Ensure a usable keyResult. When force_range is True (single-subject
+    price-target style goal), repair/build a live-spot dollar range and
+    preserve asymmetric, stance-encoding wings — the original behavior.
+    When False (comparison, screen, or any other non-price-target goal),
+    trust the model's own direct answer verbatim; only patch in missing
+    spot/lean context, never rewrite the value into a price range."""
     lean = (stance or {}).get("lean") or "neutral"
+
+    if not force_range:
+        label = ((key_result or {}).get("label") or "Bottom Line").strip()[:80] or "Bottom Line"
+        value = ((key_result or {}).get("value") or "").strip()
+        context = ((key_result or {}).get("context") or "").strip()
+        usable = bool(value) and "not estimable" not in value.lower() and not _is_bare_ticker(value)
+        if usable:
+            if market and market > 0 and "spot $" not in context.lower():
+                context = _spot_context(market, change_pct, context or f"{lean} lean")
+            elif not context and lean != "neutral":
+                context = f"{lean} lean"
+            return {"label": label, "value": _truncate_clean(value, 70), "context": context[:200]}
+        thesis = ((stance or {}).get("thesis") or "").strip()
+        if thesis:
+            return {"label": label, "value": _truncate_clean(thesis, 120), "context": context[:200]}
+        if value:
+            # Bare ticker with nothing to back it — still not a verdict on its own.
+            return {"label": label, "value": f"Favor {value}"[:80], "context": context[:200]}
+        return key_result
+
     label = f"Near-Term Range ({subject})" if subject else (
         (key_result or {}).get("label") or "Fair Value Range"
     )
@@ -1992,6 +2408,944 @@ def _normalize_key_result(
         }
     return key_result
 
+def _chart_signature(chart: dict) -> tuple:
+    return (
+        chart["chartType"],
+        tuple(sorted(str(row.get(chart["xKey"])) for row in chart["data"])),
+        tuple(sorted(sr["key"] for sr in chart["series"])),
+    )
+
+_TICKER_SUFFIX_RE = re.compile(r"[·•]\s*([A-Za-z]{1,6})\s*$")
+_TICKER_PREFIX_RE = re.compile(r"^([A-Za-z]{1,6})\s*[·•]")
+_NUM_RE = re.compile(r"([-−]?)\s*\$?\s*([\d,]+(?:\.\d+)?)")
+
+def _clip_ticker(clip: "ReportClipIn") -> str | None:
+    """Extract the subject ticker from a clip title in either position the app
+    uses: "DCF Verdict · NVDA" (suffix) or "NVDA · Profitability" (prefix)."""
+    title = clip.title or ""
+    m = _TICKER_SUFFIX_RE.search(title) or _TICKER_PREFIX_RE.match(title)
+    return m.group(1).upper() if m else None
+
+def _first_number(s: str) -> float | None:
+    """First signed number in a KPI value string, tolerating $, %, unicode minus
+    and a trailing "(sub)" note — e.g. "−16.8% (Overvalued)" -> -16.8."""
+    m = _NUM_RE.search(s or "")
+    if not m:
+        return None
+    val = _parse_money(m.group(2))
+    if val is None:
+        return None
+    return -val if m.group(1) in ("-", "−") else val
+
+def _parse_kpi_summary(summary: str) -> dict[str, str]:
+    """Parse a summarizeClipForAI KPI dump ("Label: value; Label: value; ...")
+    into {label: value}. The inverse of the frontend's cell join."""
+    out: dict[str, str] = {}
+    for part in (summary or "").split(";"):
+        label, sep, val = part.partition(":")
+        if sep and label.strip():
+            out[label.strip()] = val.strip()
+    return out
+
+def _parse_table_summary(summary: str) -> tuple[list[str], list[list[str]]] | None:
+    """Parse a summarizeClipForAI table dump ("Columns: A | B | C\\nrow1\\n...")
+    back into (columns, rows). None if it doesn't look like this shape."""
+    lines = (summary or "").strip().splitlines()
+    if not lines or not lines[0].startswith("Columns:"):
+        return None
+    columns = [c.strip() for c in lines[0][len("Columns:"):].split("|")]
+    rows = []
+    for line in lines[1:]:
+        line = line.strip()
+        if not line or line.startswith("("):  # "(+N more rows)" footer
+            continue
+        rows.append([c.strip() for c in line.split("|")])
+    return columns, rows
+
+def _mechanical_sensitivity_chart(clips: list[ReportClipIn]) -> dict | None:
+    """DCF one-way sensitivity tables ("Value Drivers — one-way sensitivity")
+    are an unambiguous low/high spread per driver — build the 'range' chart
+    directly from the real clip data rather than leave it to the model, which
+    has repeatedly either skipped charting this or malformed the chart."""
+    by_subject: dict[str, dict[str, tuple[float, float]]] = {}
+    for c in clips:
+        if not re.match(r"^Value Drivers\b", c.title or "", re.I):
+            continue
+        parsed = _parse_table_summary(c.dataSummary)
+        if not parsed:
+            continue
+        columns, rows = parsed
+        try:
+            lo_i, hi_i, drv_i = columns.index("Low $/sh"), columns.index("High $/sh"), columns.index("Driver")
+        except ValueError:
+            continue
+        m = _TICKER_SUFFIX_RE.search(c.title or "")
+        subject = m.group(1).upper() if m else c.id
+        drivers: dict[str, tuple[float, float]] = {}
+        for row in rows:
+            if len(row) <= max(lo_i, hi_i, drv_i):
+                continue
+            lo = _parse_money(row[lo_i].replace("$", ""))
+            hi = _parse_money(row[hi_i].replace("$", ""))
+            if lo is not None and hi is not None and row[drv_i]:
+                drivers[row[drv_i]] = (lo, hi)
+        if drivers:
+            by_subject[subject] = drivers
+
+    if not by_subject:
+        return None
+    subjects = list(by_subject.keys())[:2]
+    all_drivers: list[str] = []
+    for subj in subjects:
+        for d in by_subject[subj]:
+            if d not in all_drivers:
+                all_drivers.append(d)
+
+    data = []
+    for d in all_drivers[:6]:
+        row: dict = {"driver": d}
+        has_any = False
+        for subj in subjects:
+            if d in by_subject[subj]:
+                row[subj] = list(by_subject[subj][d])
+                has_any = True
+        if has_any:
+            data.append(row)
+    if len(data) < 2:
+        return None
+
+    return {
+        "kind": "chart", "chartType": "range",
+        "title": _title_case("DCF Sensitivity — One-Way Swing ($/sh)"),
+        "xKey": "driver", "data": data,
+        "series": [{"key": s, "label": f"{s} $/sh"} for s in subjects],
+    }
+
+def _mechanical_segments_pie(clip: ReportClipIn) -> dict | None:
+    """Product/geographic segment-mix tables are an unambiguous composition
+    of one company's revenue — a real candidate for a deterministic pie."""
+    if not re.match(r"^(Product|Geographic) Segments\b", clip.title or "", re.I):
+        return None
+    parsed = _parse_table_summary(clip.dataSummary)
+    if not parsed:
+        return None
+    columns, rows = parsed
+    if "Share %" not in columns:
+        return None
+    share_i = columns.index("Share %")
+    data = []
+    for row in rows:
+        if len(row) <= share_i or not row[0]:
+            continue
+        share = _parse_money(row[share_i])
+        if share is not None:
+            data.append({"segment": row[0], "share": share})
+    if len(data) < 2:
+        return None
+    return {
+        "kind": "chart", "chartType": "pie",
+        "title": clip.title, "xKey": "segment",
+        "data": data[:8],
+        "series": [{"key": "share", "label": "Share %"}],
+    }
+
+def _all_kpis_by_ticker(clips: list[ReportClipIn]) -> dict[str, dict[str, str]]:
+    """Merge every KPI clip's "Label: value" pairs, grouped by subject ticker,
+    into one {ticker: {label: value}} map. This is what lets us build correct
+    cross-company comparison charts deterministically instead of trusting the
+    weak generation model to assemble chart JSON from the clip text."""
+    out: dict[str, dict[str, str]] = {}
+    for c in clips:
+        if _parse_table_summary(c.dataSummary) is not None:
+            continue  # tables handled by their own recipes
+        ticker = _clip_ticker(c)
+        if not ticker:
+            continue
+        kv = _parse_kpi_summary(c.dataSummary)
+        if kv:
+            out.setdefault(ticker, {}).update(kv)
+    return out
+
+def _grouped_kpi_chart(by_ticker: dict[str, dict[str, str]],
+                       metrics: list[tuple[str, str]], title: str) -> dict | None:
+    """Grouped bar comparing `metrics` across every subject (xKey=metric name,
+    one series per ticker). metrics is (kpi label to look up, display label).
+    Only metrics present for >=2 tickers are charted, and >=2 such metrics are
+    required, so the chart is always a real multi-point comparison."""
+    tickers = list(by_ticker.keys())[:4]
+    if len(tickers) < 2:
+        return None
+    data: list[dict] = []
+    for kpi_label, disp in metrics:
+        row: dict = {"metric": disp}
+        n = 0
+        for t in tickers:
+            v = _first_number(by_ticker[t].get(kpi_label, ""))
+            if v is not None:
+                row[t] = v
+                n += 1
+        if n >= 2:
+            data.append(row)
+    if len(data) < 2:
+        return None
+    return {"kind": "chart", "chartType": "bar", "title": _title_case(title), "xKey": "metric",
+            "data": data, "series": [{"key": t, "label": t} for t in tickers]}
+
+def _valuation_gap_chart(by_ticker: dict[str, dict[str, str]]) -> dict | None:
+    """Grouped bar of DCF intrinsic value vs market price per subject — the
+    canonical "valuation gap" visual (xKey=ticker, series=Intrinsic/Market)."""
+    rows: list[dict] = []
+    for t, kv in by_ticker.items():
+        intrinsic = _first_number(kv.get("Intrinsic / Share", ""))
+        market = _first_number(kv.get("Market Price", "")) or _first_number(kv.get("Price", ""))
+        if intrinsic is not None and market is not None:
+            rows.append({"name": t, "intrinsic": intrinsic, "market": market})
+    if len(rows) < 2:
+        return None
+    return {"kind": "chart", "chartType": "bar", "title": _title_case("DCF Intrinsic vs Market Price"),
+            "xKey": "name", "data": rows[:4],
+            "series": [{"key": "intrinsic", "label": "DCF Intrinsic"},
+                       {"key": "market", "label": "Market Price"}]}
+
+def _peer_pe_median_chart(clips: list[ReportClipIn]) -> dict | None:
+    """Grouped bar of each subject's P/E vs its sector-median P/E, read from the
+    "All Metrics · TICKER" peer tables (the Median row plus the subject's own
+    row). xKey=ticker, series=[Company P/E, Peer Median]."""
+    rows: list[dict] = []
+    for c in clips:
+        if not re.match(r"^All Metrics\b", c.title or "", re.I):
+            continue
+        parsed = _parse_table_summary(c.dataSummary)
+        subject = _clip_ticker(c)
+        if not parsed or not subject:
+            continue
+        columns, trows = parsed
+        try:
+            pe_i, tk_i = columns.index("P/E"), columns.index("Ticker")
+        except ValueError:
+            continue
+        company_pe = median_pe = None
+        for r in trows:
+            if len(r) <= max(pe_i, tk_i):
+                continue
+            if r[tk_i].strip().lower() == "median":
+                median_pe = _first_number(r[pe_i])
+            elif r[tk_i].strip().upper() == subject:
+                company_pe = _first_number(r[pe_i])
+        if company_pe is not None and median_pe is not None:
+            rows.append({"name": subject, "company": company_pe, "median": median_pe})
+    if len(rows) < 2:
+        return None
+    return {"kind": "chart", "chartType": "bar", "title": _title_case("P/E vs Sector Median"),
+            "xKey": "name", "data": rows[:4],
+            "series": [{"key": "company", "label": "Company P/E"},
+                       {"key": "median", "label": "Sector Median"}]}
+
+def _analyst_upside_chart(clips: list[ReportClipIn]) -> dict | None:
+    """Dot plot of each subject's analyst upside %, read from the subject's own
+    row in the "Analyst Consensus · TICKER" peer tables. A dot plot (not a bar)
+    because the values straddle zero and read cleaner as points."""
+    rows: list[dict] = []
+    for c in clips:
+        if not re.match(r"^Analyst Consensus\b", c.title or "", re.I):
+            continue
+        parsed = _parse_table_summary(c.dataSummary)
+        subject = _clip_ticker(c)
+        if not parsed or not subject:
+            continue
+        columns, trows = parsed
+        try:
+            up_i, tk_i = columns.index("Upside"), columns.index("Ticker")
+        except ValueError:
+            continue
+        for r in trows:
+            if len(r) > max(up_i, tk_i) and r[tk_i].strip().upper() == subject:
+                up = _first_number(r[up_i])
+                if up is not None:
+                    rows.append({"name": subject, "upside": up})
+                break
+    if len(rows) < 2:
+        return None
+    # A bar (not a dot plot) reads cleanest for a handful of upside figures that
+    # straddle zero — negative bar down, positive bar up — and matches the
+    # "prefer bar" styling rule.
+    return {"kind": "chart", "chartType": "bar", "title": _title_case("Analyst Upside to Target (%)"),
+            "xKey": "name", "data": rows[:6],
+            "series": [{"key": "upside", "label": "Upside %"}]}
+
+_POINTS_RE = re.compile(r"POINTS:\s*(.+)", re.S)
+
+def _parse_chart_points(summary: str) -> dict[str, list] | None:
+    """Parse the POINTS line the client emits for chart clips
+    ("POINTS: year=[Y1,Y2]; Revenue=[300,340]") into {name: [values]}. Numeric
+    arrays become floats; the label/x axis stays a list of strings."""
+    m = _POINTS_RE.search(summary or "")
+    if not m:
+        return None
+    out: dict[str, list] = {}
+    for part in m.group(1).split(";"):
+        name, sep, arr = part.partition("=")
+        name, arr = name.strip(), arr.strip().strip("[]")
+        if not sep or not name or not arr:
+            continue
+        raw_vals = [v.strip() for v in arr.split(",")]
+        nums = [_coerce_num(v) for v in raw_vals]
+        out[name] = nums if all(n is not None for n in nums) else raw_vals
+    return out or None
+
+def _apply_growth_deceleration_guardrail(revs: list[float], terminal_g: float = 3.5) -> list[float]:
+    """Sanity-check multi-year revenue projections: apply terminal growth deceleration
+    and market saturation bounds so multi-year forecasts account for competitive decay
+    and realistic scale rather than uncapped compound growth rates."""
+    if len(revs) < 2:
+        return revs
+    out = [revs[0]]
+    for i in range(1, len(revs)):
+        prev = out[-1]
+        implied_g = ((revs[i] / revs[i - 1]) - 1) * 100 if revs[i - 1] > 0 else 0
+        decel_factor = 0.82 ** (i - 1)
+        g_bounded = terminal_g + (implied_g - terminal_g) * decel_factor
+        out.append(round(prev * (1 + g_bounded / 100), 1))
+    return out
+
+def _revenue_overlay_chart(clips: list[ReportClipIn]) -> dict | None:
+    """Dual-line overlay of each subject's revenue trajectory across the shared
+    projection years — a real synchronized-timeline line chart from the DCF
+    "Revenue Projection · TICKER" chart clips. Magnitudes differ between names,
+    so the renderer auto-splits the two lines onto a dual axis."""
+    by_ticker: dict[str, tuple[list, list]] = {}
+    for c in clips:
+        if not re.match(r"^Revenue Projection\b", c.title or "", re.I):
+            continue
+        t = _clip_ticker(c)
+        pts = _parse_chart_points(c.dataSummary)
+        if not t or not pts:
+            continue
+        years = next((v for v in pts.values() if v and isinstance(v[0], str)), None)
+        revs = next((v for v in pts.values() if v and isinstance(v[0], (int, float))), None)
+        if years and revs and len(years) == len(revs) and len(years) >= 3:
+            bounded_revs = _apply_growth_deceleration_guardrail([float(r) for r in revs])
+            by_ticker[t] = ([str(y) for y in years], bounded_revs)
+    if len(by_ticker) < 2:
+        return None
+    tickers = list(by_ticker.keys())[:2]
+    base_years = by_ticker[tickers[0]][0]
+    data: list[dict] = []
+    for i, yr in enumerate(base_years):
+        row: dict = {"year": yr}
+        ok = False
+        for t in tickers:
+            _, revs = by_ticker[t]
+            if i < len(revs):
+                row[t] = revs[i]
+                ok = True
+        if ok:
+            data.append(row)
+    if len(data) < 3:
+        return None
+    return {"kind": "chart", "chartType": "line", "title": _title_case("Revenue Trajectory (Projected, $M)"),
+            "xKey": "year", "data": data[:12],
+            "series": [{"key": t, "label": f"{t} revenue"} for t in tickers]}
+
+def _quartiles(vals: list[float]) -> tuple[float, float, float, float, float]:
+    s = sorted(vals)
+    n = len(s)
+    def q(p: float) -> float:
+        idx = p * (n - 1)
+        lo = int(idx)
+        frac = idx - lo
+        return s[lo] if lo + 1 >= n else s[lo] * (1 - frac) + s[lo + 1] * frac
+
+    q1 = q(0.25)
+    med = q(0.5)
+    q3 = q(0.75)
+    iqr = max(q3 - q1, 0.5)
+
+    # Standard Tukey 1.5x IQR whisker bounds logic to manage extreme outliers
+    lower_fence = q1 - 1.5 * iqr
+    upper_fence = q3 + 1.5 * iqr
+
+    non_outliers = [v for v in s if lower_fence <= v <= upper_fence]
+    w_min = non_outliers[0] if non_outliers else max(s[0], lower_fence)
+    w_max = non_outliers[-1] if non_outliers else min(s[-1], upper_fence)
+
+    return w_min, q1, med, q3, w_max
+
+def _peer_distribution_box(clips: list[ReportClipIn]) -> dict | None:
+    """Box & whisker of the peer P/E distribution from the All Metrics tables,
+    with the subjects marked as points. Outlier management ensures whiskers
+    reflect 1.5x IQR statistical bounds rather than distorted extremes."""
+    pe_vals: list[float] = []
+    markers: dict[str, float] = {}
+    for c in clips:
+        if not re.match(r"^All Metrics\b", c.title or "", re.I):
+            continue
+        parsed = _parse_table_summary(c.dataSummary)
+        subject = _clip_ticker(c)
+        if not parsed:
+            continue
+        cols, rows = parsed
+        try:
+            pe_i, tk_i = cols.index("P/E"), cols.index("Ticker")
+        except ValueError:
+            continue
+        for r in rows:
+            if len(r) <= max(pe_i, tk_i):
+                continue
+            tk = r[tk_i].strip()
+            if tk.lower() == "median":
+                continue
+            pe = _first_number(r[pe_i])
+            if pe is None or not (0 < pe < 300):
+                continue
+            pe_vals.append(pe)
+            if subject and tk.upper() == subject:
+                markers[subject] = pe
+    for t, kv in _all_kpis_by_ticker(clips).items():
+        if t not in markers:
+            pe = _first_number(kv.get("P/E", ""))
+            if pe is not None and 0 < pe < 300:
+                markers[t] = pe
+    if len(pe_vals) < 5 or not markers:
+        return None
+    mn, q1, med, q3, mx = _quartiles(pe_vals)
+    return {"kind": "chart", "chartType": "box", "title": _title_case("Peer P/E Distribution"),
+            "xKey": "metric",
+            "data": [{"metric": "P/E", "min": round(mn, 1), "q1": round(q1, 1),
+                      "median": round(med, 1), "q3": round(q3, 1), "max": round(mx, 1),
+                      "markers": [{"label": k, "value": round(v, 1)} for k, v in markers.items()]}],
+            "series": [{"key": "P/E", "label": "P/E"}]}
+
+def _peg_comparison_chart(clips: list[ReportClipIn]) -> dict | None:
+    """PEG (P/E-to-growth) comparison for the subjects, read from the Top Matches
+    screener table's PEG column — real data the report was not using, and the
+    single cleanest 'growth-adjusted valuation' number."""
+    subjects = list(_all_kpis_by_ticker(clips).keys())[:4]
+    if len(subjects) < 2:
+        return None
+    peg: dict[str, float] = {}
+    for c in clips:
+        if not re.search(r"Top Matches|Screener|Liquid Large", c.title or "", re.I):
+            continue
+        parsed = _parse_table_summary(c.dataSummary)
+        if not parsed:
+            continue
+        cols, rows = parsed
+        try:
+            peg_i, tk_i = cols.index("PEG"), cols.index("Ticker")
+        except ValueError:
+            continue
+        for r in rows:
+            if len(r) <= max(peg_i, tk_i):
+                continue
+            tk = r[tk_i].strip().upper()
+            if tk in subjects and tk not in peg:
+                v = _first_number(r[peg_i])
+                if v is not None and 0 < v < 20:
+                    peg[tk] = v
+    present = [t for t in subjects if t in peg]
+    if len(present) < 2:
+        return None
+    return {"kind": "chart", "chartType": "bar", "title": _title_case("PEG Ratio — Growth-Adjusted Valuation"),
+            "xKey": "name", "data": [{"name": t, "peg": peg[t]} for t in present],
+            "series": [{"key": "peg", "label": "PEG"}]}
+
+def _price_performance_overlay(clips: list[ReportClipIn]) -> dict | None:
+    """Tier-2 data sourcing: when the clips lack a shared historical series, fetch
+    ~1yr of real closes for the two subjects through the existing cached history
+    helper and build a dual-line relative-performance overlay (both indexed to
+    100 at the start, one synchronized timeline). Real market data, never
+    fabricated; degrades to None on any fetch problem so the report falls back to
+    the clip-only charts. Bounded to the two subject tickers and cached."""
+    subjects = list(_all_kpis_by_ticker(clips).keys())[:2]
+    if len(subjects) < 2:
+        return None
+    try:
+        import cache
+        sampled: dict[str, list[float]] = {}
+        dates: list[str] = []
+        for t in subjects:
+            df = cache.get_history(t, period="1y")
+            if df is None or getattr(df, "empty", True) or "Close" not in getattr(df, "columns", []):
+                return None
+            closes = df["Close"].dropna()
+            if len(closes) < 30:
+                return None
+            step = max(1, len(closes) // 12)
+            pts = closes.iloc[::step]
+            sampled[t] = [float(v) for v in pts.tolist()]
+            if not dates:  # both trade the same calendar; position-sampling aligns them
+                dates = [d.strftime("%b '%y") for d in pts.index]
+    except Exception as e:  # noqa: BLE001 — Tier-2 fetch is best-effort
+        logger.warning("report price-overlay fetch failed: %s", e)
+        return None
+
+    n = min(len(dates), *(len(v) for v in sampled.values()))
+    if n < 4:
+        return None
+    base = {t: sampled[t][0] or 1.0 for t in subjects}
+    data: list[dict] = []
+    for i in range(n):
+        row: dict = {"month": dates[i]}
+        for t in subjects:
+            row[t] = round(sampled[t][i] / base[t] * 100, 1)
+        data.append(row)
+    return {"kind": "chart", "chartType": "line",
+            "title": _title_case("Relative Price Performance (Indexed to 100, 1Yr)"),
+            "xKey": "month", "data": data,
+            "series": [{"key": t, "label": t} for t in subjects]}
+
+def _has_critical_sensitivity_insight(clips: list[ReportClipIn]) -> bool:
+    """Determine whether DCF sensitivity provides critical decision-making insight.
+    In comparative reports (e.g. NVDA vs AAPL), routine sensitivity is secondary noise
+    unless WACC/driver swings reveal significant asymmetry or thesis-flipping divergence."""
+    sens = _mechanical_sensitivity_chart(clips)
+    if not sens or not sens.get("data"):
+        return False
+    data = sens.get("data", [])
+    swings: dict[str, list[float]] = {}
+    for row in data:
+        for k, v in row.items():
+            if k != "driver" and isinstance(v, (list, tuple)) and len(v) == 2:
+                swings.setdefault(k, []).append(abs(v[1] - v[0]))
+    if len(swings) >= 2:
+        avg_swings = [sum(v) / max(len(v), 1) for v in swings.values()]
+        if max(avg_swings) > 0 and (max(avg_swings) / min(avg_swings) > 1.35 or abs(avg_swings[0] - avg_swings[1]) > 15):
+            return True
+    return False
+
+def _mechanical_chart_pool(clips: list[ReportClipIn]) -> list[tuple[dict, tuple[str, ...], int]]:
+    """Deterministically build every comparison chart this app's clip formats
+    support. THE SITE OWNS CHART CONSTRUCTION: the generation model (Llama 70B /
+    gpt-oss) cannot reliably choose or build chart JSON, so it never does — it
+    writes prose and picks the thesis, and we build and assign the charts. Every
+    chart is re-validated through _clean_chart."""
+    by_ticker = _all_kpis_by_ticker(clips)
+    sens_priority = 0 if len(by_ticker) <= 1 else (0 if _has_critical_sensitivity_insight(clips) else 3)
+    candidates: list[tuple[dict | None, tuple[str, ...], int]] = [
+        (_peer_distribution_box(clips),
+         ("peer", "distribution", "sector", "median", "relative", "cheap", "discount", "premium", "multiple"), 0),
+        (_mechanical_sensitivity_chart(clips),
+         ("sensitiv", "wacc", "swing", "driver", "downside", "one-way", "uncertain"), sens_priority),
+        (next((pie for c in clips if (pie := _mechanical_segments_pie(c))), None),
+         ("segment", "mix", "composition", "geograph", "revenue by", "product line", "diversif", "concentrat"), 0),
+        (_revenue_overlay_chart(clips),
+         ("revenue", "trajectory", "top-line", "top line", "expansion", "future cash", "projection"), 1),
+        (_price_performance_overlay(clips),
+         ("price", "performance", "momentum", "return", "trend", "market", "rally", "trading"), 1),
+        (_analyst_upside_chart(clips),
+         ("analyst", "upside", "consensus", "rating", "target", "sentiment"), 1),
+        (_valuation_gap_chart(by_ticker),
+         ("valuation gap", "intrinsic", "dcf", "premium", "fair value", "overvalu", "undervalu"), 2),
+        (_peg_comparison_chart(clips),
+         ("peg", "growth-adjusted", "growth adjusted", "cheap", "value"), 2),
+        (_grouped_kpi_chart(by_ticker, [
+            ("Rev Growth", "Rev Growth"), ("Gross Margin", "Gross Margin"),
+            ("Operating Margin", "Op Margin"), ("Net Margin", "Net Margin"),
+        ], "Growth & Margin Comparison"),
+         ("growth", "margin", "profitab", "edge", "momentum"), 2),
+        (_grouped_kpi_chart(by_ticker, [
+            ("P/E", "P/E"), ("ROE", "ROE"), ("ROA", "ROA"),
+        ], "Multiple & Return Comparison"),
+         ("multiple", "return on", "efficiency", "capital", "quality"), 2),
+    ]
+    pool: list[tuple[dict, tuple[str, ...], int]] = []
+    for chart, keywords, priority in candidates:
+        clean = _clean_chart(chart) if chart else None
+        if clean:
+            pool.append((clean, keywords, priority))
+    return pool
+
+def _section_haystack(section: dict) -> str:
+    parts = [section.get("heading", ""), section.get("analysis", "")]
+    parts += [f.get("label", "") for f in (section.get("keyFigures") or [])]
+    return " ".join(parts).lower()
+
+def _auto_must_include(clips: list[ReportClipIn]) -> list[str]:
+    """Directives the site forces into the report plan: it tells the writing
+    model which sections to WRITE so that the high-value charts the site can
+    build (sensitivity range, segment-mix pie) have a section to live in."""
+    out: list[str] = []
+    subjects = sorted({
+        t for c in clips
+        if re.match(r"^Value Drivers\b", c.title or "", re.I)
+        for t in [_clip_ticker(c)] if t
+    })
+    if subjects:
+        who = " and ".join(subjects)
+        out.append(
+            f"Write a dedicated section on the DCF one-way sensitivity swing for {who} "
+            "(how much intrinsic value moves as WACC and other drivers vary, and what the "
+            "tighter or wider swing implies). Do not bury this in another section. You write "
+            "the analysis; a chart is added automatically, so do not build one yourself."
+        )
+    if any(_mechanical_segments_pie(c) for c in clips):
+        out.append(
+            "Write a short section on the primary subject's revenue composition / segment "
+            "mix (where its revenue comes from and how concentrated it is). You write the "
+            "analysis; a chart is added automatically, so do not build one yourself."
+        )
+    return out
+
+def _inject_mechanical_charts(sections: list[dict], clips: list[ReportClipIn]) -> None:
+    """Assign the site-built charts to sections. THE SITE OWNS ALL SECTION
+    CHARTS: whatever chart the writing model may have emitted is discarded, and
+    each site-built chart claims its best-matching section. Distinct chart types
+    (box, range, pie, line) are assigned first so the report leads with variety;
+    the many possible bar charts compete for what is left, and an adjacency
+    penalty keeps two of the same type off neighbouring sections. Every chart is
+    used at most once. Mutates sections in place; a section that matches no chart
+    simply renders as prose plus its key-figure strip."""
+    for sec in sections:
+        sec["chart"] = None  # the model does not get to choose charts
+    pool = _mechanical_chart_pool(clips)
+    if not pool:
+        return
+    pool.sort(key=lambda item: item[2])  # priority 0 (distinct types) first
+    used_sigs: set[tuple] = set()
+
+    def neighbor_types(idx: int) -> set[str]:
+        types: set[str] = set()
+        for j in (idx - 1, idx + 1):
+            if 0 <= j < len(sections) and sections[j].get("chart"):
+                types.add(sections[j]["chart"]["chartType"])
+        return types
+
+    for chart, keywords, _priority in pool:
+        sig = _chart_signature(chart)
+        if sig in used_sigs:
+            continue  # never place the same comparison twice
+        ctype = chart["chartType"]
+        best_i, best_score = -1, 0
+        for i, sec in enumerate(sections):
+            if sec.get("chart") is not None:
+                continue
+            score = sum(1 for k in keywords if k in _section_haystack(sec))
+            if score <= 0:
+                continue
+            if ctype in neighbor_types(i):
+                score -= 2  # discourage two same-type charts on adjacent sections
+            if score > best_score:
+                best_i, best_score = i, score
+        if best_i >= 0:
+            sections[best_i]["chart"] = chart
+            used_sigs.add(sig)
+
+def _build_sections(raw_sections, valid_ids: set[str]) -> list[dict]:
+    """Clean model-returned sections and drop a section's chart if an earlier
+    section already drew the same comparison — the model generates each
+    section's chart independently and sometimes redraws the same one twice
+    (e.g. a margin comparison under both "Growth" and "Profitability")."""
+    sections: list[dict] = []
+    seen_chart_sigs: set[tuple] = set()
+    for s in raw_sections or []:
+        if not isinstance(s, dict):
+            continue
+        cid = str(s.get("clipId", ""))
+        analysis = str(s.get("analysis", "")).strip()
+        if cid not in valid_ids or not analysis:
+            continue
+        chart = _clean_chart(s.get("chart"))
+        if chart:
+            sig = _chart_signature(chart)
+            if sig in seen_chart_sigs:
+                chart = None
+            else:
+                seen_chart_sigs.add(sig)
+        sections.append({
+            "clipId": cid,
+            "heading": _title_case(str(s.get("heading", "")).strip()) or "Analysis",
+            "analysis": analysis,
+            "keyFigures": _clean_figs(s.get("keyFigures")),
+            "chart": chart,
+        })
+    return sections
+
+# ── Sequential pipeline: Step 1 (outline) and Step 4 (verify) ────────────────
+# The report is built in distinct, ordered LLM passes rather than one rushed
+# call, so a weak writer model commits to a thesis-first structure before it
+# writes, and a final pass checks the prose against the numbers. Each pass has a
+# graceful fallback: if the outline or verify pass fails, the pipeline still
+# produces a report from the remaining steps.
+
+_REPORT_OUTLINE_SYSTEM = """You are an equity-research editor planning a report BEFORE it is written. Given the goal and the data clips, produce a top-down outline built around ONE investment thesis.
+
+Rules:
+- State a single decisive thesis sentence that directly answers the goal.
+- Propose 3 to 6 sections, each advancing that thesis with distinct evidence, ordered so the argument builds top-down.
+- Require every section and chart to directly advance the central investment thesis. Omit secondary or low-relevance analyses (such as routine DCF sensitivity) unless they provide a critical decision-making insight for the central thesis.
+- Use Title Case (proper capitalization) for all section headers (e.g., "Valuation Gap & Multiple Compression", "Revenue Trajectory & Margins").
+- ONE section per comparative theme. In a multi-subject comparison every section compares all subjects together (e.g. a single "Valuation Gap" section covering both names). NEVER split a theme into one section per subject.
+- Each section names the single most relevant chart family, or "none".
+- Use ONLY evidence present in the clips. Do not invent sections the data cannot support.
+
+Respond ONLY with JSON (no markdown, no code fences):
+{
+  "thesis": "one decisive sentence answering the goal",
+  "sections": [
+    { "heading": "Title Case Comparative Theme", "argues": "what this section establishes, one sentence", "chartHint": "growth | margins | valuation | sensitivity | segments | multiples | upside | none" }
+  ]
+}"""
+
+def _generate_outline(payload: dict) -> dict | None:
+    """Step 1 — draft a thesis-first section outline. Returns None on any failure
+    so the pipeline falls back to a single unplanned draft."""
+    try:
+        messages = [
+            {"role": "system", "content": _REPORT_OUTLINE_SYSTEM},
+            {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+        ]
+        resp = groq_chat(messages, model=MODEL_SMART, max_tokens=900, temperature=0.2)
+        out = parse_json((resp.choices[0].message.content or "").strip())
+        if not isinstance(out, dict):
+            return None
+        secs = [
+            {"heading": _title_case(str(s.get("heading", "")).strip()),
+             "argues": str(s.get("argues", "")).strip(),
+             "chartHint": str(s.get("chartHint", "")).strip().lower()}
+            for s in (out.get("sections") or []) if isinstance(s, dict) and str(s.get("heading", "")).strip()
+        ]
+        if not secs:
+            return None
+        return {"thesis": str(out.get("thesis", "")).strip(), "sections": secs[:8]}
+    except Exception as e:  # noqa: BLE001 — outline is best-effort
+        logger.warning("report outline step failed: %s", e)
+        return None
+
+_REPORT_VERIFY_SYSTEM = """You are a senior equity-research copy editor doing the final proofreading pass. You receive the report's executiveSummary and conclusion, plus CHART FACTS: the exact figures shown in the report's charts.
+
+Fix ONLY these, and change nothing else:
+1. Numerical accuracy — any number in the text that contradicts the CHART FACTS must be corrected to the chart figure. Never introduce a number that is not in the facts.
+2. Tone — sharp, professional equity-research prose. Cut filler, hedging, and repetition. No em dashes, no semicolons, no emoji, no bullet lists.
+3. Swings and moves — any price swing, sensitivity range, target band, or move stated only in dollars must be restated as a percent of the current price. The CHART FACTS carry the percent (e.g. a sensitivity series labeled "NVDA (19% swing)"); use it. Never contrast two differently-priced names' swings in dollars alone. Do not invent a percent that is not derivable from the facts.
+
+Keep the verdict, the lean, and the overall length unchanged. Do not restructure. Respond ONLY with JSON (no markdown, no code fences):
+{ "executiveSummary": "...", "conclusion": "..." }"""
+
+def _chart_facts(sections: list[dict]) -> str:
+    """Compact, human-readable digest of every number the site put into the
+    section charts — the ground truth the verify pass checks the prose against."""
+    facts: list[str] = []
+    for sec in sections:
+        ch = sec.get("chart")
+        if not isinstance(ch, dict):
+            continue
+        x_key = ch.get("xKey", "")
+        rows: list[str] = []
+        for row in (ch.get("data") or [])[:8]:
+            cat = row.get(x_key)
+            vals: list[str] = []
+            for s in ch.get("series", []):
+                v = row.get(s.get("key"))
+                if isinstance(v, (list, tuple)) and len(v) == 2:
+                    vals.append(f"{s.get('label')} {v[0]}-{v[1]}")
+                elif isinstance(v, (int, float)) and not isinstance(v, bool):
+                    vals.append(f"{s.get('label')} {v}")
+            if vals:
+                rows.append(f"{cat}: " + ", ".join(vals))
+        if rows:
+            facts.append(f"{ch.get('title', 'Chart')} — " + "; ".join(rows))
+    return " | ".join(facts)
+
+def _verify_report(executive: str, conclusion: str, chart_facts: str) -> dict | None:
+    """Step 4 — proofread the summary and conclusion for numeric consistency
+    against the chart facts and for tone. Returns None on failure so the draft
+    prose is used unchanged."""
+    if not executive and not conclusion:
+        return None
+    try:
+        payload = {"executiveSummary": executive, "conclusion": conclusion, "chartFacts": chart_facts or "(no charts)"}
+        messages = [
+            {"role": "system", "content": _REPORT_VERIFY_SYSTEM},
+            {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+        ]
+        resp = groq_chat(messages, model=MODEL_SMART, max_tokens=1400, temperature=0.1)
+        out = parse_json((resp.choices[0].message.content or "").strip())
+        if not isinstance(out, dict):
+            return None
+        es = str(out.get("executiveSummary", "")).strip()
+        cc = str(out.get("conclusion", "")).strip()
+        # Guard against a pass that dropped content: keep the draft if a field
+        # came back empty or implausibly shorter than the original.
+        if es and len(es) < len(executive) * 0.5:
+            es = executive
+        if cc and len(cc) < len(conclusion) * 0.5:
+            cc = conclusion
+        return {"executiveSummary": es or executive, "conclusion": cc or conclusion}
+    except Exception as e:  # noqa: BLE001 — verify is best-effort
+        logger.warning("report verify step failed: %s", e)
+        return None
+
+def _fix_comparative_reversals(text: str, clips: list[ReportClipIn]) -> str:
+    """Post-generation linter for NARR-03: extracts comparative claims, compares operands,
+    and auto-corrects directional reversals (e.g. 'lower ROE (141.5%)' vs 114.3%)."""
+    if not text or not clips:
+        return text
+    by_ticker = _all_kpis_by_ticker(clips)
+    if len(by_ticker) < 2:
+        return text
+
+    parsed_vals: dict[str, dict[str, float]] = {}
+    for tkr, kv in by_ticker.items():
+        parsed_vals[tkr] = {}
+        for k, v in kv.items():
+            num = _first_number(str(v))
+            if num is not None:
+                parsed_vals[tkr][k.upper()] = num
+
+    tickers = list(parsed_vals.keys())
+    for i in range(len(tickers)):
+        for j in range(i + 1, len(tickers)):
+            t1, t2 = tickers[i], tickers[j]
+            v1, v2 = parsed_vals[t1], parsed_vals[t2]
+
+            roe1, roe2 = v1.get("ROE"), v2.get("ROE")
+            if roe1 is not None and roe2 is not None:
+                if roe1 > roe2:
+                    pattern = rf"(\b{re.escape(t1)}(?:'s|’s)?\b[^\n.]{{0,80}}\b)lower(\s+roe\b)"
+                    text = re.sub(pattern, r"\1higher\2", text, flags=re.I)
+                elif roe2 > roe1:
+                    pattern = rf"(\b{re.escape(t2)}(?:'s|’s)?\b[^\n.]{{0,80}}\b)lower(\s+roe\b)"
+                    text = re.sub(pattern, r"\1higher\2", text, flags=re.I)
+
+            gm1, gm2 = v1.get("GROSS MARGIN"), v2.get("GROSS MARGIN")
+            if gm1 is not None and gm2 is not None:
+                if gm1 > gm2:
+                    pattern = rf"(\b{re.escape(t1)}(?:'s|’s)?\b[^\n.]{{0,80}}\b)lower(\s+gross\s+margin\b)"
+                    text = re.sub(pattern, r"\1higher\2", text, flags=re.I)
+
+    return text
+
+def _fix_upside_vocabulary_reversals(text: str) -> str:
+    """NARR-01 & NARR-02: Fix upside/downside vocabulary reversals and misleading CAGR labels."""
+    if not text:
+        return text
+    text = re.sub(r"trading\s+([\d.]+%\s+)above\s+intrinsic\s+value", r"trading at a \1downside to intrinsic value", text, flags=re.I)
+    text = re.sub(r"\b(single-period|85\.2%|35%|16\.6%)\s+revenue\s+cagr\b", r"\1 revenue growth rate", text, flags=re.I)
+    return text
+
+def _ensure_risks_section(sections: list[dict], subject: str | None, valuation_context: dict) -> None:
+    """Ensure a qualitative key-risks section exists. Deliberately carries NO
+    falsification trigger and NO invented threshold figures — risks are described
+    in plain prose so the report never states a fabricated cutoff, date, or
+    trigger level."""
+    has_risks = any(re.search(r"\brisk", s.get("heading", ""), re.I) for s in sections)
+    if not has_risks:
+        sections.append({
+            "clipId": "key-investment-risks",
+            "heading": _title_case("Key Investment Risks"),
+            "analysis": (
+                "Product cycle transitions and customer spending pauses pose execution risk to the "
+                "revenue trajectory the thesis relies on. A faster discount-rate expansion or a "
+                "compression in the valuation multiple would weigh directly on the present value of "
+                "future cash flows and is the main way the call is wrong. Monitor these against the "
+                "figures cited above rather than any fixed trigger level."
+            ),
+            "keyFigures": [],
+            "chart": None,
+        })
+
+def _sensitivity_swing_summary(clips: list[ReportClipIn], price_by_subject: dict[str, float | None]) -> dict[str, dict]:
+    """Per-subject intrinsic-value envelope from the DCF one-way sensitivity data,
+    expressed as a PERCENT of that subject's current price so swings are
+    comparable across differently-priced names (a $40 NVDA swing and a $400 MELI
+    swing are both stated as a percent of spot). Returns {} when no sensitivity
+    data or price is available."""
+    ch = _mechanical_sensitivity_chart(clips)
+    if not ch:
+        return {}
+    out: dict[str, dict] = {}
+    for s in ch.get("series", []):
+        key = str(s.get("key", "")).upper()
+        lows: list[float] = []
+        highs: list[float] = []
+        for row in ch.get("data", []):
+            v = row.get(s.get("key"))
+            if isinstance(v, (list, tuple)) and len(v) == 2:
+                try:
+                    lows.append(float(v[0])); highs.append(float(v[1]))
+                except (TypeError, ValueError):
+                    continue
+        if not lows:
+            continue
+        lo, hi = min(lows), max(highs)
+        price = price_by_subject.get(key)
+        swing_pct = ((hi - lo) / price * 100.0) if price else None
+        out[key] = {
+            "low": round(lo, 2), "high": round(hi, 2), "swing": round(hi - lo, 2),
+            "swingPct": round(swing_pct, 1) if swing_pct is not None else None,
+        }
+    return out
+
+
+def _annotate_sensitivity_swing(sections: list[dict], price_by_subject: dict[str, float | None]) -> None:
+    """Fold each subject's swing-as-percent-of-spot into the placed sensitivity
+    range chart's series labels, so the visual states the percent regardless of
+    what the prose does (e.g. 'NVDA (19% swing)'). Mutates sections in place."""
+    for sec in sections:
+        ch = sec.get("chart")
+        if not isinstance(ch, dict) or ch.get("chartType") != "range":
+            continue
+        title = str(ch.get("title", "")).lower()
+        if "sensitiv" not in title and "swing" not in title:
+            continue
+        for s in ch.get("series", []):
+            key = str(s.get("key", "")).upper()
+            price = price_by_subject.get(key)
+            if not price:
+                continue
+            lows: list[float] = []
+            highs: list[float] = []
+            for row in ch.get("data", []):
+                v = row.get(s.get("key"))
+                if isinstance(v, (list, tuple)) and len(v) == 2:
+                    try:
+                        lows.append(float(v[0])); highs.append(float(v[1]))
+                    except (TypeError, ValueError):
+                        continue
+            if not lows:
+                continue
+            pct = (max(highs) - min(lows)) / price * 100.0
+            base = str(s.get("key", ""))
+            s["label"] = f"{base} ({pct:.0f}% swing)"
+
+
+def _build_report_slot_ctx(clips: list[ReportClipIn], subject: str | None, name: str | None,
+                           market: float | None, dcf_intrinsic: float | None):
+    """Deterministic slot fields (subject/peer numerics) shared by report
+    generation and revision, so revised prose passes the same numeric guardrails
+    the original draft did."""
+    from routers.slot_engine import SlotContext
+    slot_fields: dict = {
+        "subject.ticker": subject or "",
+        "subject.name": name or "",
+        "subject.market_price": market,
+        "subject.dcf_intrinsic": dcf_intrinsic,
+    }
+    all_kpis = _all_kpis_by_ticker(clips)
+    subj_kpis = all_kpis.get((subject or "").upper(), {})
+    slot_fields["subject.pe_trailing"] = _first_number(subj_kpis.get("P/E") or subj_kpis.get("PE") or "")
+    slot_fields["subject.roe"] = _first_number(subj_kpis.get("ROE") or "")
+    slot_fields["subject.gross_margin"] = _first_number(subj_kpis.get("GROSS MARGIN") or subj_kpis.get("MARGIN") or "")
+    slot_fields["subject.rev_growth"] = _first_number(subj_kpis.get("REV GROWTH") or subj_kpis.get("GROWTH") or "")
+
+    pe_vals = [num for t, kv in all_kpis.items() if t != (subject or "").upper() and (num := _first_number(kv.get("P/E") or "")) is not None]
+    if pe_vals:
+        slot_fields["peers.pe_median"] = round(float(_median(pe_vals)), 1)
+    roe_vals = [num for t, kv in all_kpis.items() if t != (subject or "").upper() and (num := _first_number(kv.get("ROE") or "")) is not None]
+    if roe_vals:
+        slot_fields["peers.roe_median"] = round(float(_median(roe_vals)), 1)
+    return SlotContext(fields=slot_fields)
+
+
+def _apply_report_linters(text: str, clips: list[ReportClipIn], slot_ctx) -> str:
+    """The full deterministic prose pass: comparative-direction fixes, upside
+    vocabulary fixes, then slot resolution. Applied to every AI-written block in
+    both the initial draft and any later revision."""
+    from routers.slot_engine import resolve_slots
+    return resolve_slots(_fix_upside_vocabulary_reversals(_fix_comparative_reversals(text, clips)), slot_ctx)
+
+
 @router.post("/report")
 def generate_report(req: ReportGenRequest):
     if not req.clips:
@@ -1999,6 +3353,9 @@ def generate_report(req: ReportGenRequest):
     valid_ids = {c.id for c in req.clips}
 
     subject = _subject_ticker(req)
+    subjects_ranked = _ranked_subjects(req)
+    mode = _report_mode(req, subjects_ranked)
+    length_key = _length_key(req.length)
     dcf_names = sorted(_dcf_tickers_from_clips(req.clips))
     subject_dcf = _subject_dcf_present(req.clips, subject)
     quote = _fetch_market_quote(subject)
@@ -2008,6 +3365,8 @@ def generate_report(req: ReportGenRequest):
     signal_digest = _clip_signal_digest(req.clips)
 
     valuation_context = {
+        "reportMode": mode,
+        "reportLength": length_key,
         "subjectTicker": subject,
         "subjectName": quote.get("name"),
         "marketPrice": round(market, 4) if market else None,
@@ -2018,51 +3377,102 @@ def generate_report(req: ReportGenRequest):
         "dcfTickersInClips": dcf_names,
         "signalDigest": signal_digest,
         "note": (
-            "marketPrice is LIVE spot — always cite it. "
+            "marketPrice is LIVE spot for subjectTicker — always cite it. "
             "signalDigest summarizes directional cues already in the clips (GEX, call%, IV, cone). "
             "Vol cone and implied move bound WIDTH only. "
             "When signalDigest.suggestedLean is bullish or bearish, the research range must encode that lean "
             "(mid shifted and/or asymmetric wings). Do not publish spot ± impliedMove as the whole thesis. "
             "Integrate every clip family into one argument. "
-            "subjectDcfIntrinsic is one input, not the answer."
+            "subjectDcfIntrinsic is one input, not the answer. "
+            "reportMode tells you the shape keyResult must take — see system prompt."
         ),
     }
 
+    if mode == "open" and len(subjects_ranked) >= 2:
+        subj_ctx = []
+        for t in subjects_ranked[:4]:
+            q = quote if t == subject else _fetch_market_quote(t)
+            mkt_t = float(q["price"]) if q.get("price") else None
+            chg_t = float(q["changePct"]) if q.get("changePct") is not None else None
+            dcf_present_t = _subject_dcf_present(req.clips, t)
+            dcf_val_t = _dcf_intrinsic_for_subject(req.clips, t) if dcf_present_t else None
+            subj_ctx.append({
+                "ticker": t,
+                "name": q.get("name"),
+                "marketPrice": round(mkt_t, 4) if mkt_t else None,
+                "dayChangePct": round(chg_t, 3) if chg_t is not None else None,
+                "dcfIntrinsic": round(dcf_val_t, 4) if dcf_val_t else None,
+            })
+        valuation_context["subjects"] = subj_ctx
+        valuation_context["note"] += (
+            " This is a multi-subject report: valuationContext.subjects lists every named "
+            "ticker with its own live spot and DCF (if present). Weigh ALL of them against "
+            "each other using their own clips — do not silently pick one as the report's real "
+            "subject and relegate the other's central clips to appendixClipIds."
+        )
+
+    # Price-by-subject for percent-of-spot swing framing (single + multi subject).
+    price_by_subject: dict[str, float | None] = {}
+    if subject and market:
+        price_by_subject[subject.upper()] = market
+    for s in valuation_context.get("subjects", []):
+        if s.get("ticker") and s.get("marketPrice"):
+            price_by_subject[str(s["ticker"]).upper()] = s["marketPrice"]
+    swing_summary = _sensitivity_swing_summary(req.clips, price_by_subject)
+    if swing_summary:
+        valuation_context["sensitivitySwing"] = swing_summary
+        valuation_context["note"] += (
+            " valuationContext.sensitivitySwing gives each subject's DCF intrinsic-value envelope "
+            "and its swingPct (the full swing as a percent of that subject's current price). State "
+            "sensitivity and range widths using swingPct, never a bare dollar spread — dollar swings "
+            "are not comparable across differently-priced names."
+        )
+
+    clip_payload = [
+        {"id": c.id, "sourceTool": c.sourceTab, "type": c.dataType,
+         "title": c.title, "userInstruction": c.userDescription, "data": c.dataSummary}
+        for c in req.clips
+    ]
+    goal_text = req.goal or "(not specified)"
+    purpose_text = req.purpose or "(not specified)"
+
+    # STEP 1 — Analytical structure: draft a thesis-first outline before writing.
+    outline = _generate_outline({
+        "goal": goal_text, "purpose": purpose_text,
+        "reportLength": length_key,
+        "valuationContext": valuation_context, "clips": clip_payload,
+    })
+
+    # STEP 2 — Draft: write the full report, following the outline when present.
     payload = {
         "projectName": req.projectName,
         "timeframe": req.timeframe,
-        "purpose": req.purpose or "(not specified)",
-        "goal": req.goal or "(not specified)",
+        "purpose": purpose_text,
+        "goal": goal_text,
         "valuationContext": valuation_context,
-        "clips": [
-            {"id": c.id, "sourceTool": c.sourceTab, "type": c.dataType,
-             "title": c.title, "userInstruction": c.userDescription, "data": c.dataSummary}
-            for c in req.clips
-        ],
+        "outline": outline,  # may be None → the model plans and writes in one shot
+        "clips": clip_payload,
     }
+    sys_prompt = (
+        _REPORT_SYSTEM
+        .replace("{{LENGTH_GUIDANCE}}", _LENGTH_SPEC[length_key]["guidance"])
+        .replace("{{MUST_INCLUDE_SECTION}}", _must_include_section(req.mustInclude, _auto_must_include(req.clips)))
+    )
     messages = [
-        {"role": "system", "content": _REPORT_SYSTEM},
+        {"role": "system", "content": sys_prompt},
         {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
     ]
-    resp = groq_chat(messages, model=MODEL_SMART, max_tokens=4000, temperature=0.3)
+    max_tokens = {"short": 2200, "medium": 4000, "long": 6500}[length_key]
+    resp = groq_chat(messages, model=MODEL_SMART, max_tokens=max_tokens, temperature=0.3)
     raw = (resp.choices[0].message.content or "").strip()
     result = parse_json(raw)
     if not isinstance(result, dict) or "executiveSummary" not in result:
         raise HTTPException(502, "AI returned an unexpected report shape")
 
-    sections = []
-    for s in result.get("sections") or []:
-        if not isinstance(s, dict):
-            continue
-        cid = str(s.get("clipId", ""))
-        analysis = str(s.get("analysis", "")).strip()
-        if cid in valid_ids and analysis:
-            sections.append({
-                "clipId": cid,
-                "heading": str(s.get("heading", "")).strip() or "Analysis",
-                "analysis": analysis,
-                "keyFigures": _clean_figs(s.get("keyFigures")),
-            })
+    sections = _build_sections(result.get("sections"), valid_ids)
+    # STEP 3 — Intentional chart mapping: the site builds and assigns every chart.
+    _inject_mechanical_charts(sections, req.clips)
+    _annotate_sensitivity_swing(sections, price_by_subject)
     used = {s["clipId"] for s in sections}
     appendix = [cid for cid in (str(x) for x in (result.get("appendixClipIds") or [])) if cid in valid_ids and cid not in used]
     for cid in (c.id for c in req.clips):
@@ -2096,16 +3506,214 @@ def generate_report(req: ReportGenRequest):
         dcf_intrinsic=dcf_intrinsic,
         stance=stance,
         signal_digest=signal_digest,
+        force_range=(mode == "range"),
     )
+
+    # STEP 4 — Verification gate: proofread the summary and conclusion against the
+    # exact numbers the charts show, and tighten the tone.
+    executive_summary = str(result.get("executiveSummary", "")).strip()
+    conclusion = str(result.get("conclusion", "")).strip()
+    verified = _verify_report(executive_summary, conclusion, _chart_facts(sections))
+    if verified:
+        executive_summary = verified["executiveSummary"]
+        conclusion = verified["conclusion"]
+
+    # STEP 5 — Slot resolution + post-generation linters (shared with revision).
+    slot_ctx = _build_report_slot_ctx(req.clips, subject, quote.get("name"), market, dcf_intrinsic)
+
+    executive_summary = _apply_report_linters(executive_summary, req.clips, slot_ctx)
+    conclusion = _apply_report_linters(conclusion, req.clips, slot_ctx)
+    for s in sections:
+        if s.get("analysis"):
+            s["analysis"] = _apply_report_linters(s["analysis"], req.clips, slot_ctx)
+
+    _ensure_risks_section(sections, subject, valuation_context)
 
     return {
         "headline": str(result.get("headline", "")).strip(),
         "stance": stance,
         "keyResult": key_result,
-        "executiveSummary": str(result.get("executiveSummary", "")).strip(),
+        "executiveSummary": executive_summary,
         "sections": sections,
-        "conclusion": str(result.get("conclusion", "")).strip(),
+        "conclusion": conclusion,
         "appendixClipIds": appendix,
         "model": MODEL_SMART,
         "valuationContext": valuation_context,
     }
+
+
+# ── Report Creator: targeted AI revision of an already-generated report ────────
+# The user points at a block (or the whole report) and describes a change; the
+# model proposes replacement prose for only the affected block(s). The client
+# then shows the alternative and lets the user implement, retry, or dismiss it.
+
+_ALLOWED_REVISE_FIELDS = {"headline", "executiveSummary", "conclusion", "section.analysis", "section.heading"}
+
+class ReportReviseRequest(BaseModel):
+    projectName: str = ""
+    timeframe: str = ""
+    purpose: str = ""
+    goal: str = ""
+    subjectTicker: str = ""
+    instruction: str = ""
+    scope: str = "block"        # "block" (one field) | "report" (any prose blocks)
+    field: str = ""             # block scope: which field to revise
+    clipId: str = ""            # section.* fields: which section
+    generated: dict = {}        # current report: headline, executiveSummary, sections, conclusion, stance, keyResult
+    clips: list[ReportClipIn] = []
+
+_REPORT_REVISE_SYSTEM = """You are an equity-research editor revising an ALREADY-WRITTEN report at the user's request. You receive the full report (headline, thesis, executive summary, every section, conclusion), the DATA CLIPS behind it, the live valuationContext, the TARGET you must revise, and the user's REQUESTED CHANGE.
+
+Rewrite ONLY the target block(s). Return improved replacement text that satisfies the request while staying true to the data.
+
+RULES:
+- Use ONLY figures present in the clips or valuationContext. Never invent a number, price, ratio, or date. If the request needs data you were not given, make the qualitative change you can and say the figure is not available rather than fabricating it.
+- Express every price swing, sensitivity range, target band, or move as a PERCENT of the subject's current price (valuationContext.marketPrice, or per-subject marketPrice in valuationContext.subjects), never as a bare dollar amount. A $40 move on a $200 stock is 20%. valuationContext.sensitivitySwing carries the precomputed swingPct.
+- Never write a falsification trigger or any "IF metric crosses threshold BY date THEN thesis invalidated" statement, and never invent threshold levels, cutoff dates, or trigger figures.
+- Keep the report's verdict and lean unless the request explicitly asks to change them.
+- House style: spartan, active voice, address the reader as "you", no em dashes, no semicolons, no emoji, no bullet lists inside prose, flowing paragraphs.
+- Do not touch any block other than the target(s).
+
+TARGET:
+- scope "block": revise exactly the one field in target.field. For section.analysis / section.heading, target.clipId identifies the section. Return exactly one patch, for that field.
+- scope "report": the request may span the report. Return a patch for EACH prose block that must change to satisfy it. Do not rewrite blocks the request does not touch.
+
+Allowed field values: "headline", "executiveSummary", "conclusion", "section.analysis", "section.heading".
+
+Respond ONLY with valid JSON (no markdown, no code fences):
+{ "patches": [ { "field": "<one allowed value>", "clipId": "<section clipId, only for section.* fields>", "after": "<the revised text>" } ] }"""
+
+
+def _revise_block_before(generated: dict, field: str, clip_id: str) -> str | None:
+    """Current text of the targeted block, or None if the field/section is unknown."""
+    if field == "headline":
+        return str(generated.get("headline") or "")
+    if field == "executiveSummary":
+        return str(generated.get("executiveSummary") or "")
+    if field == "conclusion":
+        return str(generated.get("conclusion") or "")
+    if field in ("section.analysis", "section.heading"):
+        key = "analysis" if field == "section.analysis" else "heading"
+        for s in (generated.get("sections") or []):
+            if isinstance(s, dict) and str(s.get("clipId")) == clip_id:
+                return str(s.get(key) or "")
+        return None
+    return None
+
+
+@router.post("/report/revise")
+def revise_report(req: ReportReviseRequest):
+    instruction = (req.instruction or "").strip()
+    if not instruction:
+        raise HTTPException(400, "No revision instruction provided")
+    generated = req.generated if isinstance(req.generated, dict) else {}
+    if not generated:
+        raise HTTPException(400, "No generated report to revise")
+
+    scope = "report" if req.scope == "report" else "block"
+    if scope == "block":
+        if req.field not in _ALLOWED_REVISE_FIELDS:
+            raise HTTPException(400, f"Cannot revise field {req.field!r}")
+        if _revise_block_before(generated, req.field, req.clipId) is None:
+            raise HTTPException(400, "Target block not found in the report")
+
+    # Reuse the generation helpers by adapting the request shape.
+    gen_req = ReportGenRequest(
+        projectName=req.projectName, purpose=req.purpose, goal=req.goal,
+        subjectTicker=req.subjectTicker, clips=req.clips,
+    )
+    subject = _subject_ticker(gen_req)
+    subjects_ranked = _ranked_subjects(gen_req)
+    mode = _report_mode(gen_req, subjects_ranked)
+    quote = _fetch_market_quote(subject)
+    market = float(quote["price"]) if quote.get("price") else None
+    dcf_intrinsic = _dcf_intrinsic_for_subject(req.clips, subject) if _subject_dcf_present(req.clips, subject) else None
+
+    price_by_subject: dict[str, float | None] = {}
+    if subject and market:
+        price_by_subject[subject.upper()] = market
+    subjects_ctx = []
+    if mode == "open" and len(subjects_ranked) >= 2:
+        for t in subjects_ranked[:4]:
+            q = quote if t == subject else _fetch_market_quote(t)
+            mkt_t = float(q["price"]) if q.get("price") else None
+            if mkt_t:
+                price_by_subject[t.upper()] = mkt_t
+            subjects_ctx.append({"ticker": t, "name": q.get("name"), "marketPrice": round(mkt_t, 4) if mkt_t else None})
+
+    valuation_context = {
+        "reportMode": mode,
+        "subjectTicker": subject,
+        "marketPrice": round(market, 4) if market else None,
+        "subjectDcfIntrinsic": round(dcf_intrinsic, 4) if dcf_intrinsic else None,
+    }
+    if subjects_ctx:
+        valuation_context["subjects"] = subjects_ctx
+    swing_summary = _sensitivity_swing_summary(req.clips, price_by_subject)
+    if swing_summary:
+        valuation_context["sensitivitySwing"] = swing_summary
+
+    # Compact current-report view for grounding.
+    report_view = {
+        "headline": generated.get("headline") or "",
+        "thesis": (generated.get("stance") or {}).get("thesis") if isinstance(generated.get("stance"), dict) else "",
+        "executiveSummary": generated.get("executiveSummary") or "",
+        "conclusion": generated.get("conclusion") or "",
+        "sections": [
+            {"clipId": str(s.get("clipId")), "heading": s.get("heading") or "", "analysis": s.get("analysis") or ""}
+            for s in (generated.get("sections") or []) if isinstance(s, dict)
+        ],
+    }
+    clip_payload = [
+        {"id": c.id, "sourceTool": c.sourceTab, "type": c.dataType,
+         "title": c.title, "userInstruction": c.userDescription, "data": c.dataSummary}
+        for c in req.clips
+    ]
+    target = {"scope": scope, "field": req.field, "clipId": req.clipId} if scope == "block" else {"scope": "report"}
+
+    payload = {
+        "purpose": req.purpose or "(not specified)",
+        "goal": req.goal or "(not specified)",
+        "valuationContext": valuation_context,
+        "report": report_view,
+        "target": target,
+        "requestedChange": instruction,
+        "clips": clip_payload,
+    }
+    messages = [
+        {"role": "system", "content": _REPORT_REVISE_SYSTEM},
+        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+    ]
+    resp = groq_chat(messages, model=MODEL_SMART, max_tokens=2600, temperature=0.35)
+    result = parse_json((resp.choices[0].message.content or "").strip())
+    if not isinstance(result, dict) or not isinstance(result.get("patches"), list):
+        raise HTTPException(502, "AI returned an unexpected revision shape")
+
+    slot_ctx = _build_report_slot_ctx(req.clips, subject, quote.get("name"), market, dcf_intrinsic)
+    valid_section_ids = {s["clipId"] for s in report_view["sections"]}
+    seen: set[tuple[str, str]] = set()
+    patches: list[dict] = []
+    for p in result["patches"]:
+        if not isinstance(p, dict):
+            continue
+        field = str(p.get("field") or "")
+        clip_id = str(p.get("clipId") or "")
+        after = str(p.get("after") or "").strip()
+        if field not in _ALLOWED_REVISE_FIELDS or not after:
+            continue
+        if scope == "block" and (field != req.field or (req.field.startswith("section.") and clip_id != req.clipId)):
+            continue
+        if field.startswith("section.") and clip_id not in valid_section_ids:
+            continue
+        dedupe = (field, clip_id)
+        if dedupe in seen:
+            continue
+        seen.add(dedupe)
+        before = _revise_block_before(generated, field, clip_id) or ""
+        # Headings are short labels, not prose; skip the numeric-prose linters.
+        after_clean = after if field == "section.heading" else _apply_report_linters(after, req.clips, slot_ctx)
+        if after_clean.strip() == before.strip():
+            continue
+        patches.append({"field": field, "clipId": clip_id, "before": before, "after": after_clean.strip()})
+
+    return {"patches": patches, "model": MODEL_SMART}

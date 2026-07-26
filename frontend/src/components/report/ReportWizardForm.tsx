@@ -1,5 +1,5 @@
 import { T } from '../../lib/theme'
-import type { LookbackPreset, LookforwardPreset, ReportScope } from '../../lib/reportCreator'
+import type { LookbackPreset, LookforwardPreset, ReportLength, ReportScope } from '../../lib/reportCreator'
 
 // Scope form: dual horizon (lookback + lookforward), purpose, and goal.
 
@@ -20,6 +20,12 @@ const LOOKFORWARD: { k: LookforwardPreset; label: string }[] = [
   { k: 'next90', label: '90D' },
   { k: 'next180', label: '180D' },
   { k: 'custom', label: 'Custom' },
+]
+
+const LENGTH: { k: ReportLength; label: string; hint: string }[] = [
+  { k: 'short', label: 'Short', hint: '1-2 sections · headline verdict only' },
+  { k: 'medium', label: 'Medium', hint: '3-6 sections · standard depth' },
+  { k: 'long', label: 'Long', hint: '6-10 sections · full supporting detail' },
 ]
 
 const label: React.CSSProperties = {
@@ -112,15 +118,30 @@ export default function ReportWizardForm({ scope, onChange }: { scope: ReportSco
       </div>
 
       <div>
-        <label style={label}>Purpose</label>
-        <textarea value={scope.purpose} onChange={e => onChange({ purpose: e.target.value })} rows={2}
-          placeholder="Quarterly risk assessment and portfolio rebalancing review" style={field} />
+        <span style={label}>Length</span>
+        <ChipRow options={LENGTH} value={scope.length} onPick={k => onChange({ length: k })} />
+        <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, marginTop: 6 }}>
+          {LENGTH.find(l => l.k === scope.length)?.hint}
+        </div>
       </div>
 
       <div>
-        <label style={label}>Goal</label>
-        <textarea value={scope.goal} onChange={e => onChange({ goal: e.target.value })} rows={2}
-          placeholder="Identify capital allocation adjustments and hedge tail risk" style={field} />
+        <label style={label}>Objective</label>
+        <textarea value={scope.goal || scope.purpose} onChange={e => onChange({ goal: e.target.value, purpose: '' })} rows={3}
+          placeholder="What should this report determine? e.g. Which is the better value between NVDA and AAPL on growth and valuation" style={field} />
+        <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, marginTop: 6 }}>
+          The question the report answers. Be specific about the subjects and what you want decided.
+        </div>
+      </div>
+
+      <div>
+        <label style={label}>Must Include</label>
+        <textarea value={scope.mustInclude} onChange={e => onChange({ mustInclude: e.target.value })} rows={3}
+          placeholder={'One requirement per line — a stat, a verdict, a chart\ne.g. PEG ratio comparison chart\nstate the analyst price target explicitly'}
+          style={field} />
+        <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, marginTop: 6 }}>
+          Forces these into the report even if the model would otherwise cut them. If the data isn't in your clips, it says so instead of making it up.
+        </div>
       </div>
     </div>
   )

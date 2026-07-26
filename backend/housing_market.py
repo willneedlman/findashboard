@@ -71,12 +71,8 @@ class HousingMarketSnapshot:
     days_on_market: float         # median days on market
     active_listings: float        # active inventory, homes
     sf_default_rate: float = 0.0      # single-family mortgage serious delinquency / default, %
-    mf_default_rate: float = 0.0      # multifamily (apartment) mortgage default, %
+    cre_delinquency_rate: float = 0.0 # commercial real estate delinquency (incl. multifamily, ex-farmland), %
     serious_delinquency: float = 0.0  # all mortgages 90+ days past due, %
-    foreclosure_rate: float = 0.0     # mortgages in the foreclosure process, %
-    negative_equity: float = 0.0      # mortgaged homes underwater (LTV > 100), %
-    avg_ltv: float = 0.0              # origination loan-to-value, %
-    avg_fico: float = 0.0            # origination borrower credit score
 
     @property
     def price_to_income(self) -> float:
@@ -207,12 +203,8 @@ def snapshot_metrics(snap: HousingMarketSnapshot, rate_30y: float) -> dict:
         "months_of_supply": round(snap.months_of_supply, 2),
         "affordability_index": round(affordability_index(snap, rate_30y), 1),
         "sf_default_rate": round(snap.sf_default_rate, 2),
-        "mf_default_rate": round(snap.mf_default_rate, 2),
+        "cre_delinquency_rate": round(snap.cre_delinquency_rate, 2),
         "serious_delinquency": round(snap.serious_delinquency, 2),
-        "foreclosure_rate": round(snap.foreclosure_rate, 2),
-        "negative_equity": round(snap.negative_equity, 2),
-        "avg_ltv": round(snap.avg_ltv, 1),
-        "avg_fico": round(snap.avg_fico, 0),
         **supply_demand_spread(snap),
         "rate_30y": round(rate_30y, 2),
     }
@@ -237,7 +229,7 @@ def region_report(hs: HousingSeries, rates: dict[date, MortgageRateRecord]) -> d
                 for s in snaps]),
             "months_of_supply": trend([s.months_of_supply for s in snaps]),
             "sf_default_rate": trend([s.sf_default_rate for s in snaps]),
-            "mf_default_rate": trend([s.mf_default_rate for s in snaps]),
+            "cre_delinquency_rate": trend([s.cre_delinquency_rate for s in snaps]),
             "serious_delinquency": trend([s.serious_delinquency for s in snaps]),
         },
         "history": [
@@ -246,7 +238,7 @@ def region_report(hs: HousingSeries, rates: dict[date, MortgageRateRecord]) -> d
              "sales_volume": round(s.sales_volume, 0),
              "months_of_supply": round(s.months_of_supply, 2),
              "sf_default_rate": round(s.sf_default_rate, 2),
-             "mf_default_rate": round(s.mf_default_rate, 2),
+             "cre_delinquency_rate": round(s.cre_delinquency_rate, 2),
              "affordability_index": round(
                  affordability_index(s, (rates.get(s.asof).rate_30y if rates.get(s.asof) else 0.0)), 1)}
             for s in snaps
@@ -302,10 +294,10 @@ def market_report(regions: list[HousingSeries], rates: dict[date, MortgageRateRe
 # sf/mf = single-family / multifamily default base %, risk = foreclosure & negative-
 # equity tilt (West runs hotter on price sensitivity, Midwest cooler).
 _PROFILE: dict[Region, dict[str, float]] = {
-    Region.NORTHEAST: {"price": 465000, "ppsf": 305, "income": 84000, "sales": 62000, "listings": 210000, "dom": 34, "starts": 118000, "sf": 0.42, "mf": 0.70, "risk": 1.05},
-    Region.MIDWEST:   {"price": 268000, "ppsf": 172, "income": 71000, "sales": 108000, "listings": 300000, "dom": 30, "starts": 155000, "sf": 0.30, "mf": 0.48, "risk": 0.88},
-    Region.SOUTH:     {"price": 345000, "ppsf": 188, "income": 69000, "sales": 232000, "listings": 640000, "dom": 38, "starts": 760000, "sf": 0.38, "mf": 0.62, "risk": 1.00},
-    Region.WEST:      {"price": 615000, "ppsf": 355, "income": 90000, "sales": 118000, "listings": 330000, "dom": 28, "starts": 300000, "sf": 0.28, "mf": 0.55, "risk": 1.12},
+    Region.NORTHEAST: {"price": 465000, "ppsf": 305, "income": 84000, "sales": 62000, "listings": 210000, "dom": 34, "starts": 118000, "sf": 0.42, "cre": 0.70},
+    Region.MIDWEST:   {"price": 268000, "ppsf": 172, "income": 71000, "sales": 108000, "listings": 300000, "dom": 30, "starts": 155000, "sf": 0.30, "cre": 0.48},
+    Region.SOUTH:     {"price": 345000, "ppsf": 188, "income": 69000, "sales": 232000, "listings": 640000, "dom": 38, "starts": 760000, "sf": 0.38, "cre": 0.62},
+    Region.WEST:      {"price": 615000, "ppsf": 355, "income": 90000, "sales": 118000, "listings": 330000, "dom": 28, "starts": 300000, "sf": 0.28, "cre": 0.55},
 }
 
 
@@ -364,24 +356,19 @@ def _simulate_region(region: Region, rates: list[MortgageRateRecord],
         listings = p["listings"] * (1 + 0.09 * max(drate, 0)) * (2 - seasonal) * rng.uniform(0.98, 1.02)
         dom = p["dom"] * (1 + 0.14 * max(drate, 0)) / seasonal * rng.uniform(0.97, 1.03)
 
-        # Credit risk: defaults and stress rise with the rate shock; multifamily is
-        # more cyclical than single-family, and softening prices push some underwater.
+        # Credit risk: defaults and stress rise with the rate shock; commercial real
+        # estate (incl. multifamily) is more cyclical than single-family.
         sf_def = p["sf"] * (1 + 0.30 * max(drate, 0)) * noise
-        mf_def = p["mf"] * (1 + 0.62 * max(drate, 0)) * noise
-        serious = (0.82 * sf_def + 0.18 * mf_def) * 1.7          # 90+ DPD is broader than default
-        foreclosure = 0.22 * p["risk"] * (1 + 0.22 * max(drate, 0)) * noise
-        neg_equity = (2.1 * p["risk"] + 0.55 * max(drate, 0)) * noise
-        ltv = 78.5 + 0.9 * max(drate, 0)                         # buyers stretch → higher LTV
-        fico = 744 + 4.5 * max(drate, 0)                         # lenders tighten → higher origination FICO
+        cre_delinq = p["cre"] * (1 + 0.62 * max(drate, 0)) * noise
+        serious = (0.82 * sf_def + 0.18 * cre_delinq) * 1.7      # 90+ DPD is broader than default
 
         hs.snapshots.append(HousingMarketSnapshot(
             region=region, asof=asof,
             median_price=round(price, 0), price_per_sqft=round(ppsf, 1), median_income=round(income, 0),
             sales_volume=round(sales, 0), pending_sales=round(pending, 0),
             days_on_market=round(dom, 1), active_listings=round(listings, 0),
-            sf_default_rate=round(sf_def, 2), mf_default_rate=round(mf_def, 2),
-            serious_delinquency=round(serious, 2), foreclosure_rate=round(foreclosure, 2),
-            negative_equity=round(neg_equity, 2), avg_ltv=round(ltv, 1), avg_fico=round(fico, 0),
+            sf_default_rate=round(sf_def, 2), cre_delinquency_rate=round(cre_delinq, 2),
+            serious_delinquency=round(serious, 2),
         ))
         # Construction pulls back as rates rise; permits lead starts lead completions.
         starts = p["starts"] * max(0.6, 1 - 0.08 * max(drate, 0)) * seasonal * rng.uniform(0.97, 1.03)
@@ -423,12 +410,8 @@ def generate_mock(months: int = 36, seed: int = 11) -> tuple[list[HousingSeries]
             days_on_market=round(sum(s.days_on_market * s.sales_volume for s in group) / wsum, 1),
             active_listings=round(sum(s.active_listings for s in group), 0),
             sf_default_rate=round(sum(s.sf_default_rate * s.sales_volume for s in group) / wsum, 2),
-            mf_default_rate=round(sum(s.mf_default_rate * s.sales_volume for s in group) / wsum, 2),
+            cre_delinquency_rate=round(sum(s.cre_delinquency_rate * s.sales_volume for s in group) / wsum, 2),
             serious_delinquency=round(sum(s.serious_delinquency * s.sales_volume for s in group) / wsum, 2),
-            foreclosure_rate=round(sum(s.foreclosure_rate * s.sales_volume for s in group) / wsum, 2),
-            negative_equity=round(sum(s.negative_equity * s.sales_volume for s in group) / wsum, 2),
-            avg_ltv=round(sum(s.avg_ltv * s.sales_volume for s in group) / wsum, 1),
-            avg_fico=round(sum(s.avg_fico * s.sales_volume for s in group) / wsum, 0),
         ))
     for asof, cgroup in sorted(con_by_month.items()):
         nat.construction.append(ConstructionActivity(

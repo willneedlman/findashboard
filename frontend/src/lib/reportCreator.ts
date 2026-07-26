@@ -24,12 +24,30 @@ export interface KpiPayload {
   title?: string
   cells: { label: string; value: string; sub?: string }[]
 }
+// chartType data conventions:
+// - 'bar' / 'line' / 'area' / 'histogram' / 'dot': data[i][xKey] is the category
+//   (histogram: a pre-binned bucket label), data[i][series[k].key] is that
+//   series' value for the category. 'histogram' and 'dot' reuse this shape —
+//   histogram renders adjacent bars, dot renders markers instead of bars/lines.
+// - 'pie': data[i][xKey] is the slice name, data[i][series[0].key] is its value.
+//   Only series[0] is used.
+// - 'scatter': data[i][xKey] is a NUMERIC x value (not a category), and
+//   data[i][series[0].key] is the numeric y value. Only series[0] is used.
+//   Each row may include an optional `label` field for the point's tooltip name.
+// - 'range': data[i][series[k].key] is a two-element [low, high] array (not two
+//   separately-named keys) — the floating bar span for that series in the
+//   category at data[i][xKey]. A real high/low spread (DCF sensitivity,
+//   analyst target range), not a statistical quartile box plot. Multiple
+//   subjects compared on the same category share ONE row, one array per series.
+// - 'box': box & whisker. data[i][xKey] is the metric name; data[i] carries the
+//   numeric five-number summary min/q1/median/q3/max, plus an optional
+//   markers:[{label,value}] array (the subjects' own values, drawn as points).
 export interface ChartPayload {
   kind: 'chart'
   title?: string
-  chartType: 'line' | 'bar' | 'area'
+  chartType: 'line' | 'bar' | 'area' | 'pie' | 'histogram' | 'dot' | 'range' | 'scatter' | 'box'
   xKey: string
-  data: Array<Record<string, string | number | null>>
+  data: Array<Record<string, string | number | null | [number, number] | Array<{ label: string; value: number }>>>
   series: Array<{ key: string; label: string; color?: string }>
 }
 export interface TextPayload {
@@ -54,6 +72,7 @@ export type TimeframePreset = 'last7' | 'last30' | 'last90' | 'qtd' | 'ytd' | 'c
 
 export type LookbackPreset = 'none' | 'last7' | 'last30' | 'last90' | 'qtd' | 'ytd' | 'custom'
 export type LookforwardPreset = 'none' | 'next7' | 'next30' | 'next90' | 'next180' | 'custom'
+export type ReportLength = 'short' | 'medium' | 'long'
 
 export interface ReportScope {
   /** Historical context window (what happened). */
@@ -68,6 +87,11 @@ export interface ReportScope {
   timeframePreset?: TimeframePreset
   purpose: string
   goal: string
+  /** How much depth the generated report should have. Defaults to 'medium'. */
+  length: ReportLength
+  /** Free-text requirements (one per line) the report must satisfy — a stat, a
+   * verdict, a chart — even if the model wouldn't otherwise curate them in. */
+  mustInclude: string
 }
 
 export interface KeyFigure { label: string; value: string }
@@ -83,6 +107,7 @@ export interface GeneratedSection {
   heading: string
   analysis: string
   keyFigures?: KeyFigure[]       // AI-extracted evidence actually used, not the raw dataset
+  chart?: ChartPayload           // AI-synthesized chart built from this section's own figures — not sourced from a clip
 }
 export interface GeneratedReport {
   headline?: string              // research-note title for the masthead
@@ -96,6 +121,18 @@ export interface GeneratedReport {
   model?: string
 }
 
+// An immutable, self-contained copy of one generation, kept so past reports are
+// never lost when a new one is generated. Carries everything ReportPrint needs
+// to render it exactly as it was, independent of later clip/scope edits.
+export interface ReportSnapshot {
+  id: string
+  generatedAt: string
+  name: string
+  scope: ReportScope
+  clips: ReportClip[]
+  generated: GeneratedReport
+}
+
 export interface ReportProject {
   id: string
   name: string
@@ -104,7 +141,14 @@ export interface ReportProject {
   scope: ReportScope
   clips: ReportClip[]      // display order
   generated?: GeneratedReport
+  history?: ReportSnapshot[]  // every generation, newest first (generated === history[0].generated)
 }
+
+// Each snapshot clones its clips so a past report renders as it was, which is
+// heavy; cap the archive so a project's history can't exhaust the localStorage
+// quota (write() fails silently on overflow, which would drop a fresh report).
+const HISTORY_CAP = 15
+const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v))
 
 interface StoreState {
   version: 1
@@ -130,10 +174,13 @@ export const defaultScope = (): ReportScope => ({
   lookforwardPreset: 'next90',
   purpose: '',
   goal: '',
+  length: 'medium',
+  mustInclude: '',
 })
 
 const LOOKBACK_OK = new Set<LookbackPreset>(['none', 'last7', 'last30', 'last90', 'qtd', 'ytd', 'custom'])
 const LOOKFORWARD_OK = new Set<LookforwardPreset>(['none', 'next7', 'next30', 'next90', 'next180', 'custom'])
+const LENGTH_OK = new Set<ReportLength>(['short', 'medium', 'long'])
 
 /** Normalize stored scope: dual horizon + legacy single timeframePreset. */
 export function normalizeScope(raw: Partial<ReportScope> | null | undefined): ReportScope {
@@ -168,6 +215,8 @@ export function normalizeScope(raw: Partial<ReportScope> | null | undefined): Re
     forwardCustomEnd: raw.forwardCustomEnd || undefined,
     purpose,
     goal,
+    length: LENGTH_OK.has(raw.length as ReportLength) ? (raw.length as ReportLength) : base.length,
+    mustInclude: typeof raw.mustInclude === 'string' ? raw.mustInclude : '',
   }
 }
 
@@ -180,15 +229,31 @@ function read(): StoreState {
     const d = JSON.parse(raw)
     if (!d || !Array.isArray(d.projects)) return { version: 1, projects: [] }
     // Defensive normalize: tolerate schema drift the way readPMPortfolios does.
-    const projects: ReportProject[] = d.projects.map((p: any): ReportProject => ({
-      id: p.id || uid(),
-      name: p.name || 'Untitled report',
-      createdAt: p.createdAt || nowISO(),
-      updatedAt: p.updatedAt || p.createdAt || nowISO(),
-      scope: normalizeScope(p.scope),
-      clips: Array.isArray(p.clips) ? p.clips.filter((c: any) => c && c.payload && c.payload.kind) : [],
-      generated: p.generated && typeof p.generated === 'object' ? p.generated : undefined,
-    }))
+    const projects: ReportProject[] = d.projects.map((p: any): ReportProject => {
+      const generated = p.generated && typeof p.generated === 'object' ? p.generated : undefined
+      let history: ReportSnapshot[] | undefined = Array.isArray(p.history)
+        ? p.history.filter((h: any) => h && h.generated && h.id)
+        : undefined
+      const clips = Array.isArray(p.clips) ? p.clips.filter((c: any) => c && c.payload && c.payload.kind) : []
+      const scope = normalizeScope(p.scope)
+      // Migrate a pre-history project: seed its existing report into the archive
+      // so nothing already generated is dropped from the new history view.
+      if (generated && (!history || history.length === 0)) {
+        history = [{
+          id: uid(),
+          generatedAt: generated.generatedAt || nowISO(),
+          name: p.name || 'Untitled report',
+          scope, clips: clone(clips), generated: clone(generated),
+        }]
+      }
+      return {
+        id: p.id || uid(),
+        name: p.name || 'Untitled report',
+        createdAt: p.createdAt || nowISO(),
+        updatedAt: p.updatedAt || p.createdAt || nowISO(),
+        scope, clips, generated, history,
+      }
+    })
     return { version: 1, projects }
   } catch {
     return { version: 1, projects: [] }
@@ -196,7 +261,22 @@ function read(): StoreState {
 }
 
 function write(state: StoreState) {
-  try { localStorage.setItem(KEY, JSON.stringify(state)) } catch { /* quota */ }
+  try {
+    localStorage.setItem(KEY, JSON.stringify(state))
+  } catch {
+    // Quota exceeded — history snapshots (with their cloned clips) are the bulk.
+    // Drop the oldest snapshot from whichever project has the most, and retry a
+    // few times, so a fresh report is never silently lost to old history.
+    for (let i = 0; i < 8; i++) {
+      let target: ReportProject | undefined
+      for (const p of state.projects) {
+        if ((p.history?.length ?? 0) > 1 && (!target || p.history!.length > target.history!.length)) target = p
+      }
+      if (!target?.history) break
+      target.history = target.history.slice(0, -1)
+      try { localStorage.setItem(KEY, JSON.stringify(state)); break } catch { /* keep trimming */ }
+    }
+  }
   emit()
 }
 
@@ -306,19 +386,41 @@ export function reorderClips(projectId: string, orderedIds: string[]) {
   })
 }
 
+// Keep the newest history snapshot in lockstep with edits to `generated`, so a
+// preview/download of the latest report always reflects the workspace edits.
+// Older snapshots stay frozen as generated.
+function syncLatestSnapshot(p: ReportProject) {
+  const latest = p.history?.[0]
+  if (latest && p.generated && latest.generatedAt === p.generated.generatedAt) {
+    latest.generated = clone(p.generated)
+    latest.name = p.name
+  }
+}
+
 export function setGenerated(projectId: string, gen: Omit<GeneratedReport, 'generatedAt'> & { generatedAt?: string }) {
   // Stores the AI report as an OUTPUT — deliberately does not bump updatedAt, so
   // updatedAt > generatedAt reliably signals the inputs changed since generation.
   mutate(s => {
     const p = s.projects.find(p => p.id === projectId)
-    if (p) p.generated = { ...gen, generatedAt: gen.generatedAt || nowISO() }
+    if (!p) return
+    const generated: GeneratedReport = { ...gen, generatedAt: gen.generatedAt || nowISO() }
+    p.generated = generated
+    const snapshot: ReportSnapshot = {
+      id: uid(),
+      generatedAt: generated.generatedAt,
+      name: p.name,
+      scope: clone(p.scope),
+      clips: clone(p.clips),
+      generated: clone(generated),
+    }
+    p.history = [snapshot, ...(p.history ?? [])].slice(0, HISTORY_CAP)
   })
 }
 
 export function updateGenerated(projectId: string, patch: Partial<Pick<GeneratedReport, 'headline' | 'executiveSummary' | 'conclusion'>>) {
   mutate(s => {
     const p = s.projects.find(p => p.id === projectId)
-    if (p?.generated) p.generated = { ...p.generated, ...patch }
+    if (p?.generated) { p.generated = { ...p.generated, ...patch }; syncLatestSnapshot(p) }
   })
 }
 
@@ -328,6 +430,7 @@ export function updateKeyResult(projectId: string, patch: Partial<KeyResult>) {
     if (p?.generated) {
       const base = p.generated.keyResult ?? { label: '', value: '', context: '' }
       p.generated = { ...p.generated, keyResult: { ...base, ...patch } }
+      syncLatestSnapshot(p)
     }
   })
 }
@@ -336,7 +439,7 @@ export function updateGeneratedSection(projectId: string, clipId: string, patch:
   mutate(s => {
     const p = s.projects.find(p => p.id === projectId)
     const sec = p?.generated?.sections.find(x => x.clipId === clipId)
-    if (sec) Object.assign(sec, patch)
+    if (sec && p) { Object.assign(sec, patch); syncLatestSnapshot(p) }
   })
 }
 
@@ -345,6 +448,22 @@ export function clearGenerated(projectId: string) {
     const p = s.projects.find(p => p.id === projectId)
     if (p) p.generated = undefined
   })
+}
+
+// Remove one archived generation. If it was the latest (the one mirrored into
+// the workspace editor), the editor's `generated` follows to the new newest.
+export function deleteSnapshot(projectId: string, snapshotId: string) {
+  mutate(s => {
+    const p = s.projects.find(p => p.id === projectId)
+    if (!p?.history) return
+    const wasLatest = p.history[0]?.id === snapshotId
+    p.history = p.history.filter(h => h.id !== snapshotId)
+    if (wasLatest) p.generated = p.history[0] ? clone(p.history[0].generated) : undefined
+  })
+}
+
+export function getSnapshot(projectId: string, snapshotId: string): ReportSnapshot | undefined {
+  return getProject(projectId)?.history?.find(h => h.id === snapshotId)
 }
 
 export const isGenerationStale = (p: ReportProject): boolean =>
@@ -393,7 +512,17 @@ export function summarizeClipForAI(clip: ReportClip): string {
     })
     const xs = p.data.map(d => String(d[p.xKey]))
     const span = xs.length ? ` over ${xs[0]} to ${xs[xs.length - 1]} (${xs.length} points)` : ''
-    return cap(`${p.chartType} chart${span}. ${parts.join('. ')}`)
+    // Emit the raw series so the server can rebuild real overlays (e.g. a
+    // dual-line revenue trajectory across a synchronized timeline) rather than
+    // only see summary stats. Bounded to a short, parseable line.
+    let points = ''
+    if (p.data.length >= 2 && p.data.length <= 16 && p.series.length <= 3) {
+      const xList = xs.join(',')
+      const seriesLines = p.series.map(s =>
+        `${s.label}=[${p.data.map(d => { const v = Number(d[s.key]); return Number.isFinite(v) ? v : '' }).join(',')}]`)
+      points = `\nPOINTS: ${p.xKey}=[${xList}]; ${seriesLines.join('; ')}`
+    }
+    return cap(`${p.chartType} chart${span}. ${parts.join('. ')}${points}`, 1600)
   }
   return cap(p.body)
 }
@@ -474,4 +603,50 @@ export const formatCaptured = (iso: string): string => {
   const hh = String(d.getHours()).padStart(2, '0')
   const mm = String(d.getMinutes()).padStart(2, '0')
   return `${fmtDate(d)} ${hh}:${mm}`
+}
+
+export function toTitleCase(s: string | undefined | null): string {
+  if (!s) return ''
+  const str = s.trim()
+  if (!str) return ''
+  const ACRONYMS = new Set(['DCF', 'WACC', 'PE', 'P/E', 'PEG', 'ROE', 'ROA', 'FCF', 'IV', 'GEX', 'EV/EBITDA', 'EBITDA', 'CAGR', 'GAAP', 'EPS', 'P/S', 'P/B', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA'])
+  const SMALL_WORDS = new Set(['a', 'an', 'and', 'as', 'at', 'but', 'by', 'en', 'for', 'if', 'in', 'of', 'on', 'or', 'the', 'to', 'vs', 'vs.', 'via', 'with', 'per'])
+
+  const parts = str.split(/(\s+)/)
+  const wordIndices: number[] = []
+  parts.forEach((p, idx) => {
+    if (p.trim() && !/\s+/.test(p)) wordIndices.push(idx)
+  })
+
+  return parts.map((part, idx) => {
+    if (!part.trim() || /\s+/.test(part)) return part
+    const isFirst = idx === wordIndices[0]
+    const isLast = idx === wordIndices[wordIndices.length - 1]
+
+    const prefix = part.match(/^[^a-zA-Z0-9]+/)?.[0] || ''
+    const suffix = part.match(/[^a-zA-Z0-9]+$/)?.[0] || ''
+    const core = part.slice(prefix.length, part.length - suffix.length || undefined)
+    if (!core) return part
+
+    const upper = core.toUpperCase()
+    if (ACRONYMS.has(upper) || /^[A-Z]{2,5}$/.test(core)) {
+      return `${prefix}${upper}${suffix}`
+    }
+
+    const lower = core.toLowerCase()
+    if (!isFirst && !isLast && SMALL_WORDS.has(lower)) {
+      return `${prefix}${lower}${suffix}`
+    }
+
+    if (core.includes('-') && !core.startsWith('-')) {
+      const casedCore = core.split('-').map(p => {
+        const pUpper = p.toUpperCase()
+        if (ACRONYMS.has(pUpper) || (p === p.toUpperCase() && p.length <= 5)) return pUpper
+        return p ? p.charAt(0).toUpperCase() + p.slice(1).toLowerCase() : ''
+      }).join('-')
+      return `${prefix}${casedCore}${suffix}`
+    }
+
+    return `${prefix}${core.charAt(0).toUpperCase()}${core.slice(1).toLowerCase()}${suffix}`
+  }).join('')
 }

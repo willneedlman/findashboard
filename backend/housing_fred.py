@@ -3,9 +3,10 @@
 Replaces the deterministic mock: builds one NATIONAL ``HousingSeries`` + the
 national mortgage-rate history from live FRED series, so ``housing_market``'s
 engine (affordability, supply/demand, trend, anomalies) and the router run
-unchanged. Fields FRED does not publish are left at 0 and shown as "—" by the UI
-rather than fabricated. Returns None if FRED is unavailable so the router can
-fall back to the mock book.
+unchanged. Fields with no free national series (foreclosure rate, negative
+equity, origination LTV/FICO) are omitted from the model entirely rather than
+zero-filled or fabricated. Returns None if FRED is unavailable so the router
+can fall back to the mock book.
 
 Series (all free, national):
     MORTGAGE30US/15US/5US  30y / 15y / 5-1 ARM, weekly
@@ -16,6 +17,8 @@ Series (all free, national):
     MEDLISPRIPERSQUFEEUS   median list price / sqft, monthly (Realtor.com)
     MEHOINUSA646N          median household income, annual ($)
     DRSFRMACBS             single-family mortgage delinquency, quarterly (%)
+    DRCRELEXFACBS           commercial real estate (incl. multifamily, ex-farmland)
+                             delinquency, quarterly (%)
     HOUST / PERMIT / COMPUTSA  starts / permits / completions, monthly (thousands, SAAR)
 """
 from __future__ import annotations
@@ -33,7 +36,7 @@ _SERIES = {
     "median_price": "MSPUS", "sales": "EXHOSLUSM495S",
     "active_listings": "ACTLISCOUUS", "days_on_market": "MEDDAYONMARUS",
     "price_per_sqft": "MEDLISPRIPERSQUFEEUS", "median_income": "MEHOINUSA646N",
-    "sf_delinq": "DRSFRMACBS",
+    "sf_delinq": "DRSFRMACBS", "cre_delinq": "DRCRELEXFACBS",
     "starts": "HOUST", "permits": "PERMIT", "completions": "COMPUTSA",
 }
 
@@ -67,6 +70,7 @@ def build(months: int = 40):
 
         sales_a = fred.as_of(data["sales"], d)            # absolute count, annual rate
         delinq = fred.as_of(data["sf_delinq"], d) or 0.0
+        cre_delinq = fred.as_of(data["cre_delinq"], d) or 0.0
         snaps.append(hm.HousingMarketSnapshot(
             region=hm.Region.NATIONAL, asof=d,
             median_price=round(fred.as_of(data["median_price"], d) or 0.0, 0),
@@ -77,10 +81,8 @@ def build(months: int = 40):
             days_on_market=round(fred.as_of(data["days_on_market"], d) or 0.0, 1),
             active_listings=round(fred.as_of(data["active_listings"], d) or 0.0, 0),
             sf_default_rate=round(delinq, 2),
+            cre_delinquency_rate=round(cre_delinq, 2),
             serious_delinquency=round(delinq, 2),
-            # FRED has no clean national series for these; left 0 → UI shows "—".
-            mf_default_rate=0.0, foreclosure_rate=0.0, negative_equity=0.0,
-            avg_ltv=0.0, avg_fico=0.0,
         ))
         starts = fred.as_of(data["starts"], d)
         permits = fred.as_of(data["permits"], d)

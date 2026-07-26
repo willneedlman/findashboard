@@ -70,4 +70,22 @@ describe('assignBodyVisuals', () => {
     const { visual } = preferChartVisual(s, [s, cone, density], used, 'volatility cone upper bound')
     expect(visual?.id).toBe('c2')
   })
+
+  it('does not hand an unrelated sibling chart to a section on a bare ticker mention alone', () => {
+    // Comparison reports mention both tickers by name in nearly every section,
+    // so a chart title matching only on "NVDA" must not be treated as evidence
+    // it's actually about this section's point (the "Valuation Gap" bug).
+    const revenueProjection = chart('c1', 'Revenue Projection · NVDA', 'DCF Valuation')
+    const dcfVerdict = kpi('k1', 'DCF Valuation')
+    const assigned = assignBodyVisuals(
+      [{
+        clipId: 'k1',
+        heading: 'Valuation Gap',
+        analysis: "NVDA's DCF intrinsic of $172.15 is only 16% below its market price of $206.84, versus AAPL's 44% discount.",
+      }],
+      new Map([['k1', dcfVerdict]]),
+      [dcfVerdict, revenueProjection],
+    )
+    expect(assigned.get('k1')?.visual).toBeUndefined()
+  })
 })

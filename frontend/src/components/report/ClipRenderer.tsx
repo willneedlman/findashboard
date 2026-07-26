@@ -1,6 +1,7 @@
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, AreaChart, Area,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  PieChart, Pie, Cell, ScatterChart, Scatter,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, LabelList,
 } from 'recharts'
 import type { ClipPayload, ChartPayload, TablePayload, KpiPayload, TextPayload } from '../../lib/reportCreator'
 import type { ClipPalette } from '../../lib/reportTheme'
@@ -45,6 +46,32 @@ function seriesColor(pal: Palette, explicit: string | undefined, i: number, them
   // Themed/print reports always use palette series so chart colors match the preset.
   if (explicit && !themed) return explicit
   return pal.series[i % pal.series.length]
+}
+
+// Report-consistent color mapping: the same series KEY (a ticker like NVDA, or
+// a semantic key like "intrinsic"/"market") always resolves to the same palette
+// slot, so NVDA is one fixed color and AAPL another across every chart in the
+// report — not flipped by whatever order the series happen to appear in. A
+// deterministic hash picks the slot; collisions inside one chart are resolved
+// by stable probing over a sorted key order so the result is identical wherever
+// the same key set is drawn.
+function buildColorMap(pal: Palette, keys: string[]): Map<string, string> {
+  const map = new Map<string, string>()
+  const used = new Set<number>()
+  const n = pal.series.length
+  const hash = (k: string) => {
+    let h = 0
+    for (let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) >>> 0
+    return h % n
+  }
+  for (const key of [...new Set(keys)].sort()) {
+    let slot = hash(key)
+    let guard = 0
+    while (used.has(slot) && used.size < n && guard < n) { slot = (slot + 1) % n; guard++ }
+    used.add(slot)
+    map.set(key, pal.series[slot])
+  }
+  return map
 }
 
 function TableClip({ p, pal, maxRows }: { p: TablePayload; pal: Palette; maxRows?: number }) {
@@ -127,8 +154,8 @@ function KpiClip({ p, pal }: { p: KpiPayload; pal: Palette }) {
                 whiteSpace: 'normal', wordBreak: 'break-word',
               }}>{k.label}</div>
               <div style={{
-                fontFamily: MONO, fontSize: 15, fontWeight: 700, color: pal.ink, marginTop: 3,
-                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                fontFamily: MONO, fontSize: 15, fontWeight: 700, lineHeight: 1.35, minHeight: 22, color: pal.ink, marginTop: 3,
+                whiteSpace: 'nowrap', overflow: 'visible', textOverflow: 'ellipsis',
               }}>{k.value}</div>
               {k.sub && (
                 <div style={{
@@ -145,6 +172,11 @@ function KpiClip({ p, pal }: { p: KpiPayload; pal: Palette }) {
 }
 
 // ── Chart axis helpers ─────────────────────────────────────────────────────
+
+// Internal-only keys for the 'range' floating-bar trick — namespaced so they
+// can never collide with a model-supplied series key.
+const RANGE_LO_KEY = (key: string) => `__rlo_${key}`
+const RANGE_SPAN_KEY = (key: string) => `__rspan_${key}`
 
 function seriesValues(p: ChartPayload, key: string): number[] {
   return p.data.map(d => Number(d[key])).filter(v => Number.isFinite(v))
@@ -238,6 +270,87 @@ function formatXTick(v: string | number): string {
   return s
 }
 
+// Box & whisker — recharts has no clean box plot, so this is a self-contained
+// SVG: one horizontal box per metric (whiskers min→max, box Q1→Q3, median line)
+// with the subjects' own values drawn as labeled marker dots. Full control means
+// no origin bug and no label overlap.
+function BoxPlotClip({ p, pal, height, print }: { p: ChartPayload; pal: Palette; height: number; print: boolean }) {
+  type Row = { name: string; min: number; q1: number; median: number; q3: number; max: number; outliers?: number[]; markers: { label: string; value: number }[] }
+  const rows: Row[] = p.data.map(d => ({
+    name: String(d[p.xKey] ?? ''),
+    min: Number(d.min), q1: Number(d.q1), median: Number(d.median), q3: Number(d.q3), max: Number(d.max),
+    outliers: Array.isArray(d.outliers) ? (d.outliers as number[]).map(Number).filter(Number.isFinite) : [],
+    markers: Array.isArray(d.markers) ? (d.markers as { label: string; value: number }[]).filter(m => Number.isFinite(Number(m.value))) : [],
+  })).filter(r => [r.min, r.q1, r.median, r.q3, r.max].every(Number.isFinite))
+  if (!rows.length) return null
+
+  const markerColors = buildColorMap(pal, rows.flatMap(r => r.markers.map(m => m.label)))
+  const whiskerVals = rows.flatMap(r => [r.min, r.max, ...(r.outliers || [])])
+  const markerVals = rows.flatMap(r => r.markers.map(m => m.value))
+  let lo = Math.min(...whiskerVals), hi = Math.max(...whiskerVals)
+  if (markerVals.length) {
+    const clampedMarkers = markerVals.map(v => Math.min(Math.max(v, lo - (hi - lo) * 0.4), hi + (hi - lo) * 0.4))
+    lo = Math.min(lo, ...clampedMarkers)
+    hi = Math.max(hi, ...clampedMarkers)
+  }
+  const pad = (hi - lo) * 0.1 || Math.abs(hi) * 0.1 || 1
+  lo -= pad; hi += pad
+
+  const VB_W = 340
+  const rowH = 62, topPad = 18, axisH = 26, labelW = 6, plotX = 62, plotR = 12
+  const plotW = VB_W - plotX - plotR
+  const VB_H = topPad + rows.length * rowH + axisH
+  const x = (v: number) => plotX + ((Math.min(Math.max(v, lo), hi) - lo) / (hi - lo)) * plotW
+  const ticks = 5
+  const tickVals = Array.from({ length: ticks }, (_, i) => lo + ((hi - lo) * i) / (ticks - 1))
+
+  return (
+    <div style={{ width: '100%' }}>
+      <svg viewBox={`0 0 ${VB_W} ${VB_H}`} width="100%" style={{ display: 'block', fontFamily: MONO }} preserveAspectRatio="xMidYMid meet">
+        {tickVals.map((tv, i) => (
+          <g key={`t${i}`}>
+            <line x1={x(tv)} x2={x(tv)} y1={topPad - 6} y2={topPad + rows.length * rowH} stroke={pal.gridStroke} strokeWidth={0.6} />
+            <text x={x(tv)} y={VB_H - 8} fontSize={8} fill={pal.muted} textAnchor="middle">{fmtTick(tv)}</text>
+          </g>
+        ))}
+        {rows.map((r, i) => {
+          const cy = topPad + i * rowH + rowH / 2 - 6
+          const boxTop = cy - 11, boxH = 22
+          return (
+            <g key={r.name}>
+              <text x={labelW} y={cy + 3} fontSize={9} fontWeight={700} fill={pal.ink}>{r.name.length > 8 ? r.name.slice(0, 8) : r.name}</text>
+              {/* whisker */}
+              <line x1={x(r.min)} x2={x(r.max)} y1={cy} y2={cy} stroke={pal.muted} strokeWidth={1} />
+              <line x1={x(r.min)} x2={x(r.min)} y1={cy - 6} y2={cy + 6} stroke={pal.muted} strokeWidth={1} />
+              <line x1={x(r.max)} x2={x(r.max)} y1={cy - 6} y2={cy + 6} stroke={pal.muted} strokeWidth={1} />
+              {/* box */}
+              <rect x={x(r.q1)} y={boxTop} width={Math.max(x(r.q3) - x(r.q1), 1)} height={boxH} fill={pal.headBg} stroke={pal.accent} strokeWidth={1} />
+              <line x1={x(r.median)} x2={x(r.median)} y1={boxTop} y2={boxTop + boxH} stroke={pal.accent} strokeWidth={1.6} />
+              {/* outlier points */}
+              {r.outliers?.map((ov, oi) => (
+                <g key={`out-${oi}`}>
+                  <circle cx={x(ov)} cy={cy} r={3} fill="none" stroke={pal.muted} strokeWidth={1} />
+                  <text x={x(ov)} y={cy - 12} fontSize={7} fill={pal.muted} textAnchor="middle">{fmtTick(ov)}</text>
+                </g>
+              ))}
+              {/* subject markers */}
+              {r.markers.map((m, mi) => (
+                <g key={m.label}>
+                  <circle cx={x(m.value)} cy={cy} r={3.6} fill={markerColors.get(m.label) ?? pal.series[mi % pal.series.length]} stroke={pal.cellBg} strokeWidth={1} />
+                  <text x={x(m.value)} y={cy - (mi % 2 === 0 ? 13 : -21)} fontSize={7.5} fontWeight={700} textAnchor="middle" fill={markerColors.get(m.label) ?? pal.ink}>{m.label} {fmtTick(m.value)}</text>
+                </g>
+              ))}
+            </g>
+          )
+        })}
+      </svg>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', marginTop: 4, justifyContent: 'center' }}>
+        <span style={{ fontFamily: MONO, fontSize: 8, color: pal.muted }}>Box = interquartile range (25th–75th), line = median, whiskers = 1.5× IQR statistical bounds. Outliers plotted as individual points.</span>
+      </div>
+    </div>
+  )
+}
+
 function ChartClip({
   p, pal, height, print = false,
 }: {
@@ -246,10 +359,51 @@ function ChartClip({
   height: number
   print?: boolean
 }) {
-  // Bar charts: keep all categories (strikes). Line/area: light downsample if huge.
-  const data = p.chartType === 'bar' || p.data.length <= 60
+  if (p.chartType === 'box') return <BoxPlotClip p={p} pal={pal} height={height} print={print} />
+
+  // Categorical types keep every category (strikes, peers, buckets). Line/area/
+  // scatter: light downsample if huge.
+  const CATEGORICAL = p.chartType === 'bar' || p.chartType === 'histogram' || p.chartType === 'dot'
+    || p.chartType === 'pie' || p.chartType === 'range'
+  const data = CATEGORICAL || p.data.length <= 60
     ? p.data
     : p.data.filter((_, i) => i % Math.ceil(p.data.length / 50) === 0 || i === p.data.length - 1)
+
+  // 'range' floats a bar from low to high via a transparent base + visible span
+  // stacked on top — recharts has no native floating-bar primitive. The whole
+  // stack is shifted down by rDomainMin so the y-axis can start near the band's
+  // low (not 0): the bars then FILL the plot instead of floating in the upper
+  // half, and the axis shows real values via a +rDomainMin tick formatter.
+  let rangeMin = Infinity, rangeMax = -Infinity
+  if (p.chartType === 'range') {
+    for (const row of data) for (const s of p.series) {
+      const v = row[s.key]
+      if (Array.isArray(v)) {
+        const a = Number(v[0]), b = Number(v[1])
+        if (Number.isFinite(a) && Number.isFinite(b)) { rangeMin = Math.min(rangeMin, a, b); rangeMax = Math.max(rangeMax, a, b) }
+      }
+    }
+  }
+  const rPad = Number.isFinite(rangeMin) ? ((rangeMax - rangeMin) * 0.12 || Math.abs(rangeMax) * 0.1 || 1) : 0
+  const rDomainMin = Number.isFinite(rangeMin) ? rangeMin - rPad : 0
+  const rDomainMax = Number.isFinite(rangeMax) ? rangeMax + rPad : 0
+  const rangeData = p.chartType === 'range'
+    ? data.map(row => {
+      const out: Record<string, string | number | null> = { [p.xKey]: String(row[p.xKey] ?? '') }
+      for (const s of p.series) {
+        const v = row[s.key]
+        const lo = Array.isArray(v) ? Number(v[0]) : NaN
+        const hi = Array.isArray(v) ? Number(v[1]) : NaN
+        if (Number.isFinite(lo) && Number.isFinite(hi)) {
+          out[RANGE_LO_KEY(s.key)] = Math.min(lo, hi) - rDomainMin  // transparent base, offset by domain min
+          out[RANGE_SPAN_KEY(s.key)] = Math.max(hi - lo, 0)
+          out[`__rhival_${s.key}`] = Math.max(lo, hi)  // real high, for the top value label
+          out[`__rloval_${s.key}`] = Math.min(lo, hi)  // real low, for the bottom value label
+        }
+      }
+      return out
+    })
+    : data
 
   const { left, right } = partitionScales(p)
   const dual = right.length > 0
@@ -257,27 +411,59 @@ function ChartClip({
   const rightKind = dual ? inferTickKind(right) : 'auto'
   const axisTick = { fontFamily: MONO, fontSize: print ? 8 : 9, fill: pal.muted }
 
+  // Report-consistent per-series colors (NVDA always one color, AAPL another).
+  const colorMap = buildColorMap(pal, p.series.map(s => s.key))
+  const fillFor = (s: { key: string; color?: string }, i: number): string =>
+    (s.color && !print ? s.color : colorMap.get(s.key) ?? pal.series[i % pal.series.length])
+
   // X ticks: limit count for readability
   const xCount = data.length
   const xInterval = xCount <= 8 ? 0 : xCount <= 16 ? 1 : Math.floor(xCount / 6)
 
+  // Categorical labels (segment/metric/driver names) are often long ("Professional
+  // Visualization", "Operating Margin"). Angle them instead of clipping to "Profe…"
+  // so every category stays readable, and give the axis the height to fit.
+  const categoricalX = p.chartType === 'bar' || p.chartType === 'histogram'
+    || p.chartType === 'dot' || p.chartType === 'range'
+  const longLabels = categoricalX && data.some(d => String(d[p.xKey] ?? '').length > 7)
+  const xAngle = longLabels ? -28 : 0
+  const xAxisHeight = longLabels ? (print ? 52 : 58) : (print ? 28 : 30)
+
   const yTick = (kind: typeof leftKind) => (v: number) => fmtTick(v, kind)
 
   const margin = print
-    ? { top: 8, right: dual ? 36 : 8, left: 2, bottom: p.chartType === 'bar' && xCount > 12 ? 4 : 2 }
-    : { top: 8, right: dual ? 44 : 12, left: 2, bottom: 0 }
+    ? { top: 8, right: dual ? 36 : 8, left: 2, bottom: longLabels ? 6 : 2 }
+    : { top: 8, right: dual ? 44 : 12, left: 2, bottom: longLabels ? 4 : 0 }
 
   const leftKeys = new Set(left.map(s => s.key))
+
+  // Value labels printed on each mark (bars, dots, scatter, range ends). Gated
+  // by mark density so a sparse comparison chart gets numbers on it while a busy
+  // one stays legible on the axis alone. Kind follows each series' own axis so a
+  // $ bar reads "$206" and a % bar reads "31.6".
+  const markCount = data.length * Math.max(p.series.length, 1)
+  const showValueLabels = markCount > 0 && markCount <= 20
+  const showRangeValueLabels = markCount > 0 && markCount <= 10
+  const seriesKind = (key: string): typeof leftKind => (leftKeys.has(key) || !dual) ? leftKind : rightKind
+  const valueLabelFontSize = print ? 8 : 9
+  const valueLabel = (key: string) => (v: unknown) => fmtTick(Number(v), seriesKind(key))
+
+  const leftMinVal = left.length ? Math.min(...left.map(s => s.min)) : 0
+  const leftDomain: [any, any] = (p.chartType === 'bar' || p.chartType === 'histogram') && leftMinVal >= 0
+    ? [0, 'auto']
+    : ['auto', 'auto']
+
   const commonX = (
     <XAxis
       dataKey={p.xKey}
-      tick={axisTick}
+      tick={{ ...axisTick, ...(longLabels ? { textAnchor: 'end' } : {}) }}
       tickLine={false}
       axisLine={{ stroke: pal.border }}
-      interval={xInterval}
-      minTickGap={print ? 12 : 20}
-      tickFormatter={formatXTick}
-      height={print ? 28 : 30}
+      interval={categoricalX ? 0 : xInterval}
+      angle={xAngle}
+      minTickGap={longLabels ? 0 : (print ? 12 : 20)}
+      tickFormatter={longLabels ? undefined : formatXTick}
+      height={xAxisHeight}
     />
   )
 
@@ -290,7 +476,7 @@ function ChartClip({
       axisLine={false}
       width={print ? 42 : 48}
       tickFormatter={yTick(leftKind)}
-      domain={['auto', 'auto']}
+      domain={leftDomain}
     />
   )
   const yRight = dual ? (
@@ -317,11 +503,147 @@ function ChartClip({
   // Legend always when dual scale or multi-series so axes make sense.
   const showLegend = p.series.length > 1 || dual
 
+  const legendStyle = { fontFamily: MONO, fontSize: 8.5, color: pal.muted, paddingTop: 4 }
+
+  // Pie: roll tiny slices (<3%) into "Other" and identify every slice through a
+  // legend below the chart — inline pie labels collide badly on small adjacent
+  // slices, which is the label-overlap the report kept showing.
+  const pieKey = p.series[0]?.key ?? ''
+  const pieRaw = p.chartType === 'pie'
+    ? data.map(d => ({ name: String(d[p.xKey] ?? ''), value: Number(d[pieKey]) })).filter(s => Number.isFinite(s.value) && s.value > 0)
+    : []
+  const pieTotal = pieRaw.reduce((a, s) => a + s.value, 0) || 1
+  const pieOther = pieRaw.filter(s => s.value / pieTotal < 0.03).reduce((a, s) => a + s.value, 0)
+  const pieData = pieOther > 0
+    ? [...pieRaw.filter(s => s.value / pieTotal >= 0.03), { name: 'Other', value: pieOther }]
+    : pieRaw
+  const pieColor = (i: number) => pal.series[i % pal.series.length]
+
   return (
     <div style={{ width: '100%', minHeight: height }}>
       <ResponsiveContainer width="100%" height={height} debounce={1}>
-        {p.chartType === 'bar' ? (
-          <BarChart data={data} margin={margin}>
+        {p.chartType === 'pie' ? (
+          <PieChart margin={{ top: 6, right: 6, left: 6, bottom: 6 }}>
+            {!print && (
+              <Tooltip
+                contentStyle={{ background: 'var(--theme-surface, #0d1826)', border: `1px solid ${pal.border}`, fontFamily: MONO, fontSize: 10 }}
+                labelStyle={{ color: pal.accent }}
+                formatter={(value: number) => `${((value / pieTotal) * 100).toFixed(1)}%`}
+              />
+            )}
+            <Pie
+              data={pieData}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              outerRadius={Math.max(Math.min(height, 300) / 2 - (print ? 14 : 12), 44)}
+              isAnimationActive={false}
+              label={false}
+              labelLine={false}
+              stroke={pal.cellBg}
+              strokeWidth={1.5}
+            >
+              {pieData.map((_, i) => <Cell key={i} fill={pieColor(i)} />)}
+            </Pie>
+          </PieChart>
+        ) : p.chartType === 'scatter' ? (
+          <ScatterChart margin={margin}>
+            {grid}
+            <XAxis
+              dataKey={p.xKey}
+              type="number"
+              name={p.xKey}
+              tick={axisTick}
+              tickLine={false}
+              axisLine={{ stroke: pal.border }}
+              tickFormatter={v => fmtTick(Number(v))}
+              height={print ? 28 : 30}
+            />
+            <YAxis
+              dataKey={p.series[0]?.key}
+              type="number"
+              name={p.series[0]?.label}
+              tick={axisTick}
+              tickLine={false}
+              axisLine={false}
+              width={print ? 42 : 48}
+              tickFormatter={v => fmtTick(Number(v))}
+            />
+            {!print && (
+              <Tooltip
+                contentStyle={{ background: 'var(--theme-surface, #0d1826)', border: `1px solid ${pal.border}`, fontFamily: MONO, fontSize: 10 }}
+                labelStyle={{ color: pal.accent }}
+                cursor={{ strokeDasharray: '3 3' }}
+                formatter={(value: number) => fmtTick(value)}
+                labelFormatter={(_v, payload) =>
+                  String((payload?.[0]?.payload as Record<string, unknown> | undefined)?.label ?? '')}
+              />
+            )}
+            <Scatter data={data} fill={p.series[0] ? fillFor(p.series[0], 0) : pal.series[0]} isAnimationActive={false}>
+              {showValueLabels && p.series[0] && (
+                <LabelList dataKey={p.series[0].key} position="top" formatter={valueLabel(p.series[0].key)}
+                  fill={pal.ink} fontSize={valueLabelFontSize} fontFamily={MONO} fontWeight={700} />
+              )}
+            </Scatter>
+          </ScatterChart>
+        ) : p.chartType === 'range' ? (
+          <BarChart data={rangeData} margin={margin}>
+            {grid}
+            {commonX}
+            <YAxis
+              yAxisId="left"
+              orientation="left"
+              tick={axisTick}
+              tickLine={false}
+              axisLine={false}
+              width={print ? 42 : 48}
+              domain={[0, Math.max(rDomainMax - rDomainMin, 1)]}
+              tickFormatter={(v: number) => fmtTick(v + rDomainMin)}
+            />
+            {!print && (
+              <Tooltip
+                contentStyle={{ background: 'var(--theme-surface, #0d1826)', border: `1px solid ${pal.border}`, fontFamily: MONO, fontSize: 10 }}
+                labelStyle={{ color: pal.accent }}
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null
+                  const row = payload[0].payload as Record<string, number | undefined>
+                  return (
+                    <div style={{ background: 'var(--theme-surface, #0d1826)', border: `1px solid ${pal.border}`, fontFamily: MONO, fontSize: 10, padding: '6px 8px' }}>
+                      <div style={{ color: pal.accent, marginBottom: 3 }}>{label}</div>
+                      {p.series.map(s => {
+                        const base = row[RANGE_LO_KEY(s.key)]
+                        const span = row[RANGE_SPAN_KEY(s.key)]
+                        if (base == null || span == null) return null
+                        const lo = base + rDomainMin
+                        return <div key={s.key}>{s.label}: {fmtTick(lo)}–{fmtTick(lo + span)}</div>
+                      })}
+                    </div>
+                  )
+                }}
+              />
+            )}
+            {/* No auto <Legend> here — its labels come straight from p.series
+                below, not from recharts inferring names off the base/span
+                bars, so an internal field name can never leak into it. */}
+            {p.series.flatMap((s, i) => {
+              const c = fillFor(s, i)
+              const stackId = `range-${s.key}`
+              return [
+                <Bar key={`${s.key}-base`} yAxisId="left" dataKey={RANGE_LO_KEY(s.key)} stackId={stackId} fill="transparent" isAnimationActive={false} legendType="none" />,
+                <Bar key={`${s.key}-span`} yAxisId="left" dataKey={RANGE_SPAN_KEY(s.key)} stackId={stackId} legendType="none" fill={c} isAnimationActive={false} maxBarSize={print ? 18 : 28}>
+                  {showRangeValueLabels && [
+                    <LabelList key="hi" dataKey={`__rhival_${s.key}`} position="top" formatter={valueLabel(s.key)}
+                      fill={pal.ink} fontSize={valueLabelFontSize} fontFamily={MONO} fontWeight={700} />,
+                    <LabelList key="lo" dataKey={`__rloval_${s.key}`} position="bottom" formatter={valueLabel(s.key)}
+                      fill={pal.muted} fontSize={valueLabelFontSize} fontFamily={MONO} fontWeight={700} />,
+                  ]}
+                </Bar>,
+              ]
+            })}
+          </BarChart>
+        ) : p.chartType === 'bar' || p.chartType === 'histogram' ? (
+          <BarChart data={data} margin={margin} barCategoryGap={p.chartType === 'histogram' ? 1 : undefined}>
             {grid}
             {commonX}
             {yLeft}
@@ -333,18 +655,17 @@ function ChartClip({
                 yAxisId={leftKeys.has(s.key) || !dual ? 'left' : 'right'}
                 dataKey={s.key}
                 name={s.label}
-                fill={seriesColor(pal, s.color, i, print)}
+                fill={fillFor(s, i)}
                 isAnimationActive={false}
                 maxBarSize={print ? 18 : 28}
-              />
+              >
+                {showValueLabels && (
+                  <LabelList dataKey={s.key} position="top" formatter={valueLabel(s.key)}
+                    fill={pal.ink} fontSize={valueLabelFontSize} fontFamily={MONO} fontWeight={700} />
+                )}
+              </Bar>
             ))}
-            {showLegend && (
-              <Legend
-                wrapperStyle={{ fontFamily: MONO, fontSize: 8.5, color: pal.muted, paddingTop: 4 }}
-                iconType="square"
-                iconSize={8}
-              />
-            )}
+            {showLegend && <Legend wrapperStyle={legendStyle} iconType="square" iconSize={8} />}
           </BarChart>
         ) : p.chartType === 'area' ? (
           <AreaChart data={data} margin={margin}>
@@ -354,7 +675,7 @@ function ChartClip({
             {yRight}
             {tip}
             {p.series.map((s, i) => {
-              const c = seriesColor(pal, s.color, i, print)
+              const c = fillFor(s, i)
               return (
                 <Area
                   key={s.key}
@@ -370,13 +691,7 @@ function ChartClip({
                 />
               )
             })}
-            {showLegend && (
-              <Legend
-                wrapperStyle={{ fontFamily: MONO, fontSize: 8.5, color: pal.muted, paddingTop: 4 }}
-                iconType="line"
-                iconSize={10}
-              />
-            )}
+            {showLegend && <Legend wrapperStyle={legendStyle} iconType="line" iconSize={10} />}
           </AreaChart>
         ) : (
           <LineChart data={data} margin={margin}>
@@ -392,24 +707,43 @@ function ChartClip({
                 type="monotone"
                 dataKey={s.key}
                 name={s.label}
-                stroke={seriesColor(pal, s.color, i, print)}
-                dot={false}
+                stroke={p.chartType === 'dot' ? 'none' : fillFor(s, i)}
+                dot={p.chartType === 'dot' ? { r: print ? 3.5 : 4.5, fill: fillFor(s, i), strokeWidth: 0 } : false}
                 strokeWidth={1.7}
                 connectNulls
                 isAnimationActive={false}
-              />
+              >
+                {p.chartType === 'dot' && showValueLabels && (
+                  <LabelList dataKey={s.key} position="top" formatter={valueLabel(s.key)}
+                    fill={pal.ink} fontSize={valueLabelFontSize} fontFamily={MONO} fontWeight={700} />
+                )}
+              </Line>
             ))}
-            {showLegend && (
-              <Legend
-                wrapperStyle={{ fontFamily: MONO, fontSize: 8.5, color: pal.muted, paddingTop: 4 }}
-                iconType="line"
-                iconSize={10}
-              />
-            )}
+            {showLegend && <Legend wrapperStyle={legendStyle} iconType="line" iconSize={10} />}
           </LineChart>
         )}
       </ResponsiveContainer>
-      {dual && (
+      {p.chartType === 'pie' && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', marginTop: 6, justifyContent: 'center' }}>
+          {pieData.map((s, i) => (
+            <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: MONO, fontSize: 8.5, color: pal.ink }}>
+              <span style={{ width: 8, height: 8, background: pieColor(i), flex: 'none' }} />
+              {s.name} <span style={{ color: pal.muted }}>{((s.value / pieTotal) * 100).toFixed(1)}%</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {p.chartType === 'range' && p.series.length > 1 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 4, paddingTop: 2 }}>
+          {p.series.map((s, i) => (
+            <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: MONO, fontSize: 8.5, color: pal.muted }}>
+              <span style={{ width: 8, height: 8, background: fillFor(s, i), display: 'inline-block' }} />
+              {s.label}
+            </div>
+          ))}
+        </div>
+      )}
+      {dual && p.chartType !== 'pie' && p.chartType !== 'scatter' && (
         <div style={{ fontFamily: MONO, fontSize: 7.5, color: pal.muted, marginTop: 2, lineHeight: 1.3 }}>
           Left axis: {left.map(s => s.label).join(', ')}. Right axis: {right.map(s => s.label).join(', ')}.
         </div>
