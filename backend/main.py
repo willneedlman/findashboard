@@ -29,7 +29,7 @@ from routers import (
     maritime, snapshots, credit, housing,
     portfolio_optimizer, macro_events,
     logistics, factset, comtrade, bcc, official,
-    portfolio_import, social, movers,
+    portfolio_import, social, movers, data_audit,
 )
 
 # Pin the MIME types the PWA depends on. A service worker served as anything but
@@ -56,7 +56,9 @@ async def lifespan(app: FastAPI):
     earnings.start_calendar_warm_loop()  # pre-enrich the upcoming week overnight so the Scanner opens warm
     import maritime_kystverket        # Norway coastal AIS (open TCP feed)
     maritime_kystverket.start_stream(maritime._upsert, maritime._classify, maritime._remember)
+    data_audit.start_audit_loop()    # cross-source data audit for the Admin Hub
     yield
+    data_audit.stop_audit_loop()
     earnings.stop_calendar_warm_loop()
     snapshots.stop_snapshot_loop()
     rates.stop_curve_warmer()
@@ -210,6 +212,7 @@ app.include_router(valuation.router,         prefix="/api/valuation",         ta
 app.include_router(earnings.router,          prefix="/api/earnings",          tags=["earnings"])
 app.include_router(ipo.router,               prefix="/api/ipo",               tags=["ipo"])
 app.include_router(leaderboard.router,       prefix="/api/leaderboard",       tags=["leaderboard"])
+app.include_router(data_audit.router,        prefix="/api/data-audit",        tags=["data-audit"])
 app.include_router(maritime.router,          prefix="/api/maritime",          tags=["maritime"])
 app.include_router(portfolio_import.router,  prefix="/api/portfolio-import",  tags=["portfolio-import"])
 app.include_router(logistics.router,         prefix="/api/logistics",         tags=["logistics"])

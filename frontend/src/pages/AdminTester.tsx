@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, lazy, Suspense } from 'react'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
+import DataAuditTab from '../components/admin/DataAuditTab'
 import WidgetRenderer from '../components/dashboard/WidgetRenderer'
 import { WIDGET_DEFAULT_SIZE, WIDGET_LABELS } from '../hooks/useDashboard'
 import type { WidgetType, WidgetConfig } from '../hooks/useDashboard'
@@ -220,7 +221,7 @@ interface UserStats {
   users: { id: string; username: string; display_name: string; email: string | null; created_at: string; last_login_at: string | null; login_count: number }[]
 }
 
-type Tab = 'traffic' | 'health' | 'users' | 'cache' | 'endpoints' | 'lob' | 'widgets' | 'regression' | 'stress' | 'algo' | 'reports' | 'market'
+type Tab = 'traffic' | 'health' | 'users' | 'cache' | 'endpoints' | 'lob' | 'widgets' | 'regression' | 'stress' | 'algo' | 'reports' | 'market' | 'audit'
 
 interface LOBSnapshot {
   msg: number
@@ -527,7 +528,7 @@ export default function AdminTester() {
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${RED_BORDER}`, marginBottom: 20 }}>
-          {(['traffic', 'health', 'users', 'cache', 'endpoints', 'lob', 'widgets', 'regression', 'stress', 'algo', 'reports', 'market'] as Tab[]).map(t => (
+          {(['traffic', 'health', 'users', 'cache', 'endpoints', 'lob', 'widgets', 'regression', 'stress', 'algo', 'reports', 'market', 'audit'] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               background: 'none', border: 'none', borderBottom: tab === t ? `2px solid ${RED}` : '2px solid transparent',
               color: tab === t ? RED : 'var(--theme-text-dim)', fontFamily: 'var(--theme-mono)', fontSize: 10,
@@ -1171,6 +1172,8 @@ export default function AdminTester() {
             </div>
           </div>
         )}
+
+        {tab === 'audit' && <DataAuditTab secret={secret} />}
       </div>
     </PageWrapper>
   )
