@@ -7,7 +7,7 @@ import axios from 'axios'
 import TickerLogo from '../components/TickerLogo'
 import { fmtMarketCap } from '../lib/format'
 import useIsMobile from '../hooks/useIsMobile'
-import { readPMPortfolios, normalizeTicker } from '../lib/pmImport'
+import { readPMBooks, normalizeTicker } from '../lib/pmImport'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip, textClip } from '../lib/reportCaptureRegistry'
@@ -193,7 +193,7 @@ export function PortfolioEarningsContent() {
   const [openMenu, setOpenMenu] = useState<MenuKey>(null)
   // Re-read PM books each time the add menu opens so renames/new books show up.
   const pmBooks = useMemo(
-    () => readPMPortfolios().filter(p => p.holdings.some(h => h.ticker && h.shares)),
+    () => readPMBooks().filter(p => p.holdings.some(h => h.ticker && h.shares)),
     [openMenu],
   )
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})

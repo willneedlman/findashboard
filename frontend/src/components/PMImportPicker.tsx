@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import axios from 'axios'
-import { readPMPortfolios, toWeightedLegs, type ImportResult } from '../lib/pmImport'
+import { readPMBooks, toWeightedLegs, type ImportResult } from '../lib/pmImport'
 
 async function fetchPrice(ticker: string): Promise<number | null> {
   try {
@@ -23,7 +23,7 @@ export default function PMImportPicker({
 }) {
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<string | null>(null)
-  const ports = readPMPortfolios()
+  const ports = readPMBooks()
   if (ports.length === 0) return null
 
   const handle = async (id: string) => {

@@ -9,7 +9,7 @@ import LoadingState from '../components/LoadingState'
 import HelpTip from '../components/HelpTip'
 import { INPUT, SELECT, LABEL, TICK, TOOLTIP_STYLE } from './valuationShared'
 import { fetchFactorDecomposition } from '../hooks/useApi'
-import { readPMPortfolios, normalizeTicker, type PMPortfolio } from '../lib/pmImport'
+import { readPMBooks, normalizeTicker, type PMPortfolio } from '../lib/pmImport'
 import { T } from '../lib/theme'
 import { MONO, SANS, mix, Panel, seg, KpiStrip } from './cockpitKit'
 import type { ClipDraft } from '../lib/reportCreator'
@@ -31,7 +31,7 @@ interface Row { ticker: string; weight: string }
 const LOOKBACKS: [string, number][] = [['6M', 180], ['1Y', 365], ['2Y', 730], ['3Y', 1095], ['5Y', 1826], ['10Y', 3653]]
 
 export default function FactorDecomposition() {
-  const books = useMemo(() => readPMPortfolios().filter(p => p.holdings.length), [])
+  const books = useMemo(() => readPMBooks().filter(p => p.holdings.length), [])
   const [mode, setMode] = useState<'saved' | 'custom'>(books.length ? 'saved' : 'custom')
   const [bookId, setBookId] = useState(books[0]?.id ?? '')
   const [rows, setRows] = useState<Row[]>([{ ticker: 'NVDA', weight: '40' }, { ticker: 'AAPL', weight: '35' }, { ticker: 'TLT', weight: '25' }])

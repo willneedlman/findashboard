@@ -52,6 +52,58 @@ export function readPMPortfolios(): PMPortfolio[] {
   }
 }
 
+// Merge holdings across portfolios into one aggregated set (same ticker sums
+// shares, share-weighted average cost) — the same math the PM overview uses.
+function mergeHoldings(ps: PMPortfolio[]): PMHolding[] {
+  const map = new Map<string, { ticker: string; shares: number; costSum: number }>()
+  for (const p of ps) for (const h of (p.holdings ?? [])) {
+    const ticker = normalizeTicker(h.ticker)
+    if (!ticker) continue
+    const e = map.get(ticker) ?? { ticker, shares: 0, costSum: 0 }
+    e.shares += h.shares; e.costSum += h.shares * (h.avgCost || 0)
+    map.set(ticker, e)
+  }
+  return [...map.values()].map(e => ({ ticker: e.ticker, shares: e.shares, avgCost: e.shares > 0 ? e.costSum / e.shares : 0 }))
+}
+
+export const COMBINED_BOOK_ID = '__overview_combined__'
+
+// The user's Portfolio Manager Overview selection as ONE synthetic aggregated
+// book, so analysis tools can run on the combined portfolios. Uses the persisted
+// overviewIds when it spans 2+ portfolios, else falls back to all portfolios.
+// Returns null unless there are 2+ portfolios with holdings to combine.
+export function combinedOverviewBook(): PMPortfolio | null {
+  try {
+    const all = readPMPortfolios()
+    if (all.length < 2) return null
+    const raw = localStorage.getItem(PORTFOLIOS_KEY)
+    const d = raw ? JSON.parse(raw) : {}
+    const selected: string[] = Array.isArray(d.overviewIds)
+      ? d.overviewIds.filter((id: string) => all.some(p => p.id === id))
+      : []
+    const ps = selected.length >= 2 ? all.filter(p => selected.includes(p.id)) : all
+    if (ps.length < 2) return null
+    const holdings = mergeHoldings(ps).filter(h => h.shares > 0)
+    if (!holdings.length) return null
+    return {
+      id: COMBINED_BOOK_ID,
+      name: `Combined · ${ps.length} portfolios`,
+      holdings,
+      cash: ps.flatMap(p => p.cash ?? []),
+      optionsCount: ps.reduce((s, p) => s + p.optionsCount, 0),
+      futuresCount: ps.reduce((s, p) => s + p.futuresCount, 0),
+    }
+  } catch { return null }
+}
+
+// Saved books for a tool's portfolio picker, with the combined-overview book
+// prepended (when it exists) so every analysis tool can pick the aggregate.
+export function readPMBooks(): PMPortfolio[] {
+  const combined = combinedOverviewBook()
+  const books = readPMPortfolios()
+  return combined ? [combined, ...books] : books
+}
+
 const uid = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now() + Math.random())
 
 // Bulk-add holdings (e.g. from a Screener export) into an existing PM

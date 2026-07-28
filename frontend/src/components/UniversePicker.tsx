@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import axios from 'axios'
-import { readPMPortfolios, toWeightedLegs, normalizeTicker, type WeightedLeg } from '../lib/pmImport'
+import { readPMBooks, toWeightedLegs, normalizeTicker, type WeightedLeg } from '../lib/pmImport'
 
 async function defaultFetchPrice(ticker: string): Promise<number | null> {
   try {
@@ -92,7 +92,7 @@ export default function UniversePicker(props: UniversePickerProps) {
   const tickerCap = props.tickerCap ?? DEFAULT_TICKER_CAP
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<string | null>(null)
-  const ports = readPMPortfolios()
+  const ports = readPMBooks()
 
   const hasBooks = ports.length > 0
   const hasScreens = (screenHandoff?.screens.length ?? 0) > 0

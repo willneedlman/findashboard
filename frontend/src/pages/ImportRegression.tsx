@@ -5,7 +5,7 @@ import { Activity, GitBranch } from 'lucide-react'
 import TickerInput from '../components/TickerInput'
 import EmptyState from '../components/EmptyState'
 import { loadCustomStrategies } from '../utils/customStrategies'
-import { readPMPortfolios, type PMPortfolio } from '../lib/pmImport'
+import { readPMBooks, type PMPortfolio } from '../lib/pmImport'
 import {
   C, PERIODS, StatCard, inputStyle, selectStyle, railLabel,
   RailGroup, RunButton, ToolShell, ModeToggle, REG_MODES, ReturnsScatter, RollingBetaChart, type RegMode,
@@ -58,7 +58,7 @@ export default function ImportRegression({ mode, setMode }: { mode: RegMode; set
   const [period, setPeriod] = useState('2y')
   const [rollWindow, setRollWindow] = useState(60)
 
-  const books = useMemo(() => readPMPortfolios().filter(p => p.holdings.length), [])
+  const books = useMemo(() => readPMBooks().filter(p => p.holdings.length), [])
   const [bookId, setBookId] = useState(books[0]?.id ?? '')
   const holdings = useMemo(() => {
     const book = books.find(b => b.id === bookId)

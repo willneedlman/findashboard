@@ -14,7 +14,7 @@ import CustomStrategyModal, { type CustomStrategyDef, type StrategyRisk, DEFAULT
 import { loadCustomStrategies, saveCustomStrategy, deleteCustomStrategy, duplicateCustomStrategy } from '../utils/customStrategies'
 import { PRESETS, PRESET_GROUPS, type Leg } from './strategy-builder/shared'
 import { ReturnsScatter, dailyReturnPairs, regressReturnPairs } from './regressionShared'
-import { readPMPortfolios, normalizeTicker, type PMPortfolio } from '../lib/pmImport'
+import { readPMBooks, normalizeTicker, type PMPortfolio } from '../lib/pmImport'
 import { SCREENER_ALGO_HANDOFF_KEY, type ScreenerAlgoHandoff, loadScreens, type Preset as SavedScreen } from './StockScreener'
 import { screenerFilterToApi } from '../lib/format'
 import type { ClipDraft } from '../lib/reportCreator'
@@ -1212,7 +1212,7 @@ export function AlgoStrategyBuilderContent() {
   // strategy once (e.g. a short straddle) doesn't mean rebuilding it per ticker.
   const [cloningId, setCloningId] = useState<string | null>(null)
   const [cloneInput, setCloneInput] = useState('')
-  const pmBooks = useMemo(() => readPMPortfolios().filter(b => b.holdings.length), [])
+  const pmBooks = useMemo(() => readPMBooks().filter(b => b.holdings.length), [])
   const savedScreens = useMemo<SavedScreen[]>(() => loadScreens(), [])
   const [loadingScreenFor, setLoadingScreenFor] = useState<string | null>(null)
   // Same per-universe fan-out + client-side merge/dedupe the Screener page itself
