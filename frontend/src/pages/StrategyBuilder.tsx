@@ -15,6 +15,7 @@ const STRIP: React.CSSProperties = {
   background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
 }
 import { type Leg, type GreekPos, type GreekResult, DEFAULT_TICKER, DEFAULT_EXPIRY, mk, roundToStrike, scalePreset, GREEK_COLORS, PRESETS, PRESET_DESC, PRESET_GROUPS, LEG_COLORS, LS_KEY, toOCC, INPUT, SELECT, type LegChain, fmtExpiry, intrinsic, impliedVol, legPnlAt, type PendingOptionStrategy } from './strategy-builder/shared'
+import { useSavedStrategies, saveStrategy, deleteSavedStrategy, savedStrategyTicker, type SavedStrategy } from './strategy-builder/savedStrategies'
 
 export default function StrategyBuilder() {
   const [legs, setLegs]               = useState<Leg[]>(PRESETS['Long Call'])
@@ -33,6 +34,26 @@ export default function StrategyBuilder() {
   const [aiNarrativePending, setAiNarrativePending] = useState(false)
   const [sentToPaperTrader, setSentToPaperTrader] = useState(false)
   const [legChains, setLegChains]     = useState<Record<number, LegChain>>({})
+
+  // Saved-strategy library (localStorage-backed, per-browser).
+  const savedStrategies = useSavedStrategies()
+  const [saving, setSaving]           = useState(false)
+  const [saveName, setSaveName]       = useState('')
+  const [activeSavedId, setActiveSavedId] = useState<string | null>(null)
+  const [confirmDel, setConfirmDel]   = useState<string | null>(null)
+
+  const startSave = () => { setSaveName(preset || `${primaryTicker} strategy`); setSaving(true) }
+  const commitSave = () => {
+    const s = saveStrategy(saveName, legs, spotOverrides)
+    setActiveSavedId(s.id); setSaving(false); setSaveName('')
+  }
+  const loadSaved = (s: SavedStrategy) => {
+    setLegs(s.legs.map(l => ({ ...l })))
+    setSpotOverrides({ ...s.spotOverrides })
+    setLegChains({})
+    setPreset('')
+    setActiveSavedId(s.id)
+  }
 
   const uniqueTickers    = useMemo(() => [...new Set(legs.map(l => l.ticker))], [legs])
   const primaryTicker    = uniqueTickers[0] ?? DEFAULT_TICKER
@@ -367,6 +388,7 @@ export default function StrategyBuilder() {
                 setLegs(draft.legs)
                 setSpotOverrides({})
                 setLegChains({})
+                setActiveSavedId(null)
                 setTab('manual')
               }} />
             </div>
@@ -399,6 +421,7 @@ export default function StrategyBuilder() {
                             setLegs(scalePreset(PRESETS[name], getSpot(primaryTicker)))
                             setSpotOverrides({})
                             setLegChains({})
+                            setActiveSavedId(null)
                             setOpenGroups(s => ({ ...s, [group.label]: true }))
                           }} style={{
                             padding: '5px 8px', fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
@@ -417,6 +440,66 @@ export default function StrategyBuilder() {
                     )}
                   </div>
                 ))}
+              </div>
+
+              {/* Saved strategies library */}
+              <div style={{ marginTop: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }}>Saved</div>
+                  {!saving && (
+                    <button onClick={startSave} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--theme-primary, #c9a84c)', background: 'none', border: 'none', cursor: 'pointer' }}>+ SAVE</button>
+                  )}
+                </div>
+
+                {saving && (
+                  <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+                    <input
+                      autoFocus value={saveName}
+                      onChange={e => setSaveName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') commitSave(); if (e.key === 'Escape') { setSaving(false); setSaveName('') } }}
+                      placeholder="Strategy name"
+                      style={{ ...INPUT, flex: 1, minWidth: 0 }}
+                    />
+                    <button onClick={commitSave} title="Save strategy" style={{ padding: '4px 8px', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer', background: 'color-mix(in srgb, var(--theme-primary) 14%, transparent)', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)' }}>Save</button>
+                    <button onClick={() => { setSaving(false); setSaveName('') }} title="Cancel" style={{ padding: '4px 8px', fontSize: 11, cursor: 'pointer', background: 'none', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: 'var(--theme-secondary, #5e768f)' }}>×</button>
+                  </div>
+                )}
+
+                {savedStrategies.length === 0 ? (
+                  <div style={{ fontSize: 9, color: 'var(--theme-secondary, #5e768f)', lineHeight: '13px', padding: '0 2px 4px' }}>
+                    No saved strategies yet. Build one and press Save to keep it here.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {savedStrategies.map(s => {
+                      const on = activeSavedId === s.id
+                      return (
+                        <div key={s.id} style={{ display: 'flex', gap: 3, alignItems: 'stretch' }}>
+                          <button onClick={() => loadSaved(s)} title="Load this strategy" style={{
+                            flex: 1, minWidth: 0, padding: '5px 8px', textAlign: 'left', cursor: 'pointer',
+                            background: on ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)' : 'transparent',
+                            border: `1px solid ${on ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.07))'}`,
+                            color: on ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #5e768f)',
+                          }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</div>
+                            <div style={{ fontSize: 9, fontWeight: 400, color: on ? 'color-mix(in srgb, var(--theme-primary) 60%, transparent)' : 'rgba(255,255,255,0.2)', marginTop: 1 }}>
+                              {s.legs.length} leg{s.legs.length === 1 ? '' : 's'} · {savedStrategyTicker(s)}
+                            </div>
+                          </button>
+                          {confirmDel === s.id ? (
+                            <div style={{ display: 'flex', gap: 2 }}>
+                              <button onClick={() => { deleteSavedStrategy(s.id); if (activeSavedId === s.id) setActiveSavedId(null); setConfirmDel(null) }}
+                                title="Confirm delete" style={{ padding: '0 7px', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'pointer', background: 'color-mix(in srgb, var(--theme-negative) 14%, transparent)', border: '1px solid var(--theme-negative)', color: 'var(--theme-negative)' }}>Del</button>
+                              <button onClick={() => setConfirmDel(null)} title="Cancel" style={{ padding: '0 7px', fontSize: 11, cursor: 'pointer', background: 'none', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: 'var(--theme-secondary, #5e768f)' }}>×</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setConfirmDel(s.id)} title="Remove saved strategy" aria-label="Remove saved strategy" style={{ padding: '0 8px', fontSize: 12, cursor: 'pointer', background: 'none', border: '1px solid var(--theme-border, rgba(255,255,255,0.07))', color: 'var(--theme-secondary, #5e768f)' }}>×</button>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Send to Paper Trader */}
