@@ -11,8 +11,10 @@ Sources (see each module's docstring for exact caveats):
   - rss_feeds.py         CNBC / MarketWatch / WSJ direct RSS (substring-matched
                          to the ticker/company name) + Google News RSS search
                          (a real per-ticker query aggregating dozens of
-                         publishers — the highest-recall source here). No key
-                         for either.
+                         publishers — the highest-recall source here) + free
+                         ticker-naming Substacks (The Transcript, Net Interest,
+                         The Bear Cave, Doomberg, Klement — matched on title or
+                         full free-post body). No key for any.
   - sec_edgar_feed.py    SEC EDGAR filings — 8-K/10-Q/10-K/Form 4/13D/13G/144
                          (no key, compliant User-Agent required)
 
@@ -49,6 +51,7 @@ def _source_calls(ticker: str, company_name: str | None) -> dict[str, Callable[[
         "Social (StockTwits/Reddit)": lambda: social_sentiment.fetch_social_mentions(ticker),
         "RSS (CNBC/MarketWatch/WSJ)": lambda: rss_feeds.fetch_ticker_mentions(ticker, company_name),
         "Google News": lambda: rss_feeds.fetch_google_news(ticker, company_name),
+        "Substack": lambda: rss_feeds.fetch_substack_mentions(ticker, company_name),
         "SEC EDGAR": lambda: sec_edgar_feed.fetch_recent_filings(ticker),
     }
 

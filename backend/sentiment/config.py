@@ -119,6 +119,27 @@ SOURCE_MATRIX: tuple[SourceSpec, ...] = (
     SourceSpec("rss:google-breaking", "Google News Breaking", "rss", 2, 1.0,
                "https://news.google.com/rss/search?q=(stock+market+OR+Federal+Reserve+OR+economy+OR+%22S%26P+500%22+OR+earnings+OR+inflation)+when:1h&hl=en-US&gl=US&ceid=US:en",
                breaking=True),
+    # Substack — independent finance / macro analysis. FREE publications only:
+    # paid Substacks expose just a paywall teaser in RSS, so there is nothing to
+    # score. Low cadence (weekly-ish), so on their own they rarely reach
+    # MIN_SOURCE_HEADLINES in a window — they act as corroborating directional
+    # signal when a fresh markets/macro post lands. Headline-only scoring like
+    # every RSS source; confidence is capped because a single analyst's read is
+    # not a wire fact.
+    SourceSpec("rss:substack-overshoot", "The Overshoot", "rss", 2, 0.8,
+               "https://theovershoot.co/feed", confidence_cap=0.6),
+    SourceSpec("rss:substack-apricitas", "Apricitas Economics", "rss", 2, 0.8,
+               "https://www.apricitas.io/feed", confidence_cap=0.6),
+    SourceSpec("rss:substack-netinterest", "Net Interest", "rss", 2, 0.8,
+               "https://www.netinterest.co/feed", confidence_cap=0.6),
+    SourceSpec("rss:substack-klement", "Klement on Investing", "rss", 2, 0.7,
+               "https://klementoninvesting.substack.com/feed", confidence_cap=0.6),
+    SourceSpec("rss:substack-transcript", "The Transcript", "rss", 2, 0.8,
+               "https://thetranscript.substack.com/feed", confidence_cap=0.6),
+    SourceSpec("rss:substack-doomberg", "Doomberg", "rss", 2, 0.7,
+               "https://doomberg.substack.com/feed", confidence_cap=0.6),
+    SourceSpec("rss:substack-concoda", "Concoda", "rss", 2, 0.7,
+               "https://concoda.substack.com/feed", confidence_cap=0.6),
     SourceSpec("reddit:investing", "Reddit/Investing", "reddit", 3, 1.2,
                "investing", confidence_cap=0.3),
     SourceSpec("reddit:stocks", "Reddit/Stocks", "reddit", 3, 1.0,

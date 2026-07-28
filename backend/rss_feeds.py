@@ -162,6 +162,93 @@ def fetch_ticker_mentions(ticker: str, company_name: str | None = None) -> list[
     return matches
 
 
+# ── Substack (free, ticker-naming finance publications) ───────────────────────
+# Evidence source for the Mover Radar. Paid Substacks expose only a paywall
+# teaser in RSS, so every feed here is one whose FREE posts embed the full body —
+# which is what lets us match a ticker/company that a deliberately oblique title
+# never names. Low cadence, so a 15-min cache is plenty.
+_SUBSTACK_CACHE_TTL = 900
+_SUBSTACK_FEEDS = {
+    "The Transcript":      "https://thetranscript.substack.com/feed",
+    "Net Interest":        "https://www.netinterest.co/feed",
+    "The Bear Cave":       "https://thebearcave.substack.com/feed",
+    "Doomberg":            "https://doomberg.substack.com/feed",
+    "Klement on Investing": "https://klementoninvesting.substack.com/feed",
+}
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _entry_text(entry) -> str:
+    """Title + full post body (free posts embed it), tags stripped and bounded —
+    the haystack a ticker or company name is matched against."""
+    parts = [entry.get("title") or "", entry.get("summary") or ""]
+    for c in (entry.get("content") or []):
+        parts.append(c.get("value") or "")
+    txt = _HTML_TAG_RE.sub(" ", " ".join(parts))
+    return re.sub(r"\s+", " ", txt).strip()[:6000]
+
+
+def _fetch_substack_feed(name: str, url: str) -> list[NewsEvent]:
+    """Recent posts from one Substack, cached and ticker-agnostic. The matchable
+    body text rides along in raw_payload['match_text']. Never raises."""
+    cache_key = f"substack:v1:{name}"
+    cached = disk_get(cache_key)
+    if cached is not None:
+        return [dict_to_event(d) for d in cached]
+
+    def _do():
+        return requests.get(url, headers=_UA, timeout=_TIMEOUT)
+
+    try:
+        resp = retry_with_backoff(_do, label=f"substack {name}")
+        resp.raise_for_status()
+        parsed = feedparser.parse(resp.content)
+    except Exception as exc:
+        logger.warning("substack fetch failed for %s: %s", name, exc)
+        return []
+
+    events: list[NewsEvent] = []
+    for entry in parsed.entries:
+        title = (entry.get("title") or "").strip()
+        if not title:
+            continue
+        events.append(NewsEvent(
+            timestamp=_parse_rss_time(entry), source_name=f"Substack ({name})", ticker=None,
+            headline_or_text=title, sentiment_score=None, url=entry.get("link"),
+            raw_payload={"match_text": _entry_text(entry)},
+        ))
+    disk_set(cache_key, [event_to_dict(e) for e in events], ttl=_SUBSTACK_CACHE_TTL)
+    return events
+
+
+def fetch_substack_mentions(ticker: str, company_name: str | None = None) -> list[NewsEvent]:
+    """Free-Substack posts that mention `ticker` or `company_name`, tagged with
+    `ticker`. A ticker in the title always counts; the company name may match
+    anywhere in the body; a bare ticker only matches the body for symbols of 3+
+    chars, since 1-2 char tickers collide with ordinary uppercase words."""
+    sym = ticker.strip().upper()
+    if not sym:
+        return []
+    tick_re = re.compile(rf"(?<![A-Za-z0-9]){re.escape(sym)}(?![A-Za-z0-9])")
+    name_re = re.compile(re.escape(company_name), re.IGNORECASE) if company_name else None
+
+    out: list[NewsEvent] = []
+    for name, url in _SUBSTACK_FEEDS.items():
+        for e in _fetch_substack_feed(name, url):
+            title = e.headline_or_text
+            body = (e.raw_payload or {}).get("match_text") or title
+            hit = bool(tick_re.search(title)) \
+                or (name_re is not None and name_re.search(body) is not None) \
+                or (len(sym) >= 3 and tick_re.search(body) is not None)
+            if hit:
+                out.append(NewsEvent(
+                    timestamp=e.timestamp, source_name=e.source_name, ticker=sym,
+                    headline_or_text=e.headline_or_text, sentiment_score=None,
+                    url=e.url, raw_payload=e.raw_payload,
+                ))
+    return out
+
+
 def _store(cache_key: str, events: list[NewsEvent]) -> None:
     disk_set(cache_key, [event_to_dict(e) for e in events], ttl=_CACHE_TTL)
 
