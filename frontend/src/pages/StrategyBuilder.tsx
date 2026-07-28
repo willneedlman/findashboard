@@ -17,6 +17,13 @@ const STRIP: React.CSSProperties = {
 import { type Leg, type GreekPos, type GreekResult, DEFAULT_TICKER, DEFAULT_EXPIRY, mk, roundToStrike, scalePreset, GREEK_COLORS, PRESETS, PRESET_DESC, PRESET_GROUPS, LEG_COLORS, LS_KEY, toOCC, INPUT, SELECT, type LegChain, fmtExpiry, intrinsic, impliedVol, legPnlAt, type PendingOptionStrategy } from './strategy-builder/shared'
 import { useSavedStrategies, saveStrategy, deleteSavedStrategy, savedStrategyTicker, type SavedStrategy } from './strategy-builder/savedStrategies'
 
+// Payoff-chart legend swatches — reuse the exact stroke/fill of each series so
+// the swatch matches whatever theme is active.
+const legWrap: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }
+const legLine = (color: string, dashed: boolean, w = 2): React.CSSProperties => ({ width: 16, height: 0, borderTop: `${w}px ${dashed ? 'dashed' : 'solid'} ${color}`, flex: 'none' })
+const legVert = (color: string): React.CSSProperties => ({ width: 0, height: 11, borderLeft: `2px dashed ${color}`, flex: 'none' })
+const legFill = (color: string): React.CSSProperties => ({ width: 11, height: 11, background: color, flex: 'none' })
+
 export default function StrategyBuilder() {
   const [legs, setLegs]               = useState<Leg[]>(PRESETS['Long Call'])
   const [preset, setPreset]           = useState('Long Call')
@@ -920,7 +927,7 @@ export default function StrategyBuilder() {
                   {/* Strike reference lines. Labels are staggered vertically by
                       index so near-adjacent strikes (e.g. 720/721) don't overlap. */}
                   {[...new Set(primaryLegs.map(l => l.K))].sort((a, b) => a - b).map((K, i) => (
-                    <ReferenceLine key={K} x={K} stroke="color-mix(in srgb, var(--theme-primary) 30%, transparent)" strokeDasharray="3 4"
+                    <ReferenceLine key={K} x={K} stroke="color-mix(in srgb, var(--theme-primary) 65%, transparent)" strokeDasharray="3 4"
                       label={({ viewBox }: any) => (
                         <text x={viewBox.x + 3} y={viewBox.y + 10 + i * 11} fill="var(--theme-primary, #c9a84c)" fontSize={8}>{`$${K}`}</text>
                       )} />
@@ -933,7 +940,7 @@ export default function StrategyBuilder() {
                       top) so a breakeven near a strike never overlaps its label,
                       and are staggered among themselves. */}
                   {chartData.breakevens.map((be, i) => (
-                    <ReferenceLine key={i} x={be} stroke="var(--theme-text-faint, rgba(255,255,255,0.25))" strokeDasharray="2 4"
+                    <ReferenceLine key={i} x={be} stroke="rgba(255,255,255,0.55)" strokeDasharray="2 4"
                       label={({ viewBox }: any) => (
                         <text x={viewBox.x + 3} y={viewBox.y + viewBox.height - 6 - i * 11} fill="var(--theme-secondary, #99907e)" fontSize={8}>{`BE $${be}`}</text>
                       )} />
@@ -955,6 +962,25 @@ export default function StrategyBuilder() {
                   <Line type="monotone" dataKey="total" stroke="var(--theme-primary, #c9a84c)" strokeWidth={2.5} dot={false} name="total" legendType="none" />
                 </ComposedChart>
               </ResponsiveContainer>
+            </div>
+
+            {/* Legend — what the lines, shaded zones, and vertical markers mean. */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', alignItems: 'center', padding: '2px 12px 8px', fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary, #99907e)' }}>
+              <span style={legWrap}><i style={legLine('var(--theme-primary, #c9a84c)', false, 2.5)} />P&L at expiry</span>
+              {chartData.showT && (
+                <span style={legWrap}><i style={legLine('var(--theme-tertiary, #60a5fa)', true)} />{chartData.tDays === 0 ? 'Value now' : `Value +${chartData.tDays}d`}</span>
+              )}
+              {primaryLegs.map((l, i) => (
+                <span key={i} style={legWrap}>
+                  <i style={legLine(LEG_COLORS[i % LEG_COLORS.length], true)} />
+                  {`${l.action === 'buy' ? 'Long' : 'Short'} ${l.K}${l.option_type === 'call' ? 'C' : 'P'}`}
+                </span>
+              ))}
+              <span style={legWrap}><i style={legFill('rgba(47,107,75,0.55)')} />Profit</span>
+              <span style={legWrap}><i style={legFill('rgba(140,46,54,0.55)')} />Loss</span>
+              <span style={legWrap}><i style={legVert('rgba(217,119,54,0.85)')} />Spot</span>
+              <span style={legWrap}><i style={legVert('color-mix(in srgb, var(--theme-primary) 65%, transparent)')} />Strike</span>
+              <span style={legWrap}><i style={legVert('rgba(255,255,255,0.7)')} />Break-even</span>
             </div>
 
             {/* Spot price slider */}
