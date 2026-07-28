@@ -451,6 +451,27 @@ def _intl_drafts(today: str) -> list[dict]:
     return drafts
 
 
+def _conference_board_drafts(today: str) -> tuple[list[dict], str | None]:
+    """Conference Board Consumer Confidence — a high-impact US print that FRED
+    does NOT carry (Conference Board is a private release), so it is scheduled by
+    rule instead: the last Tuesday of each month at 10:00 ET. Qualitative like the
+    Fed drafts — no invented actual/consensus, just a released-day marker + move."""
+    from routers.rates import _last_weekday
+    base = date.today()
+    months: list[tuple[int, int]] = []
+    for off in (-1, 0, 1, 2):
+        idx = (base.month - 1) + off
+        months.append((base.year + idx // 12, idx % 12 + 1))
+    dates = sorted(_last_weekday(y, m, 1).isoformat() for y, m in months)  # weekday 1 = Tuesday
+    meta = {"key": "conf-board-confidence", "name": "Conference Board Consumer Confidence",
+            "category": "Sentiment", "impact": "High", "source": "Conference Board",
+            "url": "https://www.conference-board.org/topics/consumer-confidence", "time": "10:00"}
+    return _fed_event_drafts(
+        today, dates, meta,
+        "The Conference Board's monthly read on US consumer confidence — a high-impact gauge of "
+        "household sentiment and near-term spending intentions.")
+
+
 def _build() -> dict:
     today = date.today().isoformat()
     events: list[dict] = []
@@ -512,6 +533,9 @@ def _build() -> dict:
     ]:
         fd, _ = _fed_event_drafts(today, d_dates, meta, summ)
         drafts.extend(fd)
+
+    cb_drafts, _ = _conference_board_drafts(today)
+    drafts.extend(cb_drafts)
 
     drafts.extend(_intl_drafts(today))
 

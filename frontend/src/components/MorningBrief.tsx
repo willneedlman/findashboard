@@ -42,10 +42,11 @@ const ROW = {
   conc: '56px minmax(0, 1fr) 36px 72px',
   /** Name | unrealized $ | unrealized % | recovery % — four fixed tracks, no jammed cells. */
   under: '56px minmax(72px, 1fr) 64px 72px',
-  /** Day | Name | Wt% | When — equal share of the row so nothing hugs the left. */
-  earn: 'minmax(0, 0.9fr) minmax(0, 1.15fr) minmax(0, 0.85fr) minmax(0, 1.2fr)',
-  /** Day | Event | Tag | Time */
-  macro: 'minmax(0, 0.7fr) minmax(0, 1.6fr) minmax(0, 0.75fr) minmax(0, 1fr)',
+  /** Day | Name | Wt% | When — When is a fixed track wide enough for the longest
+   * "tomorrow HH:MM ET" so the nowrap time never spills past the panel edge. */
+  earn: 'minmax(0, 0.9fr) minmax(0, 1.15fr) minmax(0, 0.85fr) 128px',
+  /** Day | Event | Tag | When — fixed When track (same reason as earn). */
+  macro: 'minmax(0, 0.7fr) minmax(0, 1.6fr) minmax(0, 0.75fr) 128px',
   news: '56px minmax(0, 1fr) 18px',
   /** Name | Signal (cause / crossed-flip) | Prior | Now | Chg % */
   overnight: '58px minmax(0, 1fr) 62px 62px 56px',
@@ -256,11 +257,13 @@ export default function MorningBrief({
     retry: 0,
   })
 
+  // Single source of truth with the Macro Event Hub (/macro-events): same feed,
+  // same events, so a name never shows in one surface and not the other.
   const macro = useQuery<{
-    events: { date: string; label: string; importance: 'high' | 'medium'; time_et?: string; category?: string }[]
+    events: { datetime: string; name: string; impact: 'High' | 'Medium' | 'Low'; category?: string; region?: string; status?: string }[]
   }>({
     queryKey: ['morning-brief-macro', today],
-    queryFn: () => axios.get('/api/rates/macro-calendar').then(r => r.data),
+    queryFn: () => axios.get('/api/macro-events').then(r => r.data),
     staleTime: 30 * 60 * 1000,
     retry: 0,
   })
@@ -522,28 +525,30 @@ export default function MorningBrief({
 
   type MacroRow = { date: string; day: string; label: string; tag: string; time?: string; prio: number; days: number }
   const macroWeek = useMemo<MacroRow[]>(() => {
-    const out: MacroRow[] = []
+    // De-dupe by metric (an event can appear as both a just-released and an
+    // upcoming occurrence within the week); keep the soonest.
+    const byLabel = new Map<string, MacroRow>()
     for (const e of macro.data?.events ?? []) {
-      if (!e.date) continue
-      const days = daysUntil(e.date)
+      const date = (e.datetime || '').slice(0, 10)
+      if (!date) continue
+      if ((e.region || 'US') !== 'US') continue          // the brief is a US-desk snapshot
+      const days = daysUntil(date)
       if (days < 0 || days > 7) continue
-      // Prefer Fed / high-impact; skip routine medium prints if we already have enough.
-      const isMon = e.category === 'monetary'
-      const isHigh = e.importance === 'high'
-      if (!isMon && !isHigh) continue
-      const prio = isMon ? 0 : 1
-      const tag = isMon ? 'FED' : 'HIGH'
-      out.push({
-        date: e.date,
-        day: DAY_ABBR[new Date(e.date + 'T12:00:00').getDay()],
-        label: e.label,
-        tag,
-        time: e.time_et ? `${e.time_et} ET` : undefined,
-        prio,
-        days,
-      })
+      // Fed decisions or high-impact prints only; skip routine medium/low.
+      const isFed = e.category === 'Central Bank'
+      const isHigh = e.impact === 'High'
+      if (!isFed && !isHigh) continue
+      const label = e.name.replace(/\s*\([^)]*\)\s*$/, '')  // drop the "(May 2026)" period suffix
+      const time = (e.datetime || '').slice(11, 16)          // "10:00"
+      const row: MacroRow = {
+        date, day: DAY_ABBR[new Date(date + 'T12:00:00').getDay()], label,
+        tag: isFed ? 'FED' : 'HIGH', time: time ? `${time} ET` : undefined,
+        prio: isFed ? 0 : 1, days,
+      }
+      const ex = byLabel.get(label)
+      if (!ex || row.days < ex.days) byLabel.set(label, row)
     }
-    return out
+    return [...byLabel.values()]
       .sort((a, b) => a.date.localeCompare(b.date) || a.prio - b.prio)
       .slice(0, 6)
   }, [macro.data])
@@ -643,7 +648,7 @@ export default function MorningBrief({
             style={{
               width: '100%', maxWidth: panelMax, background: F.surface,
               border: `1px solid ${F.border}`, boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
-              textAlign: 'left',
+              textAlign: 'left', overflowX: 'hidden',
             }}
             onClick={e => e.stopPropagation()}
           >
