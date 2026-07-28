@@ -83,11 +83,12 @@ def _series_metrics(equity: pd.Series, bench_ret: pd.Series, rf: float) -> dict:
 
 
 class BacktestRequest(BaseModel):
-    # 25 (not 20) so a full 20-name book plus a CASH sleeve leg validates.
-    # min_length=0 so crsp_mode (which ignores tickers/weights entirely — the
-    # S&P 500 point-in-time universe stands in for them) can send empty lists.
-    tickers: list[str] = Field(default_factory=list, max_length=25)
-    weights: list[float] = Field(default_factory=list, max_length=25)
+    # Generous cap so an AGGREGATED book (several portfolios merged for the
+    # homescreen Overview) validates alongside a CASH sleeve leg. min_length=0 so
+    # crsp_mode (which ignores tickers/weights entirely — the S&P 500 point-in-time
+    # universe stands in for them) can send empty lists.
+    tickers: list[str] = Field(default_factory=list, max_length=60)
+    weights: list[float] = Field(default_factory=list, max_length=60)
     benchmark: str = "SPY"
     start: str = "2020-01-01"
     end: str = "2024-12-31"
@@ -117,7 +118,7 @@ class BacktestRequest(BaseModel):
                 self.cash_weight += w
             else:
                 eq_t.append(t); eq_w.append(w)
-        self.tickers = validate_tickers(eq_t) if eq_t else []
+        self.tickers = validate_tickers(eq_t, max_count=60) if eq_t else []
         self.weights = eq_w
         if not self.tickers and self.cash_weight <= 0:
             raise HTTPException(400, "No holdings provided")
@@ -209,11 +210,7 @@ def backtest(req: BacktestRequest):
     if req.crsp_mode:
         port, bench, delistings, constituent_count = _crsp_backtest_series(req)
     else:
-        # Normalize equity + cash weights together so a cash sleeve dilutes exposure.
         eq_w = np.array(req.weights, dtype=float) if req.tickers else np.array([])
-        total_w = eq_w.sum() + req.cash_weight
-        if total_w <= 0:
-            total_w = 1.0
 
         all_tickers = list(dict.fromkeys(req.tickers + [req.benchmark]))
         try:
@@ -225,6 +222,25 @@ def backtest(req: BacktestRequest):
                 raw.index = raw.index.tz_convert(None)
         except Exception:
             logger.exception("internal error"); raise HTTPException(500, "Internal server error")
+
+        # Drop names with no fetched data at all (bad / newly listed / delisted
+        # symbol). Without this, a single all-NaN column makes the row-wise dropna
+        # below collapse the whole overlapping window to empty — exactly why a wide
+        # aggregated book charted "No performance data". The rest of the book still
+        # charts, and the surviving equity weights renormalize.
+        raw = raw[[c for c in raw.columns if raw[c].notna().any()]]
+        if req.benchmark not in raw.columns:
+            raise HTTPException(404, "No benchmark price data for the selected window")
+        kept_idx = [i for i, t in enumerate(req.tickers) if t in raw.columns]
+        req.tickers = [req.tickers[i] for i in kept_idx]
+        eq_w = eq_w[kept_idx] if len(eq_w) else eq_w
+        if not req.tickers and req.cash_weight <= 0:
+            raise HTTPException(404, "No price data for the provided holdings")
+
+        # Normalize equity + cash weights together so a cash sleeve dilutes exposure.
+        total_w = float(eq_w.sum()) + req.cash_weight
+        if total_w <= 0:
+            total_w = 1.0
 
         raw = raw.dropna()
         if raw.empty:
