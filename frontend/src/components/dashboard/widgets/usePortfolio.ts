@@ -41,7 +41,22 @@ export interface Quote { current_price: number; pct_change_1d: number | null }
 
 interface CashPos { amount: number; rate: number; since: string }
 interface Portfolio { id: string; name: string; holdings?: Holding[]; cash?: CashPos[] }
-interface PMState { portfolios: Portfolio[]; activeId: string }
+// overviewIds: the "primary" selection set in Portfolio Manager. Drives what the
+// homescreen Overview and the portfolio-driven widgets auto-load.
+interface PMState { portfolios: Portfolio[]; activeId: string; overviewIds?: string[] }
+
+// Merge holdings across portfolios: same ticker sums shares, share-weighted cost.
+function mergeHoldings(ps: Portfolio[]): Holding[] {
+  const map = new Map<string, { ticker: string; shares: number; costSum: number }>()
+  for (const p of ps) for (const h of (p.holdings ?? [])) {
+    const ticker = (h.ticker || '').trim().toUpperCase()
+    if (!ticker) continue
+    const e = map.get(ticker) ?? { ticker, shares: 0, costSum: 0 }
+    e.shares += h.shares; e.costSum += h.shares * (h.avgCost || 0)
+    map.set(ticker, e)
+  }
+  return [...map.values()].map(e => ({ ticker: e.ticker, shares: e.shares, avgCost: e.shares > 0 ? e.costSum / e.shares : 0 }))
+}
 
 function cashValue(c: CashPos): number {
   const start = new Date((c.since || '') + 'T00:00:00').getTime()
@@ -58,13 +73,21 @@ export function loadActivePortfolio(portfolioId?: string): ActivePortfolio {
     const raw = localStorage.getItem('pm-portfolios-v2')
     if (raw) {
       const d: PMState = JSON.parse(raw)
-      const p = (portfolioId && d.portfolios?.find(x => x.id === portfolioId))
-        || d.portfolios?.find(x => x.id === d.activeId)
-        || d.portfolios?.[0]
-      if (p) {
+      const all = d.portfolios ?? []
+      // Explicit id wins; else the persisted Overview selection; else active; else first.
+      let ids: string[] = []
+      if (portfolioId) ids = [portfolioId]
+      else if (d.overviewIds?.length) ids = d.overviewIds.filter(id => all.some(p => p.id === id))
+      let ps = all.filter(p => ids.includes(p.id))
+      if (!ps.length) { const a = all.find(x => x.id === d.activeId) || all[0]; ps = a ? [a] : [] }
+      if (ps.length === 1) {
+        const p = ps[0]
         const cash = (p.cash ?? []).reduce((s, c) => s + cashValue(c), 0)
-        const holdings = (p.holdings ?? []).filter(h => h.shares > 0)
-        return { name: p.name || 'Portfolio', holdings, cash }
+        return { name: p.name || 'Portfolio', holdings: (p.holdings ?? []).filter(h => h.shares > 0), cash }
+      }
+      if (ps.length > 1) {
+        const cash = ps.reduce((s, p) => s + (p.cash ?? []).reduce((t, c) => t + cashValue(c), 0), 0)
+        return { name: `${ps.length} portfolios`, holdings: mergeHoldings(ps).filter(h => h.shares > 0), cash }
       }
     }
   } catch { /* fall through to empty */ }

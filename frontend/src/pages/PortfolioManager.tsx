@@ -106,9 +106,30 @@ interface Portfolio {
   futures:  FuturePosition[]
   cash:     CashPosition[]
 }
-interface PMState { portfolios: Portfolio[]; activeId: string }
+// overviewIds: the persisted "primary" selection that drives the homescreen
+// Overview and every other place that auto-loads the portfolio (see
+// usePortfolio.loadActivePortfolio). Empty => follow the active tab.
+interface PMState { portfolios: Portfolio[]; activeId: string; overviewIds?: string[] }
 const PORTFOLIOS_KEY = 'pm-portfolios-v2'
 const uid = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now() + Math.random())
+
+// Merge holdings across several portfolios into one aggregated set: same ticker
+// sums its shares and keeps a share-weighted average cost. Used when the overview
+// scope spans more than one portfolio.
+function aggregateHoldings(ps: Portfolio[]): Holding[] {
+  const map = new Map<string, { ticker: string; shares: number; costSum: number }>()
+  for (const p of ps) {
+    for (const h of p.holdings) {
+      const ticker = normalizeTicker(h.ticker)
+      if (!ticker) continue
+      const e = map.get(ticker) ?? { ticker, shares: 0, costSum: 0 }
+      e.shares += h.shares
+      e.costSum += h.shares * (h.avgCost || 0)
+      map.set(ticker, e)
+    }
+  }
+  return [...map.values()].map(e => ({ ticker: e.ticker, shares: e.shares, avgCost: e.shares > 0 ? e.costSum / e.shares : 0 }))
+}
 
 function loadPortfolios(): PMState {
   try {
@@ -187,10 +208,29 @@ export default function PortfolioManager() {
   const [pm, setPm] = useState<PMState>(loadPortfolios)
   const portfolios = pm.portfolios
   const active = portfolios.find(p => p.id === pm.activeId) ?? portfolios[0]
-  const holdings = active.holdings
-  const options  = active.options
-  const futures  = active.futures
-  const cash     = active.cash
+
+  // Overview scope: which portfolios the summary/tables reflect AND which the
+  // homescreen Overview (and other auto-load spots) show. Persisted in pm state.
+  // Empty => follow the active tab (single). Selecting more than one aggregates
+  // them into a read-only combined view; editing stays scoped to the active tab.
+  const viewIds = pm.overviewIds ?? []
+  const setViewIds = (next: string[]) => setPm(s => ({ ...s, overviewIds: next }))
+  const validViewIds = viewIds.filter(id => portfolios.some(p => p.id === id))
+  const effViewIds = validViewIds.length ? validViewIds : [active.id]
+  const viewPortfolios = portfolios.filter(p => effViewIds.includes(p.id))
+  const isAggregate = !(effViewIds.length === 1 && effViewIds[0] === active.id)
+
+  const holdings = isAggregate ? aggregateHoldings(viewPortfolios) : active.holdings
+  const options  = isAggregate ? viewPortfolios.flatMap(p => p.options ?? []) : active.options
+  const futures  = isAggregate ? viewPortfolios.flatMap(p => p.futures ?? []) : active.futures
+  const cash     = isAggregate ? viewPortfolios.flatMap(p => p.cash ?? [])    : active.cash
+
+  const toggleView = (id: string) => {
+    const set = new Set(effViewIds)
+    if (set.has(id)) set.delete(id); else set.add(id)
+    const next = portfolios.filter(p => set.has(p.id)).map(p => p.id)
+    setViewIds(next.length ? next : [active.id])
+  }
 
   const patchActive = useCallback((patch: (p: Portfolio) => Partial<Portfolio>) =>
     setPm(s => ({ ...s, portfolios: s.portfolios.map(p => p.id === s.activeId ? { ...p, ...patch(p) } : p) })), [])
@@ -234,10 +274,10 @@ export default function PortfolioManager() {
 
   // Tab management
   const clearEdits = () => { setEditStock(null); setEditFut(null); setEditCash(null) }
-  const addPortfolio = () => setPm(s => { const id = uid(); return { portfolios: [...s.portfolios, { id, name: `Portfolio ${s.portfolios.length + 1}`, holdings: [], options: [], futures: [], cash: [] }], activeId: id } })
+  const addPortfolio = () => setPm(s => { const id = uid(); return { ...s, portfolios: [...s.portfolios, { id, name: `Portfolio ${s.portfolios.length + 1}`, holdings: [], options: [], futures: [], cash: [] }], activeId: id } })
   const switchPortfolio = (id: string) => { clearEdits(); setPm(s => ({ ...s, activeId: id })) }
   const renamePortfolio = (id: string, name: string) => setPm(s => ({ ...s, portfolios: s.portfolios.map(p => p.id === id ? { ...p, name } : p) }))
-  const deletePortfolio = (id: string) => { clearEdits(); setPm(s => { const rest = s.portfolios.filter(p => p.id !== id); if (!rest.length) return s; return { portfolios: rest, activeId: s.activeId === id ? rest[0].id : s.activeId } }) }
+  const deletePortfolio = (id: string) => { clearEdits(); setPm(s => { const rest = s.portfolios.filter(p => p.id !== id); if (!rest.length) return s; return { ...s, portfolios: rest, activeId: s.activeId === id ? rest[0].id : s.activeId, overviewIds: (s.overviewIds ?? []).filter(x => rest.some(p => p.id === x)) } }) }
   const [renaming, setRenaming] = useState<string | null>(null)
 
   const mountRef = useRef(false)
@@ -270,10 +310,11 @@ export default function PortfolioManager() {
   // Heal legacy share-class symbols (BRK.B -> BRK-B) so they resolve and quote;
   // runs only when a stored ticker actually differs from its normalized form.
   useEffect(() => {
+    if (isAggregate) return   // aggregated holdings are read-only; never write them back to the active tab
     if (holdings.some(h => h.ticker !== normalizeTicker(h.ticker))) {
       setHoldings(prev => prev.map(h => ({ ...h, ticker: normalizeTicker(h.ticker) })))
     }
-  }, [holdings, setHoldings])
+  }, [holdings, setHoldings, isAggregate])
 
   // Fetch live prices for all tickers (normalize so a legacy BRK.B never 404s
   // in the render before the heal effect above persists BRK-B).
@@ -595,7 +636,38 @@ export default function PortfolioManager() {
             )
           })}
           <button onClick={addPortfolio} style={{ background: 'none', border: 'none', color: T.gold, cursor: 'pointer', fontFamily: T.label, fontSize: 11, fontWeight: 700, padding: '6px 10px', letterSpacing: '0.08em' }}>+ New</button>
+
+          {/* Overview scope — the persisted primary that drives the homescreen
+              Overview and other auto-load spots. One = individual, 2+ = aggregate. */}
+          {portfolios.length > 1 && (
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', paddingBottom: 4 }}>
+              <span style={{ ...lbl, fontSize: 8.5 }}>Overview</span>
+              {portfolios.map(p => {
+                const on = effViewIds.includes(p.id)
+                return (
+                  <button key={p.id} onClick={() => toggleView(p.id)} title="Show this portfolio in the Overview (toggle several to aggregate)" style={{
+                    background: on ? 'color-mix(in srgb, var(--theme-primary) 14%, transparent)' : 'transparent',
+                    border: `1px solid ${on ? T.gold : T.border}`, color: on ? T.gold : T.muted,
+                    fontFamily: T.mono, fontSize: 10, fontWeight: 700, padding: '3px 9px', cursor: 'pointer', letterSpacing: '0.04em', whiteSpace: 'nowrap',
+                  }}>{p.name}</button>
+                )
+              })}
+              <button onClick={() => setViewIds(effViewIds.length === portfolios.length ? [] : portfolios.map(p => p.id))} style={{
+                background: 'transparent', border: `1px solid ${T.border}`, color: T.muted,
+                fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 9px', cursor: 'pointer',
+              }}>{effViewIds.length === portfolios.length ? 'Clear' : 'All'}</button>
+            </div>
+          )}
         </div>
+
+        {isAggregate && (
+          <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, marginBottom: 16, marginTop: -8 }}>
+            {effViewIds.length === 1
+              ? <>Overview showing <span style={{ color: T.gold }}>{viewPortfolios[0]?.name}</span></>
+              : <>Overview aggregating <span style={{ color: T.gold }}>{effViewIds.length}</span> portfolios</>}
+            {' '}· read-only (edit on the <span style={{ color: T.gold }}>{active.name}</span> tab)
+          </div>
+        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : '260px 1fr', gap: isMobile ? 16 : 24, alignItems: 'start' }}>
 
@@ -822,7 +894,7 @@ export default function PortfolioManager() {
                             {r.loading ? '…' : totalValue > 0 && r.price > 0 ? `${weight.toFixed(1)}%` : '—'}
                           </td>
                           <td style={{ padding: '8px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                            {editStock?.i === i ? (<>
+                            {isAggregate ? null : editStock?.i === i ? (<>
                               <button onClick={saveEditStock} style={{ ...editBtn, color: T.gold }}>Save</button>
                               <button onClick={() => setEditStock(null)} style={{ ...editBtn, color: T.muted }}>×</button>
                             </>) : (<>
@@ -896,7 +968,7 @@ export default function PortfolioManager() {
                             <td style={{ padding: '8px 12px', textAlign: 'right', color: p.pnlPct == null ? T.muted : p.pnlPct >= 0 ? T.pos : T.neg }}>{p.pnlPct != null ? `${p.pnlPct >= 0 ? '+' : ''}${p.pnlPct.toFixed(1)}%` : '—'}</td>
                             <td style={{ padding: '8px 12px', textAlign: 'right', color: T.muted }}>{p.netDelta != null ? p.netDelta.toFixed(0) : '—'}</td>
                             <td style={{ padding: '8px 6px', textAlign: 'right' }}>
-                              <button onClick={() => removeOption(p.id)} style={{ background: 'none', border: 'none', color: T.muted, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 4px' }}>×</button>
+                              {!isAggregate && <button onClick={() => removeOption(p.id)} style={{ background: 'none', border: 'none', color: T.muted, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 4px' }}>×</button>}
                             </td>
                           </tr>
                         )
@@ -946,7 +1018,7 @@ export default function PortfolioManager() {
                           <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: f.pnl == null ? T.muted : f.pnl >= 0 ? T.pos : T.neg }}>{f.pnl != null ? `${f.pnl >= 0 ? '+' : ''}${fmtMoney(f.pnl)}` : '…'}</td>
                           <td style={{ padding: '8px 12px', textAlign: 'right', color: f.pnlPct == null ? T.muted : f.pnlPct >= 0 ? T.pos : T.neg }}>{f.pnlPct != null ? `${f.pnlPct >= 0 ? '+' : ''}${f.pnlPct.toFixed(1)}%` : '—'}</td>
                           <td style={{ padding: '8px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                            {editFut?.id === f.id ? (<>
+                            {isAggregate ? null : editFut?.id === f.id ? (<>
                               <button onClick={saveEditFut} style={{ ...editBtn, color: T.gold }}>Save</button>
                               <button onClick={() => setEditFut(null)} style={{ ...editBtn, color: T.muted }}>×</button>
                             </>) : (<>
@@ -995,7 +1067,7 @@ export default function PortfolioManager() {
                           <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: c.accrued >= 0 ? T.pos : T.neg }}>{`${c.accrued >= 0 ? '+' : ''}${fmtMoney(c.accrued)}`}</td>
                           <td style={{ padding: '8px 12px', textAlign: 'right', color: T.text, fontWeight: 600 }}>{fmtMoney(c.value)}</td>
                           <td style={{ padding: '8px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                            {editCash?.id === c.id ? (<>
+                            {isAggregate ? null : editCash?.id === c.id ? (<>
                               <button onClick={saveEditCash} style={{ ...editBtn, color: T.gold }}>Save</button>
                               <button onClick={() => setEditCash(null)} style={{ ...editBtn, color: T.muted }}>×</button>
                             </>) : (<>
