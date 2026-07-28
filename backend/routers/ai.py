@@ -1198,44 +1198,313 @@ ADVANCED PARAMETER DEFAULTS & RISK MANAGEMENT:
   - Stop Losses: Set stop losses at 2x to 3x credit received for short premium trades.
   - Time Management: Exit or roll short options at 21 DTE to mitigate accelerating gamma risk.
 
-DO THE HEAVY LIFTING:
-- Propose a complete strategy structure immediately as a recommendation. Do not interrogate the user for strikes, expirations, or legs.
-- If you need clarification, present a concrete choice of options structures (e.g., "To capture a bullish move on AAPL, we can either buy a 30-day Long Call for high leverage, or buy a Bull Call Spread to lower our cost basis. Which style do you prefer?").
-- If the user's intent is clear, output a complete DRAFT immediately, using standard institutional parameters as defaults.
+LIVE MARKET DATA:
+When the underlying is known, a system message titled "LIVE MARKET DATA" gives you the real spot price, the real available expiries, and real tradeable strikes near spot. USE THESE. Place absolute strikes around the live spot and pick one of the real expiries. The builder then snaps every strike/premium to the nearest real listed contract, so treat premium as an estimate — your job is correct STRUCTURE and sensible STRIKE PLACEMENT relative to spot, not exact pricing.
+
+WHEN TO ASK vs DRAFT:
+- Ask a QUESTION when the underlying ticker is not yet identifiable, OR when the market view (direction / volatility / range) is genuinely ambiguous and you cannot reasonably assume it. Ask ONE focused question with concrete either/or choices (e.g. "Bullish on AAPL — do you want a defined-risk Bull Call Spread, or a higher-leverage Long Call?"). Never interrogate the user for individual strikes, premiums, or leg-by-leg detail — you fill those in.
+- Otherwise output a DRAFT immediately using standard institutional defaults (30-45 DTE, the delta/width guidance above).
+
+STRUCTURE INTEGRITY (verify before drafting):
+- The legs MUST match the named strategy exactly. Iron condor = 4 legs (sell put spread + sell call spread), vertical spread = 2 legs same type opposite action, straddle = 2 legs (long/short call + put at the SAME strike), strangle = 2 legs at DIFFERENT OTM strikes, butterfly = 3 strikes 1:-2:1, calendar = same strike different expiries. Every short leg needs its defining long wing for any defined-risk structure the user asked for.
+- Buy/sell, call/put, and the strike ordering must be internally consistent (a bull call spread buys the LOWER strike and sells the HIGHER; a bear put spread buys the HIGHER and sells the LOWER).
 
 LEG SCHEMA:
 Each leg in the "legs" array must match this schema:
 {
   "option_type": "call" | "put",
   "action": "buy" | "sell",
-  "K": number,          // Strike price. Centered around a spot base of 100 if relative (e.g. 95/105 spread), or absolute values if specifically requested.
-  "premium": number,    // Estimated premium price per contract (default to 2.0 or a sensible number).
-  "quantity": number,   // Contract quantity (default to 1).
-  "ticker": string,     // The underlying ticker symbol (e.g., "SPY"). Default to "SPY" if not specified.
-  "expiry": string      // Expiration date in "YYYY-MM-DD" format. Default to a date approximately 30 to 60 days from now (use 2026-08-15 as a placeholder if not specified).
+  "K": number,          // ABSOLUTE strike price near the live spot (e.g. spot 196 -> a 5% OTM call is ~206). Only use a ~100 base if the real spot is actually near 100.
+  "premium": number,    // Estimated premium per contract (the builder re-prices to the real chain).
+  "quantity": number,   // Contract quantity (default 1).
+  "ticker": string,     // The underlying ticker symbol (e.g., "SPY"). If none was given, ASK — do not invent one.
+  "expiry": string      // A real expiry from LIVE MARKET DATA in "YYYY-MM-DD" format (the builder snaps to the nearest listed date).
 }
 
 RESPONSE SHAPES:
 Every response must be valid JSON in exactly one of these shapes:
-Question: {"type": "question", "text": "<your expert recommendation and options play proposal, plain English>"}
+Question: {"type": "question", "text": "<one focused clarifying question with concrete choices, plain English>"}
 Draft: {
   "type": "draft",
   "name": "<strategy name, e.g. Iron Condor>",
   "legs": [Leg, ...],
-  "summary": "<one plain-English sentence summarizing the structure, e.g., 'Sell 90/110 strangle on SPY expiring 2026-08-15 for a net credit.'>"
+  "summary": "<one plain-English sentence, e.g. 'Sell the 185/175 put spread and 205/215 call spread on AAPL for Aug 15 as a net-credit iron condor.'>"
 }"""
+
+# ── Options strategy chat: ground the AI draft in real market data ────────────
+# The model is good at STRUCTURE (which legs a strategy needs) but blind to the
+# live spot, the real strike ladder, and the real premiums. So we detect the
+# ticker, feed the model live market context so it places absolute strikes near
+# spot, then snap every leg to a real listed contract on the backend. That is
+# what turns "nonsense" 95/105 legs on a $196 stock into real tradeable legs.
+
+# Options vocabulary + common English words that must never be probed as a
+# ticker. "A"/"I" are real tickers (Agilent, Intelligent Bio) but overwhelmingly
+# the article/pronoun, so they are excluded from the bare-word tier.
+_OPT_VOCAB_STOP = {
+    "BUY", "SELL", "PUT", "CALL", "PUTS", "CALLS", "ATM", "OTM", "ITM", "IV", "DTE", "LEAP", "LEAPS",
+    "THE", "AND", "FOR", "OR", "TO", "OF", "ON", "IN", "AT", "AN", "IC", "PMCC", "CSP", "CC", "IS", "IT",
+    "SPREAD", "STRANGLE", "STRADDLE", "CONDOR", "IRON", "FLY", "BUTTERFLY", "COLLAR", "RATIO", "CREDIT",
+    "DEBIT", "LONG", "SHORT", "BULL", "BEAR", "WIDE", "WEEK", "WEEKLY", "MONTH", "MONTHLY", "EXP", "EXPIRY",
+    "DELTA", "THETA", "VEGA", "GAMMA", "EPS", "CPI", "FOMC", "US", "ETF", "YES", "NO", "OK", "USD", "PCT",
+    "SET", "GET", "NEW", "OLD", "LOW", "HIGH", "NET", "MY", "ME", "BE", "DO", "IF", "SO", "UP", "AS", "BY",
+    "WITH", "THAT", "THIS", "WANT", "MAKE", "GIVE", "SOME", "MORE", "LESS", "OVER", "UNDER", "ABOUT",
+    "A", "I", "AN", "WE", "YOU", "YOUR", "OUR", "NEXT", "INTO", "FROM", "THEN", "THAN", "THEM", "THEY",
+    "WILL", "JUST", "LIKE", "NEED", "PLUS", "ONE", "TWO", "OUT", "ARE", "WAS", "HAS", "HAD", "CAN", "GO",
+    "DAYS", "DAY", "OTM", "NEAR", "FAR", "COST", "RISK", "GAIN", "OPEN", "CLOSE", "SIZE", "EACH",
+}
+
+
+def _opt_num(v) -> float | None:
+    try:
+        f = float(v)
+        return f if f == f and f not in (float("inf"), float("-inf")) else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _detect_options_ticker(messages: list[StrategyChatMessage]) -> str | None:
+    """Most-recently-mentioned real optionable ticker in the conversation.
+
+    Prioritised: $CASHTAGs, then tokens written UPPERCASE in the source (real
+    ticker style, e.g. NVDA/SPY/F), then lowercase 2-5 letter words. A candidate
+    is confirmed only if it has a live options chain (cached), which also rejects
+    options vocabulary the stoplist would miss. Uppercase-first ordering stops a
+    stray 'a'/'on' from beating an explicit 'NVDA'."""
+    import options_data
+    cashtags: list[str] = []
+    upper_src: list[str] = []
+    lower_words: list[str] = []
+    for m in reversed(messages):
+        if m.role != "user":
+            continue
+        for t in re.findall(r"\$([A-Za-z]{1,5})\b", m.content):
+            up = t.upper()
+            if up not in _OPT_VOCAB_STOP and up not in cashtags:
+                cashtags.append(up)
+        for t in re.findall(r"\b[A-Z]{1,5}\b", m.content):
+            if t not in _OPT_VOCAB_STOP and t not in upper_src:
+                upper_src.append(t)
+        for t in re.findall(r"\b[a-z]{2,5}\b", m.content):
+            up = t.upper()
+            if up not in _OPT_VOCAB_STOP and up not in lower_words:
+                lower_words.append(up)
+    for cand in (cashtags + upper_src + lower_words)[:10]:
+        try:
+            if options_data.get_expirations(cand):
+                return cand
+        except Exception:  # noqa: BLE001
+            continue
+    return None
+
+
+def _options_spot(sym: str, chain=None) -> float | None:
+    try:
+        if chain is None:
+            import options_data
+            exps = options_data.get_expirations(sym)
+            if exps:
+                chain = options_data.get_chain(sym, exps[0])
+        u = getattr(chain, "underlying", None) if chain is not None else None
+        if isinstance(u, dict):
+            for k in ("regularMarketPrice", "currentPrice", "regularMarketPreviousClose", "last"):
+                v = _opt_num(u.get(k))
+                if v:
+                    return v
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        import cache
+        info = cache.get_info(sym) or {}
+        return _opt_num(info.get("currentPrice")) or _opt_num(info.get("regularMarketPrice"))
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _opt_dte(exp_iso: str) -> int:
+    import datetime as _dt
+    try:
+        return (_dt.date.fromisoformat(str(exp_iso)[:10]) - _dt.date.today()).days
+    except Exception:  # noqa: BLE001
+        return 9999
+
+
+def _nearest_dte_expiry(exps: list[str], target: int) -> str | None:
+    return min(exps, key=lambda e: abs(_opt_dte(e) - target)) if exps else None
+
+
+def _snap_expiry(requested, exps: list[str], default: str | None) -> str | None:
+    import datetime as _dt
+    if not exps:
+        return (str(requested)[:10] if requested else default)
+    r = str(requested or "")[:10]
+    if r in exps:
+        return r
+    try:
+        rd = _dt.date.fromisoformat(r)
+        return min(exps, key=lambda e: abs((_dt.date.fromisoformat(e[:10]) - rd).days))
+    except Exception:  # noqa: BLE001
+        return default
+
+
+def _snap_strike_premium(df, k: float, spot: float | None, otype: str) -> tuple[float | None, float | None]:
+    """Nearest real listed strike to k, with its real mid premium. Falls back to
+    a rough intrinsic + time-value estimate when the contract is untradeable."""
+    import options_data
+    try:
+        rows = df.to_dict("records")
+    except Exception:  # noqa: BLE001
+        return None, None
+    rows = [r for r in rows if _opt_num(r.get("strike")) is not None]
+    if not rows:
+        return None, None
+    best = min(rows, key=lambda r: abs(float(r["strike"]) - k))
+    strike = float(best["strike"])
+    prem = options_data._best_price(best)
+    if not prem or prem <= 0:
+        intrinsic = max(0.0, (spot - strike) if otype == "call" else (strike - spot)) if spot else 0.0
+        prem = round(intrinsic + max(0.05, (spot or strike) * 0.01), 2)
+    return strike, prem
+
+
+def _draft_ticker(result: dict) -> str | None:
+    for leg in (result.get("legs") or []):
+        if isinstance(leg, dict) and isinstance(leg.get("ticker"), str) and leg["ticker"].strip():
+            return leg["ticker"].strip().upper()
+    return None
+
+
+def _options_market_context(sym: str) -> str | None:
+    """Live spot + real expiries + real near-spot strikes, so the model places
+    absolute strikes on the real ladder instead of a made-up base of 100."""
+    import datetime as _dt
+    import options_data
+    try:
+        exps = options_data.get_expirations(sym)
+    except Exception:  # noqa: BLE001
+        return None
+    if not exps:
+        return None
+    today = _dt.date.today().isoformat()
+    fexps = [e for e in exps if e >= today][:10] or list(exps)[:10]
+    spot = _options_spot(sym)
+    target = _nearest_dte_expiry(fexps, 35)
+    strikes: list[float] = []
+    if target:
+        try:
+            ch = options_data.get_chain(sym, target)
+            ks = sorted(float(s) for s in ch.calls["strike"].tolist())
+            if spot:
+                ks = [k for k in ks if 0.8 * spot <= k <= 1.2 * spot]
+            strikes = ks[:48]
+        except Exception:  # noqa: BLE001
+            pass
+    fmt_k = lambda k: str(int(k)) if float(k).is_integer() else str(round(k, 2))
+    lines = [
+        f"LIVE MARKET DATA for {sym}:",
+        (f"- Spot price: ${spot:.2f}" if spot else "- Spot price: unavailable"),
+        f"- Real available expiries (YYYY-MM-DD): {', '.join(fexps)}",
+        f"- Suggested expiry (~35 DTE): {target}" if target else "",
+    ]
+    if strikes:
+        lines.append(f"- Real tradeable strikes near spot for {target}: {', '.join(fmt_k(k) for k in strikes)}")
+    lines.append("Place ABSOLUTE strikes on this real ladder around the live spot, and use one of these real expiries. Do NOT use a base of 100.")
+    return "\n".join(ln for ln in lines if ln)
+
+
+def _ground_options_draft(draft: dict, sym: str) -> dict:
+    """Snap the model's legs to real listed contracts: rescale a relative-to-100
+    strike set back onto spot, then set each leg's strike/premium/expiry from the
+    live chain. Best-effort — returns the draft unchanged if data is unavailable."""
+    import options_data
+    legs = draft.get("legs")
+    if not isinstance(legs, list) or not legs:
+        return draft
+    try:
+        exps = options_data.get_expirations(sym)
+    except Exception:  # noqa: BLE001
+        return draft
+    if not exps:
+        return draft
+    import datetime as _dt
+    today = _dt.date.today().isoformat()
+    fexps = [e for e in exps if e >= today] or list(exps)
+    spot = _options_spot(sym)
+    default_exp = _nearest_dte_expiry(fexps, 35)
+
+    # A strike set clustered near 100 while spot is far from 100 is the old
+    # relative-to-100 convention — rescale it back onto the real spot first.
+    ks = [k for k in (_opt_num(l.get("K")) for l in legs if isinstance(l, dict)) if k]
+    if spot and ks:
+        med = sorted(ks)[len(ks) // 2]
+        if med and (spot / med > 1.5 or spot / med < 0.67):
+            for l in legs:
+                if isinstance(l, dict):
+                    k = _opt_num(l.get("K"))
+                    if k:
+                        l["K"] = k * spot / 100.0
+
+    chain_cache: dict[str, object] = {}
+
+    def chain_for(exp: str):
+        if exp not in chain_cache:
+            try:
+                chain_cache[exp] = options_data.get_chain(sym, exp)
+            except Exception:  # noqa: BLE001
+                chain_cache[exp] = None
+        return chain_cache[exp]
+
+    out_legs: list[dict] = []
+    for l in legs:
+        if not isinstance(l, dict):
+            continue
+        otype = "put" if str(l.get("option_type", "")).lower().startswith("p") else "call"
+        action = "sell" if str(l.get("action", "")).lower().startswith("s") else "buy"
+        exp = _snap_expiry(l.get("expiry"), fexps, default_exp)
+        k = _opt_num(l.get("K")) or spot or 100.0
+        prem = _opt_num(l.get("premium")) or 2.0
+        ch = chain_for(exp)
+        if ch is not None:
+            df = getattr(ch, "puts" if otype == "put" else "calls", None)
+            if df is not None:
+                snapped, snapped_prem = _snap_strike_premium(df, k, spot, otype)
+                if snapped is not None:
+                    k, prem = snapped, snapped_prem
+        out_legs.append({
+            "option_type": otype, "action": action,
+            "K": round(float(k), 2), "premium": round(float(prem), 2),
+            "quantity": max(1, int(_opt_num(l.get("quantity")) or 1)),
+            "ticker": sym, "expiry": exp,
+        })
+    draft["legs"] = out_legs
+    draft["ticker"] = sym
+    draft["spot"] = round(spot, 2) if spot else None
+    return draft
+
 
 @router.post("/options-strategy-chat")
 def options_strategy_chat(req: StrategyChatRequest):
     if not req.messages:
         raise HTTPException(400, "messages must not be empty")
-    messages = [{"role": "system", "content": _OPTIONS_STRATEGY_CHAT_SYSTEM}]
-    messages += [{"role": m.role, "content": m.content} for m in req.messages]
-    resp = groq_chat(messages, model=MODEL_SMART, max_tokens=1200)
+    sym = _detect_options_ticker(req.messages)
+    chat = [{"role": "system", "content": _OPTIONS_STRATEGY_CHAT_SYSTEM}]
+    if sym:
+        ctx = _options_market_context(sym)
+        if ctx:
+            chat.append({"role": "system", "content": ctx})
+    chat += [{"role": m.role, "content": m.content} for m in req.messages]
+    resp = groq_chat(chat, model=MODEL_SMART, max_tokens=1200)
     raw = (resp.choices[0].message.content or "").strip()
     result = parse_json(raw)
     if not isinstance(result, dict) or result.get("type") not in ("question", "draft"):
         raise HTTPException(500, "AI returned an unexpected response shape")
+    if result.get("type") == "draft":
+        ground_sym = sym or _draft_ticker(result)
+        if ground_sym:
+            try:
+                result = _ground_options_draft(result, ground_sym)
+            except Exception as e:  # noqa: BLE001 — grounding is best-effort
+                logger.warning("options draft grounding failed for %s: %s", ground_sym, e)
     return result
 
 

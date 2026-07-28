@@ -386,7 +386,10 @@ export default function StrategyBuilder() {
               <AiOptionsStrategyChat onAccept={(draft) => {
                 setPreset(draft.name)
                 setLegs(draft.legs)
-                setSpotOverrides({})
+                // Seed the real spot the backend grounded the strikes on so the
+                // payoff chart and greeks center on the live price, not a guess.
+                const tk = draft.ticker || draft.legs[0]?.ticker
+                setSpotOverrides(draft.spot && tk ? { [tk]: draft.spot } : {})
                 setLegChains({})
                 setActiveSavedId(null)
                 setTab('manual')
@@ -1241,7 +1244,7 @@ export default function StrategyBuilder() {
 }
 
 interface OptionsChatMsg { role: 'user' | 'assistant'; content: string }
-export interface OptionsStrategyDraft { name: string; legs: Leg[]; summary: string }
+export interface OptionsStrategyDraft { name: string; legs: Leg[]; summary: string; spot?: number; ticker?: string }
 
 function AiOptionsStrategyChat({ onAccept }: { onAccept: (draft: OptionsStrategyDraft) => void }) {
   const [messages, setMessages] = useState<OptionsChatMsg[]>([])
@@ -1307,6 +1310,8 @@ function AiOptionsStrategyChat({ onAccept }: { onAccept: (draft: OptionsStrategy
           name: typeof data.name === 'string' && data.name ? data.name : 'Custom Strategy',
           legs: draftLegs,
           summary: typeof data.summary === 'string' && data.summary ? data.summary : 'Draft ready.',
+          spot: Number.isFinite(Number(data.spot)) ? Number(data.spot) : undefined,
+          ticker: typeof data.ticker === 'string' && data.ticker ? data.ticker.toUpperCase() : undefined,
         }
         setDraft(hydrated)
         setMessages(m => [...m, { role: 'assistant', content: hydrated.summary }])
