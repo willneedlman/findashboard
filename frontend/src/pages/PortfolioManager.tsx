@@ -393,20 +393,41 @@ export default function PortfolioManager() {
   // ticker already held gets its shares/cost updated (null avgCost keeps the
   // existing cost basis), a new ticker is appended — same semantics as addHolding,
   // just batched for however many rows the user confirmed.
-  const importScreenshotHoldings = useCallback((parsed: { ticker: string; shares: number; avgCost: number | null }[]) => {
-    setHoldings(prev => {
-      let next = [...prev]
-      for (const row of parsed) {
-        const ticker = normalizeTicker(row.ticker)
-        if (!ticker || !(row.shares > 0)) continue
-        const existing = next.findIndex(h => h.ticker === ticker)
-        const avgCost = row.avgCost ?? (existing >= 0 ? next[existing].avgCost : 0)
-        if (existing >= 0) next[existing] = { ...next[existing], shares: row.shares, avgCost }
-        else next.push({ ticker, shares: row.shares, avgCost })
-      }
-      return next
-    })
-  }, [setHoldings])
+  const importScreenshot = useCallback((payload: {
+    holdings: { ticker: string; shares: number; avgCost: number | null }[]
+    options: { underlying: string; type: OptType; strike: number; expiry: string; side: Side; contracts: number; avgPremium: number | null }[]
+  }) => {
+    const { holdings, options } = payload
+    if (holdings.length) {
+      setHoldings(prev => {
+        let next = [...prev]
+        for (const row of holdings) {
+          const ticker = normalizeTicker(row.ticker)
+          if (!ticker || !(row.shares > 0)) continue
+          const existing = next.findIndex(h => h.ticker === ticker)
+          const avgCost = row.avgCost ?? (existing >= 0 ? next[existing].avgCost : 0)
+          if (existing >= 0) next[existing] = { ...next[existing], shares: row.shares, avgCost }
+          else next.push({ ticker, shares: row.shares, avgCost })
+        }
+        return next
+      })
+    }
+    // Each parsed contract lands as its own single-leg option position (the same
+    // shape the manual Add-Option form produces); the user can merge legs later.
+    if (options.length) {
+      setOptions(prev => [
+        ...prev,
+        ...options
+          .filter(o => o.underlying.trim() && o.strike > 0 && o.expiry.trim() && o.contracts > 0)
+          .map(o => ({
+            id: uid(),
+            underlying: normalizeTicker(o.underlying),
+            name: `${o.side === 'long' ? 'Long' : 'Short'} ${o.type === 'call' ? 'Call' : 'Put'}`,
+            legs: [{ type: o.type, strike: o.strike, expiry: o.expiry, side: o.side, contracts: o.contracts, avgPremium: o.avgPremium ?? 0 }],
+          })),
+      ])
+    }
+  }, [setHoldings, setOptions])
 
   // ── Option entry handlers ──
   const updateLeg = (i: number, patch: Partial<LegDraft>) =>
@@ -699,7 +720,7 @@ export default function PortfolioManager() {
                 Exports as <span style={{ fontFamily: T.mono }}>{(portfolioName.trim() || 'Portfolio').replace(/\s+/g, '-')}-{new Date().toISOString().split('T')[0]}</span><br />
                 CSV columns: <span style={{ fontFamily: T.mono }}>TICKER,SHARES,AVG_COST</span>
               </p>
-              <ScreenshotPortfolioImport onImport={importScreenshotHoldings} />
+              <ScreenshotPortfolioImport onImport={importScreenshot} />
             </div>
 
 

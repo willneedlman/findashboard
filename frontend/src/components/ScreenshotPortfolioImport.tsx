@@ -14,6 +14,8 @@ import { normalizeTicker } from '../lib/pmImport'
 
 interface ParsedRow { ticker: string; shares: number; avgCost: number | null; include: boolean }
 interface ImportedHolding { ticker: string; shares: number; avgCost: number | null }
+interface ImportedOption { underlying: string; type: 'call' | 'put'; strike: number; expiry: string; side: 'long' | 'short'; contracts: number; avgPremium: number | null }
+interface ParsedOptionRow extends ImportedOption { include: boolean }
 interface PendingImage { id: number; dataUrl: string }
 
 const MAX_IMAGES = 8
@@ -40,17 +42,18 @@ const rowInp: React.CSSProperties = {
   fontSize: 11, padding: '4px 6px', width: '100%', outline: 'none', boxSizing: 'border-box',
 }
 
-export default function ScreenshotPortfolioImport({ onImport }: { onImport: (rows: ImportedHolding[]) => void }) {
+export default function ScreenshotPortfolioImport({ onImport }: { onImport: (payload: { holdings: ImportedHolding[]; options: ImportedOption[] }) => void }) {
   const [open, setOpen] = useState(false)
   const [images, setImages] = useState<PendingImage[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
   const [rows, setRows] = useState<ParsedRow[] | null>(null)
+  const [optRows, setOptRows] = useState<ParsedOptionRow[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
   const nextId = useRef(0)
 
-  const resetResults = () => { setRows(null); setError(null); setWarning(null) }
+  const resetResults = () => { setRows(null); setOptRows([]); setError(null); setWarning(null) }
   const clearAll = () => { setImages([]); resetResults() }
   const close = () => { setOpen(false); clearAll() }
 
@@ -98,11 +101,13 @@ export default function ScreenshotPortfolioImport({ onImport }: { onImport: (row
     Promise.allSettled(images.map(img => axios.post('/api/portfolio-import/screenshot', { image_base64: img.dataUrl })))
       .then(results => {
         const holdings: ImportedHolding[] = []
+        const options: ImportedOption[] = []
         const notes: string[] = []
         results.forEach((res, i) => {
           const label = images.length > 1 ? `Screenshot ${i + 1}: ` : ''
           if (res.status === 'fulfilled') {
             holdings.push(...(res.value.data.holdings as ImportedHolding[]))
+            options.push(...((res.value.data.options ?? []) as ImportedOption[]))
             if (res.value.data.warning) notes.push(`${label}${res.value.data.warning}`)
           } else {
             const detail = res.reason?.response?.data?.detail || 'could not be parsed'
@@ -110,6 +115,7 @@ export default function ScreenshotPortfolioImport({ onImport }: { onImport: (row
           }
         })
         setRows(holdings.map(h => ({ ...h, include: true })))
+        setOptRows(options.map(o => ({ ...o, include: true })))
         setWarning(notes.length ? notes.join(' · ') : null)
       })
       .finally(() => setBusy(false))
@@ -117,15 +123,21 @@ export default function ScreenshotPortfolioImport({ onImport }: { onImport: (row
 
   const updateRow = (i: number, patch: Partial<ParsedRow>) =>
     setRows(prev => prev ? prev.map((r, j) => (j === i ? { ...r, ...patch } : r)) : prev)
+  const updateOptRow = (i: number, patch: Partial<ParsedOptionRow>) =>
+    setOptRows(prev => prev.map((r, j) => (j === i ? { ...r, ...patch } : r)))
 
   const included = rows?.filter(r => r.include) ?? []
+  const includedOpts = optRows.filter(r => r.include)
 
   const commit = () => {
-    const toImport = included
+    const holdings = included
       .filter(r => r.ticker.trim() && r.shares > 0)
       .map(r => ({ ticker: normalizeTicker(r.ticker), shares: r.shares, avgCost: r.avgCost }))
-    if (!toImport.length) return
-    onImport(toImport)
+    const options = includedOpts
+      .filter(r => r.underlying.trim() && r.strike > 0 && r.expiry.trim() && r.contracts > 0)
+      .map(r => ({ ...r, underlying: normalizeTicker(r.underlying) }))
+    if (!holdings.length && !options.length) return
+    onImport({ holdings, options })
     close()
   }
 
@@ -180,30 +192,64 @@ export default function ScreenshotPortfolioImport({ onImport }: { onImport: (row
               {rows && (
                 <>
                   {warning && <div style={{ color: T.gold, fontFamily: T.mono, fontSize: 10.5 }}>{warning}</div>}
-                  {rows.length === 0 ? (
-                    <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11 }}>No holdings found — try a clearer screenshot.</div>
+                  {rows.length === 0 && optRows.length === 0 ? (
+                    <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11 }}>No positions found — try a clearer screenshot.</div>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '18px 1fr 76px 90px', gap: 8, fontFamily: T.label, fontSize: 8.5, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                        <span /><span>Ticker</span><span>Shares</span><span>Avg Cost</span>
-                      </div>
-                      {rows.map((r, i) => (
-                        <div key={i} style={{ display: 'grid', gridTemplateColumns: '18px 1fr 76px 90px', gap: 8, alignItems: 'center', opacity: r.include ? 1 : 0.45 }}>
-                          <input type="checkbox" checked={r.include} onChange={e => updateRow(i, { include: e.target.checked })} />
-                          <input value={r.ticker} onChange={e => updateRow(i, { ticker: e.target.value.toUpperCase() })} style={rowInp} />
-                          <input type="number" value={r.shares} onChange={e => updateRow(i, { shares: parseFloat(e.target.value) || 0 })} style={{ ...rowInp, textAlign: 'right' }} />
-                          <input type="number" value={r.avgCost ?? ''} placeholder="—" onChange={e => updateRow(i, { avgCost: e.target.value === '' ? null : (parseFloat(e.target.value) || 0) })} style={{ ...rowInp, textAlign: 'right' }} />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {rows.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <div style={{ fontFamily: T.label, fontSize: 8.5, fontWeight: 700, color: T.gold, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Shares</div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '18px 1fr 76px 90px', gap: 8, fontFamily: T.label, fontSize: 8.5, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                            <span /><span>Ticker</span><span>Shares</span><span>Avg Cost</span>
+                          </div>
+                          {rows.map((r, i) => (
+                            <div key={i} style={{ display: 'grid', gridTemplateColumns: '18px 1fr 76px 90px', gap: 8, alignItems: 'center', opacity: r.include ? 1 : 0.45 }}>
+                              <input type="checkbox" checked={r.include} onChange={e => updateRow(i, { include: e.target.checked })} />
+                              <input value={r.ticker} onChange={e => updateRow(i, { ticker: e.target.value.toUpperCase() })} style={rowInp} />
+                              <input type="number" value={r.shares} onChange={e => updateRow(i, { shares: parseFloat(e.target.value) || 0 })} style={{ ...rowInp, textAlign: 'right' }} />
+                              <input type="number" value={r.avgCost ?? ''} placeholder="—" onChange={e => updateRow(i, { avgCost: e.target.value === '' ? null : (parseFloat(e.target.value) || 0) })} style={{ ...rowInp, textAlign: 'right' }} />
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                      <p style={{ fontFamily: T.label, fontSize: 8, color: T.muted, marginTop: 2, lineHeight: 1.5 }}>
+                      )}
+
+                      {optRows.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <div style={{ fontFamily: T.label, fontSize: 8.5, fontWeight: 700, color: T.gold, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Options</div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '18px 1fr 46px 60px 84px 52px 44px 64px', gap: 5, fontFamily: T.label, fontSize: 8, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                            <span /><span>Underlying</span><span>Type</span><span>Strike</span><span>Expiry</span><span>Side</span><span>Qty</span><span>Premium</span>
+                          </div>
+                          {optRows.map((r, i) => (
+                            <div key={i} style={{ display: 'grid', gridTemplateColumns: '18px 1fr 46px 60px 84px 52px 44px 64px', gap: 5, alignItems: 'center', opacity: r.include ? 1 : 0.45 }}>
+                              <input type="checkbox" checked={r.include} onChange={e => updateOptRow(i, { include: e.target.checked })} />
+                              <input value={r.underlying} onChange={e => updateOptRow(i, { underlying: e.target.value.toUpperCase() })} style={rowInp} />
+                              <select value={r.type} onChange={e => updateOptRow(i, { type: e.target.value as 'call' | 'put' })} style={{ ...rowInp, padding: '4px 2px' }}>
+                                <option value="call">Call</option><option value="put">Put</option>
+                              </select>
+                              <input type="number" value={r.strike} onChange={e => updateOptRow(i, { strike: parseFloat(e.target.value) || 0 })} style={{ ...rowInp, textAlign: 'right' }} />
+                              <input value={r.expiry} placeholder="YYYY-MM-DD" onChange={e => updateOptRow(i, { expiry: e.target.value })} style={rowInp} />
+                              <select value={r.side} onChange={e => updateOptRow(i, { side: e.target.value as 'long' | 'short' })} style={{ ...rowInp, padding: '4px 2px' }}>
+                                <option value="long">Long</option><option value="short">Short</option>
+                              </select>
+                              <input type="number" value={r.contracts} onChange={e => updateOptRow(i, { contracts: parseFloat(e.target.value) || 0 })} style={{ ...rowInp, textAlign: 'right' }} />
+                              <input type="number" value={r.avgPremium ?? ''} placeholder="—" onChange={e => updateOptRow(i, { avgPremium: e.target.value === '' ? null : (parseFloat(e.target.value) || 0) })} style={{ ...rowInp, textAlign: 'right' }} />
+                            </div>
+                          ))}
+                          <p style={{ fontFamily: T.label, fontSize: 8, color: T.muted, lineHeight: 1.5 }}>
+                            Each contract imports as a single-leg position. Premium is per share (cost per contract ÷ 100).
+                          </p>
+                        </div>
+                      )}
+
+                      <p style={{ fontFamily: T.label, fontSize: 8, color: T.muted, lineHeight: 1.5 }}>
                         Review before importing — AI-read values can be wrong. Blank avg cost keeps any existing cost basis for that ticker.
                       </p>
                     </div>
                   )}
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={resetResults} style={ghostBtn}>← Back</button>
-                    <button onClick={commit} disabled={included.length === 0} style={{ ...primaryBtn, opacity: included.length === 0 ? 0.5 : 1, cursor: included.length === 0 ? 'default' : 'pointer' }}>
-                      Import {included.length} Holding{included.length === 1 ? '' : 's'}
+                    <button onClick={commit} disabled={included.length + includedOpts.length === 0} style={{ ...primaryBtn, opacity: included.length + includedOpts.length === 0 ? 0.5 : 1, cursor: included.length + includedOpts.length === 0 ? 'default' : 'pointer' }}>
+                      Import {included.length + includedOpts.length} Position{included.length + includedOpts.length === 1 ? '' : 's'}
                     </button>
                   </div>
                 </>
