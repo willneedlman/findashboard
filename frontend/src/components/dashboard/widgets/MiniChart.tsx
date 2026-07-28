@@ -10,6 +10,7 @@ import {
   CartesianGrid,
 } from 'recharts'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
+import { useLiveMarks } from '../../../hooks/useLiveMarks'
 
 const T = {
   bg: 'var(--theme-bg, #101c2e)',
@@ -69,6 +70,7 @@ function CustomTooltip({ active, payload }: any) {
 
 export default function MiniChart({ config }: { config: WidgetConfig }) {
   const ticker = config.ticker
+  const liveMarks = useLiveMarks(ticker ? [ticker] : [])
   const period = config.period ?? '3mo'
   const days = PERIOD_DAYS[period] ?? 90
   const periodStart = new Date(Date.now() - days * 86400000).toISOString().split('T')[0]
@@ -121,8 +123,11 @@ export default function MiniChart({ config }: { config: WidgetConfig }) {
   }
 
   const { current_price, total_return } = data.metrics
-  const deltaColor = total_return >= 0 ? T.pos : T.neg
-  const deltaSign = total_return >= 0 ? '+' : ''
+  const livePrice = liveMarks[ticker.toUpperCase()] ?? current_price
+  const periodBase = data.price[0]?.value
+  const liveReturn = periodBase ? ((livePrice / periodBase) - 1) * 100 : total_return
+  const deltaColor = liveReturn >= 0 ? T.pos : T.neg
+  const deltaSign = liveReturn >= 0 ? '+' : ''
 
   return (
     <div style={containerStyle}>
@@ -133,10 +138,10 @@ export default function MiniChart({ config }: { config: WidgetConfig }) {
         </span>
         <div style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
           <span style={{ color: T.text, fontSize: 14, fontWeight: 600 }}>
-            ${current_price.toFixed(2)}
+            ${livePrice.toFixed(2)}
           </span>
           <span style={{ color: deltaColor, fontSize: 12 }}>
-            {deltaSign}{total_return.toFixed(2)}%
+            {deltaSign}{liveReturn.toFixed(2)}%
           </span>
         </div>
       </div>

@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from cachetools import TTLCache
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from ai_client import groq_complete, groq_chat, parse_json, MODEL_FAST, MODEL_SMART
 from routers.screener import ScreenRequest, run_screen
 from disk_cache import disk_get, disk_set
@@ -3986,3 +3986,177 @@ def revise_report(req: ReportReviseRequest):
         patches.append({"field": field, "clipId": clip_id, "before": before, "after": after_clean.strip()})
 
     return {"patches": patches, "model": MODEL_SMART}
+
+
+# ── Dashboard Creator: AI assembles a custom dashboard from a description ──────
+# Mirrors the options / algo strategy chat: the user describes what they want to
+# monitor or trade, and the model chooses the widgets, sizes them, and lays them
+# out on the 12-column grid. The catalog (types/labels/descriptions/sizes) is sent
+# from the client so it always matches the live widget registry.
+
+class DashboardCatalogItem(BaseModel):
+    type: str
+    label: str = ""
+    description: str = ""
+    defW: int = 4
+    defH: int = 5
+    minW: int = 1
+    minH: int = 1
+    ticker: bool = False
+    category: str = ""
+    purpose: str = ""
+    dataType: str = ""
+    priority: str = "secondary"
+    region: str = "body"
+    compatible: list[str] = Field(default_factory=list)
+    related: list[str] = Field(default_factory=list)
+    conflicts: list[str] = Field(default_factory=list)
+    configOptions: list[str] = Field(default_factory=list)
+    multiple: bool = True
+
+class DashboardChatRequest(BaseModel):
+    messages: list[StrategyChatMessage]
+    catalog: list[DashboardCatalogItem] = Field(default_factory=list)
+    current: list[dict] = Field(default_factory=list)      # {type, ticker?, title?} of existing widgets
+    cols: int = 12
+
+_DASHBOARD_CHAT_SYSTEM = """You are a dashboard architect for a professional financial terminal's custom dashboard builder. The user describes, in plain English, what they want to monitor, trade, or analyze. Do the heavy lifting: pick the BEST set of widgets for that intent, size them, set their config, and arrange them on the grid — do not make the user choose widgets one by one.
+
+You are given:
+- CATALOG: every available widget with its purpose, data type, visual priority, preferred region, dimensions, compatible, related, and conflicting widgets, configuration options, and duplicate rule. Use ONLY these `type` values.
+- CURRENT: the widgets already on the active dashboard (so you can add to or replace them).
+
+GRID: 12 columns wide. Give each widget a width w (1..12, at least its minW) and height h (at least its minH) in grid units, and ORDER the items top-to-bottom. The builder derives positions with natural-size skyline packing, so any x/y you send are IGNORED. Width, height, and order express the intended hierarchy.
+
+LAYOUT:
+- Keep widgets near their catalog default dimensions. Do not stretch a tile merely to fill a row.
+- Pair a wide primary workspace with narrow supporting widgets that can stack vertically beside it, such as 9+3 or 8+4.
+- Use compact heights. Charts and dense tables usually need h=5-8. Supporting lists and metrics usually need h=3-6.
+- Full-width strips get their own row: macro-strip (12x2) and index-tape (12x1). Put the index tape at the TOP when broad live market context matters.
+- Lead with the primary / overview widget (larger, near the top). Aim for 6-10 widgets in a coherent order.
+- Do not include conflicting widgets or duplicate a widget whose multiple flag is false. Use related and compatible metadata to form coherent rows.
+- On trading dashboards, paper-trade is the large central interaction surface. Supporting widgets must not reduce its usable size.
+
+CONFIG (set only what applies, in each item's `config`):
+- ticker widgets (CATALOG ticker=true): set config.ticker to a real symbol from the user's request, else a sensible default (SPY for market/macro, or the name they mention).
+- multi-ticker widgets — watchlist, news-feed, correlation-matrix, index-tape: set config.tickers to an array of symbols.
+- portfolio widgets — risk-metrics, factor-decomposition, pnl-attribution, portfolio-summary, pm-portfolios: leave portfolioId empty to use the user's default portfolio.
+- use only fields listed in each widget's configOptions.
+- set config.title only to override the default label; otherwise omit it.
+- Never invent config fields that aren't implied by the widget.
+
+MATCH INTENT (examples, not limits):
+- Macro / rates / credit view: macro-strip, yield-curve, credit-spreads, global-macro, macro-calendar, sector-rotation.
+- Options / vol / flow: dealer-gex, vol-skew, options-snapshot, options-pricer, delta-target, unusual-flow.
+- A single name to watch: lead with ONE main chart — tradingview-chart (large, focused, h=8) or price-card (chart + stats header, h=7); use mini-chart only as a small secondary spark. Support it with news-feed, analyst-ratings, valuation, earnings-calendar. Do not stack two big charts of the same ticker.
+- Portfolio / risk: risk-metrics, factor-decomposition, pnl-attribution, pm-portfolios, correlation-matrix.
+- Broad market monitor: index-tape, heatmap, watchlist, sentiment-gauge, sector-rotation, market-hours.
+
+ACTION — how the draft should be applied:
+- "replace": a fresh dashboard for this request (the default when they describe a whole dashboard).
+- "append": ADD these widgets to the current dashboard (when they say "add ...", or ask for specific widgets on top of what's there).
+- "new": create a separate new dashboard tab (when they say "make/create a new dashboard").
+
+WHEN TO ASK: only return a question when the request is too vague to choose well (no theme, no ticker, no goal). Otherwise build. If you ask, offer concrete directions.
+
+Respond ONLY with valid JSON (no markdown, no code fences), exactly one shape:
+Question: {"type":"question","text":"<one focused question with concrete options>"}
+Draft: {"type":"draft","name":"<short dashboard name>","action":"replace|append|new","summary":"<one plain sentence describing the layout>","items":[{"type":"<catalog type>","config":{...},"x":0,"y":0,"w":6,"h":6}, ...]}"""
+
+
+def _normalize_dashboard_items(items, catalog: list[DashboardCatalogItem], cols: int) -> list[dict]:
+    """Keep only real widget types and clamp every size to the grid + the
+    widget's minimums, defaulting anything missing — the client still re-packs,
+    but this guarantees the AI can't emit an unplaceable tile."""
+    by_type = {c.type: c for c in catalog}
+    out: list[dict] = []
+    accepted_types: list[str] = []
+    for it in items if isinstance(items, list) else []:
+        if not isinstance(it, dict):
+            continue
+        t = str(it.get("type") or "")
+        spec = by_type.get(t)
+        if not spec:
+            continue
+        if not spec.multiple and t in accepted_types:
+            continue
+        if any(existing in spec.conflicts or t in by_type[existing].conflicts for existing in accepted_types):
+            continue
+        w = it.get("w")
+        h = it.get("h")
+        try:
+            w = int(w)
+        except (TypeError, ValueError):
+            w = spec.defW
+        try:
+            h = int(h)
+        except (TypeError, ValueError):
+            h = spec.defH
+        w = max(spec.minW, min(w, cols))
+        h = max(spec.minH, h)
+        x = it.get("x")
+        try:
+            x = max(0, min(int(x), cols - w))
+        except (TypeError, ValueError):
+            x = 0
+        try:
+            y = max(0, int(it.get("y")))
+        except (TypeError, ValueError):
+            y = 0
+        raw_config = it.get("config") if isinstance(it.get("config"), dict) else {}
+        allowed_config = set(spec.configOptions) | {"title"}
+        if spec.ticker:
+            allowed_config.add("ticker")
+        config = {key: value for key, value in raw_config.items() if key in allowed_config}
+        out.append({"type": t, "config": config, "x": x, "y": y, "w": w, "h": h})
+        accepted_types.append(t)
+    return out
+
+
+@router.post("/dashboard-chat")
+def dashboard_chat(req: DashboardChatRequest):
+    if not req.messages:
+        raise HTTPException(400, "messages must not be empty")
+    if not req.catalog:
+        raise HTTPException(400, "no widget catalog provided")
+    cols = req.cols if 1 <= req.cols <= 24 else 12
+    catalog_lines = "\n".join(
+        f"- {c.type} ({c.label}): {c.purpose or c.description[:100]}; data={c.dataType}; "
+        f"priority={c.priority}; region={c.region}; size={c.defW}x{c.defH}; min={c.minW}x{c.minH}; "
+        f"related={','.join(c.related) or 'none'}; conflicts={','.join(c.conflicts) or 'none'}; "
+        f"config={','.join(c.configOptions) or 'none'}; multiple={c.multiple}"
+        for c in req.catalog
+    )
+    current_summary = ", ".join(
+        f"{w.get('type')}" + (f"({w.get('ticker')})" if w.get("ticker") else "")
+        for w in req.current if isinstance(w, dict) and w.get("type")
+    ) or "(empty)"
+    context = f"CATALOG:\n{catalog_lines}\n\nCURRENT DASHBOARD: {current_summary}\n\nGrid is {cols} columns wide."
+    chat = [
+        {"role": "system", "content": _DASHBOARD_CHAT_SYSTEM},
+        {"role": "system", "content": context},
+    ]
+    chat += [{"role": m.role, "content": m.content} for m in req.messages]
+    # Fail gracefully: a busy / rate-limited LLM provider makes groq_chat raise a
+    # raw error that would otherwise surface as a bare 500. Give the user an
+    # actionable retry message instead.
+    try:
+        resp = groq_chat(chat, model=MODEL_SMART, max_tokens=1600, temperature=0.3)
+        result = parse_json((resp.choices[0].message.content or "").strip())
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        logger.warning("dashboard-chat LLM failure: %s", e)
+        raise HTTPException(503, "The AI model is busy right now. Give it a few seconds and try again.")
+    if not isinstance(result, dict) or result.get("type") not in ("question", "draft"):
+        raise HTTPException(502, "The AI returned an unexpected response. Try rephrasing your request.")
+    if result.get("type") == "draft":
+        items = _normalize_dashboard_items(result.get("items"), req.catalog, cols)
+        if not items:
+            return {"type": "question", "text": "I could not turn that into widgets. Tell me the theme (macro, options, a specific ticker, portfolio risk) and I will lay it out."}
+        action = result.get("action")
+        result["action"] = action if action in ("replace", "append", "new") else "replace"
+        result["items"] = items
+        result["name"] = str(result.get("name") or "AI Dashboard").strip()[:40]
+        result["summary"] = str(result.get("summary") or "").strip()
+    return result

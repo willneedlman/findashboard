@@ -6,6 +6,7 @@ interface Props {
   onChange: (tickers: string[]) => void
   placeholder?: string
   maxTags?: number
+  allowMarketSymbols?: boolean
 }
 
 const S = {
@@ -26,18 +27,18 @@ const S = {
  * Chip-based ticker input. Type a symbol and press Enter, Tab, Space or comma
  * to add it as a tag. Click × on a chip to remove it.
  */
-export default function TickerTagInput({ tickers, onChange, placeholder = 'Add ticker…', maxTags }: Props) {
+export default function TickerTagInput({ tickers, onChange, placeholder = 'Add ticker…', maxTags, allowMarketSymbols = false }: Props) {
   const [input, setInput]     = useState('')
   const [focused, setFocused] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const addTicker = useCallback((raw: string) => {
-    const val = raw.trim().toUpperCase().replace(/[^A-Z0-9.\-]/g, '')
+    const val = raw.trim().toUpperCase().replace(allowMarketSymbols ? /[^A-Z0-9.\-^=:]/g : /[^A-Z0-9.\-]/g, '')
     if (!val) return
     if (maxTags && tickers.length >= maxTags) return
     if (!tickers.includes(val)) onChange([...tickers, val])
     setInput('')
-  }, [tickers, onChange, maxTags])
+  }, [tickers, onChange, maxTags, allowMarketSymbols])
 
   const removeTicker = useCallback((t: string) => {
     onChange(tickers.filter(x => x !== t))
@@ -56,7 +57,7 @@ export default function TickerTagInput({ tickers, onChange, placeholder = 'Add t
     e.preventDefault()
     const parts = e.clipboardData.getData('text').split(/[,\s]+/).filter(Boolean)
     const newTags = parts
-      .map(p => p.trim().toUpperCase().replace(/[^A-Z0-9.\-]/g, ''))
+      .map(p => p.trim().toUpperCase().replace(allowMarketSymbols ? /[^A-Z0-9.\-^=:]/g : /[^A-Z0-9.\-]/g, ''))
       .filter(v => v && !tickers.includes(v))
     if (newTags.length > 0) onChange([...tickers, ...newTags])
     setInput('')

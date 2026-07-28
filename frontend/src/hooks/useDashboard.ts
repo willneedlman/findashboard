@@ -1,81 +1,17 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { Layout } from 'react-grid-layout'
+import {
+  DEFAULT_MACRO_STRIP_SERIES, MACRO_STRIP_SERIES,
+  WIDGET_DEFINITIONS, WIDGET_DEFAULT_SIZE, WIDGET_DESCRIPTIONS, WIDGET_ICONS,
+  WIDGET_LABELS, WIDGET_MIN_SIZES, isWidgetType,
+  type DashboardObjective, type WidgetConfig, type WidgetType,
+} from '../components/dashboard/widgetRegistry'
 
-// ── Widget types ─────────────────────────────────────────────────────────────
-
-export type WidgetType =
-  | 'price-card'
-  | 'mini-chart'
-  | 'news-feed'
-  | 'watchlist'
-  | 'macro-strip'
-  | 'earnings-calendar'
-  | 'options-snapshot'
-  | 'portfolio-summary'
-  | 'options-pricer'
-  | 'delta-target'
-  | 'tradingview-chart'
-  | 'correlation-matrix'
-  | 'macro-calendar'
-  | 'global-macro'
-  | 'credit-spreads'
-  | 'yield-curve'
-  | 'sector-rotation'
-  | 'dealer-gex'
-  | 'vol-skew'
-  | 'sentiment-gauge'
-  | 'screener'
-  | 'pm-portfolios'
-  | 'paper-trade'
-  | 'index-tape'
-  | 'analyst-ratings'
-  | 'valuation'
-  | 'insider-activity'
-  | 'risk-metrics'
-  | 'pnl-attribution'
-  | 'exposure-map'
-  | 'time-and-sales'
-  | 'unusual-flow'
-  | 'heatmap'
-  | 'trade-blotter'
-  | 'position-sizer'
-  | 'market-hours'
-  // Not a real tile: selecting it in the palette surfaces the top-bar ticker
-  // selector instead of inserting a widget. Present here only so it can carry a
-  // palette label/icon/description.
-  | 'ticker-control'
-
-export interface WidgetConfig {
-  id: string
-  type: WidgetType
-  title?: string
-  ticker?: string
-  tickers?: string[]
-  period?: '1mo' | '3mo' | '6mo' | '1y'
-  color?: string
-  weights?: number[]
-  categories?: string[]    // global-macro: selected category keys
-  lookback?: number        // credit-spreads: days of history
-  chartMode?: 'cumulative' | 'beta'         // portfolio-summary
-  periodDays?: number                      // correlation-matrix
-  visibleCols?: string[]                   // watchlist
-  newsExpand?: 'first' | 'all' | 'none'    // news-feed
-  visibleItems?: string[]                  // options-snapshot
-  targetDelta?: number                     // delta-target
-  expDays?: number                         // delta-target, options-pricer
-  optionType?: 'call' | 'put'              // delta-target, options-pricer
-  strike?: number                          // options-pricer
-  vol?: number                             // options-pricer
-  expiry?: string                          // dealer-gex, vol-skew: option expiry YYYY-MM-DD
-  timeframeHours?: number                  // sentiment-gauge: lookback window
-  sectorPeriod?: string                    // sector-rotation: 1W | 1M | 3M | 6M | YTD | 1Y
-  riskPct?: number                         // position-sizer
-  entry?: number                           // position-sizer
-  stop?: number                            // position-sizer
-  accountValue?: number                    // position-sizer
-  portfolioId?: string                     // risk-metrics, pnl-attribution, exposure-map: which saved portfolio
-  layout?: 'clock' | 'rows'                // market-hours: dial vs rows
+export {
+  WIDGET_DEFINITIONS, WIDGET_DEFAULT_SIZE, WIDGET_DESCRIPTIONS, WIDGET_ICONS,
+  WIDGET_LABELS, WIDGET_MIN_SIZES,
 }
+export type { DashboardObjective, WidgetConfig, WidgetType }
 
 // Widget types that key off config.ticker — the dashboard-wide ticker control
 // broadcasts to all of these at once, and WidgetFrame uses the same list to
@@ -95,6 +31,7 @@ export interface Dashboard {
   layouts: Layout[]
   showTicker?: boolean   // surface the top-bar ticker selector on this dashboard
   icon?: string          // icon key (see DASH_ICON_KEYS in CustomDashboard); shown when the tab is collapsed
+  objective?: DashboardObjective
 }
 
 export interface StoredWorkspace {
@@ -103,167 +40,6 @@ export interface StoredWorkspace {
   activeId: string
 }
 
-// ── Default sizes per widget type ────────────────────────────────────────────
-
-export const WIDGET_DEFAULT_SIZE: Record<WidgetType, { w: number; h: number }> = {
-  'price-card':          { w: 3, h: 7 },
-  'mini-chart':          { w: 5, h: 4 },
-  'news-feed':           { w: 4, h: 5 },
-  'watchlist':           { w: 5, h: 5 },
-  'macro-strip':         { w: 12, h: 2 },
-  'earnings-calendar':   { w: 4, h: 5 },
-  'options-snapshot':    { w: 4, h: 4 },
-  'portfolio-summary':   { w: 6, h: 3 },
-  'options-pricer':      { w: 4, h: 5 },
-  'delta-target':        { w: 4, h: 5 },
-  'tradingview-chart':   { w: 8, h: 8 },
-  'correlation-matrix':  { w: 5, h: 6 },
-  'macro-calendar':      { w: 5, h: 9 },
-  'global-macro':        { w: 3, h: 9 },
-  'credit-spreads':      { w: 4, h: 7 },
-  'yield-curve':         { w: 4, h: 7 },
-  'sector-rotation':     { w: 4, h: 7 },
-  'dealer-gex':          { w: 4, h: 6 },
-  'vol-skew':            { w: 4, h: 6 },
-  'sentiment-gauge':     { w: 3, h: 5 },
-  'screener':            { w: 5, h: 6 },
-  'pm-portfolios':       { w: 4, h: 6 },
-  'paper-trade':         { w: 6, h: 8 },
-  'index-tape':          { w: 12, h: 1 },
-  'analyst-ratings':     { w: 4, h: 6 },
-  'valuation':           { w: 5, h: 5 },
-  'insider-activity':    { w: 3, h: 6 },
-  'risk-metrics':        { w: 4, h: 9 },
-  'pnl-attribution':     { w: 6, h: 6 },
-  'exposure-map':        { w: 4, h: 9 },
-  'time-and-sales':      { w: 3, h: 9 },
-  'unusual-flow':        { w: 6, h: 7 },
-  'heatmap':             { w: 8, h: 8 },
-  'trade-blotter':       { w: 6, h: 6 },
-  'position-sizer':      { w: 4, h: 6 },
-  'market-hours':        { w: 5, h: 9 },
-  'ticker-control':      { w: 3, h: 2 },   // unused — never placed as a tile
-}
-
-export const WIDGET_LABELS: Record<WidgetType, string> = {
-  'price-card':          'Price Card',
-  'mini-chart':          'Mini Chart',
-  'news-feed':           'News Feed',
-  'watchlist':           'Watchlist',
-  'macro-strip':         'Macro Strip',
-  'earnings-calendar':   'Earnings Scanner',
-  'options-snapshot':    'Options Snapshot',
-  'portfolio-summary':   'Portfolio Summary',
-  'options-pricer':      'Options Pricer',
-  'delta-target':        'Delta Price Target',
-  'tradingview-chart':   'TradingView Chart',
-  'correlation-matrix':  'Correlation Matrix',
-  'macro-calendar':      'Macro Calendar',
-  'global-macro':        'Global Macro',
-  'credit-spreads':      'Credit Spreads',
-  'yield-curve':         'Yield Curve',
-  'sector-rotation':     'Sector Rotation',
-  'dealer-gex':          'Dealer GEX',
-  'vol-skew':            'Vol Skew',
-  'sentiment-gauge':     'Market Sentiment',
-  'screener':            'Screener',
-  'pm-portfolios':       'Portfolios',
-  'paper-trade':         'Paper Trade',
-  'index-tape':          'Index Tape',
-  'analyst-ratings':     'Analyst Consensus',
-  'valuation':           'Valuation',
-  'insider-activity':    'Insider Activity',
-  'risk-metrics':        'Risk Metrics',
-  'pnl-attribution':     'P/L Attribution',
-  'exposure-map':        'Exposure',
-  'time-and-sales':      'Time & Sales',
-  'unusual-flow':        'Unusual Options Flow',
-  'heatmap':             'Market Heatmap',
-  'trade-blotter':       'Trade Blotter',
-  'position-sizer':      'Position Sizer',
-  'market-hours':        'Market Hours',
-  'ticker-control':      'Ticker Control',
-}
-
-export const WIDGET_DESCRIPTIONS: Record<WidgetType, string> = {
-  'price-card':          'Full TradingView candlestick chart with toolbar, drawing tools & indicators.',
-  'mini-chart':          'Compact price area chart over a configurable lookback period.',
-  'news-feed':           'Multi-ticker news wire with collapsible sections per ticker.',
-  'watchlist':           'Live price table — price, day change, market cap, P/E, implied move, rating.',
-  'macro-strip':         'Configurable macro dashboard: Fed Funds, Treasury yields, curve spreads.',
-  'earnings-calendar':   'Upcoming earnings dates with implied move % and analyst consensus.',
-  'options-snapshot':    'ATM IV, implied move, D50 call/put, P/C ratio, vol cone, probability dist.',
-  'portfolio-summary':   'Backtest summary: CAGR, alpha, Sharpe, Sortino, max drawdown, rolling beta.',
-  'options-pricer':      'Live Black-Scholes pricer: price, delta, gamma, theta, vega.',
-  'delta-target':        'Reverse Black-Scholes: find the strike price for a target delta.',
-  'tradingview-chart':   'Full-screen TradingView chart: candlesticks, indicators, drawing tools.',
-  'correlation-matrix':  'Return correlation heatmap for a custom ticker basket.',
-  'macro-calendar':      'Upcoming macro events: FOMC, CPI, NFP, GDP, PPI, Retail Sales — next 90 days.',
-  'global-macro':        'Live FX, commodities, bond yields, equity indices and VIX — refreshed every 5 minutes.',
-  'credit-spreads':      'BofA ICE IG & HY OAS spreads vs VIX — 90-day sparkline with 1Y change.',
-  'yield-curve':         'US Treasury yield curve with 1M/3M/1Y comparisons, key spreads, and 3M/10Y inversion history.',
-  'sector-rotation':     '11 GICS sectors ranked by relative strength — 1-month return heatmap, leaders to laggards.',
-  'dealer-gex':          'Net dealer gamma by strike for a ticker, with spot, total net GEX, and the gamma-flip level.',
-  'vol-skew':            'ATM IV, 25-delta put skew, term-structure slope, and the front-expiry IV skew for a ticker.',
-  'sentiment-gauge':     'Market-wide AI news sentiment: composite score, bull/neutral/bear split over the last 4 hours.',
-  'screener':            'Quick stock screens — biggest names, top gainers/losers, and volume leaders.',
-  'pm-portfolios':       'Your Portfolio Manager books with live value and unrealized P&L per holding.',
-  'paper-trade':         'Trade a ticker on your paper account from a chart — market, limit, and stop orders.',
-  'index-tape':          'Scrolling price strip for any tickers or a loaded portfolio — live price and day change.',
-  'analyst-ratings':     'Analyst consensus: rating, buy/hold/sell distribution, mean/high/low targets, implied upside.',
-  'valuation':           'P/E, Fwd P/E, P/S, EV/EBITDA, PEG, Div Yield with rich/cheap vs sector peers.',
-  'insider-activity':    'Institutional/retail/insider ownership split and the latest insider buy/sell transactions.',
-  'risk-metrics':        'Portfolio VaR, beta, Sharpe, vol, drawdown, and top-holding concentration.',
-  'pnl-attribution':     'Waterfall of P/L by position (day or open) from your portfolio.',
-  'exposure-map':        'Gross/net/long/short and per-position exposure as % of NAV.',
-  'time-and-sales':      'Intraday prints from 1-minute bars — time, price, size, uptick/downtick.',
-  'unusual-flow':        'Largest options flow by premium — strike, expiry, volume, vol/OI, IV.',
-  'heatmap':             'S&P treemap by sector & market cap, colored by daily % change.',
-  'trade-blotter':       'Order & fill history — side, qty, avg price, and fill status.',
-  'position-sizer':      'Risk-based share sizing from account %, entry, and stop.',
-  'market-hours':        'Live global session clock: futures, US, Europe, and Asia-Pacific.',
-  'ticker-control':      'Shows the dashboard-wide ticker selector in the top bar (not a tile).',
-}
-
-export const WIDGET_ICONS: Record<WidgetType, string> = {
-  'price-card':          '$',
-  'mini-chart':          '~',
-  'news-feed':           'N',
-  'watchlist':           'W',
-  'macro-strip':         '%',
-  'earnings-calendar':   'E',
-  'options-snapshot':    'O',
-  'portfolio-summary':   'P',
-  'options-pricer':      'BS',
-  'delta-target':        'D',
-  'tradingview-chart':   'TV',
-  'correlation-matrix':  'ρ',
-  'macro-calendar':      'CAL',
-  'global-macro':        'FX',
-  'credit-spreads':      'CR',
-  'yield-curve':         'YC',
-  'sector-rotation':     'SR',
-  'dealer-gex':          'GEX',
-  'vol-skew':            'σ',
-  'sentiment-gauge':     'S',
-  'screener':            'SCR',
-  'pm-portfolios':       'PF',
-  'paper-trade':         'TR',
-  'index-tape':          'IDX',
-  'analyst-ratings':     'AN',
-  'valuation':           'VAL',
-  'insider-activity':    'INS',
-  'risk-metrics':        'RSK',
-  'pnl-attribution':     'PNL',
-  'exposure-map':        'EXP',
-  'time-and-sales':      'T&S',
-  'unusual-flow':        'FLOW',
-  'heatmap':             'HM',
-  'trade-blotter':       'BLT',
-  'position-sizer':      'SIZ',
-  'market-hours':        'HRS',
-  'ticker-control':      'TKR',
-}
 
 // ── Default layout — all 20 widget types, one each ───────────────────────────
 //
@@ -301,6 +77,7 @@ export const DEFAULT_WIDGETS: WidgetConfig[] = [
   { id: 'w21', type: 'screener' },
   { id: 'w22', type: 'pm-portfolios' },
   { id: 'w23', type: 'paper-trade', ticker: 'SPY' },
+  { id: 'w24', type: 'factor-decomposition', factorModel: 'macro', lookback: 365 },
 ]
 
 export const DEFAULT_LAYOUTS: Layout[] = [
@@ -340,27 +117,22 @@ export const DEFAULT_LAYOUTS: Layout[] = [
   { i: 'w21', x: 3, y: 45, w: 5,  h: 6 },
   { i: 'w22', x: 8, y: 45, w: 4,  h: 6 },
   { i: 'w23', x: 0, y: 51, w: 6,  h: 8 },
+  { i: 'w24', x: 6, y: 51, w: 6,  h: 8 },
 ]
 
-// ── Size constraints ──────────────────────────────────────────────────────────
-
-const WIDGET_MIN_SIZES: Partial<Record<WidgetType, { minW: number; minH: number }>> = {
-  'tradingview-chart': { minW: 3, minH: 6 },
-  'price-card':        { minW: 3, minH: 6 },
-  'options-snapshot':  { minW: 3, minH: 4 },
-}
-
-function applyConstraints(widgets: WidgetConfig[], layouts: Layout[]): Layout[] {
+export function applyConstraints(widgets: WidgetConfig[], layouts: Layout[]): Layout[] {
   return layouts.map(item => {
     const widget = widgets.find(w => w.id === item.i)
     if (!widget) return item
-    const mins = WIDGET_MIN_SIZES[widget.type]
-    if (!mins) return item
+    const def = WIDGET_DEFINITIONS[widget.type]
     return {
       ...item,
-      minH: mins.minH, minW: mins.minW,
-      h: Math.max(item.h, mins.minH),
-      w: Math.max(item.w, mins.minW),
+      minH: def.minimum.h,
+      minW: def.minimum.w,
+      maxH: def.maximum.h,
+      maxW: def.maximum.w,
+      h: Math.min(def.maximum.h, Math.max(item.h, def.minimum.h)),
+      w: Math.min(def.maximum.w, Math.max(item.w, def.minimum.w)),
     }
   })
 }
@@ -388,7 +160,7 @@ export const PRESET_ICONS: Record<PresetKey, string> = {
 type PItem = { type: WidgetType; config?: Partial<WidgetConfig>; x: number; y: number; w: number; h: number }
 
 function fromItems(items: PItem[]): { widgets: WidgetConfig[]; layouts: Layout[] } {
-  const widgets = items.map(it => ({ id: newId(), type: it.type, ...it.config }))
+  const widgets = items.map(it => ({ id: newId(), type: it.type, ...WIDGET_DEFINITIONS[it.type].defaultConfig, ...it.config }))
   const layouts: Layout[] = items.map((it, i) => ({ i: widgets[i].id, x: it.x, y: it.y, w: it.w, h: it.h }))
   return { widgets, layouts: applyConstraints(widgets, layouts) }
 }
@@ -396,8 +168,11 @@ function fromItems(items: PItem[]): { widgets: WidgetConfig[]; layouts: Layout[]
 const W_LIST = ['SPY', 'QQQ', 'NVDA', 'AAPL', 'TSLA', 'MSFT', 'AMZN', 'META']
 const EARN = ['NVDA', 'AAPL', 'MSFT', 'AMZN', 'META', 'GOOGL']
 
-function buildPreset(key: PresetKey): { widgets: WidgetConfig[]; layouts: Layout[] } {
-  if (key === 'main') return { widgets: DEFAULT_WIDGETS, layouts: DEFAULT_LAYOUTS }
+export function buildPreset(key: PresetKey): { widgets: WidgetConfig[]; layouts: Layout[] } {
+  if (key === 'main') {
+    const widgets = normalizeWidgets(DEFAULT_WIDGETS)
+    return { widgets, layouts: applyConstraints(widgets, DEFAULT_LAYOUTS) }
+  }
   if (key === 'blank') return { widgets: [], layouts: [] }
 
   // Research — screener + analyst + sentiment / valuation + portfolios + insider /
@@ -440,17 +215,15 @@ function buildPreset(key: PresetKey): { widgets: WidgetConfig[]; layouts: Layout
     { type: 'heatmap',                                                 x: 3, y: 17, w: 9, h: 7 },
   ])
 
-  // Risk Desk — risk metrics + exposure + position sizer / P/L attribution /
-  // correlation + portfolios + trade blotter.
+  // Risk Desk: risk metrics and factor decomposition lead, with attribution,
+  // diversification, portfolio context, and the order ledger below.
   if (key === 'risk') return fromItems([
-    { type: 'risk-metrics',                                              x: 0, y: 0,  w: 4, h: 9 },
-    { type: 'exposure-map',                                             x: 4, y: 0,  w: 4, h: 9 },
-    { type: 'global-macro',                                            x: 8, y: 0,  w: 2, h: 9 },
-    { type: 'news-feed',      config: { tickers: ['SPY', 'AAPL', 'NVDA'] }, x: 10, y: 0, w: 2, h: 9 },
-    { type: 'pnl-attribution',                                         x: 0, y: 9,  w: 12, h: 6 },
-    { type: 'correlation-matrix', config: { tickers: ['SPY', 'QQQ', 'TLT', 'GLD', 'BTC-USD'] }, x: 0, y: 15, w: 4, h: 7 },
-    { type: 'pm-portfolios',                                           x: 4, y: 15, w: 4, h: 7 },
-    { type: 'trade-blotter',                                           x: 8, y: 15, w: 4, h: 7 },
+    { type: 'risk-metrics',                                             x: 0, y: 0,  w: 5, h: 6 },
+    { type: 'factor-decomposition', config: { factorModel: 'macro', lookback: 365 }, x: 5, y: 0, w: 7, h: 6 },
+    { type: 'pnl-attribution',                                         x: 0, y: 6,  w: 12, h: 6 },
+    { type: 'correlation-matrix', config: { tickers: ['SPY', 'QQQ', 'TLT', 'GLD', 'BTC-USD'] }, x: 0, y: 12, w: 4, h: 7 },
+    { type: 'pm-portfolios',                                           x: 4, y: 12, w: 4, h: 7 },
+    { type: 'trade-blotter',                                           x: 8, y: 12, w: 4, h: 7 },
   ])
 
   // Options Desk — snapshot + pricer + delta-target / dealer GEX + vol skew +
@@ -492,7 +265,18 @@ function defaultWorkspace(): StoredWorkspace {
   const id = newDashId()
   // New users land on the Trading Portal cockpit as the default dashboard.
   const p = buildPreset('cockpit')
-  return { version: 2, dashboards: [{ id, name: 'Trading Portal', widgets: p.widgets, layouts: p.layouts }], activeId: id }
+  return { version: 2, dashboards: [{ id, name: 'Trading Portal', objective: 'trading', widgets: p.widgets, layouts: p.layouts }], activeId: id }
+}
+
+export function normalizeDashboard(dashboard: Dashboard): Dashboard {
+  const widgets = normalizeWidgets(dashboard.widgets ?? [])
+  const objective = dashboard.objective ?? inferDashboardObjective(widgets)
+  return {
+    ...dashboard,
+    objective,
+    widgets,
+    layouts: validateLayout(widgets, dashboard.layouts ?? []),
+  }
 }
 
 function load(userId?: string | null): StoredWorkspace {
@@ -501,14 +285,15 @@ function load(userId?: string | null): StoredWorkspace {
     if (raw) {
       const parsed = JSON.parse(raw)
       if (parsed?.version === 2 && Array.isArray(parsed.dashboards) && parsed.dashboards.length) {
-        const dashboards: Dashboard[] = parsed.dashboards.map((d: Dashboard) => ({ ...d, layouts: applyConstraints(d.widgets, d.layouts) }))
+        const dashboards: Dashboard[] = parsed.dashboards.map(normalizeDashboard)
         const activeId = dashboards.some(d => d.id === parsed.activeId) ? parsed.activeId : dashboards[0].id
         return { version: 2, dashboards, activeId }
       }
       // Migrate a v1 single dashboard into the new workspace shape.
       if (parsed?.version === 1 && parsed.widgets && parsed.layouts) {
         const id = newDashId()
-        return { version: 2, dashboards: [{ id, name: 'Main', widgets: parsed.widgets, layouts: applyConstraints(parsed.widgets, parsed.layouts) }], activeId: id }
+        const migrated = normalizeDashboard({ id, name: 'Main', widgets: parsed.widgets, layouts: parsed.layouts })
+        return { version: 2, dashboards: [migrated], activeId: id }
       }
     }
   } catch { /* ignore */ }
@@ -517,6 +302,162 @@ function load(userId?: string | null): StoredWorkspace {
 
 function save(w: StoredWorkspace, userId?: string | null) {
   try { localStorage.setItem(storageKey(userId), JSON.stringify(w)) } catch { /* ignore */ }
+}
+
+// One AI-proposed widget: type + config + a suggested size. Positions are
+// derived by the packer, so the AI never has to get x/y exactly right.
+export interface AiDashboardItem { type: WidgetType; config?: Partial<WidgetConfig>; w?: number; h?: number }
+
+// Skyline packing preserves each widget's purposeful size and fills the lowest
+// available slot. Short supporting widgets can stack beside a tall primary
+// panel without either dimension being inflated just to complete a row.
+export function packItems(sized: { i: string; w: number; h: number }[], cols = 12, baseY = 0): Layout[] {
+  const skyline = Array.from({ length: cols }, () => baseY)
+  const layouts: Layout[] = []
+
+  for (const it of sized) {
+    const w = Math.max(1, Math.min(Math.round(it.w) || 1, cols))
+    const h = Math.max(1, Math.round(it.h) || 1)
+    let bestX = 0
+    let bestY = Number.POSITIVE_INFINITY
+    let bestWaste = Number.POSITIVE_INFINITY
+
+    for (let x = 0; x <= cols - w; x++) {
+      const span = skyline.slice(x, x + w)
+      const y = Math.max(...span)
+      const waste = span.reduce((sum, columnY) => sum + y - columnY, 0)
+      if (y < bestY || (y === bestY && waste < bestWaste)) {
+        bestX = x
+        bestY = y
+        bestWaste = waste
+      }
+    }
+
+    layouts.push({ i: it.i, x: bestX, y: bestY, w, h })
+    for (let x = bestX; x < bestX + w; x++) skyline[x] = bestY + h
+  }
+
+  return layouts
+}
+
+export function reflowLayouts(widgets: WidgetConfig[], layouts: Layout[], cols: number, sourceCols = 12): Layout[] {
+  if (cols === sourceCols) return layouts
+  const widgetById = new Map(widgets.map(widget => [widget.id, widget]))
+  const ordered = [...layouts]
+    .filter(layout => widgetById.get(layout.i)?.visible !== false)
+    .sort((a, b) => a.y - b.y || a.x - b.x)
+  const sizes = ordered.map(layout => {
+    const widget = widgetById.get(layout.i)!
+    const def = WIDGET_DEFINITIONS[widget.type]
+    const fullWidth = layout.w >= sourceCols || widget.type === 'index-tape' || widget.type === 'macro-strip'
+    const scaledMinimum = Math.max(1, Math.ceil(def.minimum.w * cols / sourceCols))
+    const scaledWidth = fullWidth
+      ? cols
+      : Math.max(scaledMinimum, Math.min(cols, Math.floor(layout.w * cols / sourceCols)))
+    return { i: layout.i, w: scaledWidth, h: layout.h }
+  })
+  const packed = packItems(sizes, cols)
+  return packed.map(layout => {
+    const widget = widgetById.get(layout.i)!
+    const def = WIDGET_DEFINITIONS[widget.type]
+    return {
+      ...layout,
+      minW: Math.max(1, Math.ceil(def.minimum.w * cols / sourceCols)),
+      minH: def.minimum.h,
+      maxW: Math.max(1, Math.min(cols, Math.ceil(def.maximum.w * cols / sourceCols))),
+      maxH: def.maximum.h,
+    }
+  })
+}
+
+const REGION_ORDER = { top: 0, center: 1, rail: 2, body: 3, bottom: 4 }
+const PRIORITY_ORDER = { primary: 0, secondary: 1, supporting: 2 }
+
+export function inferDashboardObjective(widgets: WidgetConfig[]): DashboardObjective {
+  const scores = new Map<DashboardObjective, number>()
+  for (const widget of widgets) {
+    const def = WIDGET_DEFINITIONS[widget.type]
+    for (const objective of def.objectives) {
+      scores.set(objective, (scores.get(objective) ?? 0) + (def.priority === 'primary' ? 3 : def.priority === 'secondary' ? 2 : 1))
+    }
+  }
+  return [...scores].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'general'
+}
+
+export function normalizeWidgets(widgets: WidgetConfig[]): WidgetConfig[] {
+  const seenSingleton = new Set<WidgetType>()
+  return widgets.flatMap(widget => {
+    if (!isWidgetType(widget.type) || widget.type === 'ticker-control') return []
+    const def = WIDGET_DEFINITIONS[widget.type]
+    if (!def.multiple && seenSingleton.has(widget.type)) return []
+    if (!def.multiple) seenSingleton.add(widget.type)
+    const normalized = { ...def.defaultConfig, ...widget, visible: widget.visible !== false, displayState: widget.displayState ?? 'auto' } as WidgetConfig
+    if (normalized.type === 'macro-strip') {
+      const validSeries = normalized.tickers?.filter(series => MACRO_STRIP_SERIES.includes(series)) ?? []
+      normalized.tickers = validSeries.length ? validSeries : [...DEFAULT_MACRO_STRIP_SERIES]
+    }
+    return [normalized]
+  })
+}
+
+export function compatibilityIssue(existing: WidgetConfig[], type: WidgetType): string | null {
+  const def = WIDGET_DEFINITIONS[type]
+  if (!def.multiple && existing.some(widget => widget.type === type)) return `${def.name} allows one instance per dashboard.`
+  const conflict = existing.find(widget => def.conflicts.includes(widget.type) || WIDGET_DEFINITIONS[widget.type].conflicts.includes(type))
+  return conflict ? `${def.name} overlaps with ${WIDGET_DEFINITIONS[conflict.type].name}.` : null
+}
+
+export function compatibleSet(widgets: WidgetConfig[]): WidgetConfig[] {
+  return normalizeWidgets(widgets).reduce<WidgetConfig[]>((accepted, widget) => {
+    return compatibilityIssue(accepted, widget.type) ? accepted : [...accepted, widget]
+  }, [])
+}
+
+export function composeLayouts(widgets: WidgetConfig[], objective: DashboardObjective = inferDashboardObjective(widgets), cols = 12): Layout[] {
+  const visible = normalizeWidgets(widgets).filter(widget => widget.visible !== false)
+  const ordered = [...visible].sort((a, b) => {
+    const da = WIDGET_DEFINITIONS[a.type]
+    const db = WIDGET_DEFINITIONS[b.type]
+    const topRank = (widget: WidgetConfig) => widget.type === 'index-tape' ? 0 : widget.type === 'macro-strip' ? 1 : 2
+    const topDelta = topRank(a) - topRank(b)
+    if (topDelta) return topDelta
+    const objectiveDelta = Number(!da.objectives.includes(objective)) - Number(!db.objectives.includes(objective))
+    if (objectiveDelta) return objectiveDelta
+    const regionDelta = REGION_ORDER[da.region] - REGION_ORDER[db.region]
+    if (regionDelta) return regionDelta
+    const priorityDelta = PRIORITY_ORDER[da.priority] - PRIORITY_ORDER[db.priority]
+    if (priorityDelta) return priorityDelta
+    return da.category.localeCompare(db.category)
+  })
+
+  const sizes = ordered.map(widget => {
+    const def = WIDGET_DEFINITIONS[widget.type]
+    let { w, h } = def.preferred
+    if (widget.type === 'index-tape' || widget.type === 'macro-strip') w = cols
+    if (objective === 'trading' && widget.type === 'paper-trade') {
+      w = 9
+      h = Math.max(h, 10)
+    }
+    return { i: widget.id, w: Math.min(cols, w), h }
+  })
+  return applyConstraints(ordered, packItems(sizes, cols))
+}
+
+export function validateLayout(widgets: WidgetConfig[], layouts: Layout[], cols = 12): Layout[] {
+  const ids = new Set(widgets.map(widget => widget.id))
+  const valid = layouts.filter(layout => ids.has(layout.i)).map(layout => ({
+    ...layout,
+    x: Math.max(0, Math.min(cols - 1, Math.round(layout.x))),
+    y: Math.max(0, Math.round(layout.y)),
+    w: Math.max(1, Math.min(cols, Math.round(layout.w))),
+    h: Math.max(1, Math.round(layout.h)),
+  })).map(layout => ({ ...layout, x: Math.min(layout.x, cols - layout.w) }))
+  const represented = new Set(valid.map(layout => layout.i))
+  const missing = widgets.filter(widget => !represented.has(widget.id))
+  if (!missing.length) return applyConstraints(widgets, valid)
+  const baseY = valid.reduce((max, layout) => Math.max(max, layout.y + layout.h), 0)
+  const appended = composeLayouts(missing, inferDashboardObjective(widgets), cols).map(layout => ({ ...layout, y: layout.y + baseY }))
+  return applyConstraints(widgets, [...valid, ...appended])
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
@@ -539,15 +480,14 @@ export function useDashboard(userId?: string | null) {
   }, [ws, persist])
 
   const addWidget = useCallback((type: WidgetType, config: Partial<WidgetConfig> = {}) => {
+    if (compatibilityIssue(active.widgets, type)) return
     const id = newId()
-    const def = WIDGET_DEFAULT_SIZE[type]
-    const nw: WidgetConfig = { id, type, ...config }
-    const nl: Layout = { i: id, x: 0, y: Infinity, w: def.w, h: def.h }
+    const nw: WidgetConfig = { id, type, ...WIDGET_DEFINITIONS[type].defaultConfig, ...config }
     patchActive(d => {
       const widgets = [...d.widgets, nw]
-      return { ...d, widgets, layouts: applyConstraints(widgets, [...d.layouts, nl]) }
+      return { ...d, widgets, layouts: composeLayouts(widgets, d.objective) }
     })
-  }, [patchActive])
+  }, [active.widgets, patchActive])
 
   const removeWidget = useCallback((id: string) => {
     patchActive(d => ({ ...d, widgets: d.widgets.filter(w => w.id !== id), layouts: d.layouts.filter(l => l.i !== id) }))
@@ -558,7 +498,30 @@ export function useDashboard(userId?: string | null) {
   }, [patchActive])
 
   const updateLayouts = useCallback((layouts: readonly Layout[]) => {
-    patchActive(d => ({ ...d, layouts: applyConstraints(d.widgets, [...layouts]) }))
+    patchActive(d => ({ ...d, layouts: validateLayout(d.widgets, [...layouts]) }))
+  }, [patchActive])
+
+  const duplicateWidget = useCallback((id: string) => {
+    patchActive(d => {
+      const source = d.widgets.find(widget => widget.id === id)
+      if (!source || !WIDGET_DEFINITIONS[source.type].multiple) return d
+      const duplicate = { ...source, id: newId(), title: source.title ? `${source.title} copy` : undefined }
+      const widgets = [...d.widgets, duplicate]
+      return { ...d, widgets, layouts: composeLayouts(widgets, d.objective) }
+    })
+  }, [patchActive])
+
+  const resetWidget = useCallback((id: string) => {
+    patchActive(d => ({
+      ...d,
+      widgets: d.widgets.map(widget => widget.id === id
+        ? { id: widget.id, type: widget.type, ...WIDGET_DEFINITIONS[widget.type].defaultConfig }
+        : widget),
+    }))
+  }, [patchActive])
+
+  const autoOrganize = useCallback(() => {
+    patchActive(d => ({ ...d, layouts: composeLayouts(d.widgets, d.objective) }))
   }, [patchActive])
 
   // Retarget every ticker-driven widget in one pass — looping updateWidget would
@@ -576,8 +539,35 @@ export function useDashboard(userId?: string | null) {
 
   const resetDashboard = useCallback(() => {
     const p = buildPreset('cockpit')
-    patchActive(d => ({ ...d, widgets: p.widgets, layouts: p.layouts }))
+    patchActive(d => ({ ...d, objective: 'trading', widgets: p.widgets, layouts: p.layouts }))
   }, [patchActive])
+
+  // Apply an AI-proposed set of widgets: 'replace' the active dashboard's tiles,
+  // 'append' them below what's there, or open a 'new' dashboard tab. The packer
+  // derives clean, non-overlapping positions from each item's size + order.
+  const applyAiDashboard = useCallback((items: AiDashboardItem[], mode: 'replace' | 'append' | 'new', name?: string) => {
+    const built = items.filter(it => isWidgetType(it.type) && it.type !== 'ticker-control').map(it => {
+      const def = WIDGET_DEFAULT_SIZE[it.type] ?? { w: 4, h: 5 }
+      const id = newId()
+      return { widget: { id, type: it.type, ...WIDGET_DEFINITIONS[it.type].defaultConfig, ...(it.config ?? {}) } as WidgetConfig, i: id, w: it.w ?? def.w, h: it.h ?? def.h }
+    })
+    const newWidgets = compatibleSet(built.map(b => b.widget))
+    if (mode === 'append') {
+      patchActive(d => {
+        const widgets = compatibleSet([...d.widgets, ...newWidgets])
+        return { ...d, widgets, layouts: composeLayouts(widgets, d.objective) }
+      })
+      return
+    }
+    const objective = inferDashboardObjective(newWidgets)
+    const layouts = composeLayouts(newWidgets, objective)
+    if (mode === 'new') {
+      const id = newDashId()
+      persist({ ...ws, dashboards: [...ws.dashboards, { id, name: (name || 'AI Dashboard').slice(0, 40), objective, widgets: newWidgets, layouts }], activeId: id })
+    } else {
+      patchActive(d => ({ ...d, objective, widgets: newWidgets, layouts }))
+    }
+  }, [ws, persist, patchActive])
 
   const switchDashboard = useCallback((id: string) => {
     if (ws.dashboards.some(d => d.id === id)) persist({ ...ws, activeId: id })
@@ -586,7 +576,8 @@ export function useDashboard(userId?: string | null) {
   const createDashboard = useCallback((preset: PresetKey) => {
     const p = buildPreset(preset)
     const id = newDashId()
-    persist({ ...ws, dashboards: [...ws.dashboards, { id, name: PRESET_LABELS[preset], icon: PRESET_ICONS[preset], widgets: p.widgets, layouts: p.layouts }], activeId: id })
+    const objective: DashboardObjective = preset === 'cockpit' ? 'trading' : preset === 'market-overview' ? 'macro' : preset === 'options' ? 'options' : preset === 'risk' ? 'risk' : preset === 'blank' || preset === 'main' ? 'general' : preset
+    persist({ ...ws, dashboards: [...ws.dashboards, { id, name: PRESET_LABELS[preset], icon: PRESET_ICONS[preset], objective, widgets: p.widgets, layouts: p.layouts }], activeId: id })
   }, [ws, persist])
 
   const renameDashboard = useCallback((id: string, name: string) => {
@@ -605,7 +596,7 @@ export function useDashboard(userId?: string | null) {
 
   return {
     widgets: active.widgets, layouts: active.layouts,
-    addWidget, removeWidget, updateWidget, updateLayouts, resetDashboard, setAllTickers,
+    addWidget, removeWidget, duplicateWidget, resetWidget, autoOrganize, updateWidget, updateLayouts, resetDashboard, setAllTickers, applyAiDashboard,
     showTicker: active.showTicker ?? false, setShowTicker,
     dashboards: ws.dashboards.map(d => ({ id: d.id, name: d.name, icon: d.icon })),
     activeId: ws.activeId,

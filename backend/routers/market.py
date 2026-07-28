@@ -2,7 +2,6 @@ import time
 import numpy as np
 import pandas as pd
 import datetime as _dt
-from zoneinfo import ZoneInfo
 from fastapi import APIRouter, HTTPException
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -11,6 +10,7 @@ from validation import validate_ticker, validate_tickers, validate_date
 import serpapi_finance
 import alpaca
 import factor_models as fm
+from market_hours import is_market_open, session_status
 
 
 router = APIRouter()
@@ -65,12 +65,13 @@ _CME_FUTURES_PROXIES = {
 }
 
 
+@router.get("/session")
+def market_session():
+    return session_status()
+
+
 def _us_cash_session_open(now_utc: _dt.datetime) -> bool:
-    eastern = now_utc.astimezone(ZoneInfo("America/New_York"))
-    if eastern.weekday() >= 5:
-        return False
-    current = eastern.hour * 60 + eastern.minute
-    return 9 * 60 + 30 <= current < 16 * 60
+    return is_market_open(now_utc)
 
 
 def _global_window(window: str, now):

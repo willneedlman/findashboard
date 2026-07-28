@@ -1,32 +1,13 @@
 import { X } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { WidgetType } from '../../hooks/useDashboard'
-import { WIDGET_LABELS, WIDGET_DESCRIPTIONS, WIDGET_ICONS } from '../../hooks/useDashboard'
+import { WIDGET_DEFINITIONS, WIDGET_TYPES } from './widgetRegistry'
 
-const ALL_TYPES: WidgetType[] = [
-  'price-card', 'mini-chart', 'tradingview-chart',
-  'watchlist', 'news-feed', 'earnings-calendar',
-  'options-snapshot', 'options-pricer', 'delta-target',
-  'portfolio-summary', 'correlation-matrix',
-  'analyst-ratings', 'valuation', 'insider-activity',
-  'risk-metrics', 'pnl-attribution', 'exposure-map', 'position-sizer',
-  'time-and-sales', 'unusual-flow', 'heatmap', 'trade-blotter',
-  'ticker-control',
-  'index-tape',
-  'market-hours',
-  'macro-strip',
-  'macro-calendar',
-  'global-macro',
-  'credit-spreads',
-  'yield-curve',
-  'sector-rotation',
-  'dealer-gex',
-  'vol-skew',
-  'sentiment-gauge',
-  'screener',
-  'pm-portfolios',
-  'paper-trade',
-]
+const ALL_TYPES = [...WIDGET_TYPES].sort((a, b) => {
+  const da = WIDGET_DEFINITIONS[a]
+  const db = WIDGET_DEFINITIONS[b]
+  return da.category.localeCompare(db.category) || da.name.localeCompare(db.name)
+})
 
 interface WidgetPaletteProps {
   open: boolean
@@ -92,13 +73,14 @@ export default function WidgetPalette({ open, onClose, onAdd }: WidgetPalettePro
                     background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 7%, transparent)',
                     fontFamily: 'var(--theme-mono)', fontSize: 12, fontWeight: 700, letterSpacing: '0.02em',
                     color: 'var(--theme-primary, #c9a84c)', lineHeight: 1,
-                  }}>{WIDGET_ICONS[type]}</span>
+                  }}>{WIDGET_DEFINITIONS[type].icon}</span>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 12, fontWeight: 600, color: 'var(--theme-text, #d7e3fc)', marginBottom: 3 }}>
-                      {WIDGET_LABELS[type]}
+                      {WIDGET_DEFINITIONS[type].name}
                     </div>
+                    <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 8, color: 'var(--theme-primary, #c9a84c)', marginBottom: 3 }}>{WIDGET_DEFINITIONS[type].category} | {WIDGET_DEFINITIONS[type].priority}</div>
                     <div style={{ fontSize: 10, color: 'var(--theme-secondary, #5e768f)', lineHeight: '14px' }}>
-                      {WIDGET_DESCRIPTIONS[type]}
+                      {WIDGET_DEFINITIONS[type].description}
                     </div>
                   </div>
                 </button>

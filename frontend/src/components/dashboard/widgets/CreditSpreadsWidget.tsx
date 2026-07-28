@@ -32,6 +32,19 @@ interface CreditResponse {
   as_of:  string
 }
 
+function rangeStats(series?: SeriesData) {
+  const values = series?.history.map(point => point.value).filter(Number.isFinite) ?? []
+  if (!values.length) return { min: null, max: null, z: null }
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length
+  const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length
+  const current = series?.current
+  return {
+    min: Math.min(...values),
+    max: Math.max(...values),
+    z: current != null && variance > 0 ? (current - mean) / Math.sqrt(variance) : null,
+  }
+}
+
 export default function CreditSpreadsWidget({ config }: { config: WidgetConfig }) {
   const activeSeries = config.categories?.length ? config.categories : ['ig', 'hy', 'vix']
   const lookback     = config.lookback ?? 90
@@ -70,9 +83,24 @@ export default function CreditSpreadsWidget({ config }: { config: WidgetConfig }
       const meta   = SERIES_META[key]
       if (!meta) return null
       const series = data?.series[meta.backendKey]
-      return { key, label: meta.label, color: meta.color, value: series?.current ?? null, isVix: !!meta.isVix }
+      return { key, label: meta.label, color: meta.color, value: series?.current ?? null, isVix: !!meta.isVix, ...rangeStats(series) }
     })
-    .filter(Boolean) as { key: string; label: string; color: string; value: number | null; isVix: boolean }[]
+    .filter(Boolean) as { key: string; label: string; color: string; value: number | null; isVix: boolean; min: number | null; max: number | null; z: number | null }[]
+
+  const quality = [
+    { key: 'ig_3_5', label: 'IG 3-5Y', color: SERIES_META.ig_3_5.color },
+    { key: 'hy_b', label: 'HY B', color: SERIES_META.hy_b.color },
+    { key: 'hy_ccc', label: 'HY CCC', color: SERIES_META.hy_ccc.color },
+  ].map(item => {
+    const series = data?.series[item.key]
+    return { ...item, value: series?.current ?? null, ...rangeStats(series) }
+  })
+  const qualityValues = quality.map(item => item.value).filter((value): value is number => value != null)
+  const qualityMin = Math.min(...qualityValues, 0)
+  const qualityMax = Math.max(...qualityValues, 1)
+  const igValue = quality[0].value
+  const cccValue = quality[2].value
+  const decompression = igValue != null && cccValue != null ? cccValue - igValue : null
 
   const changeItems = creditSeries.map(key => {
     const meta   = SERIES_META[key]
@@ -95,7 +123,7 @@ export default function CreditSpreadsWidget({ config }: { config: WidgetConfig }
         </div>
       )}
 
-      {isError && <div style={{ padding: 12, fontFamily: T.mono, fontSize: 10, color: T.neg }}>Failed — check FRED API key</div>}
+      {isError && <div style={{ padding: 12, fontFamily: T.mono, fontSize: 10, color: T.neg }}>Credit data unavailable</div>}
 
       {data && (
         <>
@@ -106,15 +134,40 @@ export default function CreditSpreadsWidget({ config }: { config: WidgetConfig }
             borderBottom: `1px solid ${T.border}`,
             flexShrink: 0,
           }}>
-            {statItems.map(({ label, value, color, isVix }) => (
+            {statItems.map(({ label, value, color, isVix, min, max, z }) => (
               <div key={label} style={{ padding: '8px 10px', borderRight: `1px solid ${T.border}` }}>
                 <div style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted, marginBottom: 4 }}>{label}</div>
                 <div style={{ fontFamily: T.mono, fontSize: 16, fontWeight: 700, color, lineHeight: 1 }}>
                   {value != null ? value.toFixed(0) : '—'}
                   {!isVix && <span style={{ fontSize: 9, opacity: 0.6 }}> bps</span>}
                 </div>
+                <div style={{ fontFamily: T.mono, fontSize: 7.5, color: T.muted, marginTop: 3, whiteSpace: 'nowrap' }}>
+                  z {z == null ? 'n/a' : `${z >= 0 ? '+' : ''}${z.toFixed(1)}`} | 1Y {min == null || max == null ? 'n/a' : `${min.toFixed(0)}-${max.toFixed(0)}`}
+                </div>
               </div>
             ))}
+          </div>
+
+          <div style={{ padding: '5px 10px 6px', borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', color: T.muted }}>QUALITY LADDER</span>
+              <span style={{ fontFamily: T.mono, fontSize: 8, color: decompression != null ? T.neg : T.muted }}>
+                CCC-IG gap {decompression == null ? 'n/a' : `${decompression.toFixed(0)} bps`}
+              </span>
+            </div>
+            <div style={{ position: 'relative', height: 18, background: 'rgba(255,255,255,0.04)', border: `1px solid ${T.border}` }}>
+              {quality.map(item => {
+                const left = item.value == null ? 0 : ((item.value - qualityMin) / Math.max(qualityMax - qualityMin, 1)) * 92
+                return (
+                  <div key={item.key} style={{ position: 'absolute', left: `${left}%`, top: 2, transform: 'translateX(-1px)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <div style={{ width: 2, height: 12, background: item.color }} />
+                    <span style={{ fontFamily: T.mono, fontSize: 7.5, color: item.color, whiteSpace: 'nowrap' }}>
+                      {item.label} {item.value == null ? 'n/a' : item.value.toFixed(0)}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
           </div>
 
           {/* Chart — credit series on left axis, VIX on right axis */}
@@ -182,7 +235,7 @@ export default function CreditSpreadsWidget({ config }: { config: WidgetConfig }
                       {val >= 0 ? '+' : ''}{val.toFixed(0)} bps
                     </span>
                   ) : (
-                    <span style={{ fontFamily: T.mono, fontSize: 8, color: T.muted }} title="FRED API key required for accurate 1Y spread changes">
+                    <span style={{ fontFamily: T.mono, fontSize: 8, color: T.muted }} title="One-year spread change unavailable">
                       n/a
                     </span>
                   )}

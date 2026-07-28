@@ -50,7 +50,6 @@ export default function RiskMetricsWidget({ config }: { config: WidgetConfig }) 
       }).then(r => r.data)
     },
   })
-
   if (tickers.length === 0) {
     return (
       <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 16, background: T.bg, fontFamily: T.label, fontSize: 11, color: T.muted, lineHeight: 1.6 }}>
@@ -78,7 +77,6 @@ export default function RiskMetricsWidget({ config }: { config: WidgetConfig }) 
 
   const topW = top.slice(0, 5).map(p => ({ ticker: p.ticker, pct: nav > 0 ? (p.value / nav) * 100 : 0 }))
   const maxW = Math.max(...topW.map(t => t.pct), 1)
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: T.bg }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', flexShrink: 0 }}>

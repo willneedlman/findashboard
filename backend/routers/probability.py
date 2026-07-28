@@ -13,6 +13,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from cache import get_history, cached
 import options_data
+import tradier
 from validation import validate_ticker
 
 router = APIRouter()
@@ -318,7 +319,7 @@ def skew_surface(ticker: str):
         S0   = float(hist["Close"].dropna().iloc[-1]) if not hist.empty else None
         if not S0:
             raise HTTPException(404, "No spot price")
-        expirations = options_data.get_expirations(sym)
+        expirations = tradier.get_expirations(sym) if tradier.available() else options_data.get_expirations(sym)
         if not expirations:
             raise HTTPException(404, "No options data")
     except HTTPException:
@@ -360,12 +361,16 @@ def skew_surface(ticker: str):
     for exp in future:
         T = max((pd.to_datetime(exp) - today).days / 365.25, 1 / 365)
         try:
-            ch = options_data.get_chain(sym, exp)
+            if tradier.available():
+                raw = tradier.get_options_chain(sym, exp, greeks=True)
+                call_rows = pd.DataFrame(raw["calls"])
+                put_rows = pd.DataFrame(raw["puts"])
+            else:
+                ch = options_data.get_chain(sym, exp)
+                call_rows, put_rows = ch.calls, ch.puts
         except Exception:
             continue
 
-        # yfinance's IV column is unreliable (often ~0), so solve IV from the mid
-        # price. Window strikes around spot to bound the number of root solves.
         def _bs_c(K, sig):
             d1 = (np.log(S0 / K) + (r + 0.5 * sig ** 2) * T) / (sig * np.sqrt(T))
             return float(S0 * norm.cdf(d1) - K * np.exp(-r * T) * norm.cdf(d1 - sig * np.sqrt(T)))
@@ -382,7 +387,10 @@ def skew_surface(ticker: str):
             except Exception:
                 return None
         def _smile_side(df, is_put):
-            d = df[["strike", "bid", "ask", "lastPrice"]].copy().dropna(subset=["strike"])
+            cols = ["strike", "bid", "ask", "lastPrice"]
+            if "impliedVolatility" in df.columns:
+                cols.append("impliedVolatility")
+            d = df[cols].copy().dropna(subset=["strike"])
             d["mid"] = np.where(d["bid"] > 0, (d["bid"] + d["ask"]) / 2,
                                 np.where(d["ask"] > 0.05, d["ask"] * 0.95, d["lastPrice"].fillna(0)))
             side = d[d["strike"] < S0] if is_put else d[d["strike"] >= S0]
@@ -390,11 +398,18 @@ def skew_surface(ticker: str):
             if side.empty:
                 return side.assign(iv=[])[["strike", "iv"]]
             side = side.copy()
-            side["iv"] = side.apply(lambda row: _solve(row["strike"], row["mid"], is_put), axis=1)
+            if "impliedVolatility" in side.columns:
+                side["iv"] = pd.to_numeric(side["impliedVolatility"], errors="coerce")
+                missing = side["iv"].isna() | (side["iv"] <= 0)
+                side.loc[missing, "iv"] = side[missing].apply(
+                    lambda row: _solve(row["strike"], row["mid"], is_put), axis=1
+                )
+            else:
+                side["iv"] = side.apply(lambda row: _solve(row["strike"], row["mid"], is_put), axis=1)
             return side.dropna(subset=["iv"])[["strike", "iv"]]
 
-        calls = _smile_side(ch.calls, is_put=False)
-        puts  = _smile_side(ch.puts,  is_put=True)
+        calls = _smile_side(call_rows, is_put=False)
+        puts  = _smile_side(put_rows, is_put=True)
         smile = pd.concat([puts, calls]).sort_values("strike").drop_duplicates("strike")
         smile = smile[(smile["strike"] > S0 * 0.5) & (smile["strike"] < S0 * 1.8)]
         if len(smile) < 4:

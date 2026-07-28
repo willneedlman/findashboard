@@ -1,169 +1,92 @@
 import axios from 'axios'
-import { useQueries } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
+import { T } from '../../../lib/theme'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 import TickerLogo from '../../TickerLogo'
 
-const T = {
-  bg: 'var(--theme-bg, #101c2e)',
-  border: 'var(--theme-border, rgba(255,255,255,0.08))',
-  headerBg: 'var(--theme-surface, #142032)',
-  gold: 'var(--theme-primary, #c9a84c)',
-  text: 'var(--theme-text, #d7e3fc)',
-  muted: 'var(--theme-secondary, #5e768f)',
-  mono: 'var(--theme-mono)',
-  label: 'var(--theme-sans)',
-  pos: 'var(--theme-positive, #22c55e)',
-  neg: 'var(--theme-negative, #ef4444)',
-}
-
 const DEFAULT_TICKERS = ['NVDA', 'AAPL', 'MSFT', 'AMZN', 'META', 'GOOGL']
 
-interface EarningsData {
+interface CalendarRow {
+  symbol: string
+  date: string
+  hour?: string
+  epsEstimate?: number | null
+}
+interface EnrichedRow {
+  symbol: string
+  nextDate?: string | null
+}
+interface ImpliedRow {
+  symbol: string
+  impliedMove?: number | null
+  impliedMoveExpiry?: string | null
+}
+interface EarningsEntry {
   ticker: string
-  date?: string
-  horizon?: string
-  implied_move?: number
-  consensus?: string
+  date: string | null
+  hour?: string
+  epsEstimate?: number | null
+  impliedMove?: number | null
+  impliedMoveExpiry?: string | null
 }
 
-function consensusStyle(consensus?: string): React.CSSProperties {
-  if (!consensus) return { color: T.muted, background: 'transparent', border: `1px solid ${T.muted}` }
-  const lower = consensus.toLowerCase()
-  if (lower.includes('strong buy') || lower.includes('buy')) {
-    return { color: T.pos, background: 'color-mix(in srgb, var(--theme-positive) 10%, transparent)', border: `1px solid ${T.pos}` }
-  }
-  if (lower.includes('underperform') || lower.includes('sell')) {
-    return { color: T.neg, background: 'color-mix(in srgb, var(--theme-negative) 10%, transparent)', border: `1px solid ${T.neg}` }
-  }
-  return { color: T.muted, background: 'rgba(94,118,143,0.12)', border: `1px solid ${T.muted}` }
+async function loadEarnings(tickers: string[]): Promise<EarningsEntry[]> {
+  const symbols = tickers.join(',')
+  const today = new Date().toISOString().slice(0, 10)
+  const [calendar, enriched, implied] = await Promise.all([
+    axios.get(`/api/earnings/calendar?date=${today}&days=14`).then(r => r.data).catch(() => ({ rows: [] })),
+    axios.get(`/api/earnings/enrich?symbols=${encodeURIComponent(symbols)}`).then(r => r.data).catch(() => ({ rows: [] })),
+    axios.get(`/api/earnings/implied-move?symbols=${encodeURIComponent(symbols)}`).then(r => r.data),
+  ])
+  const calendarByTicker = new Map((calendar.rows as CalendarRow[]).map(row => [row.symbol, row]))
+  const enrichedByTicker = new Map((enriched.rows as EnrichedRow[]).map(row => [row.symbol, row]))
+  const impliedByTicker = new Map((implied.rows as ImpliedRow[]).map(row => [row.symbol, row]))
+  return tickers.map(ticker => {
+    const scheduled = calendarByTicker.get(ticker)
+    const fallback = enrichedByTicker.get(ticker)
+    const move = impliedByTicker.get(ticker)
+    return {
+      ticker,
+      date: scheduled?.date ?? fallback?.nextDate ?? null,
+      hour: scheduled?.hour,
+      epsEstimate: scheduled?.epsEstimate,
+      impliedMove: move?.impliedMove,
+      impliedMoveExpiry: move?.impliedMoveExpiry,
+    }
+  })
 }
 
 export default function EarningsCalendar({ config }: { config: WidgetConfig }) {
-  const tickers = config.tickers ?? DEFAULT_TICKERS
-
-  const results = useQueries({
-    queries: tickers.map(t => ({
-      queryKey: ['earnings', t],
-      queryFn: () => axios.get(`/api/corporate/hub?ticker=${t}`).then(r => r.data as EarningsData),
-      staleTime: 300_000,
-    })),
+  const tickers = config.tickers?.length ? config.tickers : DEFAULT_TICKERS
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['earnings-widget-rich', tickers.join(',')],
+    queryFn: () => loadEarnings(tickers),
+    staleTime: 300_000,
+    retry: 1,
   })
-
-  const containerStyle: React.CSSProperties = {
-    background: T.bg,
-    fontFamily: T.mono,
-    width: '100%',
-    height: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
-  }
-
-  if (tickers.length === 0) {
-    return (
-      <div style={containerStyle}>
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ color: T.muted, fontSize: 12, fontFamily: T.label }}>Configure tickers in edit mode.</span>
-        </div>
-      </div>
-    )
-  }
-
-  const entries = tickers.map((ticker, i) => {
-    const result = results[i]
-    return {
-      ticker,
-      isLoading: result.isLoading,
-      data: result.data as EarningsData | undefined,
-    }
-  })
-
-  const sorted = [...entries].sort((a, b) => {
-    if (a.isLoading) return 1
-    if (b.isLoading) return -1
-    const da = a.data?.date ? new Date(a.data.date).getTime() : Infinity
-    const db = b.data?.date ? new Date(b.data.date).getTime() : Infinity
-    return da - db
-  })
+  const entries = [...(data ?? [])].sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999'))
 
   return (
-    <div style={containerStyle}>
-      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-        {sorted.map(({ ticker, isLoading, data }, i) => {
-          if (isLoading) {
-            return (
-              <div
-                key={ticker}
-                style={{
-                  padding: '9px 14px',
-                  borderBottom: `1px solid ${T.border}`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                }}
-              >
-                <TickerLogo ticker={ticker} size={20} />
-                <span style={{ color: T.gold, fontWeight: 700, fontSize: 9, fontFamily: T.label, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{ticker}</span>
-                <span style={{ color: T.muted, fontSize: 9, fontFamily: T.label }}>Loading…</span>
-              </div>
-            )
-          }
-
-          const implied = data?.implied_move
-          const cs = consensusStyle(data?.consensus)
-
-          return (
-            <div
-              key={ticker}
-              style={{
-                padding: '5px 10px',
-                borderBottom: i < sorted.length - 1 ? `1px solid ${T.border}` : 'none',
-                display: 'flex', alignItems: 'center', gap: 7,
-                overflow: 'hidden',
-              }}
-            >
-              <TickerLogo ticker={ticker} size={20} />
-
-              {/* Ticker + date stacked, fixed min-width so it doesn't squeeze */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 52, flexShrink: 0 }}>
-                <span style={{ color: T.gold, fontWeight: 700, fontSize: 9, fontFamily: T.label, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{ticker}</span>
-                {data?.date && (
-                  <span style={{ color: T.muted, fontSize: 9, fontFamily: T.mono }}>{data.date}</span>
-                )}
-              </div>
-
-              {/* Quarter badge */}
-              {data?.horizon && (
-                <span style={{
-                  color: 'var(--theme-tertiary, #60a5fa)', background: 'rgba(96,165,250,0.1)',
-                  border: '1px solid rgba(96,165,250,0.25)', borderRadius: 2,
-                  padding: '0 5px', fontSize: 9, fontFamily: T.label, whiteSpace: 'nowrap', flexShrink: 0,
-                }}>
-                  {data.horizon}
-                </span>
-              )}
-
-              {/* Implied move */}
-              {implied != null && (
-                <span style={{ color: T.muted, fontSize: 10, fontFamily: T.mono, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  ±{implied.toFixed(1)}%
-                </span>
-              )}
-
-              {/* Consensus — pushed right, truncated if needed */}
-              {data?.consensus && (
-                <span style={{
-                  ...cs, borderRadius: 2, padding: '0 5px',
-                  fontSize: 9, fontFamily: T.label,
-                  marginLeft: 'auto', whiteSpace: 'nowrap', flexShrink: 0,
-                }}>
-                  {data.consensus}
-                </span>
-              )}
+    <div style={{ height: '100%', overflowY: 'auto', background: T.bg }}>
+      {isLoading && <div style={{ padding: 12, color: T.muted, fontFamily: T.mono, fontSize: 10 }}>Loading earnings...</div>}
+      {isError && <div style={{ padding: 12, color: T.neg, fontFamily: T.mono, fontSize: 10 }}>Earnings unavailable</div>}
+      {entries.map(entry => (
+        <div key={entry.ticker} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderBottom: `1px solid ${T.border}` }}>
+          <TickerLogo ticker={entry.ticker} size={20} />
+          <div style={{ minWidth: 58 }}>
+            <div style={{ color: T.gold, fontFamily: T.label, fontSize: 9, fontWeight: 700 }}>{entry.ticker}</div>
+            <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 8 }}>{entry.date ?? 'Date pending'}</div>
+          </div>
+          {entry.hour && <span style={{ color: T.blue, fontFamily: T.mono, fontSize: 8 }}>{entry.hour}</span>}
+          {entry.epsEstimate != null && <span style={{ color: T.muted, fontFamily: T.mono, fontSize: 8 }}>EPS {entry.epsEstimate.toFixed(2)}</span>}
+          <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+            <div style={{ color: entry.impliedMove == null ? T.muted : T.text, fontFamily: T.mono, fontSize: 10 }}>
+              {entry.impliedMove == null ? '-' : `+/-${entry.impliedMove.toFixed(1)}%`}
             </div>
-          )
-        })}
-      </div>
+            {entry.impliedMoveExpiry && <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 7 }}>exp {entry.impliedMoveExpiry}</div>}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

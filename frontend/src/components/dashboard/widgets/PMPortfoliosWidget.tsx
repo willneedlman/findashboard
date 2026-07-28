@@ -7,6 +7,7 @@ import { normalizeTicker } from '../../../lib/pmImport'
 import TickerLogo from '../../TickerLogo'
 import { useTheme } from '../../../contexts/ThemeContext'
 import { fmtMarketCap } from '../../../lib/format'
+import { useLiveMarks } from '../../../hooks/useLiveMarks'
 
 
 interface Holding { ticker: string; shares: number; avgCost: number }
@@ -57,6 +58,7 @@ export default function PMPortfoliosWidget({ config: _config }: { config: Widget
   const paperEq = account.data?.positions ?? []
   const paperOpt = account.data?.option_positions ?? []
   const equitySymbols = isPaper ? paperEq.map(p => p.symbol) : holdings.map(h => normalizeTicker(h.ticker))
+  const liveMarks = useLiveMarks(equitySymbols)
   const quotes = useQueries({
     queries: equitySymbols.map(sym => ({
       queryKey: ['pm-widget-hub', sym],
@@ -105,7 +107,7 @@ export default function PMPortfoliosWidget({ config: _config }: { config: Widget
   } else {
     rows = holdings.map((h, i) => {
       const d = quotes[i]?.data
-      const price = d?.current_price ?? null
+      const price = liveMarks[normalizeTicker(h.ticker)] ?? d?.current_price ?? null
       const cost = h.avgCost * h.shares
       const value = price != null ? price * h.shares : null
       const pnl = value != null ? value - cost : null

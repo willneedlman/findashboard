@@ -9,6 +9,7 @@ interface SectorRow {
   ticker: string
   name: string
   returns: Record<string, number | null>
+  rel_strength: Record<string, number | null>
   momentum: number | null
 }
 interface RotationResp { sectors: SectorRow[]; as_of: string }
@@ -18,6 +19,7 @@ const PERIODS = ['1W', '1M', '3M', '6M', 'YTD', '1Y']
 
 export default function SectorRotationWidget({ config }: { config: WidgetConfig }) {
   const [period, setPeriod] = useState(PERIODS.includes(config.sectorPeriod ?? '') ? (config.sectorPeriod as string) : '1M')
+  const [mode, setMode] = useState<'return' | 'relative'>('return')
 
   const { data, isLoading, isError } = useQuery<RotationResp>({
     queryKey: ['sector-rotation-widget'],
@@ -26,10 +28,11 @@ export default function SectorRotationWidget({ config }: { config: WidgetConfig 
     retry: 1,
   })
 
+  const valueFor = (row: SectorRow) => (mode === 'relative' ? row.rel_strength : row.returns)?.[period] ?? null
   const rows = [...(data?.sectors ?? [])].sort(
-    (a, b) => (b.returns?.[period] ?? -Infinity) - (a.returns?.[period] ?? -Infinity)
+    (a, b) => (valueFor(b) ?? -Infinity) - (valueFor(a) ?? -Infinity)
   )
-  const vals = rows.map(s => s.returns?.[period]).filter((v): v is number => v != null)
+  const vals = rows.map(valueFor).filter((v): v is number => v != null)
   const maxAbs = Math.max(0.01, ...vals.map(Math.abs))
   const ups = vals.filter(v => v >= 0).length
   const downs = vals.filter(v => v < 0).length
@@ -45,6 +48,10 @@ export default function SectorRotationWidget({ config }: { config: WidgetConfig 
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: T.bg }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap', padding: '4px 8px', background: 'rgba(0,0,0,0.15)', borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
         {PERIODS.map(p => <button key={p} onClick={() => setPeriod(p)} style={periodBtn(period === p)}>{p}</button>)}
+        <div style={{ display: 'flex', marginLeft: 4 }}>
+          <button onClick={() => setMode('return')} style={periodBtn(mode === 'return')}>ABS</button>
+          <button onClick={() => setMode('relative')} style={periodBtn(mode === 'relative')}>VS SPY</button>
+        </div>
         <span style={{ marginLeft: 'auto', fontFamily: T.mono, fontSize: 9, whiteSpace: 'nowrap' }}>
           <span style={{ color: POS }}>↑ {ups}</span>&nbsp;&nbsp;<span style={{ color: NEG }}>↓ {downs}</span>
         </span>
@@ -56,7 +63,7 @@ export default function SectorRotationWidget({ config }: { config: WidgetConfig 
       {data && (
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
           {rows.map((s, i) => {
-            const v = s.returns?.[period] ?? null
+            const v = valueFor(s)
             const up = (v ?? 0) >= 0
             const scaled = v == null ? 0 : Math.min(Math.abs(v) / maxAbs, 1)
             const pct = `${(scaled * 100).toFixed(0)}%`

@@ -94,6 +94,9 @@ consistency comes from one shared chrome:
 
 - **Panel:** `--theme-surface` (`#0d1826`) fill, 1px hairline border, no radius, no
   shadow. Panels separate by borders, never elevation.
+- **Grid density:** desktop widgets use a 52px grid row with an 8px gutter.
+  Auto-arrange preserves natural widget dimensions and stacks short supporting
+  panels beside taller primary workspaces instead of stretching rows uniformly.
 - **Header strip:** a recessed bar (`rgba(0,0,0,0.16)`, bottom hairline
   `rgba(255,255,255,0.05)`) with the title in gold (`--theme-primary`), Sora,
   `9px`, weight `700`, uppercase, `letter-spacing 0.16em`. Inline controls (timeframe,

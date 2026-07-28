@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import axios from 'axios'
 import { useQueries } from '@tanstack/react-query'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
+import { useLiveMarks } from '../../../hooks/useLiveMarks'
 
 
 const DEFAULT_TICKERS = ['SPY', 'QQQ', 'DIA', 'IWM', '^VIX', 'BTC-USD']
@@ -20,6 +21,7 @@ const prefersReducedMotion =
 
 export default function IndexTapeWidget({ config }: { config: WidgetConfig }) {
   const tickers = config.tickers?.length ? config.tickers : DEFAULT_TICKERS
+  const liveMarks = useLiveMarks(tickers)
 
   const results = useQueries({
     queries: tickers.map(t => ({
@@ -32,7 +34,7 @@ export default function IndexTapeWidget({ config }: { config: WidgetConfig }) {
 
   const segments = tickers.map((t, i) => {
     const q = results[i]?.data
-    const price = q?.current_price ?? null
+    const price = liveMarks[t.toUpperCase()] ?? q?.current_price ?? null
     const pct = q?.pct_change_1d ?? null
     return { sym: tapeLabel(t), price, pct }
   })

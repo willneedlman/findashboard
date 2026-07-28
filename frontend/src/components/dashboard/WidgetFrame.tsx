@@ -1,7 +1,8 @@
-import { X, GripHorizontal, Settings } from 'lucide-react'
+import { Copy, GripHorizontal, RotateCcw, Settings, X } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { WidgetConfig, WidgetType } from '../../hooks/useDashboard'
 import { TICKER_WIDGET_TYPES } from '../../hooks/useDashboard'
+import { DEFAULT_MACRO_STRIP_SERIES, WIDGET_DEFINITIONS, WIDGET_LABELS } from './widgetRegistry'
 import TickerTagInput from '../TickerTagInput'
 import ExpirySelect from '../ExpirySelect'
 import { listPortfolios } from './widgets/usePortfolio'
@@ -15,6 +16,8 @@ interface WidgetFrameProps {
   config: WidgetConfig
   editMode: boolean
   onRemove: () => void
+  onDuplicate: () => void
+  onReset: () => void
   onUpdate: (patch: Partial<WidgetConfig>) => void
   children: React.ReactNode
 }
@@ -31,10 +34,10 @@ const CREDIT_SPREADS_WIDGETS: WidgetType[]  = ['credit-spreads']
 const MACRO_CALENDAR_WIDGETS: WidgetType[]  = ['macro-calendar']
 const EXPIRY_WIDGETS: WidgetType[]          = ['dealer-gex', 'vol-skew']
 // Widgets that read a Portfolio Manager book and let you pick which one.
-const PORTFOLIO_PICK_WIDGETS: WidgetType[]  = ['risk-metrics', 'pnl-attribution', 'exposure-map']
+const PORTFOLIO_PICK_WIDGETS: WidgetType[]  = ['risk-metrics', 'pnl-attribution', 'factor-decomposition']
 // Frame supplies the title (no gear) for widgets that host their own inline
 // controls in the body, à la Price Card's period row.
-const HEADER_WIDGETS: WidgetType[]          = ['sector-rotation', 'sentiment-gauge', 'screener', 'pm-portfolios', 'paper-trade', 'risk-metrics', 'pnl-attribution', 'exposure-map', 'unusual-flow', 'heatmap', 'trade-blotter', 'position-sizer', 'market-hours']
+const HEADER_WIDGETS: WidgetType[]          = ['sector-rotation', 'sentiment-gauge', 'screener', 'pm-portfolios', 'paper-trade', 'risk-metrics', 'pnl-attribution', 'factor-decomposition', 'unusual-flow', 'heatmap', 'trade-blotter', 'position-sizer', 'market-hours']
 
 const MACRO_CAT_OPTIONS: { key: string; label: string; color: string }[] = [
   { key: 'equity',    label: 'Equity', color: 'var(--theme-positive, #22c55e)' },
@@ -42,8 +45,9 @@ const MACRO_CAT_OPTIONS: { key: string; label: string; color: string }[] = [
   { key: 'bond',      label: 'Rates',  color: 'var(--theme-accent-violet, #a78bfa)' },
   { key: 'commodity', label: 'Cmdty',  color: 'var(--theme-accent-orange, #f97316)' },
   { key: 'vol',       label: 'Vol',    color: 'var(--theme-negative, #ef4444)' },
+  { key: 'crypto',    label: 'Crypto', color: 'var(--theme-primary, #c9a84c)' },
 ]
-const DEFAULT_MACRO_CATS = ['equity', 'fx', 'bond', 'commodity', 'vol']
+const DEFAULT_MACRO_CATS = ['equity', 'fx', 'bond', 'commodity', 'vol', 'crypto']
 
 const MACRO_CAL_CAT_OPTIONS: { key: string; label: string; color: string }[] = [
   { key: 'monetary',   label: 'Fed / Monetary', color: 'var(--theme-primary, #c9a84c)' },
@@ -89,46 +93,6 @@ const YIELD_OPTIONS: { key: string; label: string }[] = [
   { key: 'SPREAD_5_30', label: '5/30 Spread'},
 ]
 
-const DEFAULT_YIELDS = ['FED', '1Y', '2Y', '5Y', '10Y', 'SPREAD']
-
-const WIDGET_LABELS: Record<string, string> = {
-  'price-card':         'Price Card',
-  'mini-chart':         'Mini Chart',
-  'tradingview-chart':  'Chart',
-  'options-snapshot':   'Options Snapshot',
-  'options-pricer':     'Options Pricer',
-  'delta-target':       'Delta Target',
-  'watchlist':          'Watchlist',
-  'earnings-calendar':  'Earnings Scanner',
-  'news-feed':          'News Feed',
-  'correlation-matrix': 'Correlation Matrix',
-  'portfolio-summary':  'Portfolio',
-  'macro-strip':        'Macro Strip',
-  'global-macro':       'Global Macro',
-  'credit-spreads':     'Credit Spreads',
-  'macro-calendar':     'Macro Calendar',
-  'yield-curve':        'Yield Curve',
-  'sector-rotation':    'Sector Rotation',
-  'dealer-gex':         'Dealer GEX',
-  'vol-skew':           'Vol Skew',
-  'sentiment-gauge':    'Market Sentiment',
-  'screener':           'Screener',
-  'pm-portfolios':      'Portfolios',
-  'paper-trade':        'Paper Trade',
-  'index-tape':         'Index Tape',
-  'analyst-ratings':    'Analyst Consensus',
-  'valuation':          'Valuation',
-  'insider-activity':   'Insider Activity',
-  'risk-metrics':       'Risk Metrics',
-  'pnl-attribution':    'P/L Attribution',
-  'exposure-map':       'Exposure',
-  'time-and-sales':     'Time & Sales',
-  'unusual-flow':       'Unusual Options Flow',
-  'heatmap':            'Market Heatmap',
-  'trade-blotter':      'Trade Blotter',
-  'position-sizer':     'Position Sizer',
-}
-
 interface PmBook { id: string; name: string; holdings: { ticker: string }[] }
 
 function loadPmBooks(): PmBook[] {
@@ -154,6 +118,23 @@ const S = {
   text:   'var(--theme-text, #d7e3fc)',
   mono:   'var(--theme-mono)',
   label:  'var(--theme-sans)',
+}
+const S_LABEL: React.CSSProperties = {
+  fontFamily: S.label,
+  fontSize: 8,
+  fontWeight: 700,
+  letterSpacing: '0.1em',
+  textTransform: 'uppercase',
+  color: S.muted,
+}
+const CONFIG_SELECT: React.CSSProperties = {
+  background: 'var(--theme-bg, #101c2e)',
+  border: `1px solid ${S.border}`,
+  color: S.text,
+  fontFamily: S.mono,
+  fontSize: 10,
+  padding: '4px 6px',
+  outline: 'none',
 }
 
 function YieldCheckboxes({
@@ -185,7 +166,17 @@ function YieldCheckboxes({
               }}
             >
               <div
+                role="checkbox"
+                aria-label={label}
+                aria-checked={checked}
+                tabIndex={0}
                 onClick={() => toggle(key)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    toggle(key)
+                  }
+                }}
                 style={{
                   width: 12, height: 12, flexShrink: 0,
                   border: `1px solid ${checked ? S.gold : S.border}`,
@@ -266,12 +257,12 @@ function MacroCatSettings({
   selected,
   onChange,
   onSave,
-}: { selected: string[]; onChange: (v: string[]) => void; onSave: () => void }) {
+}: { selected: string[]; onChange: (v: string[]) => void; onSave?: () => void }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <span style={{ fontFamily: S.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: S.muted }}>Categories to display</span>
       <ColorCheckboxes options={MACRO_CAT_OPTIONS} selected={selected} onChange={onChange} />
-      <button onClick={onSave} style={{ alignSelf: 'flex-end', background: S.gold, border: 'none', color: 'var(--theme-bg)', fontSize: 9, fontWeight: 700, padding: '3px 12px', cursor: 'pointer', letterSpacing: '0.1em', fontFamily: S.label }}>APPLY</button>
+      {onSave && <button onClick={onSave} style={{ alignSelf: 'flex-end', background: S.gold, border: 'none', color: 'var(--theme-bg)', fontSize: 9, fontWeight: 700, padding: '3px 12px', cursor: 'pointer', letterSpacing: '0.1em', fontFamily: S.label }}>APPLY</button>}
     </div>
   )
 }
@@ -304,14 +295,15 @@ function CreditSpreadsSettings({
   )
 }
 
-export default function WidgetFrame({ config, editMode, onRemove, onUpdate, children }: WidgetFrameProps) {
+export default function WidgetFrame({ config, editMode, onRemove, onDuplicate, onReset, onUpdate, children }: WidgetFrameProps) {
   const [configOpen, setConfigOpen] = useState(false)
   const [tickerInput, setTickerInput] = useState(config.ticker || '')
   const [tagTickers, setTagTickers] = useState<string[]>(config.tickers ?? [])
   const [yieldSel, setYieldSel] = useState<string[]>(
-    config.tickers && config.tickers.length > 0 ? config.tickers : DEFAULT_YIELDS
+    config.tickers && config.tickers.length > 0 ? config.tickers : DEFAULT_MACRO_STRIP_SERIES
   )
   const [macroCatSel, setMacroCatSel]         = useState<string[]>(config.categories ?? DEFAULT_MACRO_CATS)
+  const [macroSymbols, setMacroSymbols]       = useState<string[]>(config.macroSymbols ?? [])
   const [macroCalCatSel, setMacroCalCatSel]   = useState<string[]>(config.categories ?? DEFAULT_MACRO_CAL_CATS)
   const [spreadSerSel, setSpreadSerSel]       = useState<string[]>(config.categories ?? DEFAULT_SPREAD_SERIES)
   const [spreadLookback, setSpreadLookback] = useState<number>(config.lookback ?? 90)
@@ -331,6 +323,15 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
   // the user's unsaved keystrokes; it resyncs when they close the panel.
   useEffect(() => { if (!configOpen) setTickerInput(config.ticker || '') }, [config.ticker, configOpen])
   useEffect(() => { if (!configOpen) setExpirySel(config.expiry || '') }, [config.expiry, configOpen])
+  useEffect(() => { setTagTickers(config.tickers ?? []) }, [config.tickers])
+  useEffect(() => {
+    setYieldSel(config.tickers && config.tickers.length > 0 ? config.tickers : DEFAULT_MACRO_STRIP_SERIES)
+  }, [config.tickers])
+  useEffect(() => { setMacroCatSel(config.categories ?? DEFAULT_MACRO_CATS) }, [config.categories])
+  useEffect(() => { setMacroSymbols(config.macroSymbols ?? []) }, [config.macroSymbols])
+  useEffect(() => { setMacroCalCatSel(config.categories ?? DEFAULT_MACRO_CAL_CATS) }, [config.categories])
+  useEffect(() => { setSpreadSerSel(config.categories ?? DEFAULT_SPREAD_SERIES) }, [config.categories])
+  useEffect(() => { setSpreadLookback(config.lookback ?? 90) }, [config.lookback])
 
   const handlePortTickersChange = (next: string[]) => {
     setPortTickers(next)
@@ -365,6 +366,8 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
     }
     if (GLOBAL_MACRO_WIDGETS.includes(config.type))
       patch.categories = macroCatSel
+    if (GLOBAL_MACRO_WIDGETS.includes(config.type))
+      patch.macroSymbols = macroSymbols
     if (MACRO_CALENDAR_WIDGETS.includes(config.type))
       patch.categories = macroCalCatSel
     if (CREDIT_SPREADS_WIDGETS.includes(config.type)) {
@@ -382,15 +385,7 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
   // These widgets self-configure via their inline ticker input — show header title but no gear
   const SELF_CONFIGURED: WidgetType[] = ['options-pricer', 'delta-target']
 
-  const hasSettings =
-    (TICKER_WIDGETS.includes(config.type) && !SELF_CONFIGURED.includes(config.type as WidgetType)) ||
-    TICKERS_WIDGETS.includes(config.type) ||
-    PORTFOLIO_WIDGETS.includes(config.type) ||
-    YIELD_WIDGETS.includes(config.type) ||
-    GLOBAL_MACRO_WIDGETS.includes(config.type) ||
-    CREDIT_SPREADS_WIDGETS.includes(config.type) ||
-    MACRO_CALENDAR_WIDGETS.includes(config.type) ||
-    PORTFOLIO_PICK_WIDGETS.includes(config.type)
+  const hasSettings = WIDGET_DEFINITIONS[config.type].configOptions.length > 0 && !SELF_CONFIGURED.includes(config.type)
 
   const hasHeader = hasSettings || SELF_CONFIGURED.includes(config.type as WidgetType) || HEADER_WIDGETS.includes(config.type)
 
@@ -456,9 +451,19 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
               </button>
             )}
             {editMode && (
-              <button onClick={onRemove} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-negative)', padding: 2, display: 'flex', opacity: 0.7 }}>
-                <X size={12} />
-              </button>
+              <>
+                <button onClick={onReset} title="Reset widget settings" style={{ background: 'none', border: 'none', cursor: 'pointer', color: S.muted, padding: 2, display: 'flex' }}>
+                  <RotateCcw size={11} />
+                </button>
+                {WIDGET_DEFINITIONS[config.type].multiple && (
+                  <button onClick={onDuplicate} title="Duplicate widget" style={{ background: 'none', border: 'none', cursor: 'pointer', color: S.muted, padding: 2, display: 'flex' }}>
+                    <Copy size={11} />
+                  </button>
+                )}
+                <button onClick={onRemove} title="Remove widget" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-negative)', padding: 2, display: 'flex', opacity: 0.7 }}>
+                  <X size={12} />
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -467,6 +472,16 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
       {/* Config panel */}
       {configOpen && (
         <div className="widget-no-drag" style={{ position: 'absolute', top: 26, left: 0, right: 0, bottom: 0, zIndex: 20, background: 'var(--theme-surface, #0d1826)', borderTop: '1px solid rgba(255,255,255,0.08)', padding: 10, overflowY: 'auto' }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 9 }}>
+            <span style={{ fontSize: 9, color: S.muted, fontFamily: S.label, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Responsive view</span>
+            <select value={config.displayState ?? 'auto'} onChange={event => onUpdate({ displayState: event.target.value as WidgetConfig['displayState'] })} style={{ flex: 1, background: 'var(--theme-bg, #101c2e)', border: `1px solid ${S.border}`, color: S.text, fontFamily: S.mono, fontSize: 10, padding: '3px 6px' }}>
+              <option value="auto">Auto</option>
+              <option value="full">Full</option>
+              <option value="compact">Compact</option>
+              <option value="summary">Summary</option>
+              <option value="minimum">Minimum</option>
+            </select>
+          </div>
 
           {TICKER_WIDGETS.includes(config.type) && (
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -573,7 +588,81 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
           )}
 
           {GLOBAL_MACRO_WIDGETS.includes(config.type) && (
-            <MacroCatSettings selected={macroCatSel} onChange={setMacroCatSel} onSave={saveConfig} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+              <MacroCatSettings selected={macroCatSel} onChange={setMacroCatSel} />
+              <span style={{ fontFamily: S.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: S.muted }}>Symbols (blank shows all selected categories)</span>
+              <TickerTagInput tickers={macroSymbols} onChange={setMacroSymbols} allowMarketSymbols placeholder="SPY, ^TNX, EURUSD=X, GC=F" />
+              <button onClick={saveConfig} style={{ alignSelf: 'flex-end', background: S.gold, border: 'none', color: 'var(--theme-bg)', fontSize: 9, fontWeight: 700, padding: '3px 12px', cursor: 'pointer', letterSpacing: '0.1em', fontFamily: S.label }}>APPLY SYMBOLS</button>
+            </div>
+          )}
+
+          {config.type === 'factor-decomposition' && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginTop: 9 }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, ...S_LABEL }}>
+                Factor model
+                <select value={config.factorModel ?? 'macro'} onChange={event => onUpdate({ factorModel: event.target.value as 'macro' | 'style', factorCategories: [] })} style={CONFIG_SELECT}>
+                  <option value="macro">Macro</option>
+                  <option value="style">Style</option>
+                </select>
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, ...S_LABEL }}>
+                Period
+                <select value={config.lookback ?? 365} onChange={event => onUpdate({ lookback: Number(event.target.value) })} style={CONFIG_SELECT}>
+                  <option value={180}>6M</option><option value={365}>1Y</option><option value={730}>2Y</option><option value={1095}>3Y</option><option value={1826}>5Y</option>
+                </select>
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, ...S_LABEL }}>
+                Benchmark
+                <input value={config.benchmark ?? 'SPY'} onChange={event => onUpdate({ benchmark: event.target.value.toUpperCase() })} style={CONFIG_SELECT} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, ...S_LABEL }}>
+                Presentation
+                <select value={config.presentation ?? 'chart'} onChange={event => onUpdate({ presentation: event.target.value as 'chart' | 'table' })} style={CONFIG_SELECT}>
+                  <option value="chart">Chart</option><option value="table">Table</option>
+                </select>
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, ...S_LABEL }}>
+                Values
+                <select value={config.valueMode ?? 'absolute'} onChange={event => onUpdate({ valueMode: event.target.value as 'absolute' | 'relative' })} style={CONFIG_SELECT}>
+                  <option value="absolute">Absolute</option><option value="relative">Relative to systematic</option>
+                </select>
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, ...S_LABEL }}>
+                Sort
+                <select value={config.sortBy ?? 'risk'} onChange={event => onUpdate({ sortBy: event.target.value as 'risk' | 'exposure' | 'factor' })} style={CONFIG_SELECT}>
+                  <option value="risk">Risk contribution</option><option value="exposure">Exposure</option><option value="factor">Factor name</option>
+                </select>
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: '1 / -1', ...S_LABEL }}>
+                Filter
+                <input value={config.filter ?? ''} onChange={event => onUpdate({ filter: event.target.value })} placeholder="Factor or proxy" style={CONFIG_SELECT} />
+              </label>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <span style={S_LABEL}>Factor categories</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {(config.factorModel === 'style' ? ['market', 'size', 'value', 'momentum'] : ['market', 'rates', 'credit', 'oil', 'dollar']).map(factor => {
+                    const selected = config.factorCategories ?? []
+                    const active = !selected.length || selected.includes(factor)
+                    return (
+                      <button key={factor} onClick={() => {
+                        const next = !selected.length
+                          ? (config.factorModel === 'style' ? ['market', 'size', 'value', 'momentum'] : ['market', 'rates', 'credit', 'oil', 'dollar']).filter(item => item !== factor)
+                          : active ? selected.filter(item => item !== factor) : [...selected, factor]
+                        onUpdate({ factorCategories: next })
+                      }} style={{ ...CONFIG_SELECT, cursor: 'pointer', color: active ? S.gold : S.muted }}>
+                        {factor}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: S.label, fontSize: 9, color: S.text }}>
+                <input type="checkbox" checked={config.exposureDisplay !== false} onChange={event => onUpdate({ exposureDisplay: event.target.checked })} /> Exposures
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: S.label, fontSize: 9, color: S.text }}>
+                <input type="checkbox" checked={config.contributionDisplay !== false} onChange={event => onUpdate({ contributionDisplay: event.target.checked })} /> Contributions
+              </label>
+            </div>
           )}
 
           {CREDIT_SPREADS_WIDGETS.includes(config.type) && (

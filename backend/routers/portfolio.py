@@ -486,6 +486,7 @@ class FactorRequest(BaseModel):
     holdings: list[FactorHolding] = Field(..., min_length=1, max_length=100)
     lookback_days: int = Field(365, ge=90, le=14600)  # up to ~40y — as deep as yfinance goes
     mode: str = Field("macro", pattern="^(macro|style)$")
+    benchmark: str = Field("SPY", min_length=1, max_length=12)
 
 
 @router.post("/factor-decomposition")
@@ -508,7 +509,9 @@ def factor_decomposition(req: FactorRequest):
         raise HTTPException(400, "No priceable holdings")
 
     tickers = sorted(holds)
-    factor_syms = [s for _, s in _FACTORS] if req.mode == "macro" else []
+    benchmark = validate_ticker(req.benchmark)
+    factors = [("Market", benchmark), *((label, symbol) for label, symbol in _FACTORS[1:] if symbol != benchmark)]
+    factor_syms = [s for _, s in factors] if req.mode == "macro" else []
     union = tuple(sorted(set(tickers) | set(factor_syms)))
     import datetime as _dt
     end = (_dt.date.today() + _dt.timedelta(days=1)).isoformat()
@@ -556,12 +559,12 @@ def factor_decomposition(req: FactorRequest):
         fac_frame_for_merge = style_factors
         source_label = f"Ken French FF4/Carhart factors ({'/'.join(keys)})"
     else:
-        fac_cols = [(lbl, s) for lbl, s in _FACTORS if s in daily.columns and daily[s].notna().sum() > 20]
+        fac_cols = [(lbl, s) for lbl, s in factors if s in daily.columns and daily[s].notna().sum() > 20]
         keys = [lbl.lower() for lbl, _ in fac_cols]
         labels = {lbl.lower(): lbl for lbl, _ in fac_cols}
         proxies = {lbl.lower(): s for lbl, s in fac_cols}
         fac_frame_for_merge = pd.concat([daily[s].rename(lbl.lower()) for lbl, s in fac_cols], axis=1)
-        source_label = "yfinance factor ETFs (SPY/TLT/HYG/USO/UUP)"
+        source_label = f"yfinance factor ETFs ({'/'.join(symbol for _, symbol in factors)})"
 
     frame = pd.concat([port.rename("port"), fac_frame_for_merge], axis=1).dropna()
     if len(frame) < 60:
@@ -637,6 +640,7 @@ def factor_decomposition(req: FactorRequest):
 
     return {
         "mode": req.mode,
+        "benchmark": benchmark,
         "factors": factors,
         "rolling": rolling,
         "holdings_detail": holdings_detail,

@@ -8,7 +8,16 @@ import { TOOLTIP_STYLE, BAR_CURSOR } from '../../ChartTooltip'
 
 
 interface GEXStrike { strike: number; net_gex: number }
-interface GEXResp { spot?: number; data?: GEXStrike[]; expiry?: string | null }
+interface GEXLevel { strike: number; gex_m: number }
+interface GEXResp {
+  spot?: number
+  data?: GEXStrike[]
+  expiry?: string | null
+  flip?: number | null
+  total_net_gex: number
+  max_positive_gex?: GEXLevel | null
+  max_negative_gex?: GEXLevel | null
+}
 
 const STRIKE_COUNTS = [10, 20, 30, 40, 0] // 0 = all
 const selStyle: React.CSSProperties = { background: 'var(--theme-bg, #101c2e)', border: `1px solid ${T.border}`, color: T.gold, fontFamily: T.mono, fontSize: 8.5, padding: '1px 3px', outline: 'none', cursor: 'pointer' }
@@ -38,20 +47,8 @@ export default function DealerGEXWidget({ config }: { config: WidgetConfig }) {
   const band = count > 0 && spot
     ? [...raw].sort((a, b) => Math.abs(a.strike - spot) - Math.abs(b.strike - spot)).slice(0, count).sort((a, b) => a.strike - b.strike)
     : raw
-  const totalNet = raw.reduce((s, d) => s + d.net_gex, 0)
-
-  // Gamma flip: per-strike net_gex sign change nearest spot.
-  let flip: number | null = null
-  if (spot && raw.length > 1) {
-    let best = Infinity
-    for (let i = 0; i < raw.length - 1; i++) {
-      if (raw[i].net_gex * raw[i + 1].net_gex < 0) {
-        const cand = Math.abs(raw[i].strike - spot) <= Math.abs(raw[i + 1].strike - spot) ? raw[i].strike : raw[i + 1].strike
-        const dist = Math.abs(cand - spot)
-        if (dist < best) { best = dist; flip = cand }
-      }
-    }
-  }
+  const totalNet = data?.total_net_gex ?? 0
+  const flip = data?.flip ?? null
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: T.bg }}>
@@ -78,6 +75,19 @@ export default function DealerGEXWidget({ config }: { config: WidgetConfig }) {
             <select value={count} onChange={e => setCount(Number(e.target.value))} style={selStyle} title="Strikes shown (nearest spot)">
               {STRIKE_COUNTS.map(n => <option key={n} value={n}>{n === 0 ? 'All strikes' : `${n} strikes`}</option>)}
             </select>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+            {[
+              { label: 'Max +GEX wall', level: data.max_positive_gex, color: T.pos },
+              { label: 'Max -GEX wall', level: data.max_negative_gex, color: T.neg },
+            ].map(({ label, level, color }) => (
+              <div key={label} style={{ padding: '4px 10px', borderRight: `1px solid ${T.border}`, display: 'flex', justifyContent: 'space-between', gap: 6 }}>
+                <span style={{ fontFamily: T.label, fontSize: 8, color: T.muted }}>{label}</span>
+                <span style={{ fontFamily: T.mono, fontSize: 9, fontWeight: 700, color }}>
+                  {level ? `$${level.strike.toFixed(0)} | ${level.gex_m >= 0 ? '+' : ''}${level.gex_m.toFixed(0)}M` : 'N/A'}
+                </span>
+              </div>
+            ))}
           </div>
           <div style={{ flex: 1, minHeight: 0, padding: '4px 4px 4px' }}>
             <ResponsiveContainer width="100%" height="100%">

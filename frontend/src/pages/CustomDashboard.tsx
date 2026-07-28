@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import RGL, { type Layout, type Layouts } from 'react-grid-layout'
 import { useTheme } from '../contexts/ThemeContext'
 import 'react-grid-layout/css/styles.css'
@@ -9,14 +9,16 @@ const { Responsive, WidthProvider } = RGL as unknown as {
   Responsive: React.ComponentType<any>
   WidthProvider: (c: React.ComponentType<any>) => React.ComponentType<any>
 }
-import { Lock, Unlock, Plus, RotateCcw, X, ChevronDown,
+import { Lock, Unlock, Plus, RotateCcw, X, ChevronDown, Sparkles,
   LayoutGrid, Gauge, Search, Filter, Globe, Layers, Shield, BarChart3, LineChart,
   Briefcase, Activity, Eye, PieChart, Newspaper, TrendingUp, DollarSign, Maximize2, Minimize2, type LucideIcon } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import WidgetFrame from '../components/dashboard/WidgetFrame'
 import WidgetRenderer from '../components/dashboard/WidgetRenderer'
 import WidgetPalette from '../components/dashboard/WidgetPalette'
-import { useDashboard, PRESET_LABELS, PRESET_ICONS, TICKER_WIDGET_TYPES, type WidgetType, type WidgetConfig, type PresetKey } from '../hooks/useDashboard'
+import DashboardAiChat from '../components/dashboard/DashboardAiChat'
+import { useDashboard, PRESET_LABELS, PRESET_ICONS, TICKER_WIDGET_TYPES, reflowLayouts, type WidgetType, type WidgetConfig, type PresetKey } from '../hooks/useDashboard'
+import { responsiveState } from '../components/dashboard/widgetRegistry'
 import useIsMobile from '../hooks/useIsMobile'
 
 const ResponsiveGridLayout = WidthProvider(Responsive)
@@ -46,12 +48,13 @@ export default function CustomDashboard() {
   const isMobile = useIsMobile()
   const { user } = useTheme()
   const {
-    widgets, layouts, addWidget, removeWidget, updateWidget, updateLayouts, resetDashboard, setAllTickers,
+    widgets, layouts, addWidget, removeWidget, duplicateWidget, resetWidget, autoOrganize, updateWidget, updateLayouts, resetDashboard, setAllTickers, applyAiDashboard,
     showTicker, setShowTicker,
     dashboards, activeId, switchDashboard, createDashboard, renameDashboard, deleteDashboard, setDashboardIcon,
   } = useDashboard(user?.id)
   const [editMode, setEditMode] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [aiOpen, setAiOpen] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
   const [presetMenuOpen, setPresetMenuOpen] = useState(false)
   const [iconPickerOpen, setIconPickerOpen] = useState(false)
@@ -90,7 +93,13 @@ export default function CustomDashboard() {
     if (allLayouts.lg) updateLayouts(allLayouts.lg)
   }
 
-  const rglLayouts: Layouts = { lg: layouts, md: layouts, sm: layouts }
+  const rglLayouts: Layouts = useMemo(() => ({
+    lg: layouts,
+    md: reflowLayouts(widgets, layouts, COLS.md),
+    sm: reflowLayouts(widgets, layouts, COLS.sm),
+    xs: reflowLayouts(widgets, layouts, COLS.xs),
+    xxs: reflowLayouts(widgets, layouts, COLS.xxs),
+  }), [layouts, widgets])
 
   const handleReset = () => {
     if (confirmReset) { resetDashboard(); setConfirmReset(false) }
@@ -208,10 +217,24 @@ export default function CustomDashboard() {
           {editMode && (
             <>
               <button
+                onClick={() => setAiOpen(true)}
+                title="Describe a dashboard and let AI choose, size, and arrange the widgets"
+                style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'color-mix(in srgb, var(--theme-primary) 14%, transparent)', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)', padding: '6px 12px', cursor: 'pointer', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}
+              >
+                <Sparkles size={12} /> Build with AI
+              </button>
+              <button
                 onClick={() => setPaletteOpen(true)}
                 style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)', padding: '6px 12px', cursor: 'pointer', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}
               >
                 <Plus size={12} /> Add Widget
+              </button>
+              <button
+                onClick={autoOrganize}
+                title="Rebuild the layout from widget purpose, priority, and preferred region"
+                style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', color: 'var(--theme-secondary, #5e768f)', padding: '6px 12px', cursor: 'pointer', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}
+              >
+                <LayoutGrid size={12} /> Auto Arrange
               </button>
               <button
                 onClick={handleReset}
@@ -256,8 +279,8 @@ export default function CustomDashboard() {
             layouts={rglLayouts}
             breakpoints={BREAKPOINTS}
             cols={COLS}
-            rowHeight={60}
-            margin={[10, 10]}
+            rowHeight={52}
+            margin={[8, 8]}
             isDraggable={editMode}
             isResizable={editMode}
             draggableCancel=".widget-no-drag"
@@ -267,18 +290,27 @@ export default function CustomDashboard() {
             preventCollision={false}
             useCSSTransforms
           >
-            {widgets.map(w => (
+            {widgets.filter(w => w.visible !== false).map(w => {
+              const layout = layouts.find(item => item.i === w.id)
+              const effective = {
+                ...w,
+                displayState: responsiveState(w.type, layout?.w ?? 4, layout?.h ?? 5, w.displayState),
+              }
+              return (
               <div key={w.id}>
                 <WidgetFrame
                   config={w}
                   editMode={editMode}
                   onRemove={() => removeWidget(w.id)}
+                  onDuplicate={() => duplicateWidget(w.id)}
+                  onReset={() => resetWidget(w.id)}
                   onUpdate={(patch: Partial<WidgetConfig>) => updateWidget(w.id, patch)}
                 >
-                  <WidgetRenderer config={w} />
+                  <WidgetRenderer config={effective} />
                 </WidgetFrame>
               </div>
-            ))}
+              )
+            })}
           </ResponsiveGridLayout>
         </div>
       )}
@@ -289,6 +321,9 @@ export default function CustomDashboard() {
         onClose={() => setPaletteOpen(false)}
         onAdd={(type: WidgetType) => { if (type === 'ticker-control') setShowTicker(true); else addWidget(type) }}
       />
+      {aiOpen && (
+        <DashboardAiChat current={widgets} applyAiDashboard={applyAiDashboard} onClose={() => setAiOpen(false)} />
+      )}
       </div>
     </PageWrapper>
   )

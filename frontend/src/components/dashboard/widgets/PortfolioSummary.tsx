@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -6,6 +6,7 @@ import {
   CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer,
 } from 'recharts'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
+import { loadActivePortfolio, priceHoldings, useQuotes } from './usePortfolio'
 
 const T = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', headerBg: 'var(--theme-surface, #0d1826)',
@@ -65,11 +66,14 @@ function ChartTooltip({ active, payload, label }: any) {
 }
 
 export default function PortfolioSummary({ config }: { config: WidgetConfig }) {
-  const tickers = config.tickers?.length ? config.tickers : ['SPY', 'QQQ']
-  const rawWeights = config.weights
-  const weights = rawWeights?.length === tickers.length
-    ? (() => { const s = rawWeights.reduce((a, b) => a + b, 0); return s > 0 ? rawWeights.map(w => w / s) : tickers.map(() => 1 / tickers.length) })()
-    : tickers.map(() => 1 / tickers.length)
+  const portfolio = useMemo(() => loadActivePortfolio(config.portfolioId), [config.portfolioId])
+  const tickers = portfolio.holdings.map(holding => holding.ticker)
+  const quotes = useQuotes(tickers)
+  const priced = priceHoldings(portfolio.holdings, quotes)
+  const equityValue = priced.reduce((sum, position) => sum + position.value, 0)
+  const totalValue = equityValue + portfolio.cash
+  const weights = priced.map(position => totalValue > 0 ? position.value / totalValue : 0)
+  const cashWeight = totalValue > 0 ? portfolio.cash / totalValue : 0
 
   const [periodIdx, setPeriodIdx] = useState(0)
   const [legendOpen, setLegendOpen] = useState(true)
@@ -79,10 +83,10 @@ export default function PortfolioSummary({ config }: { config: WidgetConfig }) {
   const startDate = PERIODS[periodIdx].start()
 
   const { data, isLoading, isError } = useQuery<BacktestResult>({
-    queryKey: ['portfolio-summary-v2', tickers.join(','), startDate],
-    queryFn: () => axios.post('/api/portfolio/backtest', { tickers, weights, benchmark: 'SPY', start: startDate, end: today }).then(r => r.data),
+    queryKey: ['portfolio-summary-v3', tickers.join(','), weights.map(weight => weight.toFixed(6)).join(','), cashWeight.toFixed(6), startDate],
+    queryFn: () => axios.post('/api/portfolio/backtest', { tickers, weights, cash_weight: cashWeight, benchmark: 'SPY', start: startDate, end: today }).then(r => r.data),
     staleTime: 300_000,
-    enabled: tickers.length >= 1,
+    enabled: tickers.length >= 1 && totalValue > 0,
     retry: 1,
   })
 
@@ -90,11 +94,21 @@ export default function PortfolioSummary({ config }: { config: WidgetConfig }) {
     background: T.bg, height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: T.mono,
   }
 
+  if (!tickers.length) {
+    return (
+      <div style={base}>
+        <div style={{ flex: 1, display: 'grid', placeItems: 'center', color: T.muted, fontFamily: T.label, fontSize: 11 }}>
+          Add holdings in Portfolio Manager.
+        </div>
+      </div>
+    )
+  }
+
   if (isError) {
     return (
       <div style={base}>
         <div style={{ padding: '6px 12px', background: T.headerBg, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
-          <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.gold }}>PORTFOLIO</span>
+          <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.gold }}>{portfolio.name.toUpperCase() || 'PORTFOLIO'}</span>
         </div>
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <span style={{ color: T.neg, fontFamily: T.label, fontSize: 11 }}>Data unavailable. Check tickers or try a shorter period.</span>
@@ -108,7 +122,7 @@ export default function PortfolioSummary({ config }: { config: WidgetConfig }) {
       <div style={base}>
         <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
         <div style={{ padding: '6px 12px', background: T.headerBg, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
-          <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.gold }}>PORTFOLIO</span>
+          <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.gold }}>{portfolio.name.toUpperCase() || 'PORTFOLIO'}</span>
         </div>
         <div style={{ flex: '0 1 auto', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4, padding: 8 }}>
           {Array.from({ length: 8 }).map((_, i) => <div key={i} style={{ ...shimmer, height: 44 }} />)}
@@ -142,6 +156,12 @@ export default function PortfolioSummary({ config }: { config: WidgetConfig }) {
                 <span style={{ color: T.dim }}> {(weights[i] * 100).toFixed(0)}%</span>
               </span>
             ))}
+            {cashWeight > 0 && (
+              <span style={{ fontFamily: T.label, fontSize: 9, color: T.text }}>
+                <span style={{ color: T.gold }}>CASH</span>
+                <span style={{ color: T.dim }}> {(cashWeight * 100).toFixed(0)}%</span>
+              </span>
+            )}
           </div>
           <span style={{ color: T.dim, fontSize: 9, fontFamily: T.mono, transition: 'transform 0.15s', display: 'inline-block', transform: legendOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }}>▾</span>
         </div>
@@ -150,6 +170,7 @@ export default function PortfolioSummary({ config }: { config: WidgetConfig }) {
             {tickers.map((tk, i) => (
               <div key={tk} title={`${tk} ${(weights[i] * 100).toFixed(1)}%`} style={{ height: 4, background: T.gold, opacity: 0.4 + weights[i] * 0.6, flex: weights[i] }} />
             ))}
+            {cashWeight > 0 && <div title={`Cash ${(cashWeight * 100).toFixed(1)}%`} style={{ height: 4, background: T.muted, flex: cashWeight }} />}
           </div>
         )}
       </div>

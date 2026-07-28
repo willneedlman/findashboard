@@ -4,6 +4,7 @@ import type { IChartApi, ISeriesApi } from 'lightweight-charts'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 import { readToken } from '../../../lib/theme'
 import { ChevronsRight } from 'lucide-react'
+import { useLiveMarks } from '../../../hooks/useLiveMarks'
 
 const PERIODS = [
   { label: '1M', value: '1mo' },
@@ -25,6 +26,8 @@ function toTVSymbol(ticker: string): string {
 export default function TradingViewChart({ config }: { config: WidgetConfig }) {
   const ticker    = (config.ticker || 'SPY').toUpperCase()
   const displaySym = toTVSymbol(ticker)
+  const liveMarks = useLiveMarks([ticker])
+  const livePrice = liveMarks[ticker]
 
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef      = useRef<IChartApi | null>(null)
@@ -177,8 +180,27 @@ export default function TradingViewChart({ config }: { config: WidgetConfig }) {
 
   return (
     <div style={{ height: '100%', minHeight: 300, display: 'flex', flexDirection: 'column', background: 'var(--theme-bg, #101c2e)', overflow: 'hidden' }}>
-
-      {/* Chart */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10, height: 30, padding: '0 10px',
+        borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+        background: 'var(--theme-surface, #0d1826)', flexShrink: 0,
+        fontFamily: 'var(--theme-mono)',
+      }}>
+        <span style={{ color: 'var(--theme-primary, #c9a84c)', fontSize: 11, fontWeight: 700 }}>{displaySym}</span>
+        {crosshair ? (
+          <>
+            <span style={{ color: 'var(--theme-secondary, #5e768f)', fontSize: 9 }}>{crosshair.date}</span>
+            <span style={{ color: 'var(--theme-text, #d7e3fc)', fontSize: 9 }}>O {crosshair.open.toFixed(2)}</span>
+            <span style={{ color: 'var(--theme-text, #d7e3fc)', fontSize: 9 }}>H {crosshair.high.toFixed(2)}</span>
+            <span style={{ color: 'var(--theme-text, #d7e3fc)', fontSize: 9 }}>L {crosshair.low.toFixed(2)}</span>
+            <span style={{ color: pctColor, fontSize: 9 }}>C {crosshair.close.toFixed(2)} {crosshair.pct >= 0 ? '+' : ''}{crosshair.pct.toFixed(2)}%</span>
+          </>
+        ) : (
+          <span style={{ color: 'var(--theme-text, #d7e3fc)', fontSize: 12, fontWeight: 700 }}>
+            {livePrice == null ? '-' : `$${livePrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          </span>
+        )}
+      </div>
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
         {loading && (

@@ -5,6 +5,7 @@ import { createChart, ColorType, CrosshairMode } from 'lightweight-charts'
 import type { IChartApi, ISeriesApi } from 'lightweight-charts'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 import { readToken } from '../../../lib/theme'
+import { useLiveMarks } from '../../../hooks/useLiveMarks'
 
 const T = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', headerBg: 'var(--theme-surface, #0d1826)',
@@ -159,6 +160,7 @@ function CandleChart({ ticker }: { ticker: string }) {
 
 export default function PriceCard({ config }: { config: WidgetConfig }) {
   const ticker = config.ticker
+  const liveMarks = useLiveMarks(ticker ? [ticker] : [])
 
   const { data, isLoading, isError } = useQuery<PriceData>({
     queryKey: ['price-card', ticker],
@@ -197,8 +199,9 @@ export default function PriceCard({ config }: { config: WidgetConfig }) {
 
   const { current_price, ann_volatility, max_drawdown } = data.metrics
   const prices = data.price
+  const livePrice = liveMarks[ticker.toUpperCase()] ?? current_price
   const dayChange = prices.length >= 2
-    ? ((prices[prices.length - 1].value - prices[prices.length - 2].value) / prices[prices.length - 2].value) * 100
+    ? ((livePrice - prices[prices.length - 2].value) / prices[prices.length - 2].value) * 100
     : 0
   const dayColor = dayChange >= 0 ? T.pos : T.neg
   const daySign  = dayChange >= 0 ? '+' : ''
@@ -218,7 +221,7 @@ export default function PriceCard({ config }: { config: WidgetConfig }) {
           {ticker}
         </span>
         <span style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: T.text, marginRight: 6, flexShrink: 0 }}>
-          ${current_price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          ${livePrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
         <span style={{ fontFamily: T.mono, fontSize: 11, color: dayColor, flexShrink: 0 }}>
           {daySign}{dayChange.toFixed(2)}%

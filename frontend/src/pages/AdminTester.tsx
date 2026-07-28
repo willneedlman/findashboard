@@ -15,7 +15,7 @@ const AlgoRunner         = lazy(() => import('./AlgoRunner'))
 // Risk/Flow Desk presets.
 const PREVIEW_WIDGETS: { type: WidgetType; config: Partial<WidgetConfig> }[] = [
   { type: 'risk-metrics',    config: {} },
-  { type: 'exposure-map',    config: {} },
+  { type: 'factor-decomposition', config: { factorModel: 'macro', lookback: 365 } },
   { type: 'position-sizer',  config: { ticker: 'AAPL' } },
   { type: 'pnl-attribution', config: {} },
   { type: 'unusual-flow',    config: {} },

@@ -15,6 +15,7 @@ interface SkewResp {
   ts_slope: number
   front_smile: { moneyness: number; iv: number }[]
   term_structure: { expiry: string; dte: number; atm_iv: number; rr_25: number; smile: { moneyness: number; iv: number }[] }[]
+  read: string
 }
 
 const skewColor = (v: number) => (v > 4 ? T.neg : v > 1.5 ? T.warn : T.pos)
@@ -52,7 +53,7 @@ export default function VolSkewWidget({ config }: { config: WidgetConfig }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: T.bg }}>
-      {isLoading && <div style={{ padding: 12, fontFamily: T.mono, fontSize: 10, color: T.muted }}>Loading skew…</div>}
+      {isLoading && <div style={{ padding: 12, fontFamily: T.mono, fontSize: 10, color: T.muted }}>Loading skew...</div>}
       {isError && <div style={{ padding: 12, fontFamily: T.mono, fontSize: 10, color: T.neg }}>No skew data</div>}
 
       {data && (
@@ -67,7 +68,10 @@ export default function VolSkewWidget({ config }: { config: WidgetConfig }) {
           </div>
 
           <div style={{ padding: '4px 10px 0', fontFamily: T.mono, fontSize: 8, color: T.muted, letterSpacing: '0.06em', flexShrink: 0 }}>
-            Skew · {smileExpiry} · IV by moneyness
+            Skew | {smileExpiry} | IV by moneyness
+          </div>
+          <div style={{ padding: '4px 10px', fontFamily: T.label, fontSize: 9, lineHeight: 1.35, color: T.muted, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+            {data.read}
           </div>
           <div style={{ flex: 1, minHeight: 0, padding: '2px 4px 4px' }}>
             <ResponsiveContainer width="100%" height="100%">

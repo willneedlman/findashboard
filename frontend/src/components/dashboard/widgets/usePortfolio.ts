@@ -1,6 +1,7 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { useTheme } from '../../../contexts/ThemeContext'
+import { useLiveMarks } from '../../../hooks/useLiveMarks'
 
 // Shared formatters used across the portfolio/flow widgets.
 export const money = (v: number) => `${v < 0 ? '-' : ''}$${Math.abs(Math.round(v)).toLocaleString()}`
@@ -107,6 +108,7 @@ export function listPortfolios(): { portfolios: { id: string; name: string }[]; 
 }
 
 export function useQuotes(tickers: string[]): Record<string, Quote | undefined> {
+  const liveMarks = useLiveMarks(tickers)
   const results = useQueries({
     queries: tickers.map(t => ({
       queryKey: ['pm-widget-quote', t],
@@ -116,7 +118,13 @@ export function useQuotes(tickers: string[]): Record<string, Quote | undefined> 
     })),
   })
   const out: Record<string, Quote | undefined> = {}
-  tickers.forEach((t, i) => { out[t] = results[i]?.data })
+  tickers.forEach((t, i) => {
+    const fallback = results[i]?.data
+    const live = liveMarks[t.toUpperCase()]
+    out[t] = live != null
+      ? { current_price: live, pct_change_1d: fallback?.pct_change_1d ?? null }
+      : fallback
+  })
   return out
 }
 

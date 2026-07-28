@@ -43,7 +43,8 @@ def options_snapshot(ticker: str):
             return _snap_cache[sym]
 
     # Check disk cache before hitting any external API
-    disk_val = disk_get(f"snap:{sym}")
+    disk_key = f"snap:v2:{sym}"
+    disk_val = disk_get(disk_key)
     if disk_val:
         with _snap_lock:
             _snap_cache[sym] = disk_val
@@ -93,17 +94,31 @@ def options_snapshot(ticker: str):
 
         today = _dt.date.today()
         r_rate = 0.045
-        future_exps = [e for e in (tkr.options or []) if _dt.date.fromisoformat(e) > today]
+        tradier_chain = False
+        if _tradier.available():
+            try:
+                future_exps = [e for e in _tradier.get_expirations(sym) if _dt.date.fromisoformat(e) > today]
+                tradier_chain = bool(future_exps)
+            except Exception:
+                future_exps = []
+        else:
+            future_exps = []
+        if not future_exps:
+            future_exps = [e for e in (tkr.options or []) if _dt.date.fromisoformat(e) > today]
 
-        # Pick the first expiry that has any real ATM lastPrice data (lastPrice > 0)
         calls = puts = None
         for exp in future_exps[:12]:
             try:
-                c   = tkr.option_chain(exp)
-                cf  = c.calls.fillna(0)
-                pf  = c.puts.fillna(0)
+                if tradier_chain:
+                    chain = _tradier.get_options_chain(sym, exp, greeks=True)
+                    cf = pd.DataFrame(chain["calls"]).fillna(0)
+                    pf = pd.DataFrame(chain["puts"]).fillna(0)
+                else:
+                    chain = tkr.option_chain(exp)
+                    cf = chain.calls.fillna(0)
+                    pf = chain.puts.fillna(0)
                 atm = cf[(cf["strike"] >= spot * 0.9) & (cf["strike"] <= spot * 1.1)]
-                if (atm["lastPrice"] > 0.01).any() or (atm["volume"] > 0).any():
+                if not atm.empty and ((atm["lastPrice"] > 0.01).any() or (atm["volume"] > 0).any()):
                     expiry = exp
                     calls, puts = cf, pf
                     break
@@ -112,8 +127,13 @@ def options_snapshot(ticker: str):
 
         if calls is None and future_exps:
             expiry = future_exps[0]
-            c = tkr.option_chain(expiry)
-            calls, puts = c.calls.fillna(0), c.puts.fillna(0)
+            if tradier_chain:
+                chain = _tradier.get_options_chain(sym, expiry, greeks=True)
+                calls = pd.DataFrame(chain["calls"]).fillna(0)
+                puts = pd.DataFrame(chain["puts"]).fillna(0)
+            else:
+                chain = tkr.option_chain(expiry)
+                calls, puts = chain.calls.fillna(0), chain.puts.fillna(0)
 
         if calls is not None and expiry:
             exp_dt = _dt.date.fromisoformat(expiry)
@@ -143,9 +163,15 @@ def options_snapshot(ticker: str):
                 c_price = _best_price(atm_c)
                 p_price = _best_price(atm_p)
 
-                # D50 prices — ATM call and put (delta ≈ 0.50 at ATM)
-                if c_price > 0.01: d50_call = round(float(c_price), 2)
-                if p_price > 0.01: d50_put  = round(float(p_price), 2)
+                if tradier_chain and "delta" in calls and "delta" in puts:
+                    d50_c = calls.iloc[(calls["delta"].abs() - 0.5).abs().argsort()[:1]]
+                    d50_p = puts.iloc[(puts["delta"].abs() - 0.5).abs().argsort()[:1]]
+                    d50_c_price = _best_price(d50_c)
+                    d50_p_price = _best_price(d50_p)
+                else:
+                    d50_c_price, d50_p_price = c_price, p_price
+                if d50_c_price > 0.01: d50_call = round(float(d50_c_price), 2)
+                if d50_p_price > 0.01: d50_put = round(float(d50_p_price), 2)
 
                 # Straddle price and implied move
                 straddle_val = c_price + p_price
@@ -153,12 +179,17 @@ def options_snapshot(ticker: str):
                     straddle_px  = round(float(straddle_val), 2)
                     implied_move = round(float(straddle_val / spot * 100), 1)
 
-                # ATM IV — back-calculate from best available price via B-S inversion
                 ivs = []
-                if c_price > 0.01:
+                if tradier_chain and "impliedVolatility" in atm_c and not atm_c.empty:
+                    iv = float(atm_c.iloc[0]["impliedVolatility"])
+                    if 0.01 < iv < 5.0: ivs.append(iv)
+                if tradier_chain and "impliedVolatility" in atm_p and not atm_p.empty:
+                    iv = float(atm_p.iloc[0]["impliedVolatility"])
+                    if 0.01 < iv < 5.0: ivs.append(iv)
+                if not ivs and c_price > 0.01:
                     iv = _implied_vol(c_price, spot, atm_strike, T_y, r_rate, 'c')
                     if iv and 0.01 < iv < 5.0: ivs.append(iv)
-                if p_price > 0.01:
+                if not ivs and p_price > 0.01:
                     iv = _implied_vol(p_price, spot, atm_strike, T_y, r_rate, 'p')
                     if iv and 0.01 < iv < 5.0: ivs.append(iv)
                 if ivs:
@@ -284,10 +315,11 @@ def options_snapshot(ticker: str):
         "analyst_count":  analyst_count,
         "latest_action":  latest_action,
         "price_target":   price_target,
+        "options_source": "tradier" if tradier_chain else "yfinance",
     }
     with _snap_lock:
         _snap_cache[sym] = result
-    disk_set(f"snap:{sym}", result, ttl=_SNAP_DISK_TTL)
+    disk_set(disk_key, result, ttl=_SNAP_DISK_TTL)
     return result
 
 
@@ -672,6 +704,40 @@ def option_marks(req: MarksRequest):
     return {"marks": out}
 
 
+def _gex_levels(pivot: pd.DataFrame, spot: float) -> dict:
+    ordered = pivot.sort_values("strike").reset_index(drop=True)
+    flip_candidates: list[float] = []
+    for i, row in ordered.iterrows():
+        strike = float(row["strike"])
+        net = float(row["net_gex"])
+        if net == 0:
+            flip_candidates.append(strike)
+        if i == len(ordered) - 1:
+            continue
+        next_row = ordered.iloc[i + 1]
+        next_net = float(next_row["net_gex"])
+        if net * next_net < 0:
+            next_strike = float(next_row["strike"])
+            flip_candidates.append(strike - net * (next_strike - strike) / (next_net - net))
+
+    positive = ordered[ordered["net_gex"] > 0]
+    negative = ordered[ordered["net_gex"] < 0]
+    pos_row = positive.loc[positive["net_gex"].idxmax()] if not positive.empty else None
+    neg_row = negative.loc[negative["net_gex"].idxmin()] if not negative.empty else None
+
+    def level(row) -> dict | None:
+        if row is None:
+            return None
+        return {"strike": round(float(row["strike"]), 4), "gex_m": round(float(row["net_gex"]), 4)}
+
+    return {
+        "flip": round(min(flip_candidates, key=lambda value: abs(value - spot)), 4) if flip_candidates else None,
+        "max_positive_gex": level(pos_row),
+        "max_negative_gex": level(neg_row),
+        "total_net_gex": round(float(ordered["net_gex"].sum()), 4),
+    }
+
+
 @router.get("/gex")
 def dealer_gex(ticker: str, expiry: str | None = None):
     import datetime as _dt
@@ -679,7 +745,7 @@ def dealer_gex(ticker: str, expiry: str | None = None):
     open_now = is_market_open()
     # v2: GEX now sources chains from Tradier 24/7 (reliable OI + greeks) rather
     # than yfinance-only when closed; bump invalidates stale near-empty caches.
-    cache_key = f"gex:v2:{sym}:{expiry or 'all'}"
+    cache_key = f"gex:v3:{sym}:{expiry or 'all'}"
 
     # Market closed → the profile can't change intraday, so serve the last cached
     # one instead of refetching. BUT only if that cache reflects the most recent
@@ -821,7 +887,17 @@ def dealer_gex(ticker: str, expiry: str | None = None):
     }
 
     if not rows:
-        return {"spot": spot, "data": [], "expirations": all_expirations, "expiry": used_expiry, **_meta}
+        return {
+            "spot": spot,
+            "data": [],
+            "expirations": all_expirations,
+            "expiry": used_expiry,
+            "flip": None,
+            "max_positive_gex": None,
+            "max_negative_gex": None,
+            "total_net_gex": 0,
+            **_meta,
+        }
 
     df = pd.DataFrame(rows)
     pivot = (df.groupby(["strike", "side"])["gex_m"].sum()
@@ -831,11 +907,13 @@ def dealer_gex(ticker: str, expiry: str | None = None):
             pivot[col] = 0.0
     pivot["net_gex"] = pivot["call_gex"] + pivot["put_gex"]
     pivot = pivot.reset_index().sort_values("strike")
+    levels = _gex_levels(pivot, float(spot))
     result = {
         "spot": spot,
         "data": pivot.round(4).to_dict(orient="records"),
         "expirations": all_expirations,
         "expiry": used_expiry,
+        **levels,
         **_meta,
     }
     disk_set(cache_key, result, ttl=86400)   # reuse while the market is closed

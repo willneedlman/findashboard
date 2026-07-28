@@ -28,7 +28,7 @@ import ValuationWidget from './widgets/ValuationWidget'
 import InsiderWidget from './widgets/InsiderWidget'
 import RiskMetricsWidget from './widgets/RiskMetricsWidget'
 import PnLAttributionWidget from './widgets/PnLAttributionWidget'
-import ExposureMapWidget from './widgets/ExposureMapWidget'
+import FactorDecompositionWidget from './widgets/FactorDecompositionWidget'
 import TimeAndSalesWidget from './widgets/TimeAndSalesWidget'
 import UnusualFlowWidget from './widgets/UnusualFlowWidget'
 import HeatmapWidget from './widgets/HeatmapWidget'
@@ -68,7 +68,7 @@ export default function WidgetRenderer({ config }: { config: WidgetConfig }) {
     case 'insider-activity':   return <InsiderWidget config={config} />
     case 'risk-metrics':       return <RiskMetricsWidget config={config} />
     case 'pnl-attribution':    return <PnLAttributionWidget config={config} />
-    case 'exposure-map':       return <ExposureMapWidget config={config} />
+    case 'factor-decomposition': return <FactorDecompositionWidget config={config} />
     case 'time-and-sales':     return <TimeAndSalesWidget config={config} />
     case 'unusual-flow':       return <UnusualFlowWidget config={config} />
     case 'heatmap':            return <HeatmapWidget config={config} />
