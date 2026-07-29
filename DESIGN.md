@@ -118,10 +118,18 @@ consistency comes from one shared chrome:
 - **Trading tone:** buy/up green `#22C55E`, sell/down red `#EF4444`, labels in
   `--theme-secondary`.
 
-Presets (`buildPreset` in `hooks/useDashboard.ts`): Everything, Trading Portal,
-Research, Screening, Market Overview. Research-specific widgets: Analyst Consensus
-(rating distribution + targets), Valuation (multiples vs the broad market), Insider
-Activity (ownership split + transaction log).
+Workspace starters (`buildPreset` in `hooks/useDashboard.ts`): Everything, Trading
+Portal, Research, Screening, Market Overview, Options Desk, and Risk Desk. Starters
+choose useful widget collections, not geometry. Curated layout templates are an
+internal composition tool selected from widget intent and metadata by the AI builder
+and Auto Arrange. Never expose template names or a template picker to users.
+
+Portfolio-risk dashboards have a protected six-widget core: Portfolio Summary and
+Risk Metrics lead, Factor Decomposition and Correlation Matrix explain exposure,
+then P/L Attribution and Portfolios provide position-level context. Portfolio Summary
+and Risk Metrics are complementary and must never conflict. AI drafts are repaired
+to this baseline when the user asks for a complete portfolio-risk workspace. Empty
+portfolio panels collapse while populated peers retain their useful height.
 
 ## Motion
 

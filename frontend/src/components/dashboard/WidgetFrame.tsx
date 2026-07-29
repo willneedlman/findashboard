@@ -1,5 +1,5 @@
 import { Copy, GripHorizontal, RotateCcw, Settings, X } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { WidgetConfig, WidgetType } from '../../hooks/useDashboard'
 import { TICKER_WIDGET_TYPES } from '../../hooks/useDashboard'
 import { DEFAULT_MACRO_STRIP_SERIES, WIDGET_DEFINITIONS, WIDGET_LABELS } from './widgetRegistry'
@@ -296,6 +296,7 @@ function CreditSpreadsSettings({
 }
 
 export default function WidgetFrame({ config, editMode, onRemove, onDuplicate, onReset, onUpdate, children }: WidgetFrameProps) {
+  const frameRef = useRef<HTMLDivElement>(null)
   const [configOpen, setConfigOpen] = useState(false)
   const [tickerInput, setTickerInput] = useState(config.ticker || '')
   const [tagTickers, setTagTickers] = useState<string[]>(config.tickers ?? [])
@@ -332,6 +333,12 @@ export default function WidgetFrame({ config, editMode, onRemove, onDuplicate, o
   useEffect(() => { setMacroCalCatSel(config.categories ?? DEFAULT_MACRO_CAL_CATS) }, [config.categories])
   useEffect(() => { setSpreadSerSel(config.categories ?? DEFAULT_SPREAD_SERIES) }, [config.categories])
   useEffect(() => { setSpreadLookback(config.lookback ?? 90) }, [config.lookback])
+  useEffect(() => {
+    const gridItem = frameRef.current?.parentElement
+    if (!gridItem) return
+    gridItem.style.zIndex = configOpen ? '100' : ''
+    return () => { gridItem.style.zIndex = '' }
+  }, [configOpen])
 
   const handlePortTickersChange = (next: string[]) => {
     setPortTickers(next)
@@ -388,29 +395,48 @@ export default function WidgetFrame({ config, editMode, onRemove, onDuplicate, o
   const hasSettings = WIDGET_DEFINITIONS[config.type].configOptions.length > 0 && !SELF_CONFIGURED.includes(config.type)
 
   const hasHeader = hasSettings || SELF_CONFIGURED.includes(config.type as WidgetType) || HEADER_WIDGETS.includes(config.type)
+  const isIndexTape = config.type === 'index-tape'
 
   return (
     <div
+      ref={frameRef}
       style={{
         position: 'relative', height: '100%', display: 'flex', flexDirection: 'column',
         background: 'var(--theme-bg, #101c2e)',
         border: editMode ? '1px solid color-mix(in srgb, var(--theme-primary) 55%, transparent)' : '1px solid var(--theme-border, rgba(255,255,255,0.08))',
         boxShadow: editMode ? '0 0 0 1px color-mix(in srgb, var(--theme-primary) 8%, transparent) inset' : 'none',
-        transition: 'border-color 0.15s', overflow: 'hidden',
+        transition: 'border-color 0.15s', overflow: isIndexTape && configOpen ? 'visible' : 'hidden',
         cursor: editMode ? 'grab' : 'default',
       }}>
+      {isIndexTape && !editMode && hasSettings && (
+        <button
+          className="widget-no-drag"
+          aria-label="Configure Index Tape"
+          title="Configure Index Tape"
+          onClick={() => setConfigOpen(open => !open)}
+          style={{
+            position: 'absolute', top: 3, right: 5, zIndex: 10,
+            width: 20, height: 20, padding: 0, display: 'grid', placeItems: 'center',
+            border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+            background: 'color-mix(in srgb, var(--theme-bg) 88%, transparent)',
+            color: 'var(--theme-secondary, #5e768f)', cursor: 'pointer',
+          }}
+        >
+          <Settings size={10} />
+        </button>
+      )}
       {/* Header bar */}
-      {(hasHeader || editMode) && (
+      {(hasHeader || editMode) && (!isIndexTape || editMode) && (
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           // Trading Portal panel-header strip — same tokens as .ft-panel-header.
           background: editMode ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' : 'var(--theme-hover, rgba(0,0,0,0.12))',
           borderBottom: editMode ? '1px solid color-mix(in srgb, var(--theme-primary) 25%, transparent)' : '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))',
-          padding: '6px 10px', flexShrink: 0,
+          padding: isIndexTape ? '2px 7px' : '6px 10px', flexShrink: 0,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-            {editMode && <GripHorizontal size={13} style={{ color: 'color-mix(in srgb, var(--theme-primary) 70%, transparent)', flexShrink: 0 }} />}
-            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase',
+            {editMode && <GripHorizontal size={isIndexTape ? 10 : 13} style={{ color: 'color-mix(in srgb, var(--theme-primary) 70%, transparent)', flexShrink: 0 }} />}
+            <span style={{ fontSize: isIndexTape ? 7.5 : 9, fontWeight: 700, letterSpacing: isIndexTape ? '0.12em' : '0.16em', textTransform: 'uppercase',
               color: editMode ? 'color-mix(in srgb, var(--theme-primary) 70%, transparent)' : 'var(--theme-primary, #c9a84c)',
               fontFamily: S.label, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {widgetTitle(config)}
@@ -471,7 +497,14 @@ export default function WidgetFrame({ config, editMode, onRemove, onDuplicate, o
 
       {/* Config panel */}
       {configOpen && (
-        <div className="widget-no-drag" style={{ position: 'absolute', top: 26, left: 0, right: 0, bottom: 0, zIndex: 20, background: 'var(--theme-surface, #0d1826)', borderTop: '1px solid rgba(255,255,255,0.08)', padding: 10, overflowY: 'auto' }}>
+        <div className="widget-no-drag" style={{
+          position: 'absolute', top: isIndexTape && !editMode ? 0 : isIndexTape ? 20 : 26,
+          left: 0, right: 0, bottom: isIndexTape ? 'auto' : 0, minHeight: isIndexTape ? 220 : undefined,
+          zIndex: 20, background: 'var(--theme-surface, #0d1826)',
+          border: isIndexTape ? '1px solid var(--theme-border, rgba(255,255,255,0.12))' : undefined,
+          borderTop: '1px solid rgba(255,255,255,0.08)', padding: 10, overflowY: 'auto',
+          boxShadow: isIndexTape ? '0 16px 36px rgba(0,0,0,0.42)' : undefined,
+        }}>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 9 }}>
             <span style={{ fontSize: 9, color: S.muted, fontFamily: S.label, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Responsive view</span>
             <select value={config.displayState ?? 'auto'} onChange={event => onUpdate({ displayState: event.target.value as WidgetConfig['displayState'] })} style={{ flex: 1, background: 'var(--theme-bg, #101c2e)', border: `1px solid ${S.border}`, color: S.text, fontFamily: S.mono, fontSize: 10, padding: '3px 6px' }}>

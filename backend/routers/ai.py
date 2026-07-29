@@ -4008,6 +4008,10 @@ class DashboardCatalogItem(BaseModel):
     dataType: str = ""
     priority: str = "secondary"
     region: str = "body"
+    orientation: str = "balanced"
+    density: str = "standard"
+    visualRole: str = "supporting"
+    growth: str = "bounded"
     compatible: list[str] = Field(default_factory=list)
     related: list[str] = Field(default_factory=list)
     conflicts: list[str] = Field(default_factory=list)
@@ -4026,7 +4030,10 @@ You are given:
 - CATALOG: every available widget with its purpose, data type, visual priority, preferred region, dimensions, compatible, related, and conflicting widgets, configuration options, and duplicate rule. Use ONLY these `type` values.
 - CURRENT: the widgets already on the active dashboard (so you can add to or replace them).
 
-GRID: 12 columns wide. Give each widget a width w (1..12, at least its minW) and height h (at least its minH) in grid units, and ORDER the items top-to-bottom. The builder derives positions with natural-size skyline packing, so any x/y you send are IGNORED. Width, height, and order express the intended hierarchy.
+Never repeat a widget with the same material configuration. Multiple instances are only useful when their configured subjects differ and the comparison is intentional.
+
+GRID: 12 columns wide. Give each widget a width w (1..12, at least its minW) and height h (at least its minH) in grid units, and ORDER the items by importance. The builder validates your suggestions, maps widgets into a curated template, and compacts unmatched items into balanced rows. Any x/y you send are ignored.
+The composition template is an internal design tool. Infer the strongest structure from the user's intent and widget mix. Never ask the user to choose a template or preset, and never mention internal template names in questions, summaries, or drafts.
 
 LAYOUT:
 - Keep widgets near their catalog default dimensions. Do not stretch a tile merely to fill a row.
@@ -4049,7 +4056,7 @@ MATCH INTENT (examples, not limits):
 - Macro / rates / credit view: macro-strip, yield-curve, credit-spreads, global-macro, macro-calendar, sector-rotation.
 - Options / vol / flow: dealer-gex, vol-skew, options-snapshot, options-pricer, delta-target, unusual-flow.
 - A single name to watch: lead with ONE main chart — tradingview-chart (large, focused, h=8) or price-card (chart + stats header, h=7); use mini-chart only as a small secondary spark. Support it with news-feed, analyst-ratings, valuation, earnings-calendar. Do not stack two big charts of the same ticker.
-- Portfolio / risk: risk-metrics, factor-decomposition, pnl-attribution, pm-portfolios, correlation-matrix.
+- Portfolio / risk: ALWAYS include portfolio-summary, risk-metrics, factor-decomposition, pnl-attribution, correlation-matrix, and pm-portfolios. These are complementary views of performance, loss, exposure, attribution, diversification, and book context. Do not substitute market tape, watchlist, options, or macro widgets unless the user explicitly asks for them.
 - Broad market monitor: index-tape, heatmap, watchlist, sentiment-gauge, sector-rotation, market-hours.
 
 ACTION — how the draft should be applied:
@@ -4063,6 +4070,113 @@ Respond ONLY with valid JSON (no markdown, no code fences), exactly one shape:
 Question: {"type":"question","text":"<one focused question with concrete options>"}
 Draft: {"type":"draft","name":"<short dashboard name>","action":"replace|append|new","summary":"<one plain sentence describing the layout>","items":[{"type":"<catalog type>","config":{...},"x":0,"y":0,"w":6,"h":6}, ...]}"""
 
+_DASHBOARD_INTENT_PROFILES = {
+    "risk": {
+        "required": (
+            "portfolio-summary",
+            "risk-metrics",
+            "factor-decomposition",
+            "correlation-matrix",
+            "pnl-attribution",
+            "pm-portfolios",
+        ),
+        "name": "Portfolio Risk Monitor",
+        "summary": "Portfolio performance and loss first, followed by factor exposure, diversification, attribution, and book context.",
+    },
+    "portfolio": {
+        "required": (
+            "portfolio-summary",
+            "risk-metrics",
+            "factor-decomposition",
+            "correlation-matrix",
+            "pnl-attribution",
+            "pm-portfolios",
+        ),
+        "name": "Portfolio Monitor",
+        "summary": "Portfolio performance, risk, factor exposure, diversification, attribution, and book context in one view.",
+    },
+}
+
+
+def _dashboard_user_text(messages: list[StrategyChatMessage]) -> str:
+    return " ".join(message.content for message in messages if message.role == "user").lower()
+
+
+def _infer_dashboard_objective(messages: list[StrategyChatMessage]) -> str:
+    text = _dashboard_user_text(messages)
+    portfolio_terms = re.search(r"\b(portfolio|holdings?|book|allocation|p/?l)\b", text)
+    risk_terms = re.search(r"\b(risk|var|drawdown|concentration|exposure|stress|downside|hedg(?:e|ing))\b", text)
+    if risk_terms and portfolio_terms:
+        return "risk"
+    if re.search(r"\b(portfolio risk|value at risk|max(?:imum)? drawdown|factor exposure)\b", text):
+        return "risk"
+    if portfolio_terms:
+        return "portfolio"
+    if re.search(r"\b(options?|gamma|gex|skew|implied vol(?:atility)?|greeks?|calls?|puts?)\b", text):
+        return "options"
+    if re.search(r"\b(macro|rates?|yield curve|credit spreads?|inflation|fed|economic)\b", text):
+        return "macro"
+    if re.search(r"\b(screen|screener|filter|candidates?|universe)\b", text):
+        return "screening"
+    if re.search(r"\b(trade|trading|order|execution|tape|intraday)\b", text):
+        return "trading"
+    if re.search(r"\b(research|valuation|analyst|fundamental|company|earnings)\b", text):
+        return "research"
+    return "general"
+
+
+def _requests_complete_dashboard(text: str) -> bool:
+    return bool(re.search(r"\b(dashboard|monitor|overview|cockpit|workspace|track my|watch my)\b", text))
+
+
+def _explicitly_requests_widget(widget_type: str, label: str, text: str) -> bool:
+    terms = {widget_type.replace("-", " "), label.lower()}
+    aliases = {
+        "vol-skew": {"volatility skew", "skew"},
+        "global-macro": {"cross asset", "global macro"},
+        "index-tape": {"market tape", "index tape"},
+        "pm-portfolios": {"portfolio list", "saved portfolios"},
+        "pnl-attribution": {"p/l attribution", "pnl attribution"},
+    }
+    terms.update(aliases.get(widget_type, set()))
+    return any(term and term in text for term in terms)
+
+
+def _enforce_dashboard_intent(
+    items: list[dict],
+    catalog: list[DashboardCatalogItem],
+    objective: str,
+    action: str,
+    text: str,
+    cols: int,
+) -> list[dict]:
+    profile = _DASHBOARD_INTENT_PROFILES.get(objective)
+    if not profile or action == "append" or not _requests_complete_dashboard(text):
+        return items
+    specs = {item.type: item for item in catalog}
+    proposed = {item["type"]: item for item in items}
+    guarded: list[dict] = []
+    for widget_type in profile["required"]:
+        spec = specs.get(widget_type)
+        if not spec:
+            continue
+        guarded.append(proposed.get(widget_type) or {
+            "type": widget_type,
+            "config": {},
+            "x": 0,
+            "y": 0,
+            "w": min(cols, max(spec.minW, spec.defW)),
+            "h": max(spec.minH, spec.defH),
+        })
+    required = set(profile["required"])
+    for item in items:
+        if item["type"] in required:
+            continue
+        spec = specs.get(item["type"])
+        if spec and _explicitly_requests_widget(item["type"], spec.label, text):
+            guarded.append(item)
+    return _normalize_dashboard_items(guarded[:8], catalog, cols)
+
 
 def _normalize_dashboard_items(items, catalog: list[DashboardCatalogItem], cols: int) -> list[dict]:
     """Keep only real widget types and clamp every size to the grid + the
@@ -4071,6 +4185,7 @@ def _normalize_dashboard_items(items, catalog: list[DashboardCatalogItem], cols:
     by_type = {c.type: c for c in catalog}
     out: list[dict] = []
     accepted_types: list[str] = []
+    accepted_identities: set[str] = set()
     for it in items if isinstance(items, list) else []:
         if not isinstance(it, dict):
             continue
@@ -4108,8 +4223,12 @@ def _normalize_dashboard_items(items, catalog: list[DashboardCatalogItem], cols:
         if spec.ticker:
             allowed_config.add("ticker")
         config = {key: value for key, value in raw_config.items() if key in allowed_config}
+        identity = json.dumps([t, config], sort_keys=True, separators=(",", ":"))
+        if identity in accepted_identities:
+            continue
         out.append({"type": t, "config": config, "x": x, "y": y, "w": w, "h": h})
         accepted_types.append(t)
+        accepted_identities.add(identity)
     return out
 
 
@@ -4123,6 +4242,7 @@ def dashboard_chat(req: DashboardChatRequest):
     catalog_lines = "\n".join(
         f"- {c.type} ({c.label}): {c.purpose or c.description[:100]}; data={c.dataType}; "
         f"priority={c.priority}; region={c.region}; size={c.defW}x{c.defH}; min={c.minW}x{c.minH}; "
+        f"orientation={c.orientation}; density={c.density}; role={c.visualRole}; growth={c.growth}; "
         f"related={','.join(c.related) or 'none'}; conflicts={','.join(c.conflicts) or 'none'}; "
         f"config={','.join(c.configOptions) or 'none'}; multiple={c.multiple}"
         for c in req.catalog
@@ -4151,12 +4271,21 @@ def dashboard_chat(req: DashboardChatRequest):
     if not isinstance(result, dict) or result.get("type") not in ("question", "draft"):
         raise HTTPException(502, "The AI returned an unexpected response. Try rephrasing your request.")
     if result.get("type") == "draft":
+        objective = _infer_dashboard_objective(req.messages)
+        text = _dashboard_user_text(req.messages)
+        action = result.get("action")
+        action = action if action in ("replace", "append", "new") else "replace"
         items = _normalize_dashboard_items(result.get("items"), req.catalog, cols)
+        items = _enforce_dashboard_intent(items, req.catalog, objective, action, text, cols)
         if not items:
             return {"type": "question", "text": "I could not turn that into widgets. Tell me the theme (macro, options, a specific ticker, portfolio risk) and I will lay it out."}
-        action = result.get("action")
-        result["action"] = action if action in ("replace", "append", "new") else "replace"
+        result["action"] = action
         result["items"] = items
-        result["name"] = str(result.get("name") or "AI Dashboard").strip()[:40]
-        result["summary"] = str(result.get("summary") or "").strip()
+        result["objective"] = objective
+        profile = _DASHBOARD_INTENT_PROFILES.get(objective)
+        name = str(result.get("name") or "AI Dashboard").strip()
+        if profile and not any(term in name.lower() for term in ("portfolio", "risk")):
+            name = profile["name"]
+        result["name"] = name[:40]
+        result["summary"] = profile["summary"] if profile else str(result.get("summary") or "").strip()
     return result

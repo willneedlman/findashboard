@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 import TickerLogo from '../../TickerLogo'
+import { useWidgetContentState } from '../widgetContentState'
 
 
 interface Row { ticker: string; marketCap: number | null; sector: string; change1d: number | null }
@@ -31,7 +32,7 @@ function groupSectors(rows: Row[]): Sector[] {
     .slice(0, 7)
 }
 
-export default function HeatmapWidget({ config: _c }: { config: WidgetConfig }) {
+export default function HeatmapWidget({ config }: { config: WidgetConfig }) {
   const { data, isLoading, isError } = useQuery<{ results: Row[] }>({
     queryKey: ['heatmap-screener'],
     staleTime: 5 * 60_000,
@@ -40,6 +41,7 @@ export default function HeatmapWidget({ config: _c }: { config: WidgetConfig }) 
   })
 
   const sectors = groupSectors(data?.results ?? [])
+  useWidgetContentState(config.id, isLoading ? 'loading' : isError ? 'error' : sectors.length ? 'ready' : 'empty')
 
   if (sectors.length === 0) {
     return (

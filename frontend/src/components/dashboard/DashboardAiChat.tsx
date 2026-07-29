@@ -4,6 +4,7 @@ import { Sparkles, X, RefreshCw } from 'lucide-react'
 import {
   WIDGET_LABELS, WIDGET_DESCRIPTIONS, WIDGET_DEFAULT_SIZE, WIDGET_MIN_SIZES,
   WIDGET_DEFINITIONS, TICKER_WIDGET_TYPES, type WidgetType, type WidgetConfig, type AiDashboardItem,
+  type DashboardObjective,
 } from '../../hooks/useDashboard'
 
 // AI dashboard architect — mirrors the options / algo strategy chat. The user
@@ -12,7 +13,7 @@ import {
 
 type Msg = { role: 'user' | 'assistant'; content: string }
 type DraftItem = { type: WidgetType; config?: Partial<WidgetConfig>; w?: number; h?: number }
-type Draft = { name: string; action: 'replace' | 'append' | 'new'; summary: string; items: DraftItem[] }
+type Draft = { name: string; action: 'replace' | 'append' | 'new'; objective?: DashboardObjective; summary: string; items: DraftItem[] }
 
 // Built from the live widget registry so it can never drift from what exists.
 const CATALOG = (Object.keys(WIDGET_LABELS) as WidgetType[])
@@ -27,6 +28,10 @@ const CATALOG = (Object.keys(WIDGET_LABELS) as WidgetType[])
     dataType: WIDGET_DEFINITIONS[t].dataType,
     priority: WIDGET_DEFINITIONS[t].priority,
     region: WIDGET_DEFINITIONS[t].region,
+    orientation: WIDGET_DEFINITIONS[t].orientation,
+    density: WIDGET_DEFINITIONS[t].density,
+    visualRole: WIDGET_DEFINITIONS[t].visualRole,
+    growth: WIDGET_DEFINITIONS[t].growth,
     compatible: WIDGET_DEFINITIONS[t].compatible,
     related: WIDGET_DEFINITIONS[t].related,
     conflicts: WIDGET_DEFINITIONS[t].conflicts,
@@ -48,12 +53,23 @@ const chip = (on: boolean): React.CSSProperties => ({
   letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 11px', cursor: 'pointer',
 })
 const ADJ: Record<string, string> = { replace: 'Replace', append: 'Add', new: 'New tab' }
+const OBJECTIVE_LABELS: Record<DashboardObjective, string> = {
+  trading: 'Trading',
+  portfolio: 'Portfolio',
+  macro: 'Macro',
+  risk: 'Portfolio risk',
+  research: 'Research',
+  screening: 'Screening',
+  options: 'Options',
+  general: 'General',
+}
+const VALID_OBJECTIVES = new Set<DashboardObjective>(Object.keys(OBJECTIVE_LABELS) as DashboardObjective[])
 
 export default function DashboardAiChat({
   current, applyAiDashboard, onClose,
 }: {
   current: WidgetConfig[]
-  applyAiDashboard: (items: AiDashboardItem[], mode: 'replace' | 'append' | 'new', name?: string) => void
+  applyAiDashboard: (items: AiDashboardItem[], mode: 'replace' | 'append' | 'new', name?: string, objective?: DashboardObjective) => void
   onClose: () => void
 }) {
   const [messages, setMessages] = useState<Msg[]>([])
@@ -83,6 +99,7 @@ export default function DashboardAiChat({
         const d: Draft = {
           name: String(data.name || 'AI Dashboard'),
           action: (['replace', 'append', 'new'].includes(data.action) ? data.action : 'replace'),
+          objective: VALID_OBJECTIVES.has(data.objective) ? data.objective : undefined,
           summary: String(data.summary || ''),
           items,
         }
@@ -98,7 +115,7 @@ export default function DashboardAiChat({
 
   const apply = () => {
     if (!draft) return
-    applyAiDashboard(draft.items.map(it => ({ type: it.type, config: it.config, w: it.w, h: it.h })), mode, draft.name)
+    applyAiDashboard(draft.items.map(it => ({ type: it.type, config: it.config, w: it.w, h: it.h })), mode, draft.name, draft.objective)
     onClose()
   }
 
@@ -133,7 +150,7 @@ export default function DashboardAiChat({
           {draft && (
             <div style={{ border: `1px solid color-mix(in srgb, var(--theme-primary) 40%, transparent)`, background: `color-mix(in srgb, var(--theme-primary) 6%, transparent)`, padding: '10px 12px' }}>
               <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.gold, fontFamily: T.sans, marginBottom: 7 }}>
-                {draft.name} · {draft.items.length} widgets
+                {draft.name} · {draft.objective ? OBJECTIVE_LABELS[draft.objective] : 'Custom'} · {draft.items.length} widgets
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
                 {draft.items.map((it, i) => (

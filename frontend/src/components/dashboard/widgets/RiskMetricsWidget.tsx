@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 import { loadActivePortfolio, useQuotes, priceHoldings, money } from './usePortfolio'
+import { useWidgetContentState } from '../widgetContentState'
 
 const cap: React.CSSProperties = { fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted, marginBottom: 3 }
 
@@ -50,6 +51,7 @@ export default function RiskMetricsWidget({ config }: { config: WidgetConfig }) 
       }).then(r => r.data)
     },
   })
+  useWidgetContentState(config.id, !tickers.length ? 'empty' : isLoading ? 'loading' : isError ? 'error' : data?.metrics?.length ? 'ready' : 'empty')
   if (tickers.length === 0) {
     return (
       <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 16, background: T.bg, fontFamily: T.label, fontSize: 11, color: T.muted, lineHeight: 1.6 }}>

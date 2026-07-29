@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { T } from '../../../lib/theme'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
+import { useWidgetContentState } from '../widgetContentState'
 
 interface Reaction {
   asset: string
@@ -86,6 +87,7 @@ export default function MacroCalendar({ config }: { config: WidgetConfig }) {
   })
   const selected = config.categories?.map(categoryKey)
   const events = (data?.events ?? []).filter(event => !selected?.length || selected.includes(categoryKey(event.category)))
+  useWidgetContentState(config.id, isLoading ? 'loading' : isError ? 'error' : events.length ? 'ready' : 'empty')
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: T.bg }}>
@@ -134,7 +136,16 @@ export default function MacroCalendar({ config }: { config: WidgetConfig }) {
             })}
           </div>
         ))}
-        {!isLoading && !events.length && <div style={{ padding: 16, textAlign: 'center', color: T.muted, fontFamily: T.mono, fontSize: 10 }}>No releases available</div>}
+        {!isLoading && !events.length && (
+          <div style={{ display: 'grid', gap: 4, padding: '14px 12px', color: T.muted }}>
+            <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              Calendar clear
+            </span>
+            <span style={{ fontFamily: T.mono, fontSize: 9, lineHeight: 1.5 }}>
+              No matching releases in the current window.
+            </span>
+          </div>
+        )}
       </div>
       {data && <div style={{ padding: '3px 10px', borderTop: `1px solid ${T.border}`, color: T.muted, background: T.surface, fontFamily: T.mono, fontSize: 8 }}>{data.source}</div>}
     </div>

@@ -4,6 +4,7 @@ import type { WidgetConfig } from '../../../hooks/useDashboard'
 import { fetchFactorDecomposition } from '../../../hooks/useApi'
 import { T } from '../../../lib/theme'
 import { loadActivePortfolio } from './usePortfolio'
+import { useWidgetContentState } from '../widgetContentState'
 
 interface FactorRow {
   factor: string
@@ -52,6 +53,7 @@ export default function FactorDecompositionWidget({ config }: { config: WidgetCo
       benchmark,
     }),
   })
+  useWidgetContentState(config.id, !holdings.length ? 'empty' : isLoading ? 'loading' : isError ? 'error' : data ? 'ready' : 'empty')
 
   if (!holdings.length) {
     return <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', padding: 16, textAlign: 'center', background: T.bg, color: T.muted, fontFamily: T.label, fontSize: 10 }}>Choose a saved portfolio with holdings.</div>

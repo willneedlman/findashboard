@@ -2,6 +2,7 @@ import { T } from '../../../lib/theme'
 import { useState, useMemo } from 'react'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 import { loadActivePortfolio, useQuotes, priceHoldings, money } from './usePortfolio'
+import { useWidgetContentState } from '../widgetContentState'
 
 
 
@@ -15,6 +16,7 @@ export default function PnLAttributionWidget({ config }: { config: WidgetConfig 
     .map(p => ({ ticker: p.ticker, pnl: mode === 'day' ? p.dayPnl : p.pnl }))
     .sort((a, b) => b.pnl - a.pnl)
   const net = rows.reduce((s, r) => s + r.pnl, 0)
+  useWidgetContentState(config.id, rows.length ? 'ready' : 'empty')
 
   const btn = (active: boolean): React.CSSProperties => ({
     fontFamily: T.mono, fontSize: 8.5, fontWeight: 700, padding: '1px 7px', cursor: 'pointer', letterSpacing: '0.04em',

@@ -77,8 +77,12 @@ describe('responsive dashboard reflow', () => {
     const medium = reflowLayouts(widgets, desktop, 10)
     const trade = medium.find(layout => layout.i === 'trade')!
     const hours = medium.find(layout => layout.i === 'hours')!
-    expect(trade.w + hours.w).toBe(10)
-    expect(trade.y).toBe(hours.y)
+    const watch = medium.find(layout => layout.i === 'watch')!
+    const topRail = [hours, watch].find(layout => layout.y === trade.y)!
+    const lowerRail = [hours, watch].find(layout => layout.y > trade.y)!
+    expect(trade.w + topRail.w).toBe(10)
+    expect(topRail.x).toBe(lowerRail.x)
+    expect(topRail.y + topRail.h).toBe(lowerRail.y)
     expectValidLayout(medium, 10)
   })
 

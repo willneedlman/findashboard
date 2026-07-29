@@ -8,6 +8,7 @@ import TickerLogo from '../../TickerLogo'
 import { useTheme } from '../../../contexts/ThemeContext'
 import { fmtMarketCap } from '../../../lib/format'
 import { useLiveMarks } from '../../../hooks/useLiveMarks'
+import { useWidgetContentState } from '../widgetContentState'
 
 
 interface Holding { ticker: string; shares: number; avgCost: number }
@@ -123,6 +124,7 @@ export default function PMPortfoliosWidget({ config: _config }: { config: Widget
   const totalPnl = isPaper ? rows.reduce((s, r) => s + (r.pnl ?? 0), 0) : totalValue - totalCost
   const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0
   const loading = isPaper ? account.isLoading : false
+  useWidgetContentState(_config.id, !sources.length ? 'empty' : loading ? 'loading' : rows.length ? 'ready' : 'empty')
 
   if (!sources.length) return (
     <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', background: T.bg, padding: 14, textAlign: 'center' }}>

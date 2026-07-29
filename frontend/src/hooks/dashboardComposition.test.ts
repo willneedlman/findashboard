@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  applyConstraints, buildPreset, compatibleSet, composeLayouts,
+  applyConstraints, buildPreset, compatibleSet, composeIntelligentDashboard, composeLayouts,
   inferDashboardObjective, normalizeDashboard, normalizeWidgets, validateLayout,
   type WidgetConfig,
 } from './useDashboard'
@@ -22,6 +22,10 @@ describe('widget metadata', () => {
       expect(definition.maximum.w).toBeGreaterThanOrEqual(definition.preferred.w)
       expect(definition.maximum.w).toBeLessThanOrEqual(Math.min(12, definition.preferred.w + 2))
       expect(definition.maximum.h).toBeLessThanOrEqual(definition.preferred.h + 2)
+      expect(['horizontal', 'vertical', 'balanced']).toContain(definition.orientation)
+      expect(['compact', 'standard', 'dense']).toContain(definition.density)
+      expect(['focal', 'supporting']).toContain(definition.visualRole)
+      expect(['fixed', 'horizontal', 'vertical', 'bounded']).toContain(definition.growth)
     }
   })
 })
@@ -44,18 +48,51 @@ describe('intelligent dashboard composition', () => {
     expect(inferDashboardObjective([widget('trade', 'paper-trade'), widget('watch', 'watchlist')])).toBe('trading')
   })
 
+  it('selects the internal composition from the current widget intent', () => {
+    const risk = composeIntelligentDashboard([
+      widget('risk', 'risk-metrics'),
+      widget('factor', 'factor-decomposition'),
+    ])
+    const trading = composeIntelligentDashboard([
+      widget('trade', 'paper-trade'),
+      widget('watch', 'watchlist'),
+    ])
+    expect(risk).toMatchObject({ objective: 'risk', templateId: 'portfolio-risk' })
+    expect(trading).toMatchObject({ objective: 'trading', templateId: 'market-monitor' })
+    expect(risk.layouts).toHaveLength(2)
+    expect(trading.layouts).toHaveLength(2)
+  })
+
   it('removes conflicting and disallowed duplicate widgets from generated sets', () => {
     const set = compatibleSet([
       widget('tape-a', 'index-tape'),
       widget('tape-b', 'index-tape'),
       widget('paper', 'paper-trade'),
       widget('chart', 'tradingview-chart'),
-      widget('news-a', 'news-feed'),
-      widget('news-b', 'news-feed'),
+      widget('news-a', 'news-feed', { tickers: ['SPY'] }),
+      widget('news-b', 'news-feed', { tickers: ['NVDA'] }),
     ])
     expect(set.filter(item => item.type === 'index-tape')).toHaveLength(1)
     expect(set.some(item => item.type === 'tradingview-chart')).toBe(false)
     expect(set.filter(item => item.type === 'news-feed')).toHaveLength(2)
+  })
+
+  it('treats Portfolio Summary and Risk Metrics as complementary portfolio views', () => {
+    const set = compatibleSet([
+      widget('summary', 'portfolio-summary'),
+      widget('risk', 'risk-metrics'),
+    ])
+    expect(set.map(item => item.type)).toEqual(['portfolio-summary', 'risk-metrics'])
+  })
+
+  it('repairs invalid configuration before removing redundant widget instances', () => {
+    const normalized = normalizeWidgets([
+      widget('credit-invalid', 'credit-spreads', { categories: ['made-up-series'], lookback: 999 }),
+      widget('credit-default', 'credit-spreads'),
+    ])
+    expect(normalized).toHaveLength(1)
+    expect(normalized[0].categories).toEqual(['ig', 'hy', 'vix'])
+    expect(normalized[0].lookback).toBe(90)
   })
 })
 
@@ -106,6 +143,8 @@ describe('configuration persistence and migration', () => {
     expect(dashboard.layouts[0].x).toBeGreaterThanOrEqual(0)
     expect(dashboard.layouts[0].w).toBeLessThanOrEqual(12)
     expect(dashboard.layouts[0].h).toBeGreaterThanOrEqual(WIDGET_DEFINITIONS['risk-metrics'].minimum.h)
+    expect(dashboard.templateId).toBe('portfolio-risk')
+    expect(dashboard.layoutMode).toBe('template')
   })
 })
 
@@ -127,9 +166,12 @@ describe('responsive and preset behavior', () => {
   it('uses factor decomposition in Risk Desk without exposure or historical stress widgets', () => {
     const preset = buildPreset('risk')
     const types = preset.widgets.map(item => item.type)
+    expect(types).toContain('portfolio-summary')
+    expect(types).toContain('risk-metrics')
     expect(types).toContain('factor-decomposition')
     expect(types).not.toContain('exposure-map')
     expect(WIDGET_DEFINITIONS['risk-metrics'].description.toLowerCase()).not.toContain('stress')
-    expect(preset.layouts.find(layout => preset.widgets.find(widget => widget.id === layout.i)?.type === 'factor-decomposition')?.h).toBe(6)
+    expect(preset.layouts.find(layout => preset.widgets.find(widget => widget.id === layout.i)?.type === 'factor-decomposition')?.h)
+      .toBe(WIDGET_DEFINITIONS['factor-decomposition'].preferred.h)
   })
 })

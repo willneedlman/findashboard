@@ -7,6 +7,7 @@ import {
 } from 'recharts'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 import { loadActivePortfolio, priceHoldings, useQuotes } from './usePortfolio'
+import { useWidgetContentState } from '../widgetContentState'
 
 const T = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', headerBg: 'var(--theme-surface, #0d1826)',
@@ -89,6 +90,7 @@ export default function PortfolioSummary({ config }: { config: WidgetConfig }) {
     enabled: tickers.length >= 1 && totalValue > 0,
     retry: 1,
   })
+  useWidgetContentState(config.id, !tickers.length ? 'empty' : isLoading ? 'loading' : isError ? 'error' : data ? 'ready' : 'empty')
 
   const base: React.CSSProperties = {
     background: T.bg, height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: T.mono,

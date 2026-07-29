@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
+import { useWidgetContentState } from '../widgetContentState'
 
 const T = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))',
@@ -55,6 +56,18 @@ export default function NewsFeed({ config }: { config: WidgetConfig }) {
   const allItems: NewsItem[] = (data?.sources ?? []).flatMap(source =>
     source.items.map(item => ({ ...item, source: source.label }))
   ).sort((a, b) => b.published_at - a.published_at)
+  const matchingItemCount = tickers.reduce((sum, ticker) => sum + allItems.filter(item => matchesTicker(item, ticker)).length, 0)
+  useWidgetContentState(config.id, isLoading ? 'loading' : isError ? 'error' : matchingItemCount ? 'ready' : 'empty')
+
+  useEffect(() => {
+    if (!data) return
+    const firstTickerWithNews = tickers.find(ticker => allItems.some(item => matchesTicker(item, ticker)))
+    if (!firstTickerWithNews) return
+    setOpenMap(current => {
+      const hasUsefulOpenGroup = tickers.some(ticker => current[ticker] && allItems.some(item => matchesTicker(item, ticker)))
+      return hasUsefulOpenGroup ? current : { ...current, [firstTickerWithNews]: true }
+    })
+  }, [data])
 
   if (!tickers.length) {
     return <div style={{ height: '100%', display: 'grid', placeItems: 'center', background: T.bg, color: T.muted, fontFamily: T.label, fontSize: 11 }}>Configure tickers in edit mode.</div>

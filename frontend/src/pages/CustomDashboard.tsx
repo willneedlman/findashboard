@@ -17,7 +17,12 @@ import WidgetFrame from '../components/dashboard/WidgetFrame'
 import WidgetRenderer from '../components/dashboard/WidgetRenderer'
 import WidgetPalette from '../components/dashboard/WidgetPalette'
 import DashboardAiChat from '../components/dashboard/DashboardAiChat'
-import { useDashboard, PRESET_LABELS, PRESET_ICONS, TICKER_WIDGET_TYPES, reflowLayouts, type WidgetType, type WidgetConfig, type PresetKey } from '../hooks/useDashboard'
+import { composeTemplateLayouts } from '../components/dashboard/dashboardTemplates'
+import {
+  WIDGET_CONTENT_STATE_EVENT,
+  type WidgetContentState,
+} from '../components/dashboard/widgetContentState'
+import { useDashboard, PRESET_LABELS, PRESET_ICONS, TICKER_WIDGET_TYPES, type DashboardObjective, type WidgetType, type WidgetConfig, type PresetKey } from '../hooks/useDashboard'
 import { responsiveState } from '../components/dashboard/widgetRegistry'
 import useIsMobile from '../hooks/useIsMobile'
 
@@ -43,12 +48,23 @@ const NAME_ICON: Record<string, string> = Object.fromEntries(
   (Object.keys(PRESET_LABELS) as PresetKey[]).map(k => [PRESET_LABELS[k], PRESET_ICONS[k]])
 )
 const iconForDash = (d: { name: string; icon?: string }) => d.icon ?? NAME_ICON[d.name] ?? 'grid'
+const OBJECTIVE_LABELS: Record<DashboardObjective, string> = {
+  trading: 'Trading',
+  portfolio: 'Portfolio',
+  macro: 'Macro',
+  risk: 'Portfolio risk',
+  research: 'Research',
+  screening: 'Screening',
+  options: 'Options',
+  general: 'General',
+}
 
 export default function CustomDashboard() {
   const isMobile = useIsMobile()
   const { user } = useTheme()
   const {
     widgets, layouts, addWidget, removeWidget, duplicateWidget, resetWidget, autoOrganize, updateWidget, updateLayouts, resetDashboard, setAllTickers, applyAiDashboard,
+    templateId, layoutMode, objective,
     showTicker, setShowTicker,
     dashboards, activeId, switchDashboard, createDashboard, renameDashboard, deleteDashboard, setDashboardIcon,
   } = useDashboard(user?.id)
@@ -58,6 +74,21 @@ export default function CustomDashboard() {
   const [confirmReset, setConfirmReset] = useState(false)
   const [presetMenuOpen, setPresetMenuOpen] = useState(false)
   const [iconPickerOpen, setIconPickerOpen] = useState(false)
+  const [activeBreakpoint, setActiveBreakpoint] = useState<keyof typeof COLS>('lg')
+  const [contentStates, setContentStates] = useState<Record<string, WidgetContentState>>({})
+
+  useEffect(() => {
+    setContentStates({})
+  }, [activeId])
+
+  useEffect(() => {
+    const handleContentState = (event: Event) => {
+      const { widgetId, state } = (event as CustomEvent<{ widgetId: string; state: WidgetContentState }>).detail
+      setContentStates(current => current[widgetId] === state ? current : { ...current, [widgetId]: state })
+    }
+    window.addEventListener(WIDGET_CONTENT_STATE_EVENT, handleContentState)
+    return () => window.removeEventListener(WIDGET_CONTENT_STATE_EVENT, handleContentState)
+  }, [])
 
   // Full-screen the dashboard (toolbar + grid) via the Fullscreen API, so the
   // board can fill the display with no terminal chrome around it.
@@ -89,17 +120,32 @@ export default function CustomDashboard() {
     setAllTickers(sym)
   }
 
-  const handleLayoutChange = (_: Layout[], allLayouts: Layouts) => {
-    if (allLayouts.lg) updateLayouts(allLayouts.lg)
+  const handleManualLayout = (nextLayout: Layout[]) => {
+    if (editMode && activeBreakpoint === 'lg') updateLayouts(nextLayout)
   }
 
   const rglLayouts: Layouts = useMemo(() => ({
-    lg: layouts,
-    md: reflowLayouts(widgets, layouts, COLS.md),
-    sm: reflowLayouts(widgets, layouts, COLS.sm),
-    xs: reflowLayouts(widgets, layouts, COLS.xs),
-    xxs: reflowLayouts(widgets, layouts, COLS.xxs),
-  }), [layouts, widgets])
+    lg: layoutMode === 'template'
+      ? composeTemplateLayouts(widgets, templateId, COLS.lg, contentStates)
+      : layouts,
+    md: composeTemplateLayouts(widgets, templateId, COLS.md, contentStates),
+    sm: composeTemplateLayouts(widgets, templateId, COLS.sm, contentStates),
+    xs: composeTemplateLayouts(widgets, templateId, COLS.xs, contentStates),
+    xxs: composeTemplateLayouts(widgets, templateId, COLS.xxs, contentStates),
+  }), [contentStates, layoutMode, layouts, templateId, widgets])
+
+  const visibleWidgets = useMemo(() => {
+    const activeLayouts = rglLayouts[activeBreakpoint] ?? layouts
+    const position = new Map(activeLayouts.map(item => [item.i, item]))
+    return widgets
+      .filter(widget => widget.visible !== false)
+      .sort((a, b) => {
+        const left = position.get(a.id)
+        const right = position.get(b.id)
+        if (!left || !right) return a.id.localeCompare(b.id)
+        return left.y - right.y || left.x - right.x
+      })
+  }, [activeBreakpoint, layouts, rglLayouts, widgets])
 
   const handleReset = () => {
     if (confirmReset) { resetDashboard(); setConfirmReset(false) }
@@ -113,7 +159,7 @@ export default function CustomDashboard() {
       {isMobile ? (
         <h1 className="ft-page-title" style={{ marginBottom: 12 }}>My Dashboard</h1>
       ) : (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingBottom: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingBottom: 8, flexWrap: 'wrap' }}>
         {/* Dashboards — the active one shows its name, the rest collapse to their icon (name on hover).
             flex-wrap (not overflow) so the New-preset menu and icon picker popovers aren't clipped. */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
@@ -174,7 +220,7 @@ export default function CustomDashboard() {
             </button>
             {presetMenuOpen && (
               <div style={{ position: 'absolute', top: '120%', left: 0, zIndex: 30, minWidth: 150, background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-primary, #c9a84c)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
-                <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', padding: '7px 10px 4px' }}>From preset</div>
+                <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', padding: '7px 10px 4px' }}>Start with</div>
                 {(['cockpit', 'research', 'screening', 'market-overview', 'options', 'risk', 'main'] as PresetKey[]).map(k => (
                   <button key={k} onClick={() => { createDashboard(k); setPresetMenuOpen(false) }}
                     style={{ display: 'block', width: '100%', textAlign: 'left', fontFamily: 'var(--theme-sans)', fontSize: 11, padding: '7px 10px', cursor: 'pointer', border: 'none', background: 'transparent', color: 'var(--theme-text, #d7e3fc)' }}
@@ -193,10 +239,10 @@ export default function CustomDashboard() {
         </div>
 
         {/* Controls */}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-          <span title={editMode ? 'Drag to rearrange · resize from corners · click + to add widgets' : `${widgets.length} widget${widgets.length !== 1 ? 's' : ''} · click the lock to customise`}
-            style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: 'var(--theme-secondary, #5e768f)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 150 }}>
-            {editMode ? 'Drag · resize · + add' : `${widgets.length} widget${widgets.length !== 1 ? 's' : ''}`}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 1, flexWrap: 'wrap', justifyContent: 'flex-end', marginLeft: 'auto', maxWidth: '100%' }}>
+          <span title={editMode ? 'Drag to rearrange · resize from corners · click + to add widgets' : `${OBJECTIVE_LABELS[objective]} · ${widgets.length} widget${widgets.length !== 1 ? 's' : ''} · click the lock to customise`}
+            style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: 'var(--theme-secondary, #5e768f)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 190 }}>
+            {editMode ? 'Drag · resize · + add' : `${OBJECTIVE_LABELS[objective]} · ${widgets.length} widget${widgets.length !== 1 ? 's' : ''}`}
           </span>
           {(showTicker || tickerWidgets.length > 0) && (
             <div style={{ display: 'flex', alignItems: 'stretch', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))' }} title={`Applies to ${tickerWidgets.length} ticker widget${tickerWidgets.length !== 1 ? 's' : ''} on this dashboard`}>
@@ -231,7 +277,7 @@ export default function CustomDashboard() {
               </button>
               <button
                 onClick={autoOrganize}
-                title="Rebuild the layout from widget purpose, priority, and preferred region"
+                title="Arrange widgets into a clear, compact dashboard"
                 style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', color: 'var(--theme-secondary, #5e768f)', padding: '6px 12px', cursor: 'pointer', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}
               >
                 <LayoutGrid size={12} /> Auto Arrange
@@ -261,37 +307,28 @@ export default function CustomDashboard() {
       </div>
       )}
 
-      {/* ── Mobile: not available ── */}
-      {isMobile ? (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 24px', gap: 12, textAlign: 'center' }}>
-          <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 32, color: 'var(--theme-text-subtle, rgba(255,255,255,0.08))' }}>⊞</div>
-          <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 13, fontWeight: 600, color: 'var(--theme-primary, #c9a84c)', letterSpacing: '0.06em' }}>
-            Desktop Only
-          </div>
-          <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-secondary, #5e768f)', maxWidth: 260, lineHeight: 1.6 }}>
-            The custom dashboard requires a larger screen. Open it on a desktop or tablet for the full drag-and-resize experience.
-          </div>
-        </div>
-      ) : (
-        /* ── Desktop: react-grid-layout ── */
-        <div className={editMode ? 'rgl-edit-mode' : ''}>
+      {visibleWidgets.length ? (
+        <div className={editMode && activeBreakpoint === 'lg' ? 'rgl-edit-mode' : ''}>
           <ResponsiveGridLayout
             layouts={rglLayouts}
             breakpoints={BREAKPOINTS}
             cols={COLS}
             rowHeight={52}
             margin={[8, 8]}
-            isDraggable={editMode}
-            isResizable={editMode}
+            isDraggable={editMode && activeBreakpoint === 'lg'}
+            isResizable={editMode && activeBreakpoint === 'lg'}
             draggableCancel=".widget-no-drag"
             resizeHandles={['se', 'sw']}
-            onLayoutChange={handleLayoutChange}
-            compactType="vertical"
-            preventCollision={false}
+            onBreakpointChange={(breakpoint: string) => setActiveBreakpoint(breakpoint as keyof typeof COLS)}
+            onDragStop={handleManualLayout}
+            onResizeStop={handleManualLayout}
+            compactType={layoutMode === 'template' ? null : 'vertical'}
+            preventCollision={layoutMode === 'template'}
             useCSSTransforms
           >
-            {widgets.filter(w => w.visible !== false).map(w => {
-              const layout = layouts.find(item => item.i === w.id)
+            {visibleWidgets.map(w => {
+              const activeLayouts = rglLayouts[activeBreakpoint] ?? layouts
+              const layout = activeLayouts.find(item => item.i === w.id)
               const effective = {
                 ...w,
                 displayState: responsiveState(w.type, layout?.w ?? 4, layout?.h ?? 5, w.displayState),
@@ -312,6 +349,25 @@ export default function CustomDashboard() {
               )
             })}
           </ResponsiveGridLayout>
+        </div>
+      ) : (
+        <div style={{ minHeight: 280, display: 'grid', placeItems: 'center', border: '1px dashed var(--theme-border, rgba(255,255,255,0.12))', background: 'rgba(0,0,0,0.08)' }}>
+          <div style={{ maxWidth: 360, padding: 28, textAlign: 'center' }}>
+            <LayoutGrid size={22} color="var(--theme-primary, #c9a84c)" style={{ margin: '0 auto 12px' }} />
+            <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 13, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)' }}>Build your workspace</div>
+            <div style={{ marginTop: 6, fontFamily: 'var(--theme-sans)', fontSize: 10, lineHeight: 1.6, color: 'var(--theme-secondary, #8099b0)' }}>
+              Add widgets and the builder will arrange each panel into a natural, compact layout.
+            </div>
+            {!isMobile && (
+              <button
+                type="button"
+                onClick={() => { setEditMode(true); setPaletteOpen(true) }}
+                style={{ marginTop: 14, border: '1px solid var(--theme-primary, #c9a84c)', background: 'color-mix(in srgb, var(--theme-primary) 12%, transparent)', color: 'var(--theme-primary, #c9a84c)', padding: '7px 12px', cursor: 'pointer', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}
+              >
+                Add widgets
+              </button>
+            )}
+          </div>
         </div>
       )}
 

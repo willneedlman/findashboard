@@ -25,6 +25,21 @@ def _catalog():
     ]
 
 
+def _risk_catalog():
+    return [
+        DashboardCatalogItem(type="portfolio-summary", label="Portfolio Summary", defW=7, defH=6, minW=5, minH=5, multiple=False),
+        DashboardCatalogItem(type="risk-metrics", label="Risk Metrics", defW=5, defH=6, minW=4, minH=6, multiple=False),
+        DashboardCatalogItem(type="factor-decomposition", label="Factor Decomposition", defW=7, defH=5, minW=5, minH=5, multiple=False),
+        DashboardCatalogItem(type="correlation-matrix", label="Correlation Matrix", defW=5, defH=6, minW=4, minH=5, multiple=False),
+        DashboardCatalogItem(type="pnl-attribution", label="P/L Attribution", defW=7, defH=6, minW=5, minH=5, multiple=False),
+        DashboardCatalogItem(type="pm-portfolios", label="Portfolios", defW=5, defH=5, minW=4, minH=4, multiple=False),
+        DashboardCatalogItem(type="index-tape", label="Index Tape", defW=12, defH=1, minW=6, minH=1, multiple=False),
+        DashboardCatalogItem(type="watchlist", label="Watchlist", defW=4, defH=6, minW=3, minH=4),
+        DashboardCatalogItem(type="vol-skew", label="Vol Skew", defW=4, defH=7, minW=4, minH=5, ticker=True),
+        DashboardCatalogItem(type="global-macro", label="Global Macro", defW=4, defH=9, minW=3, minH=6),
+    ]
+
+
 def _req(msg="build a macro dashboard"):
     return DashboardChatRequest(messages=[StrategyChatMessage(role="user", content=msg)], catalog=_catalog())
 
@@ -70,6 +85,60 @@ def test_empty_catalog_rejected():
         ai.dashboard_chat(DashboardChatRequest(messages=[StrategyChatMessage(role="user", content="x")], catalog=[]))
 
 
+def test_layout_templates_are_internal_ai_tools():
+    prompt = ai._DASHBOARD_CHAT_SYSTEM.lower()
+    assert "never ask the user to choose a template or preset" in prompt
+    assert "never mention internal template names" in prompt
+
+
+def test_portfolio_risk_request_repairs_weak_widget_selection(monkeypatch):
+    weak_draft = {
+        "type": "draft",
+        "name": "Custom Dashboard",
+        "action": "replace",
+        "summary": "A generic market view.",
+        "items": [
+            {"type": "index-tape"},
+            {"type": "watchlist"},
+            {"type": "vol-skew", "config": {"ticker": "SPY"}},
+            {"type": "global-macro"},
+        ],
+    }
+    monkeypatch.setattr(ai, "groq_chat", lambda *a, **k: _resp(json.dumps(weak_draft)))
+    request = DashboardChatRequest(
+        messages=[StrategyChatMessage(role="user", content="Build a dashboard to monitor risk on my portfolio")],
+        catalog=_risk_catalog(),
+    )
+    out = ai.dashboard_chat(request)
+    assert out["objective"] == "risk"
+    assert out["name"] == "Portfolio Risk Monitor"
+    assert [item["type"] for item in out["items"]] == [
+        "portfolio-summary",
+        "risk-metrics",
+        "factor-decomposition",
+        "correlation-matrix",
+        "pnl-attribution",
+        "pm-portfolios",
+    ]
+    assert "performance and loss first" in out["summary"].lower()
+
+
+def test_append_request_does_not_expand_into_a_full_risk_dashboard(monkeypatch):
+    draft = {
+        "type": "draft",
+        "action": "append",
+        "items": [{"type": "vol-skew", "config": {"ticker": "SPY"}}],
+    }
+    monkeypatch.setattr(ai, "groq_chat", lambda *a, **k: _resp(json.dumps(draft)))
+    request = DashboardChatRequest(
+        messages=[StrategyChatMessage(role="user", content="Add vol skew to my portfolio risk dashboard")],
+        catalog=_risk_catalog(),
+    )
+    out = ai.dashboard_chat(request)
+    assert out["action"] == "append"
+    assert [item["type"] for item in out["items"]] == ["vol-skew"]
+
+
 def test_normalizer_enforces_duplicate_conflict_and_config_metadata():
     catalog = [
         DashboardCatalogItem(type="index-tape", multiple=False, configOptions=["tickers"]),
@@ -85,6 +154,19 @@ def test_normalizer_enforces_duplicate_conflict_and_config_metadata():
     out = ai._normalize_dashboard_items(items, catalog, 12)
     assert [item["type"] for item in out] == ["index-tape", "paper-trade"]
     assert out[0]["config"] == {"tickers": ["SPY"]}
+
+
+def test_normalizer_drops_identical_config_but_keeps_meaningful_variants():
+    catalog = [
+        DashboardCatalogItem(type="news-feed", multiple=True, configOptions=["tickers"]),
+    ]
+    items = [
+        {"type": "news-feed", "config": {"tickers": ["SPY"]}},
+        {"type": "news-feed", "config": {"tickers": ["SPY"]}},
+        {"type": "news-feed", "config": {"tickers": ["NVDA"]}},
+    ]
+    out = ai._normalize_dashboard_items(items, catalog, 12)
+    assert [item["config"]["tickers"] for item in out] == [["SPY"], ["NVDA"]]
 
 
 def test_llm_failure_returns_friendly_503(monkeypatch):
