@@ -7,10 +7,12 @@ import re
 import tempfile
 import time
 import uuid
+import zipfile
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 
 from admin_auth import require_admin
 
@@ -101,6 +103,18 @@ def _active_files() -> list[dict]:
     return sorted(files, key=lambda item: float(item.get("createdAt", 0)), reverse=True)
 
 
+def _archive_name(name: str, used: set[str]) -> str:
+    candidate = _safe_name(name)
+    stem = Path(candidate).stem
+    suffix = Path(candidate).suffix
+    number = 2
+    while candidate.casefold() in used:
+        candidate = f"{stem} ({number}){suffix}"
+        number += 1
+    used.add(candidate.casefold())
+    return candidate
+
+
 @router.get("")
 def list_temp_files():
     return {
@@ -161,6 +175,62 @@ async def upload_temp_file(file: UploadFile = File(...)):
         raise
     finally:
         await file.close()
+
+
+@router.get("/download-all")
+def download_all_temp_files():
+    active = _active_files()
+    if not active:
+        raise HTTPException(404, "No active temporary files to download")
+
+    _STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+    archive_handle = tempfile.NamedTemporaryFile(
+        prefix=".download-",
+        suffix=".zip",
+        dir=_STORAGE_DIR,
+        delete=False,
+    )
+    archive_path = Path(archive_handle.name)
+    archive_handle.close()
+    used_names: set[str] = set()
+    archived_count = 0
+
+    try:
+        with zipfile.ZipFile(
+            archive_path,
+            mode="w",
+            compression=zipfile.ZIP_DEFLATED,
+            compresslevel=6,
+        ) as archive:
+            for item in sorted(active, key=lambda value: str(value.get("name", "")).casefold()):
+                try:
+                    data_path, _ = _paths(str(item.get("id", "")))
+                except HTTPException:
+                    continue
+                if not data_path.is_file():
+                    continue
+                archive.write(
+                    data_path,
+                    arcname=_archive_name(str(item.get("name") or "download.bin"), used_names),
+                )
+                archived_count += 1
+        if archived_count == 0:
+            raise HTTPException(404, "No active temporary files to download")
+    except Exception:
+        archive_path.unlink(missing_ok=True)
+        raise
+
+    timestamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime(_now()))
+    return FileResponse(
+        archive_path,
+        media_type="application/zip",
+        filename=f"alphatape-files-{timestamp}.zip",
+        headers={
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+        background=BackgroundTask(archive_path.unlink, missing_ok=True),
+    )
 
 
 @router.get("/{file_id}")

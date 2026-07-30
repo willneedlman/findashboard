@@ -51,6 +51,17 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Request failed'
 }
 
+function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1_000)
+}
+
 export default function TemporaryFileDrop({ secret }: { secret: string }) {
   const isMobile = useIsMobile(640)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -59,6 +70,7 @@ export default function TemporaryFileDrop({ secret }: { secret: string }) {
   const [uploading, setUploading] = useState(false)
   const [uploadName, setUploadName] = useState('')
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [downloadingAll, setDownloadingAll] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [error, setError] = useState('')
   const [now, setNow] = useState(() => Date.now())
@@ -125,12 +137,7 @@ export default function TemporaryFileDrop({ secret }: { secret: string }) {
         headers,
         responseType: 'blob',
       })
-      const url = URL.createObjectURL(response.data)
-      const anchor = document.createElement('a')
-      anchor.href = url
-      anchor.download = item.name
-      anchor.click()
-      URL.revokeObjectURL(url)
+      saveBlob(response.data, item.name)
     } catch (downloadError) {
       setError(errorMessage(downloadError))
       loadFiles(true)
@@ -152,6 +159,23 @@ export default function TemporaryFileDrop({ secret }: { secret: string }) {
   const files = (data?.files ?? []).filter(file => file.expiresAt * 1000 > now)
   const totalBytes = files.reduce((sum, file) => sum + file.size, 0)
   const maxFileBytes = data?.limits.maxFileBytes ?? 50 * 1024 * 1024
+  const downloadAll = useCallback(async () => {
+    if (downloadingAll || files.length === 0) return
+    setDownloadingAll(true)
+    setError('')
+    try {
+      const response = await axios.get('/api/admin/files/download-all', {
+        headers,
+        responseType: 'blob',
+      })
+      saveBlob(response.data, `alphatape-files-${new Date().toISOString().slice(0, 10)}.zip`)
+    } catch (downloadError) {
+      setError(errorMessage(downloadError))
+      loadFiles(true)
+    } finally {
+      setDownloadingAll(false)
+    }
+  }, [downloadingAll, files.length, headers, loadFiles])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -173,21 +197,40 @@ export default function TemporaryFileDrop({ secret }: { secret: string }) {
             Files stay private behind the admin secret and expire one hour after upload.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => loadFiles()}
-          disabled={loading}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px',
-            background: 'transparent', border: `1px solid ${RED_BORDER}`, color: RED,
-            fontFamily: 'var(--theme-mono)', fontSize: 9, fontWeight: 700,
-            letterSpacing: '0.08em', textTransform: 'uppercase',
-            cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.55 : 1,
-          }}
-        >
-          <RefreshCw size={12} aria-hidden="true" />
-          Refresh
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={downloadAll}
+            disabled={files.length === 0 || downloadingAll}
+            aria-busy={downloadingAll}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px',
+              background: RED_TINT, border: `1px solid ${RED_BORDER}`, color: RED,
+              fontFamily: 'var(--theme-mono)', fontSize: 9, fontWeight: 700,
+              letterSpacing: '0.08em', textTransform: 'uppercase',
+              cursor: files.length === 0 || downloadingAll ? 'default' : 'pointer',
+              opacity: files.length === 0 || downloadingAll ? 0.45 : 1,
+            }}
+          >
+            <Download size={12} aria-hidden="true" />
+            {downloadingAll ? 'Preparing ZIP' : 'Download all'}
+          </button>
+          <button
+            type="button"
+            onClick={() => loadFiles()}
+            disabled={loading}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px',
+              background: 'transparent', border: `1px solid ${RED_BORDER}`, color: RED,
+              fontFamily: 'var(--theme-mono)', fontSize: 9, fontWeight: 700,
+              letterSpacing: '0.08em', textTransform: 'uppercase',
+              cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.55 : 1,
+            }}
+          >
+            <RefreshCw size={12} aria-hidden="true" />
+            Refresh
+          </button>
+        </div>
       </div>
 
       <input
