@@ -24,8 +24,8 @@ const LOOKFORWARD: { k: LookforwardPreset; label: string }[] = [
 
 const LENGTH: { k: ReportLength; label: string; hint: string }[] = [
   { k: 'short', label: 'Short', hint: '1-2 sections · headline verdict only' },
-  { k: 'medium', label: 'Medium', hint: '3-6 sections · standard depth' },
-  { k: 'long', label: 'Long', hint: '6-10 sections · full supporting detail' },
+  { k: 'medium', label: 'Medium', hint: '3-6 sections normally · expands when evidence requires' },
+  { k: 'long', label: 'Long', hint: '6-12 sections · full supporting detail' },
 ]
 
 const label: React.CSSProperties = {

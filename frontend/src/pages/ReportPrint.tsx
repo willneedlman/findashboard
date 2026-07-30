@@ -1,15 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { Download, ArrowLeft } from 'lucide-react'
+import TickerLogo from '../components/TickerLogo'
 import ClipRenderer from '../components/report/ClipRenderer'
-import SectionLayout, { FillGrid } from '../components/report/SectionLayout'
+import SectionLayout, {
+  assignReportBodyVisuals,
+  FillGrid,
+  promoteTableToChart,
+  reportSectionAssignmentKey,
+} from '../components/report/SectionLayout'
 import {
   useReportCreator, timeframeLabel, clipTitle,
   type ReportClip, type ClipPayload,
 } from '../lib/reportCreator'
 import { exportReportPdf } from '../lib/exportReportPdf'
+import { selectReportAppendixData } from '../lib/reportPresentation'
 import { useTheme } from '../contexts/ThemeContext'
 import { buildReportPalette, toClipPalette, type ReportPalette } from '../lib/reportTheme'
+import { reportTickerSymbols } from '../lib/tickerLogos'
 
 // Print-ready research note at /report-creator/print/:id.
 // Colors and fonts follow the active Settings color preset so the PDF matches
@@ -50,10 +58,13 @@ function heroFontSize(value: string, base: number, min: number): number {
   return min
 }
 
-function AppendixBlock({ clip, palette }: { clip: ReportClip; palette: ReportPalette }) {
+function AppendixBlock({ clip, palette, compact = false }: { clip: ReportClip; palette: ReportPalette; compact?: boolean }) {
   const p = clip.payload
   const title = p.title || clipTitle(clip)
   const clipPal = toClipPalette(palette)
+  const promoted = p.kind === 'table' && /\bsector (?:leadership|rotation)\b/i.test(p.title || '')
+    ? promoteTableToChart(p)
+    : undefined
   const frame: React.CSSProperties = {
     border: `1px solid ${palette.border}`, background: palette.panel, marginTop: 2,
   }
@@ -63,16 +74,27 @@ function AppendixBlock({ clip, palette }: { clip: ReportClip; palette: ReportPal
     padding: '5px 10px', borderBottom: `1px solid ${palette.border}`,
     background: palette.cellBg, color: palette.accent,
   }
-  if (p.kind === 'table') {
-    const slim: ClipPayload = { ...p, rows: p.rows.slice(0, 10) }
+  if (promoted) {
     return (
       <div style={frame}>
         <div style={head}>{title}</div>
         <div style={{ padding: '6px 10px 8px', background: palette.cellBg }}>
-          <ClipRenderer payload={slim} mode="print" maxTableRows={10} palette={clipPal} />
-          {p.rows.length > 10 && (
+          <ClipRenderer payload={promoted} mode="print" compact={compact} palette={clipPal} />
+        </div>
+      </div>
+    )
+  }
+  if (p.kind === 'table') {
+    const rowLimit = p.columns.some(column => /\b(headline|event|name)\b/i.test(column)) ? 6 : 8
+    const slim: ClipPayload = { ...p, rows: p.rows.slice(0, rowLimit) }
+    return (
+      <div style={frame}>
+        <div style={head}>{title}</div>
+        <div style={{ padding: '6px 10px 8px', background: palette.cellBg }}>
+          <ClipRenderer payload={slim} mode="print" compact={compact} maxTableRows={rowLimit} palette={clipPal} />
+          {p.rows.length > rowLimit && (
             <div style={{ fontFamily: palette.mono, fontSize: 8, color: palette.muted, marginTop: 4 }}>
-              Showing 10 of {p.rows.length} rows.
+              Showing {rowLimit} of {p.rows.length} rows.
             </div>
           )}
         </div>
@@ -83,7 +105,7 @@ function AppendixBlock({ clip, palette }: { clip: ReportClip; palette: ReportPal
     <div style={frame}>
       <div style={head}>{title}</div>
       <div style={{ padding: '6px 10px 8px', background: palette.cellBg }}>
-        <ClipRenderer payload={p} mode="print" maxTableRows={10} palette={clipPal} />
+        <ClipRenderer payload={p} mode="print" compact={compact} maxTableRows={10} palette={clipPal} />
       </div>
     </div>
   )
@@ -118,56 +140,26 @@ export default function ReportPrint() {
     [renderClips],
   )
   const allClips = renderClips
+  const reportTickers = useMemo(
+    () => reportTickerSymbols(
+      renderScope?.researchSymbols ?? '',
+      allClips.map(clip => clip.researchKey),
+    ),
+    [allClips, renderScope?.researchSymbols],
+  )
 
   const bodyVisuals = useMemo(() => {
-    const map = new Map<string, { visual: ReportClip | undefined; showKeyFigures: boolean }>()
-    if (!gen) return map
-    // The site owns every section chart. A section either carries a site-built
-    // chart (s.chart) — wrapped as a synthetic clip so the existing renderer
-    // draws it — or it shows prose plus its key-figure strip and no chart. Raw
-    // clip charts are never pulled into the body, which is what kept the report
-    // from turning into a wall of the source tools' line/bar projections.
-    for (const s of gen.sections) {
-      map.set(s.clipId, s.chart
-        ? {
-          visual: {
-            id: `site-chart:${s.clipId}`,
-            sourceTab: 'Alphatape',
-            capturedAt: gen.generatedAt,
-            dataType: 'chart',
-            payload: s.chart,
-            projectId: project?.id ?? '',
-          },
-          showKeyFigures: true,
-        }
-        : { visual: undefined, showKeyFigures: true })
-    }
-    return map
-  }, [gen, project?.id])
+    if (!gen) return new Map<string, { visual: ReportClip | undefined; showKeyFigures: boolean }>()
+    return assignReportBodyVisuals(gen.sections, clipById, allClips, {
+      projectId: project?.id ?? '',
+      generatedAt: gen.generatedAt,
+    })
+  }, [allClips, clipById, gen, project?.id])
 
-  const chartsUsedInBody = useMemo(() => {
-    const ids = new Set<string>()
-    for (const v of bodyVisuals.values()) {
-      if (v.visual?.payload.kind === 'chart') ids.add(v.visual.id)
-    }
-    return ids
-  }, [bodyVisuals])
-
-  const appendixClips: ReportClip[] = (() => {
-    if (!gen) return []
-    const raw = gen.appendixClipIds.map(cid => clipById.get(cid)).filter((c): c is ReportClip => !!c)
-    const isStub = (c: ReportClip) =>
-      c.payload.kind === 'text' && /no structured panels|add a note describing/i.test(c.payload.body)
-    // The appendix is supporting DATA — tables, KPI grids, and profile text.
-    // Raw chart clips (the source tools' own line/bar projections) are dropped:
-    // they read as a monotonous wall of near-identical charts, and the curated,
-    // varied section charts in the body already carry the visual story.
-    const rank = (c: ReportClip) =>
-      c.payload.kind === 'kpi' ? 2 : c.payload.kind === 'table' ? 3 : 4
-    return raw
-      .filter(c => c.payload.kind !== 'chart' && !isStub(c) && !chartsUsedInBody.has(c.id))
-      .sort((a, b) => rank(a) - rank(b))
-  })()
+  const appendixData = useMemo(
+    () => gen ? selectReportAppendixData(gen.appendixClipIds, allClips) : [],
+    [allClips, gen],
+  )
 
   const reportDate = useMemo(() => {
     if (gen?.generatedAt) {
@@ -178,7 +170,8 @@ export default function ReportPrint() {
   }, [gen?.generatedAt])
 
   const dateLong = fmtDateLong(reportDate)
-  const fileName = renderName ? pdfBaseName(renderName, reportDate) : 'Report'
+  const reportTitle = gen?.headline?.trim() || renderName || 'Report'
+  const fileName = pdfBaseName(reportTitle, reportDate)
 
   const eyebrow: React.CSSProperties = {
     fontFamily: palette.sans, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em',
@@ -319,15 +312,44 @@ export default function ReportPrint() {
                   fontFamily: palette.sans, fontSize: 24, fontWeight: 700, color: palette.onMasthead,
                   margin: 0, lineHeight: 1.2, letterSpacing: '-0.02em',
                 }}>
-                  {renderName}
+                  {reportTitle}
                 </h1>
-                {gen?.headline && (
+                {gen?.headline && renderName && gen.headline.trim() !== renderName.trim() && (
                   <p style={{
                     fontFamily: palette.sans, fontSize: 13.5, fontWeight: 500, color: palette.onMastheadDim,
                     margin: '8px 0 0', lineHeight: 1.4, maxWidth: 420,
                   }}>
-                    {gen.headline}
+                    Workspace · {renderName}
                   </p>
+                )}
+                {reportTickers.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 10 }}>
+                    {reportTickers.map(ticker => (
+                      <div key={ticker} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        border: `1px solid ${palette.border}`,
+                        background: 'rgba(255,255,255,0.035)',
+                        padding: '3px 8px 3px 3px',
+                      }}>
+                        <TickerLogo
+                          ticker={ticker}
+                          size={22}
+                          crossOrigin="anonymous"
+                          fit="contain"
+                          cornerRadius={4}
+                          padding={1}
+                          logoBackground="#ffffff"
+                          normalizeVisualWeight
+                        />
+                        <span style={{
+                          fontFamily: palette.mono, fontSize: 9, fontWeight: 700,
+                          letterSpacing: '0.08em', color: palette.onMasthead,
+                        }}>
+                          {ticker}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
 
@@ -401,7 +423,7 @@ export default function ReportPrint() {
                     <h2 style={bandHead}>Key Data</h2>
                     <FillGrid
                       items={keyData.map((k, i) => ({ key: i, ...k }))}
-                      preferCols={Math.min(keyData.length, 4)}
+                      preferCols={Math.min(keyData.length, 5)}
                       palette={palette}
                       render={(item) => {
                         const k = item as { key: number; label: string; value: string; sub?: string }
@@ -415,14 +437,11 @@ export default function ReportPrint() {
                             <div style={{
                               fontFamily: palette.mono, fontWeight: 700,
                               color: hero ? palette.accent : palette.ink,
-                              marginTop: 3, lineHeight: 1.25,
+                              marginTop: 3, lineHeight: 1.35, minHeight: 20,
                               fontSize: hero ? heroFontSize(k.value, 14, 10) : 14,
-                              ...(hero
-                                ? {
-                                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-                                    overflow: 'hidden', textOverflow: 'ellipsis',
-                                  }
-                                : { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }),
+                              whiteSpace: hero ? 'normal' : 'nowrap',
+                              overflow: 'visible',
+                              wordBreak: hero ? 'break-word' : undefined,
                             } as React.CSSProperties}>{k.value}</div>
                             {k.sub && (
                               <div style={{ fontFamily: palette.sans, fontSize: 9, color: palette.muted, marginTop: 2, lineHeight: 1.25 }}>
@@ -441,28 +460,34 @@ export default function ReportPrint() {
                   <p style={prose}>{gen.executiveSummary || '—'}</p>
                 </section>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
                   {gen.sections.map((s, i) => {
                     const clip = clipById.get(s.clipId)
-                    const assigned = bodyVisuals.get(s.clipId)
+                    const sectionKey = reportSectionAssignmentKey(gen.sections, i)
+                    const assigned = bodyVisuals.get(sectionKey)
                     return (
-                      <section key={s.clipId} className="rc-section" style={{ breakInside: 'avoid' }}>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 0 }}>
-                          <span style={{ fontFamily: palette.mono, fontSize: 11, fontWeight: 700, color: palette.accent }}>
-                            {String(i + 1).padStart(2, '0')}
-                          </span>
+                      <section key={sectionKey} className="rc-section">
+                        <div className="rc-section-heading" style={{
+                          display: 'flex',
+                          alignItems: 'baseline',
+                          justifyContent: 'space-between',
+                          gap: 12,
+                          marginBottom: 5,
+                          paddingTop: 2,
+                        }}>
                           <h3 style={secTitle}>{s.heading}</h3>
+                          {clip && (
+                            <span style={{ ...secMeta, margin: 0, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                              {clip.sourceTab}
+                            </span>
+                          )}
                         </div>
-                        {clip && (
-                          <div style={secMeta}>
-                            {clip.sourceTab}
-                          </div>
-                        )}
                         <SectionLayout
                           analysis={s.analysis}
                           clip={clip}
                           keyFigures={s.keyFigures}
                           index={i}
+                          layout={s.layout}
                           projectClips={allClips}
                           visual={assigned?.visual}
                           showKeyFigures={assigned?.showKeyFigures}
@@ -474,8 +499,10 @@ export default function ReportPrint() {
                 </div>
 
                 <section className="rc-keep" style={{
-                  marginTop: 16, borderLeft: `3px solid ${palette.accent}`,
-                  background: palette.panel, padding: '12px 14px 12px 14px',
+                  marginTop: 14,
+                  border: `1px solid ${palette.border}`,
+                  background: palette.panel,
+                  padding: '11px 13px',
                 }}>
                   <h2 style={{
                     ...bandHead, border: 'none', margin: '0 0 6px', paddingBottom: 0,
@@ -485,13 +512,12 @@ export default function ReportPrint() {
                   <p style={prose}>{gen.conclusion || '—'}</p>
                 </section>
 
-                {appendixClips.length > 0 && (
+                {appendixData.length > 0 && (
                   <section style={{ marginTop: 20 }}>
-                    <h2 style={bandHead}>Appendix — Supporting Data</h2>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 2 }}>
-                      {appendixClips.map(c => (
-                        <div key={c.id} className="rc-keep">
-                          <h3 style={{ ...secTitle, fontSize: 12.5, marginBottom: 0 }}>{clipTitle(c)}</h3>
+                    <h2 style={bandHead}>Data Appendix</h2>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 2 }}>
+                      {appendixData.map(c => (
+                        <div key={c.id} className={c.payload.kind === 'table' ? 'rc-keep rc-keep-tight' : 'rc-keep'}>
                           <div style={secMeta}>{c.sourceTab} · {c.dataType}</div>
                           <AppendixBlock clip={c} palette={palette} />
                         </div>
@@ -503,17 +529,18 @@ export default function ReportPrint() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {renderClips.map((c, i) => (
-                  <section key={c.id} className="rc-section" style={{ breakInside: 'avoid' }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                      <span style={{ fontFamily: palette.mono, fontSize: 11, fontWeight: 700, color: palette.accent }}>
-                        {String(i + 1).padStart(2, '0')}
-                      </span>
+                  <section key={c.id} className="rc-section">
+                    <div className="rc-section-heading" style={{
+                      display: 'flex',
+                      alignItems: 'baseline',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                      marginBottom: 5,
+                    }}>
                       <h3 style={secTitle}>{clipTitle(c)}</h3>
-                    </div>
-                    <div style={secMeta}>
-                      {c.sourceTab}
-                      <span style={{ color: palette.border, margin: '0 6px' }}>·</span>
-                      {c.dataType}
+                      <span style={{ ...secMeta, margin: 0, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        {c.sourceTab} · {c.dataType}
+                      </span>
                     </div>
                     {c.userDescription ? (
                       <SectionLayout

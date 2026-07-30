@@ -84,10 +84,14 @@ export function chartClip(
   xKey: string,
   data: Array<Record<string, string | number | null>>,
   series: Array<{ key: string; label: string; color?: string }>,
+  options?: {
+    barOrientation?: 'vertical' | 'horizontal'
+    details?: Array<{ key: string; label: string }>
+  },
 ): ClipDraft {
   return {
     sourceTab,
     dataType: 'chart',
-    payload: { kind: 'chart', title, chartType, xKey, data, series },
+    payload: { kind: 'chart', title, chartType, xKey, data, series, ...options },
   }
 }

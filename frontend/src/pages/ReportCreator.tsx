@@ -1,20 +1,35 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Eye, EyeOff, FileText, FileDown, Sparkles, RefreshCw, Loader2, AlertTriangle, Check, Clock, Download } from 'lucide-react'
+import {
+  Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Eye, EyeOff, FileText,
+  FileDown, Sparkles, RefreshCw, Loader2, AlertTriangle, Check, Clock, Download,
+  Circle, Database, ExternalLink, XCircle,
+} from 'lucide-react'
 import { T } from '../lib/theme'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
+import TickerLogo from '../components/TickerLogo'
 import useIsMobile from '../hooks/useIsMobile'
+import useActivePortfolio from '../hooks/useActivePortfolio'
 import ReportWizardForm from '../components/report/ReportWizardForm'
 import ClipRenderer from '../components/report/ClipRenderer'
+import { assignReportBodyVisuals, reportSectionAssignmentKey } from '../components/report/SectionLayout'
 import {
   useReportCreator, createProject, renameProject, deleteProject, updateScope,
   removeClip, updateClipDescription, moveClip, timeframeLabel, clipTitle, formatCaptured,
   setGenerated, updateGenerated, updateGeneratedSection, updateKeyResult, isGenerationStale, summarizeClipForAI,
-  deleteSnapshot,
+  deleteSnapshot, replaceAlphaTapeClips,
   type ReportProject, type ReportClip, type ReportSnapshot,
 } from '../lib/reportCreator'
+import {
+  collectReportResearch, enhanceReportResearchPlan, planReportResearch, researchSourceProducesVisuals,
+  type ReportResearchPlan, type ReportResearchProgress, type ReportResearchResult,
+  type ReportResearchSourceId,
+} from '../lib/reportResearch'
+import type { ActivePortfolioContext } from '../lib/pmImport'
+import { selectReportAppendixData } from '../lib/reportPresentation'
+import { reportTickerSymbols } from '../lib/tickerLogos'
 import { ReportRevise, BlockRevise } from '../components/report/ReviseControls'
 
 const DTYPE_COLOR: Record<string, string> = { table: '#60a5fa', chart: '#c9a84c', kpi: '#34d399', text: '#c084fc' }
@@ -44,19 +59,119 @@ const genField: React.CSSProperties = {
   fontSize: 11.5, lineHeight: 1.6, padding: '9px 11px', width: '100%', outline: 'none', boxSizing: 'border-box', resize: 'vertical',
 }
 
+function generationStage(progress: number): string {
+  if (progress < 28) return 'Structuring the thesis'
+  if (progress < 56) return 'Writing the analysis'
+  if (progress < 78) return 'Matching evidence and visuals'
+  if (progress < 100) return 'Checking figures and layout'
+  return 'Report ready'
+}
+
+function GenerationProgress({ progress }: { progress: number }) {
+  const value = Math.max(0, Math.min(100, Math.round(progress)))
+  return (
+    <div
+      role="progressbar"
+      aria-label="Generating report"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={value}
+      aria-valuetext={generationStage(value)}
+      style={{
+        border: `1px solid ${T.border}`,
+        background: T.surface,
+        padding: '8px 10px 9px',
+      }}
+    >
+      <div style={{
+        display: 'flex',
+        alignItems: 'baseline',
+        justifyContent: 'space-between',
+        gap: 12,
+        marginBottom: 6,
+      }}>
+        <span style={{
+          fontFamily: T.label,
+          fontSize: 8.5,
+          fontWeight: 700,
+          letterSpacing: '0.09em',
+          textTransform: 'uppercase',
+          color: T.gold,
+        }}>
+          {generationStage(value)}
+        </span>
+        <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>{value}%</span>
+      </div>
+      <div style={{ height: 4, overflow: 'hidden', background: T.borderFaint }}>
+        <div style={{
+          width: `${value}%`,
+          height: '100%',
+          background: T.gold,
+          transition: 'width 260ms ease-out',
+        }} />
+      </div>
+    </div>
+  )
+}
+
 function GeneratedEditor({ project }: { project: ReportProject }) {
   const gen = project.generated!
-  const clipById = new Map(project.clips.map(c => [c.id, c]))
+  const clipById = useMemo(() => new Map(project.clips.map(c => [c.id, c])), [project.clips])
+  const appendixClips = useMemo(
+    () => selectReportAppendixData(gen.appendixClipIds, project.clips),
+    [gen.appendixClipIds, project.clips],
+  )
+  const reportTickers = useMemo(
+    () => reportTickerSymbols(
+      project.scope.researchSymbols,
+      project.clips.map(clip => clip.researchKey),
+    ),
+    [project.clips, project.scope.researchSymbols],
+  )
+  const bodyVisuals = useMemo(
+    () => assignReportBodyVisuals(gen.sections, clipById, project.clips, {
+      projectId: project.id,
+      generatedAt: gen.generatedAt,
+    }),
+    [clipById, gen.generatedAt, gen.sections, project.clips, project.id],
+  )
   const kr = gen.keyResult
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <ReportRevise project={project} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={subLabel}>Headline</div>
+        <div style={subLabel}>AI title</div>
         <input key={`hl-${gen.generatedAt}-${vh(gen.headline ?? '')}`} defaultValue={gen.headline ?? ''} onBlur={e => updateGenerated(project.id, { headline: e.target.value })}
-          placeholder="Research-note headline" style={{ ...genField, fontFamily: T.mono, fontSize: 14, fontWeight: 700, resize: 'none' }} />
+          placeholder="AI-generated report title" style={{ ...genField, fontFamily: T.mono, fontSize: 14, fontWeight: 700, resize: 'none' }} />
         <BlockRevise project={project} field="headline" />
       </div>
+      {reportTickers.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+          {reportTickers.map(ticker => (
+            <div key={ticker} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              border: `1px solid ${T.border}`, background: T.surface,
+              padding: '3px 8px 3px 3px',
+            }}>
+              <TickerLogo
+                ticker={ticker}
+                size={22}
+                fit="contain"
+                cornerRadius={4}
+                padding={1}
+                logoBackground="#ffffff"
+                normalizeVisualWeight
+              />
+              <span style={{
+                fontFamily: T.mono, fontSize: 9, fontWeight: 700,
+                letterSpacing: '0.08em', color: T.text,
+              }}>
+                {ticker}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       {gen.stance && (
         <div style={{ border: `1px solid ${T.border}`, background: T.bg, padding: 12 }}>
           <div style={subLabel}>Stance</div>
@@ -91,8 +206,10 @@ function GeneratedEditor({ project }: { project: ReportProject }) {
       </div>
       {gen.sections.map((s, i) => {
         const clip = clipById.get(s.clipId)
+        const sectionKey = reportSectionAssignmentKey(gen.sections, i)
+        const visual = bodyVisuals.get(sectionKey)?.visual
         return (
-          <div key={s.clipId} style={{ border: `1px solid ${T.border}`, background: T.bg, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div key={sectionKey} style={{ border: `1px solid ${T.border}`, background: T.bg, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontFamily: T.mono, fontSize: 11, color: T.gold }}>{String(i + 1).padStart(2, '0')}</span>
               <input key={`h-${gen.generatedAt}-${s.clipId}-${vh(s.heading)}`} defaultValue={s.heading}
@@ -112,6 +229,16 @@ function GeneratedEditor({ project }: { project: ReportProject }) {
                 ))}
               </div>
             )}
+            {visual && visual.payload.kind !== 'text' && (
+              <div style={{ border: `1px solid ${T.border}`, background: T.surface }}>
+                <div style={{ borderBottom: `1px solid ${T.border}`, padding: '5px 8px', fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: T.gold }}>
+                  Visual evidence · {visual.sourceTab}
+                </div>
+                <div style={{ padding: 8 }}>
+                  <ClipRenderer payload={visual.payload} mode="dark" />
+                </div>
+              </div>
+            )}
             <BlockRevise project={project} field="section.analysis" clipId={s.clipId} />
           </div>
         )
@@ -122,11 +249,15 @@ function GeneratedEditor({ project }: { project: ReportProject }) {
           onBlur={e => updateGenerated(project.id, { conclusion: e.target.value })} style={genField} />
         <BlockRevise project={project} field="conclusion" />
       </div>
-      {gen.appendixClipIds.length > 0 && (
+      {appendixClips.length > 0 && (
         <div>
           <div style={subLabel}>Appendix · supporting data (not central to the thesis)</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {gen.appendixClipIds.map(id => { const c = clipById.get(id); return c ? <span key={id} style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, border: `1px solid ${T.border}`, padding: '3px 7px' }}>{clipTitle(c)}</span> : null })}
+            {appendixClips.map(clip => (
+              <span key={clip.id} style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, border: `1px solid ${T.border}`, padding: '3px 7px' }}>
+                {clipTitle(clip)}
+              </span>
+            ))}
           </div>
         </div>
       )}
@@ -154,7 +285,9 @@ function Section({ label, meta, children, collapsible, defaultOpen = true }: { l
 
 function ClipCard({ project, clip, index, count }: { project: ReportProject; clip: ReportClip; index: number; count: number }) {
   const [open, setOpen] = useState(false)
+  const navigate = useNavigate()
   const color = DTYPE_COLOR[clip.dataType] ?? T.muted
+  const researched = clip.origin === 'alphatape'
   return (
     <div style={{ border: `1px solid ${T.border}`, background: T.bg }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderBottom: open ? `1px solid ${T.borderFaint}` : 'none' }}>
@@ -162,9 +295,18 @@ function ClipCard({ project, clip, index, count }: { project: ReportProject; cli
         <span style={{ fontFamily: T.label, fontSize: 7.5, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color, border: `1px solid ${color}`, padding: '2px 5px', flexShrink: 0 }}>{clip.dataType}</span>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontFamily: T.label, fontSize: 11.5, color: T.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{clipTitle(clip)}</div>
-          <div style={{ fontFamily: T.mono, fontSize: 8.5, color: T.muted }}>{clip.sourceTab} · {formatCaptured(clip.capturedAt)}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', fontFamily: T.mono, fontSize: 8.5, color: T.muted }}>
+            <span style={{ color: researched ? T.gold : T.muted }}>{researched ? 'AlphaTape research' : 'Manual clip'}</span>
+            <span>·</span>
+            <span>{clip.sourceTab}</span>
+            <span>·</span>
+            <span>{formatCaptured(clip.capturedAt)}</span>
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+          {clip.sourceRoute && (
+            <IconBtn title={`Open ${clip.sourceTab}`} onClick={() => navigate(clip.sourceRoute!)}><ExternalLink size={12} /></IconBtn>
+          )}
           <IconBtn title="Move up" disabled={index === 0} onClick={() => moveClip(project.id, clip.id, -1)}><ChevronUp size={13} /></IconBtn>
           <IconBtn title="Move down" disabled={index === count - 1} onClick={() => moveClip(project.id, clip.id, 1)}><ChevronDown size={13} /></IconBtn>
           <IconBtn title={open ? 'Hide preview' : 'Show preview'} onClick={() => setOpen(o => !o)}>{open ? <EyeOff size={13} /> : <Eye size={13} />}</IconBtn>
@@ -179,6 +321,294 @@ function ClipCard({ project, clip, index, count }: { project: ReportProject; cli
             onBlur={e => updateClipDescription(project.id, clip.id, e.target.value)}
             style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.label, fontSize: 11, lineHeight: 1.5, padding: '7px 9px', width: '100%', outline: 'none', boxSizing: 'border-box', resize: 'vertical' }} />
         </div>
+      )}
+    </div>
+  )
+}
+
+type ResearchSourceState = ReportResearchProgress['status'] | 'queued'
+
+function ResearchPanel({
+  project,
+  portfolio,
+  plan,
+  researching,
+  statuses,
+  result,
+  error,
+  planning,
+  planningError,
+  onEnhance,
+  onRun,
+  isMobile,
+}: {
+  project: ReportProject
+  portfolio: ActivePortfolioContext
+  plan: ReportResearchPlan
+  researching: boolean
+  statuses: Partial<Record<ReportResearchSourceId, ResearchSourceState>>
+  result: ReportResearchResult | null
+  error: string | null
+  planning: boolean
+  planningError: string | null
+  onEnhance: () => void
+  onRun: (baselineOnly?: boolean) => void
+  isMobile: boolean
+}) {
+  const navigate = useNavigate()
+  const automaticCount = project.clips.filter(clip => clip.origin === 'alphatape').length
+  const failedSourceCount = new Set(result?.failed.map(failure => failure.sourceId) ?? []).size
+  const mode = project.scope.evidenceMode
+  const modeButton = (active: boolean): React.CSSProperties => ({
+    flex: '1 1 180px',
+    display: 'flex', alignItems: 'flex-start', gap: 9, textAlign: 'left',
+    background: active ? T.goldTint(9) : T.bg,
+    border: `1px solid ${active ? T.gold : T.border}`,
+    color: active ? T.text : T.muted,
+    padding: '10px 11px', cursor: 'pointer',
+  })
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+      <div role="group" aria-label="Evidence sourcing method" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        <button type="button" aria-pressed={mode === 'manual'} onClick={() => updateScope(project.id, { evidenceMode: 'manual' })} style={modeButton(mode === 'manual')}>
+          <FileText size={14} color={mode === 'manual' ? T.gold : T.muted} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>
+            <span style={{ display: 'block', fontFamily: T.label, fontSize: 10.5, fontWeight: 700 }}>Clip tools manually</span>
+            <span style={{ display: 'block', fontFamily: T.mono, fontSize: 8.5, lineHeight: 1.45, marginTop: 3 }}>Choose exact tables, charts, and metrics from any tool.</span>
+          </span>
+        </button>
+        <button type="button" aria-pressed={mode === 'alphatape'} onClick={() => updateScope(project.id, { evidenceMode: 'alphatape' })} style={modeButton(mode === 'alphatape')}>
+          <Database size={14} color={mode === 'alphatape' ? T.gold : T.muted} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>
+            <span style={{ display: 'block', fontFamily: T.label, fontSize: 10.5, fontWeight: 700 }}>Research with AlphaTape</span>
+            <span style={{ display: 'block', fontFamily: T.mono, fontSize: 8.5, lineHeight: 1.45, marginTop: 3 }}>Build a baseline, then let AI add useful tools and visuals.</span>
+          </span>
+        </button>
+      </div>
+
+      {mode === 'manual' ? (
+        <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 11, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ fontFamily: T.label, fontSize: 10.5, color: T.muted, lineHeight: 1.5, maxWidth: 650 }}>
+            Use Send to Report inside a tool. AlphaTape research clips already in this project stay available until you remove them.
+          </div>
+          <span style={{ fontFamily: T.mono, fontSize: 9, color: automaticCount ? T.gold : T.muted }}>
+            {automaticCount} AlphaTape clip{automaticCount === 1 ? '' : 's'} retained
+          </span>
+        </div>
+      ) : (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'minmax(220px, 1.2fr) minmax(220px, 0.8fr)', gap: 8 }}>
+            <label style={{ display: 'block', minWidth: 0 }}>
+              <span style={subLabel}>Research symbols</span>
+              <input
+                value={project.scope.researchSymbols}
+                onChange={event => updateScope(project.id, { researchSymbols: event.target.value })}
+                placeholder="AAPL, MSFT"
+                aria-label="Research symbols"
+                style={{
+                  width: '100%', boxSizing: 'border-box', background: T.bg, border: `1px solid ${T.border}`,
+                  color: T.text, fontFamily: T.mono, fontSize: 10.5, padding: '8px 9px', outline: 'none',
+                }}
+              />
+              <span style={{ display: 'block', fontFamily: T.mono, fontSize: 8.5, color: T.muted, marginTop: 5 }}>
+                Optional when the objective names uppercase tickers or the active book supplies them.
+              </span>
+            </label>
+            <div>
+              <span style={subLabel}>Portfolio context</span>
+              <button
+                type="button"
+                aria-pressed={project.scope.includePortfolio}
+                onClick={() => updateScope(project.id, { includePortfolio: !project.scope.includePortfolio })}
+                style={{
+                  width: '100%', minHeight: 34, display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left',
+                  background: project.scope.includePortfolio ? T.goldTint(8) : T.bg,
+                  border: `1px solid ${project.scope.includePortfolio ? T.gold : T.border}`,
+                  color: project.scope.includePortfolio ? T.text : T.muted,
+                  padding: '7px 9px', cursor: 'pointer',
+                }}
+              >
+                <span style={{
+                  width: 13, height: 13, flexShrink: 0, display: 'grid', placeItems: 'center',
+                  border: `1px solid ${project.scope.includePortfolio ? T.gold : T.muted}`,
+                  color: T.gold,
+                }}>
+                  {project.scope.includePortfolio && <Check size={10} />}
+                </span>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: 'block', fontFamily: T.label, fontSize: 9.5, fontWeight: 700 }}>Use active portfolio</span>
+                  <span style={{ display: 'block', fontFamily: T.mono, fontSize: 8.5, color: T.muted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {portfolio.hasData ? `${portfolio.name} · ${portfolio.positionCount} positions` : 'No active portfolio'}
+                  </span>
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div style={{ border: `1px solid ${T.border}`, background: T.bg }}>
+            <div style={{ minHeight: 31, padding: '0 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderBottom: `1px solid ${T.border}` }}>
+              <span style={{ fontFamily: T.label, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.text }}>
+                {plan.aiEnhanced ? 'AI-expanded sources' : 'Baseline sources'}
+              </span>
+              <span style={{ fontFamily: T.mono, fontSize: 8.5, color: T.muted }}>
+                {plan.sources.length} tool{plan.sources.length === 1 ? '' : 's'} · {plan.symbols.length ? plan.symbols.join(', ') : 'market scope'}
+              </span>
+            </div>
+            {plan.blockedReason ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 12px', color: T.warn, fontFamily: T.label, fontSize: 10.5, lineHeight: 1.45 }}>
+                <AlertTriangle size={13} style={{ flexShrink: 0 }} />
+                <span>{plan.blockedReason}</span>
+              </div>
+            ) : (
+              <div>
+                {plan.sources.map((source, index) => {
+                  const status = statuses[source.id] ?? 'queued'
+                  const statusColor = status === 'complete' ? T.pos
+                    : status === 'partial' ? T.warn
+                      : status === 'failed' ? T.neg
+                        : status === 'running' ? T.gold
+                          : T.muted
+                  const failedSources = result?.failed.filter(failure => failure.sourceId === source.id) ?? []
+                  return (
+                    <div key={source.id} style={{
+                      display: 'grid',
+                      gridTemplateColumns: isMobile ? '18px minmax(0, 1fr) auto' : '18px minmax(132px, 0.55fr) minmax(180px, 1fr) auto',
+                      alignItems: 'center', gap: 9, minHeight: 43, padding: '6px 10px',
+                      borderBottom: index < plan.sources.length - 1 ? `1px solid ${T.borderFaint}` : 'none',
+                    }}>
+                      <span style={{ display: 'inline-flex', color: statusColor }}>
+                        {status === 'running' ? <Loader2 size={12} className="rc-spin" />
+                          : status === 'complete' ? <Check size={12} />
+                            : status === 'partial' ? <AlertTriangle size={12} />
+                            : status === 'failed' ? <XCircle size={12} />
+                              : <Circle size={10} />}
+                      </span>
+                      <span style={{ minWidth: 0 }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', fontFamily: T.label, fontSize: 10, fontWeight: 700, color: T.text }}>
+                          {source.label}
+                          {source.selectionOrigin === 'ai' && <span style={{ color: T.gold, fontFamily: T.mono, fontSize: 7.5, fontWeight: 700 }}>AI added</span>}
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: T.mono, fontSize: 8, color: T.muted, marginTop: 2 }}>
+                          {source.tool}
+                          {researchSourceProducesVisuals(source.id) && <span style={{ color: T.blue }}>· visual output</span>}
+                        </span>
+                      </span>
+                      <span style={{
+                        gridColumn: isMobile ? '2 / -1' : undefined,
+                        gridRow: isMobile ? 2 : undefined,
+                        fontFamily: T.label, fontSize: 9.5,
+                        color: failedSources.length ? (status === 'partial' ? T.warn : T.neg) : T.muted, lineHeight: 1.4,
+                      }}>
+                        {failedSources.length
+                          ? `${failedSources.map(failure => failure.message).join(' ')} Retry the research run.`
+                          : source.reason}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => navigate(source.route)}
+                        title={`Open ${source.tool}`}
+                        aria-label={`Open ${source.tool}`}
+                        style={{
+                          gridColumn: isMobile ? 3 : undefined,
+                          gridRow: isMobile ? 1 : undefined,
+                          background: 'transparent', border: 'none', color: T.muted,
+                          padding: 4, cursor: 'pointer', display: 'inline-flex',
+                        }}
+                      >
+                        <ExternalLink size={11} />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {plan.aiEnhanced && plan.aiSummary && (
+            <div style={{ borderLeft: `2px solid ${T.gold}`, padding: '7px 9px', background: T.goldTint(5), fontFamily: T.label, fontSize: 9.5, lineHeight: 1.5, color: T.muted }}>
+              <span style={{ color: T.gold, fontWeight: 700 }}>AI research strategy</span> · {plan.aiSummary}
+            </div>
+          )}
+
+          {planningError && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, border: `1px solid ${T.warn}`, background: T.goldTint(5), color: T.warn, fontFamily: T.label, fontSize: 10.5, padding: '8px 10px' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <AlertTriangle size={13} style={{ flexShrink: 0 }} /> {planningError}
+              </span>
+              <button type="button" onClick={() => onRun(true)} disabled={planning || researching || !!plan.blockedReason}
+                style={{ background: 'transparent', border: `1px solid ${T.warn}`, color: T.warn, fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 8px', cursor: planning || researching || plan.blockedReason ? 'default' : 'pointer' }}>
+                Run baseline only
+              </button>
+            </div>
+          )}
+
+          {error && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${T.neg}`, background: T.negTint(7), color: T.neg, fontFamily: T.label, fontSize: 10.5, padding: '8px 10px' }}>
+              <AlertTriangle size={13} style={{ flexShrink: 0 }} /> {error}
+            </div>
+          )}
+
+          {result && result.clips.length > 0 && (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
+              border: `1px solid ${result.failed.length ? T.warn : T.pos}`,
+              background: result.failed.length ? T.goldTint(5) : T.posTint(5),
+              padding: '8px 10px',
+            }}>
+              <span style={{ fontFamily: T.label, fontSize: 10.5, color: T.text }}>
+                Added {result.clips.length} clip{result.clips.length === 1 ? '' : 's'} from {result.completed.length} tool{result.completed.length === 1 ? '' : 's'}.
+                {failedSourceCount ? ` ${failedSourceCount} source${failedSourceCount === 1 ? '' : 's'} had missing evidence.` : ''}
+                {` ${result.clips.filter(clip => clip.dataType === 'chart').length} visual${result.clips.filter(clip => clip.dataType === 'chart').length === 1 ? '' : 's'} included.`}
+              </span>
+              <span style={{ fontFamily: T.mono, fontSize: 8.5, color: T.muted }}>Review clips before generating</span>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <span style={{ fontFamily: T.mono, fontSize: 8.5, color: T.muted, lineHeight: 1.45 }}>
+              {automaticCount ? 'Refresh replaces completed AlphaTape sources. Manual clips, notes, and prior evidence from failed sources stay.' : 'Research adds ordinary clips. Nothing is generated until you review them.'}
+            </span>
+            <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={onEnhance}
+                disabled={planning || researching || !!plan.blockedReason}
+                style={{
+                  ...primaryAction,
+                  background: 'transparent',
+                  borderColor: plan.aiEnhanced ? T.gold : T.border,
+                  color: plan.aiEnhanced ? T.gold : T.muted,
+                  cursor: planning || researching || plan.blockedReason ? 'default' : 'pointer',
+                  opacity: planning || researching || plan.blockedReason ? 0.62 : 1,
+                }}
+              >
+                {planning ? <Loader2 size={13} className="rc-spin" /> : <Sparkles size={13} />}
+                {planning ? 'AI planning…' : plan.aiEnhanced ? 'Rethink with AI' : 'Improve plan with AI'}
+              </button>
+              <button
+                type="button"
+                onClick={() => onRun()}
+                disabled={researching || planning || !!plan.blockedReason}
+                style={{
+                  ...primaryAction,
+                  background: researching || planning || plan.blockedReason ? 'transparent' : T.gold,
+                  borderColor: researching || planning || plan.blockedReason ? T.border : T.gold,
+                  color: researching || planning || plan.blockedReason ? T.muted : 'var(--theme-bg)',
+                  cursor: researching || planning || plan.blockedReason ? 'default' : 'pointer',
+                  opacity: researching || planning || plan.blockedReason ? 0.62 : 1,
+                }}
+              >
+                {researching || planning ? <Loader2 size={13} className="rc-spin" /> : plan.aiEnhanced ? <Database size={13} /> : <Sparkles size={13} />}
+                {planning ? 'AI planning…'
+                  : researching ? 'Researching…'
+                    : plan.aiEnhanced
+                      ? automaticCount ? 'Refresh AlphaTape research' : 'Run AlphaTape research'
+                      : automaticCount ? 'Plan and refresh with AI' : 'Plan and run with AI'}
+              </button>
+            </span>
+          </div>
+        </>
       )}
     </div>
   )
@@ -248,17 +678,81 @@ export default function ReportCreator() {
   const projects = useReportCreator()
   const navigate = useNavigate()
   const isMobile = useIsMobile()
+  const activePortfolio = useActivePortfolio()
   const [activeId, setActiveId] = useState('')
   const [newName, setNewName] = useState('')
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
+  const [generationProgress, setGenerationProgress] = useState(0)
   const [genError, setGenError] = useState<string | null>(null)
   const [justDone, setJustDone] = useState(false)
+  const [researching, setResearching] = useState(false)
+  const [researchStatuses, setResearchStatuses] = useState<Partial<Record<ReportResearchSourceId, ResearchSourceState>>>({})
+  const [researchResult, setResearchResult] = useState<ReportResearchResult | null>(null)
+  const [researchError, setResearchError] = useState<string | null>(null)
+  const [planningResearch, setPlanningResearch] = useState(false)
+  const [planningError, setPlanningError] = useState<string | null>(null)
+  const [aiResearchPlan, setAiResearchPlan] = useState<ReportResearchPlan | null>(null)
+  const researchOperationRef = useRef(0)
 
   const active = projects.find(p => p.id === activeId) ?? projects[0]
+  const baselineResearchPlan = useMemo(
+    () => active ? planReportResearch(active.scope, activePortfolio) : null,
+    [active, activePortfolio],
+  )
+  const researchPlan = aiResearchPlan ?? baselineResearchPlan
+  const researchPlanSignature = baselineResearchPlan
+    ? JSON.stringify({
+      projectId: active?.id,
+      objective: baselineResearchPlan.objective,
+      symbols: baselineResearchPlan.symbols,
+      sources: baselineResearchPlan.sources.map(source => source.id),
+      lookback: active?.scope.lookbackPreset,
+      customStart: active?.scope.customStart,
+      customEnd: active?.scope.customEnd,
+      lookforward: active?.scope.lookforwardPreset,
+      forwardCustomStart: active?.scope.forwardCustomStart,
+      forwardCustomEnd: active?.scope.forwardCustomEnd,
+      includePortfolio: active?.scope.includePortfolio,
+      portfolioId: activePortfolio.id,
+      portfolio: activePortfolio.holdings.map(holding => [holding.ticker, holding.shares, holding.avgCost]),
+      portfolioCash: activePortfolio.cashValue,
+    })
+    : ''
+  const researchSignatureRef = useRef(researchPlanSignature)
+  researchSignatureRef.current = researchPlanSignature
+
+  useEffect(() => {
+    researchOperationRef.current += 1
+    setPlanningResearch(false)
+    setResearching(false)
+    setAiResearchPlan(null)
+    setResearchStatuses({})
+    setResearchResult(null)
+    setResearchError(null)
+    setPlanningError(null)
+  }, [researchPlanSignature])
+
+  useEffect(() => {
+    if (!generating) return
+    const startedAt = Date.now()
+    setGenerationProgress(6)
+    const timer = window.setInterval(() => {
+      const elapsed = Date.now() - startedAt
+      const target = elapsed < 2500
+        ? 6 + (elapsed / 2500) * 22
+        : elapsed < 7500
+          ? 28 + ((elapsed - 2500) / 5000) * 28
+          : elapsed < 14000
+            ? 56 + ((elapsed - 7500) / 6500) * 22
+            : Math.min(94, 78 + ((elapsed - 14000) / 1000) * 1.4)
+      setGenerationProgress(current => Math.max(current, target))
+    }, 250)
+    return () => window.clearInterval(timer)
+  }, [generating])
 
   const generate = async () => {
-    if (!active || active.clips.length === 0) return
+    if (!active || active.clips.length === 0 || researching || planningResearch) return
     setGenerating(true); setGenError(null); setJustDone(false)
     try {
       const payload = {
@@ -271,6 +765,11 @@ export default function ReportCreator() {
         clips: active.clips.map(c => ({ id: c.id, sourceTab: c.sourceTab, dataType: c.dataType, title: clipTitle(c), userDescription: c.userDescription ?? '', dataSummary: summarizeClipForAI(c) })),
       }
       const r = await axios.post('/api/ai/report', payload)
+      const activeClipById = new Map(active.clips.map(clip => [clip.id, clip]))
+      const appendixClipIds = Array.isArray(r.data.appendixClipIds)
+        ? [...new Set<string>(r.data.appendixClipIds)]
+          .filter(id => activeClipById.get(id)?.payload.kind !== 'chart')
+        : []
       setGenerated(active.id, {
         headline: r.data.headline ?? '',
         stance: r.data.stance ?? undefined,
@@ -278,9 +777,10 @@ export default function ReportCreator() {
         executiveSummary: r.data.executiveSummary ?? '',
         sections: Array.isArray(r.data.sections) ? r.data.sections : [],
         conclusion: r.data.conclusion ?? '',
-        appendixClipIds: Array.isArray(r.data.appendixClipIds) ? r.data.appendixClipIds : [],
+        appendixClipIds,
         model: r.data.model,
       })
+      setGenerationProgress(100)
       setJustDone(true)
       window.setTimeout(() => setJustDone(false), 6000)
     } catch (e) {
@@ -298,9 +798,94 @@ export default function ReportCreator() {
     setNewName('')
   }
 
+  const enhanceResearchPlan = async () => {
+    if (!active || !baselineResearchPlan || baselineResearchPlan.blockedReason) return
+    const operation = ++researchOperationRef.current
+    const signature = researchPlanSignature
+    setPlanningResearch(true)
+    setPlanningError(null)
+    try {
+      const enhanced = await enhanceReportResearchPlan(baselineResearchPlan, active.scope, activePortfolio)
+      if (researchOperationRef.current !== operation || researchSignatureRef.current !== signature) return
+      setAiResearchPlan(enhanced)
+    } catch {
+      if (researchOperationRef.current !== operation || researchSignatureRef.current !== signature) return
+      setPlanningError('AI planning is unavailable. The baseline sources remain ready to run.')
+    } finally {
+      if (researchOperationRef.current === operation && researchSignatureRef.current === signature) {
+        setPlanningResearch(false)
+      }
+    }
+  }
+
+  const runResearch = async (baselineOnly = false) => {
+    if (!active || !baselineResearchPlan || baselineResearchPlan.blockedReason) return
+    const operation = ++researchOperationRef.current
+    const signature = researchPlanSignature
+    const projectId = active.id
+    const projectScope = active.scope
+    const portfolioContext = activePortfolio
+    let planToRun = baselineOnly ? baselineResearchPlan : researchPlan ?? baselineResearchPlan
+    setPlanningError(null)
+    if (!baselineOnly && !planToRun.aiEnhanced) {
+      setPlanningResearch(true)
+      try {
+        planToRun = await enhanceReportResearchPlan(baselineResearchPlan, projectScope, portfolioContext)
+        if (researchOperationRef.current !== operation || researchSignatureRef.current !== signature) return
+        setAiResearchPlan(planToRun)
+      } catch {
+        if (researchOperationRef.current !== operation || researchSignatureRef.current !== signature) return
+        setPlanningError('AI planning is unavailable. Run the visible baseline only, or retry AI planning.')
+        return
+      } finally {
+        if (researchOperationRef.current === operation && researchSignatureRef.current === signature) {
+          setPlanningResearch(false)
+        }
+      }
+    }
+    if (researchOperationRef.current !== operation || researchSignatureRef.current !== signature) return
+    setResearching(true)
+    setResearchError(null)
+    setResearchResult(null)
+    setResearchStatuses(Object.fromEntries(planToRun.sources.map(source => [source.id, 'queued'])))
+    try {
+      const result = await collectReportResearch(
+        planToRun,
+        projectScope,
+        portfolioContext,
+        progress => {
+          if (researchOperationRef.current === operation && researchSignatureRef.current === signature) {
+            setResearchStatuses(current => ({ ...current, [progress.sourceId]: progress.status }))
+          }
+        },
+      )
+      if (researchOperationRef.current !== operation || researchSignatureRef.current !== signature) return
+      if (!result.clips.length) {
+        setResearchError('No source returned usable evidence. Check the symbols, then retry.')
+        setResearchResult(result)
+        return
+      }
+      replaceAlphaTapeClips(projectId, result.clips, {
+        sourceIds: result.failed.filter(failure => !failure.researchKey).map(failure => failure.sourceId),
+        researchKeys: result.failed.flatMap(failure => failure.researchKey ? [failure.researchKey] : []),
+      })
+      setResearchResult(result)
+    } catch {
+      if (researchOperationRef.current === operation && researchSignatureRef.current === signature) {
+        setResearchError('AlphaTape research could not finish. Existing clips were not changed.')
+      }
+    } finally {
+      if (researchOperationRef.current === operation && researchSignatureRef.current === signature) {
+        setResearching(false)
+      }
+    }
+  }
+
   const clips = active?.clips ?? []
-  const canGenerate = !!active && clips.length > 0
+  const canGenerate = !!active && clips.length > 0 && !researching && !planningResearch
   const scopeIncomplete = !!active && !active.scope.goal.trim() && !active.scope.purpose.trim()
+  const researchedClipCount = clips.filter(clip => clip.origin === 'alphatape').length
+  const manualClipCount = clips.length - researchedClipCount
 
   return (
     <PageWrapper>
@@ -355,7 +940,7 @@ export default function ReportCreator() {
             <FileText size={26} color={T.muted} />
             <div style={{ fontFamily: T.label, fontSize: 13, fontWeight: 700, color: T.text, letterSpacing: '0.04em' }}>Build a research report</div>
             <div style={{ fontFamily: T.mono, fontSize: 10.5, color: T.muted, lineHeight: 1.6, maxWidth: 440 }}>
-              Create a project, then browse any tool and use Send to Report to clip tables, charts, and metrics into it. Set a timeframe, purpose, and goal, then generate a print-ready PDF.
+              Create a project, define the question, then let AlphaTape gather evidence or clip exact tool outputs yourself. Review the clips before generating a print-ready PDF.
             </div>
           </div>
         ) : (
@@ -376,8 +961,8 @@ export default function ReportCreator() {
                 )}
                 {active.generated && (
                   <button onClick={generate} disabled={generating || !canGenerate} title="Regenerate from the current clips and scope"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent', border: `1px solid ${T.border}`, color: T.muted, fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '8px 12px', cursor: generating ? 'default' : 'pointer', opacity: generating ? 0.6 : 1 }}>
-                    {generating ? <Loader2 size={12} className="rc-spin" /> : <RefreshCw size={12} />} Regenerate
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent', border: `1px solid ${T.border}`, color: T.muted, fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '8px 12px', cursor: (generating || !canGenerate) ? 'default' : 'pointer', opacity: (generating || !canGenerate) ? 0.6 : 1 }}>
+                    {!generating && <RefreshCw size={12} />} {generating ? 'Regenerating…' : 'Regenerate'}
                   </button>
                 )}
                 {active.generated ? (
@@ -387,11 +972,13 @@ export default function ReportCreator() {
                 ) : (
                   <button onClick={generate} disabled={generating || !canGenerate}
                     style={{ ...primaryAction, background: canGenerate ? T.gold : 'transparent', border: `1px solid ${canGenerate ? T.gold : T.border}`, color: canGenerate ? 'var(--theme-bg)' : T.muted, cursor: (generating || !canGenerate) ? 'default' : 'pointer', opacity: (generating || !canGenerate) ? 0.6 : 1 }}>
-                    {generating ? <><Loader2 size={13} className="rc-spin" /> Generating…</> : <><Sparkles size={13} /> Generate AI report</>}
+                    {generating ? 'Generating report…' : <><Sparkles size={13} /> Generate AI report</>}
                   </button>
                 )}
               </div>
             </div>
+
+            {generating && <GenerationProgress progress={generationProgress} />}
 
             {genError && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${T.neg}`, background: T.negTint(8), color: T.neg, fontFamily: T.mono, fontSize: 10.5, padding: '8px 12px' }}>
@@ -404,10 +991,36 @@ export default function ReportCreator() {
               <ReportWizardForm scope={active.scope} onChange={patch => updateScope(active.id, patch)} />
             </Section>
 
-            <Section label="Clips" meta={`${clips.length} in order`} collapsible defaultOpen={!active.generated}>
+            {researchPlan && (
+              <Section label="Evidence sourcing" meta={active.scope.evidenceMode === 'alphatape' ? 'AlphaTape research' : 'Manual clips'} collapsible defaultOpen={!active.generated}>
+                <ResearchPanel
+                  project={active}
+                  portfolio={activePortfolio}
+                  plan={researchPlan}
+                  researching={researching}
+                  statuses={researchStatuses}
+                  result={researchResult}
+                  error={researchError}
+                  planning={planningResearch}
+                  planningError={planningError}
+                  onEnhance={enhanceResearchPlan}
+                  onRun={runResearch}
+                  isMobile={isMobile}
+                />
+              </Section>
+            )}
+
+            <Section
+              label="Clips"
+              meta={researchedClipCount ? `${researchedClipCount} researched · ${manualClipCount} manual` : `${clips.length} in order`}
+              collapsible
+              defaultOpen={!active.generated}
+            >
               {clips.length === 0 ? (
                 <div style={{ padding: '20px 8px', textAlign: 'center', fontFamily: T.mono, fontSize: 10.5, color: T.muted, lineHeight: 1.6 }}>
-                  No clips yet. Open any tool and click Send to Report to add its tables, charts, or metrics here.
+                  {active.scope.evidenceMode === 'alphatape'
+                    ? 'No clips yet. Run AlphaTape research above to collect a first evidence set.'
+                    : 'No clips yet. Open any tool and click Send to Report to add its tables, charts, or metrics here.'}
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

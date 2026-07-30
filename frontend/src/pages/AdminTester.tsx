@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, lazy, Suspense } from 'react'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import DataAuditTab from '../components/admin/DataAuditTab'
+import TemporaryFileDrop from '../components/admin/TemporaryFileDrop'
 import WidgetRenderer from '../components/dashboard/WidgetRenderer'
 import { WIDGET_DEFAULT_SIZE, WIDGET_LABELS } from '../hooks/useDashboard'
 import type { WidgetType, WidgetConfig } from '../hooks/useDashboard'
@@ -221,7 +222,7 @@ interface UserStats {
   users: { id: string; username: string; display_name: string; email: string | null; created_at: string; last_login_at: string | null; login_count: number }[]
 }
 
-type Tab = 'traffic' | 'health' | 'users' | 'cache' | 'endpoints' | 'lob' | 'widgets' | 'regression' | 'stress' | 'algo' | 'reports' | 'market' | 'audit'
+type Tab = 'traffic' | 'files' | 'health' | 'users' | 'cache' | 'endpoints' | 'lob' | 'widgets' | 'regression' | 'stress' | 'algo' | 'reports' | 'market' | 'audit'
 
 interface LOBSnapshot {
   msg: number
@@ -527,18 +528,20 @@ export default function AdminTester() {
         </div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${RED_BORDER}`, marginBottom: 20 }}>
-          {(['traffic', 'health', 'users', 'cache', 'endpoints', 'lob', 'widgets', 'regression', 'stress', 'algo', 'reports', 'market', 'audit'] as Tab[]).map(t => (
+        <div style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${RED_BORDER}`, marginBottom: 20, overflowX: 'auto' }}>
+          {(['traffic', 'files', 'health', 'users', 'cache', 'endpoints', 'lob', 'widgets', 'regression', 'stress', 'algo', 'reports', 'market', 'audit'] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               background: 'none', border: 'none', borderBottom: tab === t ? `2px solid ${RED}` : '2px solid transparent',
               color: tab === t ? RED : 'var(--theme-text-dim)', fontFamily: 'var(--theme-mono)', fontSize: 10,
               fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-              padding: '8px 16px', cursor: 'pointer',
+              padding: '8px 16px', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
             }}>
-              {t}
+              {t === 'files' ? 'file drop' : t}
             </button>
           ))}
         </div>
+
+        {tab === 'files' && <TemporaryFileDrop secret={secret} />}
 
         {/* ── Health tab ── */}
         {tab === 'traffic' && (

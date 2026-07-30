@@ -46,9 +46,14 @@ export interface ChartPayload {
   kind: 'chart'
   title?: string
   chartType: 'line' | 'bar' | 'area' | 'pie' | 'histogram' | 'dot' | 'range' | 'scatter' | 'box'
+  /** Semantic direction of bar marks. Horizontal bars are preferred for
+   * rankings and categorical labels that need room to read. */
+  barOrientation?: 'vertical' | 'horizontal'
   xKey: string
   data: Array<Record<string, string | number | null | [number, number] | Array<{ label: string; value: number }>>>
   series: Array<{ key: string; label: string; color?: string }>
+  /** Supporting values shown in the tooltip without adding more plotted marks. */
+  details?: Array<{ key: string; label: string }>
 }
 export interface TextPayload {
   kind: 'text'
@@ -65,6 +70,10 @@ export interface ReportClip {
   payload: ClipPayload
   userDescription?: string
   projectId: string
+  origin?: 'manual' | 'alphatape'
+  researchSourceId?: string
+  researchKey?: string
+  sourceRoute?: string
 }
 
 /** @deprecated Use lookbackPreset — kept for stored-project migration. */
@@ -73,6 +82,7 @@ export type TimeframePreset = 'last7' | 'last30' | 'last90' | 'qtd' | 'ytd' | 'c
 export type LookbackPreset = 'none' | 'last7' | 'last30' | 'last90' | 'qtd' | 'ytd' | 'custom'
 export type LookforwardPreset = 'none' | 'next7' | 'next30' | 'next90' | 'next180' | 'custom'
 export type ReportLength = 'short' | 'medium' | 'long'
+export type EvidenceMode = 'manual' | 'alphatape'
 
 export interface ReportScope {
   /** Historical context window (what happened). */
@@ -92,6 +102,9 @@ export interface ReportScope {
   /** Free-text requirements (one per line) the report must satisfy — a stat, a
    * verdict, a chart — even if the model wouldn't otherwise curate them in. */
   mustInclude: string
+  evidenceMode: EvidenceMode
+  researchSymbols: string
+  includePortfolio: boolean
 }
 
 export interface KeyFigure { label: string; value: string }
@@ -102,10 +115,23 @@ export interface ReportStance {
   baseCase?: string
   thesis?: string
 }
+export type ReportSectionLayout =
+  | 'full-width'
+  | 'visual-left'
+  | 'visual-right'
+  | 'wrap-left'
+  | 'wrap-right'
+  | 'metric-rail'
+  | 'metric-rail-left'
+  | 'evidence-band'
+  | 'analysis-first'
 export interface GeneratedSection {
   clipId: string
   heading: string
   analysis: string
+  /** AI-only composition direction. The renderer may repair incompatible
+   * choices after it sees the actual visual assigned to this section. */
+  layout?: ReportSectionLayout
   keyFigures?: KeyFigure[]       // AI-extracted evidence actually used, not the raw dataset
   chart?: ChartPayload           // AI-synthesized chart built from this section's own figures — not sourced from a clip
 }
@@ -160,6 +186,10 @@ export interface ClipDraft {
   sourceTab: string
   dataType: ClipDataType
   payload: ClipPayload
+  origin?: 'manual' | 'alphatape'
+  researchSourceId?: string
+  researchKey?: string
+  sourceRoute?: string
 }
 
 const uid = () =>
@@ -176,6 +206,9 @@ export const defaultScope = (): ReportScope => ({
   goal: '',
   length: 'medium',
   mustInclude: '',
+  evidenceMode: 'manual',
+  researchSymbols: '',
+  includePortfolio: true,
 })
 
 const LOOKBACK_OK = new Set<LookbackPreset>(['none', 'last7', 'last30', 'last90', 'qtd', 'ytd', 'custom'])
@@ -217,6 +250,9 @@ export function normalizeScope(raw: Partial<ReportScope> | null | undefined): Re
     goal,
     length: LENGTH_OK.has(raw.length as ReportLength) ? (raw.length as ReportLength) : base.length,
     mustInclude: typeof raw.mustInclude === 'string' ? raw.mustInclude : '',
+    evidenceMode: raw.evidenceMode === 'alphatape' ? 'alphatape' : 'manual',
+    researchSymbols: typeof raw.researchSymbols === 'string' ? raw.researchSymbols : '',
+    includePortfolio: raw.includePortfolio !== false,
   }
 }
 
@@ -334,6 +370,10 @@ export function addClip(projectId: string, draft: ClipDraft, userDescription?: s
     payload: draft.payload,
     userDescription: userDescription?.trim() || undefined,
     projectId,
+    origin: draft.origin ?? 'manual',
+    researchSourceId: draft.researchSourceId,
+    researchKey: draft.researchKey,
+    sourceRoute: draft.sourceRoute,
   }
   let ok = false
   mutate(s => {
@@ -341,6 +381,80 @@ export function addClip(projectId: string, draft: ClipDraft, userDescription?: s
     if (p) { p.clips.push(clip); p.updatedAt = nowISO(); ok = true }
   })
   return ok ? clip : null
+}
+
+export function mergeAlphaTapeClips(
+  existing: ReportClip[],
+  projectId: string,
+  drafts: ClipDraft[],
+  capturedAt = nowISO(),
+  preserve: { sourceIds?: string[]; researchKeys?: string[] } = {},
+): ReportClip[] {
+  const preserveSources = new Set(preserve.sourceIds ?? [])
+  const preserveKeys = new Set(preserve.researchKeys ?? [])
+  const prior = new Map(
+    existing
+      .filter(clip => clip.origin === 'alphatape' && clip.researchKey)
+      .map(clip => [clip.researchKey!, clip]),
+  )
+  const fresh = drafts.map((draft): ReportClip => {
+    const old = draft.researchKey ? prior.get(draft.researchKey) : undefined
+    return {
+      id: old?.id ?? uid(),
+      sourceTab: draft.sourceTab,
+      capturedAt,
+      dataType: draft.dataType,
+      payload: draft.payload,
+      userDescription: old?.userDescription,
+      projectId,
+      origin: 'alphatape',
+      researchSourceId: draft.researchSourceId,
+      researchKey: draft.researchKey,
+      sourceRoute: draft.sourceRoute,
+    }
+  })
+  const freshByKey = new Map(
+    fresh
+      .filter(clip => clip.researchKey)
+      .map(clip => [clip.researchKey!, clip]),
+  )
+  const consumed = new Set<string>()
+  const merged = existing.flatMap(clip => {
+    if (clip.origin !== 'alphatape') return [clip]
+    if (clip.researchKey && freshByKey.has(clip.researchKey)) {
+      consumed.add(clip.researchKey)
+      return [freshByKey.get(clip.researchKey)!]
+    }
+    const researchKey = clip.researchKey
+    const preservesResearchKey = !!researchKey && [...preserveKeys].some(
+      key => researchKey === key || researchKey.startsWith(`${key}:`),
+    )
+    if (
+      preservesResearchKey
+      || (!!clip.researchSourceId && preserveSources.has(clip.researchSourceId))
+    ) return [clip]
+    return []
+  })
+  return [
+    ...merged,
+    ...fresh.filter(clip => !clip.researchKey || !consumed.has(clip.researchKey)),
+  ]
+}
+
+export function replaceAlphaTapeClips(
+  projectId: string,
+  drafts: ClipDraft[],
+  preserve: { sourceIds?: string[]; researchKeys?: string[] } = {},
+): number {
+  let added = 0
+  mutate(state => {
+    const project = state.projects.find(candidate => candidate.id === projectId)
+    if (!project) return
+    project.clips = mergeAlphaTapeClips(project.clips, projectId, drafts, nowISO(), preserve)
+    project.updatedAt = nowISO()
+    added = drafts.length
+  })
+  return added
 }
 
 export function removeClip(projectId: string, clipId: string) {

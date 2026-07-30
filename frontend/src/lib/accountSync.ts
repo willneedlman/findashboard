@@ -95,6 +95,7 @@ export async function sync(userId: string, token: string): Promise<boolean> {
       schedule()
     }
   }
+  if (changed) window.dispatchEvent(new Event('ft:portfolio-context'))
   return changed
 }
 
@@ -111,6 +112,7 @@ export function reset() {
 export function clearLocal() {
   suppress = true
   try { for (const key of ALLOWLIST) localStorage.removeItem(key) } finally { suppress = false }
+  window.dispatchEvent(new Event('ft:portfolio-context'))
 }
 
 function flush() {

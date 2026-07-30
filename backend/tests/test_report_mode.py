@@ -5,24 +5,82 @@ single-subject price-range verdict: 2+ named subjects (or explicit comparison
 language) must route to "open" mode, where keyResult is trusted verbatim
 instead of being rewritten into a dollar range. Network-free (no LLM calls).
 """
+import json
 import os
 import sys
+from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+import routers.ai as ai  # noqa: E402
 from routers.ai import (  # noqa: E402
-    ReportClipIn, ReportGenRequest, _all_kpis_by_ticker, _auto_must_include, _build_sections,
+    ReportClipIn, ReportGenRequest, _all_kpis_by_ticker, _apply_section_layout_architecture,
+    _auto_must_include, _build_sections,
     _clean_chart, _clip_ticker, _first_number, _grouped_kpi_chart, _inject_mechanical_charts,
     _length_key, _mechanical_chart_pool, _mechanical_segments_pie, _mechanical_sensitivity_chart,
     _must_include_section, _normalize_key_result, _parse_kpi_summary, _parse_table_summary,
-    _ranked_subjects, _report_mode, _subject_ticker, _valuation_gap_chart,
+    _ranked_subjects, _report_mode, _report_system_prompt, _subject_ticker, _valuation_gap_chart,
     _annotate_sensitivity_swing, _revise_block_before, _sensitivity_swing_summary, _ALLOWED_REVISE_FIELDS,
+    _select_report_appendix_clip_ids,
 )
 
 
 def _clip(id_, source, title, summary):
     return ReportClipIn(id=id_, sourceTab=source, dataType="kpi", title=title,
                          dataSummary=summary, userDescription="")
+
+
+def test_report_research_planner_keeps_only_supported_nonbaseline_tools(monkeypatch):
+    monkeypatch.setattr(ai, "groq_complete", lambda *args, **kwargs: """{
+      "summary": "Add visual dependence and rates evidence.",
+      "additions": [
+        {"id": "correlation", "reason": "Show whether the subjects diversify one another."},
+        {"id": "company", "reason": "Repeat the baseline."},
+        {"id": "invented", "reason": "Not a real tool."},
+        {"id": "rate-engine", "reason": "Frame duration-sensitive valuation risk."},
+        {"id": "rate-engine", "reason": "Duplicate."}
+      ]
+    }""")
+    req = ai.ReportResearchPlanRequest(
+        objective="Compare AAPL and MSFT risk",
+        symbols=["AAPL", "MSFT"],
+        baselineSourceIds=["company"],
+        tools=[
+            ai.ReportResearchToolIn(id="company", label="Company"),
+            ai.ReportResearchToolIn(id="correlation", label="Correlation", producesVisuals=True),
+            ai.ReportResearchToolIn(id="rate-engine", label="Rate Engine", producesVisuals=True),
+        ],
+    )
+    result = ai.plan_report_research(req)
+    assert result == {
+        "summary": "Add visual dependence and rates evidence.",
+        "additions": [
+            {"id": "correlation", "reason": "Show whether the subjects diversify one another."},
+            {"id": "rate-engine", "reason": "Frame duration-sensitive valuation risk."},
+        ],
+    }
+
+
+def test_report_title_uses_ai_headline_and_outline_fallback():
+    req = ReportGenRequest(projectName="Untitled report", goal="Compare AAPL and MSFT", clips=[])
+    assert ai._report_title({"headline": "AAPL Leads on Quality"}, None, req) == "AAPL Leads on Quality"
+    assert ai._report_title({}, {"thesis": "MSFT offers the stronger risk adjusted profile over this horizon."}, req) == (
+        "MSFT Offers the Stronger Risk Adjusted Profile over This Horizon"
+    )
+
+
+def test_report_appendix_omits_unused_and_explicit_chart_clips():
+    clips = [
+        ReportClipIn(id="used-chart", sourceTab="Chart", dataType="chart"),
+        ReportClipIn(id="unused-chart", sourceTab="Chart", dataType="chart"),
+        ReportClipIn(id="supporting-table", sourceTab="Peers", dataType="table"),
+        ReportClipIn(id="unselected-kpi", sourceTab="Company", dataType="kpi"),
+    ]
+    assert _select_report_appendix_clip_ids(
+        ["unused-chart", "supporting-table", "supporting-table"],
+        clips,
+        {"used-chart"},
+    ) == ["supporting-table"]
 
 
 def test_two_dcf_subjects_route_to_open_mode():
@@ -136,6 +194,35 @@ def test_length_key_defaults_to_medium_for_unknown_values():
     assert _length_key("") == "medium"
     assert _length_key(None) == "medium"
     assert _length_key("gigantic") == "medium"
+
+
+def test_outline_length_is_not_capped_at_three_pages(monkeypatch):
+    sections = [
+        {"heading": f"Section {index}", "argues": f"Evidence {index}", "chartHint": "none"}
+        for index in range(12)
+    ]
+    response = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps({
+            "thesis": "Use every material piece of evidence.",
+            "sections": sections,
+        })))],
+    )
+    captured = {}
+
+    def fake_chat(messages, **_kwargs):
+        captured["system"] = messages[0]["content"]
+        return response
+
+    monkeypatch.setattr(ai, "groq_chat", fake_chat)
+
+    long_outline = ai._generate_outline({"reportLength": "long"})
+    short_outline = ai._generate_outline({"reportLength": "short"})
+
+    assert long_outline is not None
+    assert short_outline is not None
+    assert len(long_outline["sections"]) == 12
+    assert len(short_outline["sections"]) == 2
+    assert "Page count is not a writing constraint" in captured["system"]
 
 
 def test_clean_chart_accepts_valid_comparison_bar_chart():
@@ -285,6 +372,132 @@ def test_build_sections_skips_sections_with_no_analysis_or_unknown_clip_id():
         {"clipId": "not-a-real-clip", "heading": "Unknown clip", "analysis": "some text"},
     ]
     assert _build_sections(raw, {"k1"}) == []
+
+
+def test_build_sections_keeps_only_simple_ai_design_intents():
+    sections = _build_sections([
+        {
+            "clipId": "k1",
+            "heading": "Compact comparison",
+            "analysis": "A small comparison can sit beside the interpretation.",
+            "design": "compact",
+        },
+        {
+            "clipId": "k2",
+            "heading": "Evidence first",
+            "analysis": "A supported metric rail can lead the interpretation.",
+            "design": "visual",
+        },
+        {
+            "clipId": "k3",
+            "heading": "Unknown intent",
+            "analysis": "An invented intent must not reach the layout engine.",
+            "design": "cinematic",
+        },
+    ], {"k1", "k2", "k3"})
+    assert sections[0]["design"] == "compact"
+    assert sections[1]["design"] == "visual"
+    assert "design" not in sections[2]
+    assert all("layout" not in section for section in sections)
+
+
+def test_layout_architecture_uses_real_evidence_then_removes_ai_intent():
+    clips = [
+        ReportClipIn(id="visual", dataType="chart", title="Peer Comparison"),
+        ReportClipIn(id="narrative", dataType="kpi", title="Operating Metrics"),
+        ReportClipIn(id="compact-a", dataType="kpi", title="Supporting Metrics"),
+        ReportClipIn(id="compact-b", dataType="kpi", title="Secondary Metrics"),
+        ReportClipIn(id="dense", dataType="table", title="Sensitivity Grid"),
+    ]
+    sections = [
+        {
+            "clipId": "visual", "heading": "Evidence", "analysis": "The comparison decides the call.",
+            "keyFigures": [{"label": "Lead", "value": "12%"}, {"label": "Gap", "value": "4 pp"}],
+            "chart": None, "design": "visual",
+        },
+        {
+            "clipId": "narrative", "heading": "Interpretation", "analysis": "The mechanism matters.",
+            "keyFigures": [{"label": "Margin", "value": "20%"}, {"label": "Growth", "value": "15%"}],
+            "chart": None, "design": "narrative",
+        },
+        {
+            "clipId": "compact-a", "heading": "Support A", "analysis": "Compact support.",
+            "keyFigures": [{"label": "Beta", "value": "0.8"}, {"label": "Vol", "value": "16%"}],
+            "chart": None, "design": "compact",
+        },
+        {
+            "clipId": "compact-b", "heading": "Support B", "analysis": "More compact support.",
+            "keyFigures": [{"label": "ROE", "value": "18%"}, {"label": "P/E", "value": "22x"}],
+            "chart": None, "design": "compact",
+        },
+        {
+            "clipId": "dense", "heading": "Sensitivity", "analysis": "The grid needs label room.",
+            "keyFigures": [{"label": "Low", "value": "$80"}],
+            "chart": None, "design": "compact",
+        },
+    ]
+
+    _apply_section_layout_architecture(sections, clips)
+
+    assert [section["layout"] for section in sections] == [
+        "evidence-band",
+        "analysis-first",
+        "metric-rail",
+        "metric-rail-left",
+        "full-width",
+    ]
+    assert all("design" not in section for section in sections)
+
+
+def test_layout_architecture_varies_repeated_ai_intents():
+    clips = [
+        ReportClipIn(id="a", dataType="chart", title="Growth Comparison"),
+        ReportClipIn(id="b", dataType="chart", title="Margin Comparison"),
+    ]
+    sections = [
+        {
+            "clipId": clip.id, "heading": clip.title, "analysis": "The evidence supports the thesis.",
+            "keyFigures": [{"label": "Lead", "value": "12%"}, {"label": "Gap", "value": "4 pp"}],
+            "chart": None, "design": "visual",
+        }
+        for clip in clips
+    ]
+
+    _apply_section_layout_architecture(sections, clips)
+
+    assert [section["layout"] for section in sections] == ["evidence-band", "metric-rail-left"]
+
+
+def test_layout_architecture_infers_a_safe_design_when_llama_omits_it():
+    clip = ReportClipIn(id="kpi", dataType="kpi", title="Quality Metrics")
+    section = {
+        "clipId": "kpi", "heading": "Quality", "analysis": "Quality supports the thesis.",
+        "keyFigures": [{"label": "ROE", "value": "18%"}, {"label": "Margin", "value": "24%"}],
+        "chart": None,
+    }
+
+    _apply_section_layout_architecture([section], [clip])
+
+    assert section["layout"] == "visual-right"
+
+
+def test_report_prompt_hides_renderer_presets_and_includes_only_the_active_mode():
+    range_prompt = _report_system_prompt("range", "short", "")
+    open_prompt = _report_system_prompt("open", "short", "")
+
+    assert '"design": "visual | narrative | balanced | compact"' in range_prompt
+    assert "metric-rail" not in range_prompt
+    assert "visual-left" not in range_prompt
+    assert "price call on ONE equity" in range_prompt
+    assert "comparison, screen, ranking" not in range_prompt
+    assert "the midpoint as '$X'" in range_prompt
+    assert "favored ticker/name" not in range_prompt
+    assert "comparison, screen, ranking" in open_prompt
+    assert "price call on ONE equity" not in open_prompt
+    assert "favored ticker/name" in open_prompt
+    assert "the midpoint as '$X'" not in open_prompt
+    assert "{{" not in range_prompt
+    assert "{{" not in open_prompt
 
 
 def _sensitivity_clip(id_, ticker, rows):

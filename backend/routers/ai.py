@@ -1508,7 +1508,98 @@ def options_strategy_chat(req: StrategyChatRequest):
     return result
 
 
-# ── Report Creator: synthesize an analyst report from clipped data ────────────
+# ── Report Creator: plan research and synthesize clipped evidence ─────────────
+
+class ReportResearchToolIn(BaseModel):
+    id: str
+    label: str = ""
+    description: str = ""
+    targetMode: str = "market"
+    producesVisuals: bool = False
+
+
+class ReportResearchPlanRequest(BaseModel):
+    objective: str = ""
+    mustInclude: str = ""
+    timeframe: str = ""
+    symbols: list[str] = Field(default_factory=list)
+    portfolio: dict = Field(default_factory=dict)
+    baselineSourceIds: list[str] = Field(default_factory=list)
+    tools: list[ReportResearchToolIn] = Field(default_factory=list)
+
+
+_REPORT_RESEARCH_PLANNER_SYSTEM = """You are AlphaTape's research director.
+Choose only ADDITIONAL tools that materially improve the evidence for the stated report objective.
+The deterministic baseline tools are already included. Do not repeat them.
+Prefer a chart-producing tool when a visual relationship, trend, distribution, or comparison would make the conclusion clearer.
+Do not add tools merely for breadth. Every selection must close a specific evidence gap.
+Respect targetMode: symbol tools need symbols, portfolio tools need a supported active portfolio, and market tools need neither.
+Return only valid JSON:
+{
+  "summary": "one short sentence describing the evidence strategy",
+  "additions": [
+    {"id": "exact catalog id", "reason": "specific evidence gap this tool closes"}
+  ]
+}
+Select at most 4 additions. An empty additions array is valid when the baseline is sufficient."""
+
+
+def _normalize_report_research_plan(raw, allowed: set[str], baseline: set[str]) -> dict:
+    data = raw if isinstance(raw, dict) else {}
+    summary = re.sub(r"\s+", " ", str(data.get("summary", "")).strip())[:240]
+    additions: list[dict] = []
+    seen: set[str] = set()
+    for item in data.get("additions", []):
+        if not isinstance(item, dict):
+            continue
+        source_id = str(item.get("id", "")).strip()
+        if source_id not in allowed or source_id in baseline or source_id in seen:
+            continue
+        reason = re.sub(r"\s+", " ", str(item.get("reason", "")).strip())[:220]
+        if not reason:
+            continue
+        additions.append({"id": source_id, "reason": reason})
+        seen.add(source_id)
+        if len(additions) >= 4:
+            break
+    return {"summary": summary, "additions": additions}
+
+
+@router.post("/report-research-plan")
+def plan_report_research(req: ReportResearchPlanRequest):
+    objective = req.objective.strip()
+    if not objective:
+        raise HTTPException(400, "Report objective is required")
+    tools = req.tools[:24]
+    allowed = {tool.id for tool in tools if tool.id}
+    baseline = {source_id for source_id in req.baselineSourceIds if source_id in allowed}
+    if not allowed:
+        raise HTTPException(400, "No supported research tools supplied")
+    prompt = json.dumps({
+        "objective": objective[:1200],
+        "mustInclude": req.mustInclude[:1200],
+        "timeframe": req.timeframe[:160],
+        "symbols": req.symbols[:8],
+        "portfolio": req.portfolio,
+        "baselineSourceIds": sorted(baseline),
+        "toolCatalog": [
+            {
+                "id": tool.id,
+                "label": tool.label[:80],
+                "description": tool.description[:240],
+                "targetMode": tool.targetMode,
+                "producesVisuals": tool.producesVisuals,
+            }
+            for tool in tools if tool.id
+        ],
+    }, separators=(",", ":"))
+    raw = groq_complete(
+        prompt,
+        max_tokens=800,
+        model=MODEL_SMART,
+        system=_REPORT_RESEARCH_PLANNER_SYSTEM,
+    )
+    return _normalize_report_research_plan(parse_json(raw), allowed, baseline)
 
 class ReportClipIn(BaseModel):
     id: str
@@ -1542,17 +1633,18 @@ _LENGTH_SPEC = {
         ),
     },
     "medium": {
-        "sections": "3 to 6",
+        "sections": "3 to 6 normally, up to 8 when the evidence requires it",
         "guidance": (
             "Medium: standard research-note depth. 3 to 6 body sections, each 1-3 short paragraphs with "
             "2-4 keyFigures. Executive summary is one tight paragraph. Conclusion covers the verdict, "
-            "the main risk to it, and an action."
+            "the main risk to it, and an action. Expand to as many as 8 sections only when distinct, "
+            "decision-critical evidence would otherwise be omitted."
         ),
     },
     "long": {
-        "sections": "6 to 10",
+        "sections": "6 to 12",
         "guidance": (
-            "Long: full supporting detail for a desk that wants the complete picture. 6 to 10 body "
+            "Long: full supporting detail for a desk that wants the complete picture. 6 to 12 body "
             "sections — cover secondary drivers, sensitivities, and peer/segment detail that medium "
             "length would cut, in addition to the core thesis sections. Each section can run 2-4 "
             "paragraphs with 2-4 keyFigures. Executive summary can run 2-3 sentences. Conclusion "
@@ -1584,11 +1676,41 @@ The user has required the following to appear in this report:
 Each requirement must surface somewhere in the output — in a section's analysis, a keyFigure, a chart, the keyResult, the executiveSummary, or the conclusion, whichever fits it best. These survive the curation and length rules above: even a "short" report, or a section that would otherwise get merged or cut, must still make room for every required item. Satisfy a requirement only with a real figure already present in the clips or valuationContext — never fabricate a number, chart data point, or verdict to check the box. If a requirement cannot be sourced from the data you were given, say so explicitly wherever it would have appeared (e.g. "PEG ratio not available in the supplied clips") — do not silently drop it and do not invent it.
 """
 
-_REPORT_SYSTEM = """You are a senior investment analyst writing a formal research note for a professional desk. Register: academic, financial, and direct. State conclusions plainly. Support every claim with figures from the clips or valuationContext.
+_REPORT_RANGE_GUIDANCE = """The Goal is a price call on ONE equity. Return a dollar range in keyResult.value using "$A–$B", with A < B.
+- Take a bullish, bearish, or neutral lean and low, moderate, or high conviction. Use neutral only when signals genuinely cancel.
+- Encode the lean in the range. A bullish range should usually have a midpoint above spot or more upside than downside. A bearish range should do the reverse.
+- Treat implied move, volatility cones, and probability bands as width constraints, not as the thesis. Let flow, positioning, catalysts, fundamentals, and valuation determine direction.
+- Keep short-horizon ranges within roughly ±25% of spot unless supplied evidence supports more.
+- keyResult.context, executiveSummary, and conclusion must name spot, the lean, the range, and the two or three decisive drivers.
+- Use options strikes, gamma levels, probability anchors, catalysts, and valuation only when the supplied clips contain them."""
+
+_REPORT_OPEN_GUIDANCE = """The Goal is a comparison, screen, ranking, thematic read, portfolio question, or other non-range task.
+- keyResult.value is a direct headline verdict under 40 characters, such as "Buy NVDA", "NVDA over AAPL", or "Reduce Tech Risk". Never return a bare ticker.
+- stance.baseCase is only the favored ticker/name or a 2–3 word tag. Put reasoning in stance.thesis.
+- For multiple subjects, build one side-by-side argument organized by comparative theme. Do not create mirrored sections for each subject.
+- Include every decision-relevant subject in the shared comparison and reach a verdict even when evidence conflicts.
+- executiveSummary and conclusion must state the verdict and the two or three decisive drivers."""
+
+_REPORT_SCHEMA_BY_MODE = {
+    "range": {
+        "baseCase": "the midpoint as '$X'",
+        "label": "'Fair Value Range (TICKER)' or 'Near-Term Range (TICKER)'",
+        "value": "'$A–$B'",
+        "context": "'spot $X · lean · decisive drivers'",
+    },
+    "open": {
+        "baseCase": "the favored ticker/name or a 2-3 word tag, never a sentence",
+        "label": "a short answer label such as 'Relative Pick', 'Risk Call', or 'Verdict'",
+        "value": "a headline verdict under 40 characters",
+        "context": "the figures that decided the verdict",
+    },
+}
+
+_SECTION_DESIGN_INTENTS = {"visual", "narrative", "balanced", "compact"}
+
+_REPORT_SYSTEM = """You are a senior investment analyst writing a formal research note for a professional desk. Write directly, support claims with supplied evidence, and answer the Goal.
 
 You receive: Purpose, Goal, Timeframe (lookback and/or lookforward), DATA CLIPS (each with id, source tool, title, optional user note, data summary), valuationContext (live spot, optional day change, optional DCF, signalDigest of directional cues extracted from clips, reportMode, and reportLength), and optionally an `outline`.
-
-Primary job: answer the Goal directly, in whatever form the Goal actually calls for. valuationContext.reportMode tells you which of the two shapes below to use. Never force the other shape onto it.
 
 OUTLINE: if the input includes an `outline` (a thesis plus planned sections), it was drafted first as the report's analytical structure and you MUST follow it. Anchor the entire report to outline.thesis. Write exactly the outline's sections, in order, each using its heading and developing its `argues` point with the clip figures. Do not add, drop, reorder, split, or merge sections. If no outline is present, plan a thesis-first structure yourself with one section per comparative theme (never one section per subject for the same theme).
 
@@ -1596,39 +1718,12 @@ OUTLINE: if the input includes an `outline` (a thesis plus planned sections), it
 LENGTH — valuationContext.reportLength sets the target depth
 ════════════════════════════════════════
 {{LENGTH_GUIDANCE}}
-This governs section count and depth in BOTH reportMode "range" and "open". It does not change what counts as a decisive driver — still cut anything that does not advance the thesis, regardless of length.
+Cut anything that does not advance the thesis, regardless of the length target.
 {{MUST_INCLUDE_SECTION}}
 ════════════════════════════════════════
-reportMode "range" — single-subject price call
+MODE
 ════════════════════════════════════════
-The Goal is a fair value, price target, near-term range, or outlook on ONE named equity (valuationContext.subjectTicker). keyResult MUST be a dollar range — never "not estimable" and never a vague qualitative-only bottom line when marketPrice is set.
-
-STANCE (non-negotiable in this mode):
-- Take a lean: bullish, bearish, or neutral. Neutral is allowed only when directional signals truly cancel or are absent. If call flow, call GEX, and risk-on macro align, do NOT hide behind "range-bound with no edge."
-- Conviction: low, moderate, or high. Low conviction still requires a lean and an asymmetric or shifted range that reflects that lean.
-- Separate (1) the statistical envelope from options (implied move, vol cone, density percentiles) from (2) your research range. The cone/IV envelope is a constraint on how wide you may go, not the thesis itself. Do not publish a range that is essentially spot ± implied-move or the cone's 15th/85th unless every other clip is empty of directional content.
-- Encode stance in the dollars: a bullish lean usually means midpoint above spot and/or more room to the upside than downside (e.g. floor near spot or slightly below, ceiling further out). A bearish lean does the reverse. A truly neutral lean may be tight and near-symmetric — say so explicitly and name the conflicting signals.
-- Executive summary and conclusion must each state the lean, the range, and the two or three decisive drivers in plain language. Avoid empty phrases like "modest upside bias" without tying them to a mid above spot or an asymmetric band.
-- keyResult.value format: "$A–$B" with A < B. Prefer whole dollars for equities above $20.
-- keyResult.context: must include spot, lean, and the main driver stack (e.g. "spot $203 · bullish lean · call GEX + flow · IV envelope caps $218").
-- No 2x-3x fantasy targets without model support. Keep a short horizon range inside roughly ±25% of spot unless clips justify wider.
-- Each body section must push the range decision forward, not summarize a panel in isolation:
-  - Dealer GEX / gamma: long gamma + call-heavy GEX supports a floor and mean-reversion toward a flip/zero-gamma level. Call wall / put wall strikes are candidate range edges.
-  - Options flow: call vs put premium share, top strikes, vol/OI aggression. Aggressive call buying below or at spot is a bullish tell. Put buying above spot is a hedge or bearish tell.
-  - IV rank / term / implied move: implied move sets a hard near-term width budget. Prefer base case inside ~0.5-0.8x one implied-move, with tails out to the cone only if catalysts justify it.
-  - Implied probability / density: modal strike and P50 are better anchors than a flat ±10% band. Skew shifts the lean.
-  - Macro / calendar: scheduled high-impact prints widen the band or cut conviction, they do not by themselves center the range on spot.
-  - DCF / multiples / SOTP: structural anchors, cite gap to spot, do not paste intrinsic as the range.
-
-════════════════════════════════════════
-reportMode "open" — comparison, screen, or any other goal
-════════════════════════════════════════
-The Goal is NOT a single-ticker price call: a comparison between named subjects (valuationContext.subjects, when present, lists every ticker with its own live spot and DCF), a screen, a ranking, a thematic or risk read, a portfolio/allocation question, or anything else. keyResult is the single-line direct answer to the Goal in whatever form fits it. Do NOT force a dollar-range or single-ticker price-target framing onto this.
-- keyResult.value MUST be short and punchy, like a headline stat: under 40 characters, e.g. "Buy NVDA" or "NVDA over AAPL" or "Favor NVDA: 2.6x the growth". It renders in a masthead box sized for a price range, not a sentence — put the reasoning and figures in keyResult.context and the executiveSummary, never in value. Never write a full clause or sentence into value. A bare ticker or company name alone (e.g. just "NVDA") is NOT a verdict — it must always carry an action or comparison word (Buy / Favor / X over Y / Avoid / Hold), never the name by itself.
-- stance.baseCase MUST also be short: just the favored subject's name/ticker (e.g. "NVDA") or, for a screen/ranking with no single favorite, a 2-3 word tag (e.g. "No clear edge"). Never a sentence. stance.thesis is where the full reasoning goes.
-- stance.lean still applies: for a comparison it names which subject you favor (bullish = favor the first-named or higher-conviction subject, bearish = favor the other, neutral = genuinely a toss-up).
-- With 2+ subjects in valuationContext.subjects: build ONE argument that weighs ALL of them against each other. Organize sections by COMPARATIVE THEME (e.g. "Growth and Margin Edge", "Valuation Gap"), each citing every relevant subject's figures side by side in the SAME section. Never write one section per subject per metric category (do not write both an "NVDA Profitability" section and a separate "Apple Profitability" section — write one "Profitability" section citing both). Do not silently favor one subject and relegate the other's central clips (DCF, multiples, company profile) to appendixClipIds — cite both, just inside shared thematic sections rather than mirrored ones.
-- Executive summary and conclusion must each state the verdict and the two or three decisive drivers in plain language, in the same form as keyResult (not recast as a price range).
+{{MODE_GUIDANCE}}
 
 ════════════════════════════════════════
 INTEGRATE EVERY SUPPLIED CLIP FAMILY (both modes)
@@ -1640,9 +1735,19 @@ Build ONE argument, whichever mode you are in.
 Ignore pure appendix stubs that contain no figures. If clips conflict (e.g. bullish GEX vs demanding reverse-DCF growth, or subject A wins on growth but subject B wins on valuation), name the conflict, weight the horizon, and still reach a verdict with appropriate conviction.
 
 ════════════════════════════════════════
-CHARTS — you do NOT build them
+VISUALS
 ════════════════════════════════════════
-Do not produce chart data. The site builds every chart itself from the underlying clip data and places it into the right section automatically. Your job for visuals is only to WRITE THE ANALYSIS that a chart will sit next to: when a section compares figures across subjects or metrics (margins, valuation gap, sensitivity swing, peer multiples, revenue mix, analyst upside), write the interpretation of that comparison in prose, and the matching chart appears on its own. Do not describe a chart, do not reference "the chart below", and do not emit any "chart" field — just write the analysis and cite the key figures.
+You do not build charts or choose renderer layouts. Use a chart clip's id as clipId when its native visual materially supports the section. Prefer 2–4 distinct decision-grade visuals when enough relevant chart clips exist. Omit unused visuals and never place chart clips in appendixClipIds.
+
+════════════════════════════════════════
+DESIGN INTENT
+════════════════════════════════════════
+Choose one simple `design` intent per section:
+- "visual": the evidence should lead.
+- "narrative": the interpretation should lead.
+- "balanced": evidence and interpretation have equal weight.
+- "compact": this is supporting material and should use minimal space.
+The application converts this intent into a compatible, varied composition after it builds the real visuals.
 
 ════════════════════════════════════════
 HORIZON
@@ -1667,11 +1772,11 @@ HARD RULES & NARRATIVE VOCABULARY (both modes)
 - stance object required (see schema).
 - Tone and keyResult must agree. Do not claim a strong lean with a hedged, noncommittal keyResult.
 - Writing: no em dashes, no semicolons, no emoji, no bullet lists inside prose. Flowing paragraphs. Spartan. No restating Purpose/Goal as labels.
-- Curate sections: only clips that advance the thesis. Others → appendixClipIds.
+- Curate sections: only clips that advance the thesis. Supporting non-chart evidence may go to appendixClipIds. Omit irrelevant or redundant chart clips entirely.
 - Every body section needs keyFigures (2–4 real figures from that clip). Keep keyFigures sparse.
 - Large boards: two to five key figures, not every row.
 - Report length is driven by valuationContext.reportLength (see LENGTH above), not by clip count. Merge clips that serve the same point into one section (e.g. two DCF verdicts for a comparison, or a KPI panel plus the chart behind it) rather than writing a section per clip.
-- Every section's analysis must interpret, compare, or draw a conclusion — never transcribe a clip's numbers back as prose with no takeaway (e.g. do not write "NVDA's price is $206.84, P/E is 31.6x, EPS is $6.54" and stop there; those figures already appear in the keyFigures/table below the prose). If a clip has nothing to add beyond its own numbers, cut the section and move the clip to appendixClipIds.
+- Every section's analysis must interpret, compare, or draw a conclusion — never transcribe a clip's numbers back as prose with no takeaway (e.g. do not write "NVDA's price is $206.84, P/E is 31.6x, EPS is $6.54" and stop there; those figures already appear in the keyFigures/table below the prose). If a clip has nothing to add beyond its own numbers, cut the section. A supporting non-chart clip may move to appendixClipIds; an unused chart must be omitted.
 
 Respond ONLY with valid JSON (no markdown, no code fences):
 {
@@ -1679,27 +1784,44 @@ Respond ONLY with valid JSON (no markdown, no code fences):
   "stance": {
     "lean": "bullish" | "bearish" | "neutral",
     "conviction": "low" | "moderate" | "high",
-    "baseCase": "range mode: '$X'. open mode: just the favored subject's ticker/name, or a 2-3 word tag — never a sentence",
+    "baseCase": "{{BASE_CASE_SCHEMA}}",
     "thesis": "one sentence: what you believe and why, over the lookforward"
   },
   "keyResult": {
-    "label": "range mode: 'Fair Value Range (TICKER)' or 'Near-Term Range (TICKER)'. open mode: a short label naming the answer, e.g. 'Relative Pick' or 'Verdict'",
-    "value": "range mode: '$A–$B'. open mode: a short headline verdict, UNDER 40 CHARACTERS — reasoning goes in context, not here",
-    "context": "range mode: 'spot $X · lean · decisive drivers'. open mode: the figures that decided it"
+    "label": "{{KEY_RESULT_LABEL_SCHEMA}}",
+    "value": "{{KEY_RESULT_VALUE_SCHEMA}}",
+    "context": "{{KEY_RESULT_CONTEXT_SCHEMA}}"
   },
   "executiveSummary": "one tight paragraph stating the verdict (range or open) and how the clips jointly justify it (not a list of panel summaries)",
   "sections": [
     {
       "clipId": "<id>",
       "heading": "analytical heading naming the comparative theme, not the tool name or a single subject",
+      "design": "visual | narrative | balanced | compact",
       "analysis": "paragraphs linking figures to the verdict (what moves it, what strengthens or weakens it) — interpret, do not transcribe. Section count and depth follow valuationContext.reportLength, not clip count. Do NOT include a chart field; the site adds charts.",
       "keyFigures": [ { "label": "metric", "value": "figure with units" } ]
     }
   ],
   "conclusion": "restate the verdict and conviction, the main risk to it, and a concrete action",
-  "appendixClipIds": ["<ids not central to the thesis>"]
+  "appendixClipIds": ["<supporting non-chart clip ids only>"]
 }
 Every clipId must be one of the provided clip ids."""
+
+
+def _report_system_prompt(mode: str, length_key: str, must_include: str) -> str:
+    mode_key = "range" if mode == "range" else "open"
+    mode_guidance = _REPORT_RANGE_GUIDANCE if mode_key == "range" else _REPORT_OPEN_GUIDANCE
+    schema = _REPORT_SCHEMA_BY_MODE[mode_key]
+    return (
+        _REPORT_SYSTEM
+        .replace("{{MODE_GUIDANCE}}", mode_guidance)
+        .replace("{{LENGTH_GUIDANCE}}", _LENGTH_SPEC[length_key]["guidance"])
+        .replace("{{MUST_INCLUDE_SECTION}}", must_include)
+        .replace("{{BASE_CASE_SCHEMA}}", schema["baseCase"])
+        .replace("{{KEY_RESULT_LABEL_SCHEMA}}", schema["label"])
+        .replace("{{KEY_RESULT_VALUE_SCHEMA}}", schema["value"])
+        .replace("{{KEY_RESULT_CONTEXT_SCHEMA}}", schema["context"])
+    )
 
 def _clean_figs(raw) -> list:
     figs = []
@@ -1710,6 +1832,16 @@ def _clean_figs(raw) -> list:
             if label and value:
                 figs.append({"label": label[:60], "value": value[:60]})
     return figs
+
+
+def _report_title(result: dict, outline: dict | None, req: ReportGenRequest) -> str:
+    raw = str(result.get("headline", "")).strip()
+    if not raw and outline:
+        raw = str(outline.get("thesis", "")).strip()
+    if not raw:
+        raw = (req.goal or req.projectName or "AlphaTape Research").strip()
+    words = raw.rstrip(" .").split()
+    return _title_case(" ".join(words[:12]), 96) or "AlphaTape Research"
 
 _CHART_TYPES = {"bar", "line", "area", "pie", "histogram", "dot", "range", "scatter", "box"}
 _SINGLE_SERIES_TYPES = {"pie", "scatter"}  # only series[0] is used
@@ -3321,14 +3453,133 @@ def _build_sections(raw_sections, valid_ids: set[str]) -> list[dict]:
                 chart = None
             else:
                 seen_chart_sigs.add(sig)
-        sections.append({
+        section = {
             "clipId": cid,
             "heading": _title_case(str(s.get("heading", "")).strip()) or "Analysis",
             "analysis": analysis,
             "keyFigures": _clean_figs(s.get("keyFigures")),
             "chart": chart,
-        })
+        }
+        design = str(s.get("design", "")).strip().lower()
+        if design in _SECTION_DESIGN_INTENTS:
+            section["design"] = design
+        sections.append(section)
     return sections
+
+
+def _section_evidence_profile(section: dict, clip: ReportClipIn | None) -> dict:
+    chart = section.get("chart") if isinstance(section.get("chart"), dict) else None
+    chart_type = str((chart or {}).get("chartType", "")).lower()
+    chart_rows = len((chart or {}).get("data") or [])
+    chart_series = len((chart or {}).get("series") or [])
+    data_type = (clip.dataType if clip else "").strip().lower()
+    source_text = " ".join([
+        clip.title if clip else "",
+        clip.dataSummary if clip else "",
+    ]).lower()
+    dense_keywords = (
+        "time series", "history", "historical", "yield curve", "sensitivity",
+        "matrix", "ranking", "ranked", "distribution", "term structure",
+    )
+    dense = (
+        data_type == "table"
+        or chart_type in {"box", "range", "scatter"}
+        or chart_rows > 7
+        or chart_series > 3
+        or (data_type == "chart" and any(word in source_text for word in dense_keywords))
+    )
+    return {
+        "dense": dense,
+        "hasVisual": bool(chart) or data_type in {"chart", "table", "kpi"},
+        "figureCount": len(section.get("keyFigures") or []),
+        "wordCount": len(str(section.get("analysis", "")).split()),
+    }
+
+
+def _default_section_design(profile: dict) -> str:
+    if profile["dense"]:
+        return "visual"
+    if profile["wordCount"] >= 110:
+        return "narrative"
+    if profile["figureCount"] >= 2:
+        return "balanced"
+    return "compact"
+
+
+def _apply_section_layout_architecture(
+    sections: list[dict],
+    clips: list[ReportClipIn],
+) -> None:
+    """Convert simple editorial intent into renderer-safe report compositions."""
+    clips_by_id = {clip.id: clip for clip in clips}
+    side_index = 0
+    rail_index = 0
+    last_layout = ""
+
+    for section in sections:
+        profile = _section_evidence_profile(section, clips_by_id.get(section.get("clipId", "")))
+        intent = section.pop("design", None) or _default_section_design(profile)
+        figures = profile["figureCount"]
+
+        if profile["dense"]:
+            layout = "full-width"
+        elif not profile["hasVisual"]:
+            layout = "metric-rail" if figures >= 2 else "full-width"
+        elif intent == "visual":
+            if figures >= 2:
+                layout = "evidence-band"
+            else:
+                layout = "visual-left" if side_index % 2 == 0 else "visual-right"
+                side_index += 1
+        elif intent == "narrative":
+            if figures >= 2:
+                layout = "analysis-first"
+            else:
+                layout = "wrap-right" if side_index % 2 == 0 else "wrap-left"
+                side_index += 1
+        elif intent == "compact":
+            if figures >= 2:
+                layout = "metric-rail" if rail_index % 2 == 0 else "metric-rail-left"
+                rail_index += 1
+            else:
+                layout = "wrap-left" if side_index % 2 == 0 else "wrap-right"
+                side_index += 1
+        elif figures >= 3:
+            layout = "metric-rail-left" if rail_index % 2 == 0 else "metric-rail"
+            rail_index += 1
+        else:
+            layout = "visual-right" if side_index % 2 == 0 else "visual-left"
+            side_index += 1
+
+        if layout == last_layout and layout != "full-width":
+            mirrors = {
+                "visual-left": "visual-right",
+                "visual-right": "visual-left",
+                "wrap-left": "wrap-right",
+                "wrap-right": "wrap-left",
+                "metric-rail": "metric-rail-left",
+                "metric-rail-left": "metric-rail",
+                "evidence-band": "metric-rail-left",
+                "analysis-first": "visual-right",
+            }
+            layout = mirrors.get(layout, layout)
+        section["layout"] = layout
+        last_layout = layout
+
+
+def _select_report_appendix_clip_ids(raw_ids, clips: list[ReportClipIn], used: set[str]) -> list[str]:
+    clip_type = {clip.id: clip.dataType.strip().lower() for clip in clips}
+    appendix: list[str] = []
+    for raw_id in raw_ids or []:
+        clip_id = str(raw_id)
+        if (
+            clip_id in clip_type
+            and clip_type[clip_id] != "chart"
+            and clip_id not in used
+            and clip_id not in appendix
+        ):
+            appendix.append(clip_id)
+    return appendix
 
 # ── Sequential pipeline: Step 1 (outline) and Step 4 (verify) ────────────────
 # The report is built in distinct, ordered LLM passes rather than one rushed
@@ -3341,7 +3592,9 @@ _REPORT_OUTLINE_SYSTEM = """You are an equity-research editor planning a report 
 
 Rules:
 - State a single decisive thesis sentence that directly answers the goal.
-- Propose 3 to 6 sections, each advancing that thesis with distinct evidence, ordered so the argument builds top-down.
+- Follow reportLength: short uses 1 to 2 sections; medium normally uses 3 to 6 and may expand to 8 when distinct decision-critical evidence requires it; long uses 6 to 12.
+- Page count is not a writing constraint. The renderer paginates automatically. Never cut material evidence merely to target three pages, and never pad a report to reach a section quota.
+- Each section must advance the thesis with distinct evidence, ordered so the argument builds top-down.
 - Require every section and chart to directly advance the central investment thesis. Omit secondary or low-relevance analyses (such as routine DCF sensitivity) unless they provide a critical decision-making insight for the central thesis.
 - Use Title Case (proper capitalization) for all section headers (e.g., "Valuation Gap & Multiple Compression", "Revenue Trajectory & Margins").
 - ONE section per comparative theme. In a multi-subject comparison every section compares all subjects together (e.g. a single "Valuation Gap" section covering both names). NEVER split a theme into one section per subject.
@@ -3376,7 +3629,8 @@ def _generate_outline(payload: dict) -> dict | None:
         ]
         if not secs:
             return None
-        return {"thesis": str(out.get("thesis", "")).strip(), "sections": secs[:8]}
+        section_cap = {"short": 2, "medium": 8, "long": 12}[_length_key(payload.get("reportLength"))]
+        return {"thesis": str(out.get("thesis", "")).strip(), "sections": secs[:section_cap]}
     except Exception as e:  # noqa: BLE001 — outline is best-effort
         logger.warning("report outline step failed: %s", e)
         return None
@@ -3722,10 +3976,10 @@ def generate_report(req: ReportGenRequest):
         "outline": outline,  # may be None → the model plans and writes in one shot
         "clips": clip_payload,
     }
-    sys_prompt = (
-        _REPORT_SYSTEM
-        .replace("{{LENGTH_GUIDANCE}}", _LENGTH_SPEC[length_key]["guidance"])
-        .replace("{{MUST_INCLUDE_SECTION}}", _must_include_section(req.mustInclude, _auto_must_include(req.clips)))
+    sys_prompt = _report_system_prompt(
+        mode,
+        length_key,
+        _must_include_section(req.mustInclude, _auto_must_include(req.clips)),
     )
     messages = [
         {"role": "system", "content": sys_prompt},
@@ -3743,10 +3997,11 @@ def generate_report(req: ReportGenRequest):
     _inject_mechanical_charts(sections, req.clips)
     _annotate_sensitivity_swing(sections, price_by_subject)
     used = {s["clipId"] for s in sections}
-    appendix = [cid for cid in (str(x) for x in (result.get("appendixClipIds") or [])) if cid in valid_ids and cid not in used]
-    for cid in (c.id for c in req.clips):
-        if cid not in used and cid not in appendix:
-            appendix.append(cid)
+    appendix = _select_report_appendix_clip_ids(
+        result.get("appendixClipIds"),
+        req.clips,
+        used,
+    )
 
     stance = _stance_from_result(result, market)
     # If model omitted stance lean, use signal digest as soft prior.
@@ -3797,9 +4052,10 @@ def generate_report(req: ReportGenRequest):
             s["analysis"] = _apply_report_linters(s["analysis"], req.clips, slot_ctx)
 
     _ensure_risks_section(sections, subject, valuation_context)
+    _apply_section_layout_architecture(sections, req.clips)
 
     return {
-        "headline": str(result.get("headline", "")).strip(),
+        "headline": _report_title(result, outline, req),
         "stance": stance,
         "keyResult": key_result,
         "executiveSummary": executive_summary,

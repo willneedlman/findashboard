@@ -52,7 +52,7 @@ export const HUBS: Hub[] = [
       { title: 'Sector Rotation',   chip: 'Sector Rotation', desc: 'GICS sector performance heatmap over time',                route: '/sector-rotation',    icon: PieChart },
       { title: 'Regression',        chip: 'Regression',      desc: 'OLS and polynomial fits with diagnostics',                 route: '/regression',         icon: Activity },
       { title: 'Correlation',       chip: 'Correlation',     desc: 'Correlation matrix, rolling drift, and beta',              route: '/correlation',        icon: Waves },
-      { title: 'Report Creator',    chip: 'Reports',         desc: 'Clip tables, charts, and metrics from any tool into a print-ready PDF report', route: '/report-creator', icon: ClipboardList },
+      { title: 'Report Creator',    chip: 'Reports',         desc: 'Collect evidence manually or let AlphaTape research across its tools, then build a print-ready report', route: '/report-creator', icon: ClipboardList },
     ],
   },
   {

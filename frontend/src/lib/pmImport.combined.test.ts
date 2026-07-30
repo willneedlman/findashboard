@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest'
-import { combinedOverviewBook, readPMBooks, COMBINED_BOOK_ID } from './pmImport'
+import { combinedOverviewBook, readActivePortfolioContext, readPMBooks, COMBINED_BOOK_ID } from './pmImport'
 
 const store = new Map<string, string>()
 const ls = {
@@ -69,5 +69,28 @@ describe('combined overview book', () => {
       port('b', 'B', [{ ticker: 'MSFT', shares: 4, avgCost: 200 }]),
     ], ['a'])
     expect(combinedOverviewBook()!.holdings.map(h => h.ticker).sort()).toEqual(['AAPL', 'MSFT'])
+  })
+
+  it('publishes the explicit terminal-wide active selection', () => {
+    seed([
+      port('a', 'Long-term', [{ ticker: 'AAPL', shares: 10, avgCost: 100 }]),
+      port('b', 'Trading', [{ ticker: 'MSFT', shares: 4, avgCost: 200 }]),
+    ], ['b'])
+    const active = readActivePortfolioContext()
+    expect(active.name).toBe('Trading')
+    expect(active.portfolioIds).toEqual(['b'])
+    expect(active.holdings.map(h => h.ticker)).toEqual(['MSFT'])
+    expect(active.isCombined).toBe(false)
+  })
+
+  it('merges the terminal-wide context when several books are selected', () => {
+    seed([
+      port('a', 'A', [{ ticker: 'AAPL', shares: 10, avgCost: 100 }]),
+      port('b', 'B', [{ ticker: 'AAPL', shares: 5, avgCost: 130 }]),
+    ], ['a', 'b'])
+    const active = readActivePortfolioContext()
+    expect(active.id).toBe(COMBINED_BOOK_ID)
+    expect(active.isCombined).toBe(true)
+    expect(active.holdings[0].shares).toBe(15)
   })
 })

@@ -1,10 +1,14 @@
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, AreaChart, Area,
   PieChart, Pie, Cell, ScatterChart, Scatter,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, LabelList,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, LabelList, ReferenceLine,
 } from 'recharts'
+import type { LabelProps } from 'recharts'
+import TickerLogo from '../TickerLogo'
 import type { ClipPayload, ChartPayload, TablePayload, KpiPayload, TextPayload } from '../../lib/reportCreator'
 import type { ClipPalette } from '../../lib/reportTheme'
+import { isTickerSymbol } from '../../lib/tickerLogos'
+import { formatHorizontalCategoryLabel, horizontalCategoryAxisWidth } from './chartLabels'
 
 // One renderer for every clip payload, shared by capture preview, workspace,
 // and print. Print mode accepts a theme-derived palette so the PDF matches the
@@ -74,20 +78,40 @@ function buildColorMap(pal: Palette, keys: string[]): Map<string, string> {
   return map
 }
 
-function TableClip({ p, pal, maxRows }: { p: TablePayload; pal: Palette; maxRows?: number }) {
+function TableClip({ p, pal, maxRows, print }: { p: TablePayload; pal: Palette; maxRows?: number; print: boolean }) {
   const rows = maxRows != null && maxRows > 0 ? p.rows.slice(0, maxRows) : p.rows
   const truncated = rows.length < p.rows.length
+  const isTextColumn = (index: number) =>
+    index === 0 || /\b(name|headline|event|source|instrument|sector|feature|driver|status|category|region)\b/i.test(p.columns[index] ?? '')
+  const narrativeIndex = print && p.columns.length <= 5
+    ? p.columns.findIndex(column => /\b(headline|event|name|instrument|driver)\b/i.test(column))
+    : -1
+  const tickerColumn = p.columns.findIndex(column => /^(ticker|symbol)$/i.test(column.trim()))
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: MONO, fontSize: 10 }}>
+    <div style={{ overflowX: print ? 'hidden' : 'auto', maxWidth: '100%' }}>
+      <table style={{
+        width: '100%', borderCollapse: 'collapse', fontFamily: MONO, fontSize: 10,
+        tableLayout: print ? 'fixed' : 'auto',
+      }}>
+        {narrativeIndex >= 0 && (
+          <colgroup>
+            {p.columns.map((_, index) => (
+              <col
+                key={index}
+                style={{ width: index === narrativeIndex ? '50%' : `${50 / Math.max(1, p.columns.length - 1)}%` }}
+              />
+            ))}
+          </colgroup>
+        )}
         <thead>
           <tr>
             {p.columns.map((c, i) => (
               <th key={i} style={{
-                padding: '5px 8px', textAlign: i === 0 ? 'left' : 'right', color: pal.muted,
+                padding: '5px 8px', textAlign: isTextColumn(i) ? 'left' : 'right', color: pal.muted,
                 fontFamily: SANS, fontSize: 8, fontWeight: 700, letterSpacing: '0.06em',
                 textTransform: 'uppercase', borderBottom: `1px solid ${pal.border}`,
-                background: pal.headBg, whiteSpace: 'nowrap',
+                background: pal.headBg, whiteSpace: print ? 'normal' : 'nowrap',
+                overflowWrap: print ? 'anywhere' : undefined,
               }}>{c}</th>
             ))}
           </tr>
@@ -97,10 +121,29 @@ function TableClip({ p, pal, maxRows }: { p: TablePayload; pal: Palette; maxRows
             <tr key={r}>
               {row.map((cell, c) => (
                 <td key={c} style={{
-                  padding: '4px 8px', textAlign: c === 0 ? 'left' : 'right', color: pal.ink,
+                  padding: '4px 8px', textAlign: isTextColumn(c) ? 'left' : 'right', color: pal.ink,
                   borderBottom: `1px solid ${pal.border}`, fontVariantNumeric: 'tabular-nums',
-                  whiteSpace: 'nowrap',
-                }}>{cell == null ? '—' : String(cell)}</td>
+                  whiteSpace: print ? 'normal' : 'nowrap',
+                  overflowWrap: print ? 'anywhere' : undefined,
+                  wordBreak: print ? 'break-word' : undefined,
+                  verticalAlign: 'top',
+                }}>
+                  {print && c === tickerColumn && typeof cell === 'string' && isTickerSymbol(cell) ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                      <TickerLogo
+                        ticker={cell}
+                        size={16}
+                        crossOrigin="anonymous"
+                        fit="contain"
+                        cornerRadius={3}
+                        padding={1}
+                        logoBackground="#ffffff"
+                        normalizeVisualWeight
+                      />
+                      <span>{cell}</span>
+                    </span>
+                  ) : (cell == null ? '—' : String(cell))}
+                </td>
               ))}
             </tr>
           ))}
@@ -215,37 +258,136 @@ function partitionScales(p: ChartPayload) {
   return { left, right }
 }
 
-function fmtTick(v: number, kind: 'auto' | 'pct' | 'price' | 'compact' = 'auto'): string {
-  if (!Number.isFinite(v)) return ''
-  if (kind === 'pct' || (kind === 'auto' && Math.abs(v) <= 200 && Math.abs(v) > 0 && Math.abs(v) < 100 && Number.isInteger(Math.round(v * 10)))) {
-    // Prefer plain number; callers pass kind when known.
-  }
+type TickKind = 'auto' | 'pct' | 'price' | 'compact' | 'multiple' | 'bps' | 'pp'
+
+function compactNumber(v: number): string {
   const a = Math.abs(v)
-  if (kind === 'price' || (kind === 'auto' && a >= 20 && a < 1e6)) {
-    if (a >= 100) return v.toFixed(0)
-    if (a >= 10) return v.toFixed(1)
-    return v.toFixed(2)
-  }
-  if (kind === 'pct') {
-    return `${v >= 0 ? '' : '−'}${Math.abs(v).toFixed(a >= 10 ? 0 : 1)}`
-  }
-  if (a >= 1e9) return `${(v / 1e9).toFixed(1)}B`
-  if (a >= 1e6) return `${(v / 1e6).toFixed(1)}M`
-  if (a >= 1e3) return `${(v / 1e3).toFixed(a >= 1e4 ? 0 : 1)}k`
-  if (a >= 100) return v.toFixed(0)
-  if (a >= 10) return v.toFixed(1)
-  if (a >= 1) return v.toFixed(2)
-  return v.toFixed(2)
+  if (a >= 1e9) return `${(a / 1e9).toFixed(1)}B`
+  if (a >= 1e6) return `${(a / 1e6).toFixed(1)}M`
+  if (a >= 1e3) return `${(a / 1e3).toFixed(a >= 1e4 ? 0 : 1)}k`
+  if (a >= 100) return a.toFixed(0)
+  if (a >= 10) return a.toFixed(1)
+  if (a >= 1) return a.toFixed(2)
+  return a.toFixed(2)
 }
 
-function inferTickKind(stats: { mid: number; max: number; min: number; label: string }[]): 'auto' | 'pct' | 'price' {
-  const label = stats.map(s => s.label).join(' ').toLowerCase()
-  if (/\b(iv|vol|%|pct|percent|rank|premium|share)\b/.test(label)) return 'pct'
-  if (/\b(price|spot|strike|\$|nav|fair)\b/.test(label)) return 'price'
+function fmtTick(v: number, kind: TickKind = 'auto'): string {
+  if (!Number.isFinite(v)) return ''
+  const a = Math.abs(v)
+  const sign = v < 0 ? '−' : ''
+  if (kind === 'price') return `${sign}$${compactNumber(v)}`
+  if (kind === 'pct') return `${sign}${a.toFixed(a >= 10 ? 0 : 1)}%`
+  if (kind === 'multiple') return `${sign}${compactNumber(v)}×`
+  if (kind === 'bps') return `${sign}${compactNumber(v)} bps`
+  if (kind === 'pp') return `${sign}${compactNumber(v)} pp`
+  return `${sign}${compactNumber(v)}`
+}
+
+function inferTickKind(
+  stats: { mid: number; max: number; min: number; label: string }[],
+  context = '',
+): Exclude<TickKind, 'compact'> {
+  const seriesLabel = stats.map(s => s.label).join(' ').toLowerCase()
+  const label = `${seriesLabel} ${context}`.toLowerCase()
+  if (/\bpp\b|\bpercentage points?\b/.test(seriesLabel)) return 'pp'
+  if (/\b(bps?|basis points?)\b/.test(seriesLabel)) return 'bps'
+  if (/%|\bpct\b|\bpercent\b/.test(seriesLabel)) return 'pct'
+  if (/(\$|\busd\b|\bprice\b|\bspot\b|\bstrike\b|\btarget\b|\bintrinsic\b|\bfair value\b|\bnav\b|\bper share\b|\/sh\b)/.test(seriesLabel)) return 'price'
+  if (/(\bp\/e\b|\bev\/ebitda\b|\bp\/s\b|\bp\/b\b|\bp\/fcf\b|\bpeg\b|\bmultiple\b)/.test(seriesLabel)) return 'multiple'
+  if (/\b(bps?|basis points?)\b/.test(label)) return 'bps'
+  if (/(\bprice history\b|\$|\busd\b|\bspot\b|\bstrike\b|\btarget\b|\bintrinsic\b|\bfair value\b|\bnav\b|\bper share\b|\/sh\b)/.test(label)) return 'price'
+  if (/(%|\bpct\b|\bpercent\b|\biv\b|\bvol(?:atility)?\b|\bmargin\b|\bgrowth\b|\bupside\b|\breturn\b|\byield\b|\brate\b|\bshare\b|\bweight\b|\ballocation\b|\bpremium\b|\broe\b|\broa\b)/.test(label)) return 'pct'
+  if (/(\bp\/e\b|\bev\/ebitda\b|\bp\/s\b|\bp\/b\b|\bp\/fcf\b|\bpeg\b|\bmultiple\b)/.test(label)) return 'multiple'
   if (!stats.length) return 'auto'
-  const maxAbs = Math.max(...stats.map(s => Math.max(Math.abs(s.max), Math.abs(s.min))))
-  if (maxAbs <= 150 && maxAbs > 0) return 'auto'
   return 'auto'
+}
+
+function humanizeAxisLabel(value: string): string {
+  const normalized = value.replace(/[_-]+/g, ' ').trim()
+  if (/^(x|date|asof|month|year|period)$/i.test(normalized)) return /^(x)$/i.test(normalized) ? 'Period' : normalized.replace(/\b\w/g, c => c.toUpperCase())
+  if (/^(name|ticker|symbol)$/i.test(normalized)) return 'Company'
+  if (/^category$/i.test(normalized)) return 'Category'
+  if (/^driver$/i.test(normalized)) return 'Valuation driver'
+  return normalized.replace(/\b\w/g, c => c.toUpperCase())
+}
+
+function measureLabel(
+  stats: { label: string }[],
+  kind: Exclude<TickKind, 'compact'>,
+  context = '',
+): string {
+  if (kind === 'pct') return 'Percent (%)'
+  if (kind === 'price') return 'Value (USD)'
+  if (kind === 'multiple') return 'Multiple (×)'
+  if (kind === 'bps') return 'Basis points (bps)'
+  if (kind === 'pp') return 'Percentage points (pp)'
+  if (/\b(relative performance|indexed|normalized)\b/i.test(context)) return 'Indexed performance (start = 100)'
+  if (/\bcorrelation\b/i.test(context)) return 'Correlation'
+  if (/\bbeta\b/i.test(context)) return 'Beta'
+  if (/\b(residual|return)\b/i.test(context)) return 'Return'
+  if (stats.length === 1 && stats[0].label) return stats[0].label
+  return 'Value'
+}
+
+export function HorizontalCategoryTick({
+  x = 0,
+  y = 0,
+  payload,
+  pal,
+  print,
+}: {
+  x?: number
+  y?: number
+  payload?: { value?: unknown }
+  pal: Palette
+  print: boolean
+}) {
+  const label = formatHorizontalCategoryLabel(payload?.value, print ? 16 : 18)
+  const fontSize = print ? 7.5 : 8.5
+  const labelX = x - (print ? 5 : 7)
+  if (!label.secondary) {
+    return (
+      <text
+        x={labelX}
+        y={y}
+        dy="0.35em"
+        textAnchor="end"
+        fill={pal.ink}
+        fontFamily={SANS}
+        fontSize={fontSize}
+        fontWeight={600}
+      >
+        {label.primary}
+      </text>
+    )
+  }
+  return (
+    <text
+      x={labelX}
+      y={y}
+      dy="0.35em"
+      textAnchor="end"
+      fontFamily={SANS}
+      aria-label={`${label.secondary} ${label.primary}`}
+    >
+      <tspan
+        fill={pal.muted}
+        fontFamily={MONO}
+        fontSize={print ? 6.8 : 7.8}
+        fontWeight={700}
+      >
+        {label.secondary}
+      </tspan>
+      <tspan
+        dx={print ? 4 : 5}
+        fill={pal.ink}
+        fontSize={fontSize}
+        fontWeight={600}
+      >
+        {label.primary}
+      </tspan>
+    </text>
+  )
 }
 
 function formatXTick(v: string | number): string {
@@ -405,11 +547,21 @@ function ChartClip({
     })
     : data
 
-  const { left, right } = partitionScales(p)
+  let { left, right } = partitionScales(p)
+  const categoryContext = data.map(row => String(row[p.xKey] ?? '')).join(' ')
+  let leftKind = inferTickKind(left, `${p.title ?? ''} ${categoryContext}`)
+  let rightKind = right.length ? inferTickKind(right, `${p.title ?? ''} ${categoryContext}`) : 'auto'
+  if (right.length && leftKind === rightKind && leftKind !== 'auto') {
+    left = [...left, ...right]
+    right = []
+    leftKind = inferTickKind(left, `${p.title ?? ''} ${categoryContext}`)
+    rightKind = 'auto'
+  }
   const dual = right.length > 0
-  const leftKind = inferTickKind(left)
-  const rightKind = dual ? inferTickKind(right) : 'auto'
   const axisTick = { fontFamily: MONO, fontSize: print ? 8 : 9, fill: pal.muted }
+  const xLabel = humanizeAxisLabel(p.xKey)
+  const leftMeasure = measureLabel(left, leftKind, p.title)
+  const rightMeasure = dual ? measureLabel(right, rightKind, p.title) : ''
 
   // Report-consistent per-series colors (NVDA always one color, AAPL another).
   const colorMap = buildColorMap(pal, p.series.map(s => s.key))
@@ -464,6 +616,15 @@ function ChartClip({
       minTickGap={longLabels ? 0 : (print ? 12 : 20)}
       tickFormatter={longLabels ? undefined : formatXTick}
       height={xAxisHeight}
+      label={{
+        value: xLabel,
+        position: 'insideBottom',
+        offset: print ? -1 : -2,
+        fill: pal.muted,
+        fontFamily: SANS,
+        fontSize: print ? 7 : 8,
+        fontWeight: 700,
+      }}
     />
   )
 
@@ -477,6 +638,15 @@ function ChartClip({
       width={print ? 42 : 48}
       tickFormatter={yTick(leftKind)}
       domain={leftDomain}
+      label={{
+        value: leftMeasure,
+        angle: -90,
+        position: 'insideLeft',
+        fill: pal.muted,
+        fontFamily: SANS,
+        fontSize: print ? 7 : 8,
+        fontWeight: 700,
+      }}
     />
   )
   const yRight = dual ? (
@@ -489,15 +659,72 @@ function ChartClip({
       width={print ? 36 : 44}
       tickFormatter={yTick(rightKind)}
       domain={['auto', 'auto']}
+      label={{
+        value: rightMeasure,
+        angle: 90,
+        position: 'insideRight',
+        fill: pal.muted,
+        fontFamily: SANS,
+        fontSize: print ? 7 : 8,
+        fontWeight: 700,
+      }}
     />
   ) : null
 
   const grid = <CartesianGrid strokeDasharray="3 3" stroke={pal.gridStroke} />
+  const details = p.details ?? []
   const tip = !print ? (
-    <Tooltip
-      contentStyle={{ background: 'var(--theme-surface, #0d1826)', border: `1px solid ${pal.border}`, fontFamily: MONO, fontSize: 10 }}
-      labelStyle={{ color: pal.accent }}
-    />
+    details.length ? (
+      <Tooltip
+        cursor={{ fill: pal.headBg }}
+        content={({ active, payload, label }) => {
+          if (!active || !payload?.length) return null
+          const row = payload[0].payload as Record<string, unknown>
+          return (
+            <div style={{
+              background: 'var(--theme-surface, #0d1826)',
+              border: `1px solid ${pal.border}`,
+              color: pal.ink,
+              fontFamily: MONO,
+              fontSize: 10,
+              padding: '7px 9px',
+            }}>
+              <div style={{ color: pal.accent, fontWeight: 700, marginBottom: 5 }}>{String(label ?? '')}</div>
+              {p.series.map(series => {
+                const value = Number(row[series.key])
+                if (!Number.isFinite(value)) return null
+                return (
+                  <div key={series.key} style={{ display: 'flex', justifyContent: 'space-between', gap: 14 }}>
+                    <span style={{ color: pal.muted }}>{series.label}</span>
+                    <span>{fmtTick(value, seriesKind(series.key))}</span>
+                  </div>
+                )
+              })}
+              {details.map(detail => {
+                const value = Number(row[detail.key])
+                if (!Number.isFinite(value)) return null
+                const kind = inferTickKind([{ label: detail.label, min: value, max: value, mid: value }], p.title)
+                return (
+                  <div key={detail.key} style={{ display: 'flex', justifyContent: 'space-between', gap: 14 }}>
+                    <span style={{ color: pal.muted }}>{detail.label}</span>
+                    <span>{fmtTick(value, kind)}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        }}
+      />
+    ) : (
+      <Tooltip
+        contentStyle={{ background: 'var(--theme-surface, #0d1826)', border: `1px solid ${pal.border}`, fontFamily: MONO, fontSize: 10 }}
+        labelStyle={{ color: pal.accent }}
+        formatter={(value: number, name: string) => {
+          const series = p.series.find(item => item.label === name || item.key === name)
+          return [fmtTick(Number(value), series ? seriesKind(series.key) : leftKind), name]
+        }}
+      />
+    )
   ) : null
 
   // Legend always when dual scale or multi-series so axes make sense.
@@ -519,8 +746,66 @@ function ChartClip({
     : pieRaw
   const pieColor = (i: number) => pal.series[i % pal.series.length]
 
+  const horizontalBars = p.chartType === 'bar' && p.barOrientation === 'horizontal'
+  const horizontalKind = p.series[0] ? seriesKind(p.series[0].key) : leftKind
+  const horizontalValues = p.series[0] ? seriesValues(p, p.series[0].key) : []
+  const isDivergingHorizontal = horizontalBars
+    && p.series.length === 1
+    && horizontalValues.some(value => value < 0)
+    && horizontalValues.some(value => value > 0)
+    && /\b(momentum|return|change|upside|downside|relative|variance|contribution)\b/i.test(
+      `${p.title ?? ''} ${p.series[0]?.label ?? ''}`,
+    )
+  const horizontalValueLabel = (props: LabelProps) => {
+    const view = props.viewBox as { x?: number; y?: number; width?: number; height?: number } | undefined
+    const value = Number(props.value)
+    if (!view || !Number.isFinite(value)) return null
+    const x = Number(view.x ?? 0)
+    const y = Number(view.y ?? 0)
+    const width = Number(view.width ?? 0)
+    const height = Number(view.height ?? 0)
+    const negative = value < 0
+    const formatted = `${value > 0 ? '+' : ''}${fmtTick(value, horizontalKind)}`
+    const barEnd = x + width
+    return (
+      <text
+        x={barEnd + (negative ? -4 : 4)}
+        y={y + height / 2}
+        dy="0.35em"
+        textAnchor={negative ? 'end' : 'start'}
+        fill={pal.ink}
+        fontSize={valueLabelFontSize}
+        fontFamily={MONO}
+        fontWeight={700}
+      >
+        {formatted}
+      </text>
+    )
+  }
+  const horizontalCategoryWidth = horizontalCategoryAxisWidth(
+    data.map(row => row[p.xKey]),
+    print,
+  )
+
   return (
     <div style={{ width: '100%', minHeight: height }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+        minHeight: 20,
+        padding: '0 4px 4px',
+        color: pal.muted,
+        fontFamily: SANS,
+        fontSize: print ? 7 : 8,
+        fontWeight: 700,
+        letterSpacing: '0.06em',
+        textTransform: 'uppercase',
+      }}>
+        <span>Measure · {p.chartType === 'pie' ? (p.series[0]?.label || 'Share') : leftMeasure}</span>
+        <span>By · {xLabel}</span>
+      </div>
       <ResponsiveContainer width="100%" height={height} debounce={1}>
         {p.chartType === 'pie' ? (
           <PieChart margin={{ top: 6, right: 6, left: 6, bottom: 6 }}>
@@ -537,6 +822,7 @@ function ChartClip({
               nameKey="name"
               cx="50%"
               cy="50%"
+              innerRadius={Math.max(Math.min(height, 300) * 0.17, 28)}
               outerRadius={Math.max(Math.min(height, 300) / 2 - (print ? 14 : 12), 44)}
               isAnimationActive={false}
               label={false}
@@ -546,6 +832,30 @@ function ChartClip({
             >
               {pieData.map((_, i) => <Cell key={i} fill={pieColor(i)} />)}
             </Pie>
+            <text
+              x="50%"
+              y="47%"
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill={pal.muted}
+              fontFamily={SANS}
+              fontSize={print ? 7 : 8}
+              fontWeight={700}
+            >
+              TOTAL
+            </text>
+            <text
+              x="50%"
+              y="55%"
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill={pal.ink}
+              fontFamily={MONO}
+              fontSize={print ? 12 : 14}
+              fontWeight={700}
+            >
+              100%
+            </text>
           </PieChart>
         ) : p.chartType === 'scatter' ? (
           <ScatterChart margin={margin}>
@@ -641,6 +951,78 @@ function ChartClip({
                 </Bar>,
               ]
             })}
+          </BarChart>
+        ) : horizontalBars ? (
+          <BarChart
+            data={data}
+            layout="vertical"
+            margin={{ top: 4, right: print ? 44 : 56, left: 2, bottom: print ? 18 : 20 }}
+            barCategoryGap="24%"
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke={pal.gridStroke} horizontal={false} />
+            <XAxis
+              type="number"
+              tick={axisTick}
+              tickLine={false}
+              axisLine={{ stroke: pal.border }}
+              tickFormatter={(value: number) => fmtTick(value, horizontalKind)}
+              domain={leftMinVal >= 0 ? [0, 'auto'] : ['auto', 'auto']}
+              label={{
+                value: leftMeasure,
+                position: 'insideBottom',
+                offset: -2,
+                fill: pal.muted,
+                fontFamily: SANS,
+                fontSize: print ? 7 : 8,
+                fontWeight: 700,
+              }}
+            />
+            {isDivergingHorizontal && (
+              <ReferenceLine x={0} stroke={pal.muted} strokeWidth={1} />
+            )}
+            <YAxis
+              type="category"
+              dataKey={p.xKey}
+              tick={(props) => <HorizontalCategoryTick {...props} pal={pal} print={print} />}
+              tickLine={false}
+              axisLine={false}
+              width={horizontalCategoryWidth}
+              interval={0}
+            />
+            {tip}
+            {p.series.map((s, i) => (
+              <Bar
+                key={s.key}
+                dataKey={s.key}
+                name={s.label}
+                fill={fillFor(s, i)}
+                isAnimationActive={false}
+                maxBarSize={print ? 18 : 24}
+              >
+                {isDivergingHorizontal && data.map((row, index) => (
+                  <Cell
+                    key={`${s.key}-${index}`}
+                    fill={Number(row[s.key]) >= 0 ? pal.pos : pal.neg}
+                  />
+                ))}
+                {showValueLabels && (
+                  isDivergingHorizontal ? (
+                    <LabelList dataKey={s.key} content={horizontalValueLabel} />
+                  ) : (
+                    <LabelList
+                      dataKey={s.key}
+                      position="right"
+                      formatter={valueLabel(s.key)}
+                      fill={pal.ink}
+                      fontSize={valueLabelFontSize}
+                      fontFamily={MONO}
+                      fontWeight={700}
+                    />
+                  )
+                )}
+              </Bar>
+            ))}
+            {showLegend && <Legend wrapperStyle={legendStyle} iconType="square" iconSize={8} />}
           </BarChart>
         ) : p.chartType === 'bar' || p.chartType === 'histogram' ? (
           <BarChart data={data} margin={margin} barCategoryGap={p.chartType === 'histogram' ? 1 : undefined}>
@@ -756,16 +1138,44 @@ function TextClip({ p, pal }: { p: TextPayload; pal: Palette }) {
   return <div style={{ fontFamily: SANS, fontSize: 11, lineHeight: 1.55, color: pal.ink, whiteSpace: 'pre-wrap' }}>{p.body}</div>
 }
 
+export function reportChartHeight(
+  payload: ClipPayload,
+  print: boolean,
+  compact = false,
+  inline = false,
+): number {
+  const baseChartH = print
+    ? (inline ? 112 : compact ? 168 : 210)
+    : (inline ? 126 : compact ? 170 : 230)
+  if (
+    payload.kind !== 'chart'
+    || payload.chartType !== 'bar'
+    || payload.barOrientation !== 'horizontal'
+  ) {
+    return baseChartH
+  }
+  return Math.max(
+    print ? (inline ? 104 : compact ? 124 : 138) : (inline ? 116 : compact ? 136 : 154),
+    Math.min(
+      print ? (inline ? 220 : compact ? 250 : 276) : (inline ? 240 : compact ? 280 : 320),
+      payload.data.length * (print ? (inline ? 15 : compact ? 17 : 18) : (inline ? 18 : 20))
+        + (print ? (inline ? 38 : compact ? 42 : 46) : (inline ? 44 : 50)),
+    ),
+  )
+}
+
 export default function ClipRenderer({
   payload,
   mode = 'dark',
   compact,
+  inline,
   maxTableRows,
   palette,
 }: {
   payload: ClipPayload
   mode?: 'dark' | 'print'
   compact?: boolean
+  inline?: boolean
   maxTableRows?: number
   /** Theme-derived palette for print mode (active color preset). */
   palette?: ClipPalette
@@ -773,12 +1183,9 @@ export default function ClipRenderer({
   const print = mode === 'print'
   const pal = print ? (palette ?? PRINT_FALLBACK) : DARK
   const tableCap = maxTableRows ?? (print ? 10 : undefined)
-  // Full-width print charts get real height; compact only for side-by-side.
-  const chartH = print
-    ? (compact ? 168 : 210)
-    : (compact ? 170 : 230)
+  const chartH = reportChartHeight(payload, print, compact, inline)
   switch (payload.kind) {
-    case 'table': return <TableClip p={payload} pal={pal} maxRows={tableCap} />
+    case 'table': return <TableClip p={payload} pal={pal} maxRows={tableCap} print={print} />
     case 'kpi':   return <KpiClip p={payload} pal={pal} />
     case 'chart': return <ChartClip p={payload} pal={pal} height={chartH} print={print} />
     case 'text':  return <TextClip p={payload} pal={pal} />

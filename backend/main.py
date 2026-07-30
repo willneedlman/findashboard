@@ -29,7 +29,7 @@ from routers import (
     maritime, snapshots, credit, housing,
     portfolio_optimizer, macro_events,
     logistics, factset, comtrade, bcc, official,
-    portfolio_import, social, movers, data_audit,
+    portfolio_import, social, movers, data_audit, admin_files,
 )
 
 # Pin the MIME types the PWA depends on. A service worker served as anything but
@@ -57,7 +57,9 @@ async def lifespan(app: FastAPI):
     import maritime_kystverket        # Norway coastal AIS (open TCP feed)
     maritime_kystverket.start_stream(maritime._upsert, maritime._classify, maritime._remember)
     data_audit.start_audit_loop()    # cross-source data audit for the Admin Hub
+    admin_files.start_cleanup_loop()
     yield
+    await admin_files.stop_cleanup_loop()
     data_audit.stop_audit_loop()
     earnings.stop_calendar_warm_loop()
     snapshots.stop_snapshot_loop()
@@ -221,6 +223,7 @@ app.include_router(official.router,          prefix="/api/official",          ta
 app.include_router(bcc.router,               prefix="/api/bcc",               tags=["bcc"])
 app.include_router(social.router,            prefix="/api/social",             tags=["social"])
 app.include_router(movers.router,            prefix="/api/movers",             tags=["movers"])
+app.include_router(admin_files.router,       prefix="/api/admin/files",        tags=["admin"])
 
 
 @app.api_route("/api/health", methods=["GET", "HEAD"])

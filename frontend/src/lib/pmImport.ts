@@ -12,8 +12,8 @@ export function normalizeTicker(raw: string): string {
   return raw.trim().toUpperCase().replace(/[./]/g, '-')
 }
 
-interface PMHolding { ticker: string; shares: number; avgCost: number }
-interface PMCash { id: string; label: string; amount: number; rate: number; since: string }
+export interface PMHolding { ticker: string; shares: number; avgCost: number }
+export interface PMCash { id: string; label: string; amount: number; rate: number; since: string }
 export interface PMPortfolio {
   id: string
   name: string
@@ -23,7 +23,25 @@ export interface PMPortfolio {
   futuresCount: number
 }
 
-const PORTFOLIOS_KEY = 'pm-portfolios-v2'
+export const PORTFOLIOS_KEY = 'pm-portfolios-v2'
+export const PORTFOLIO_CONTEXT_EVENT = 'ft:portfolio-context'
+
+export interface ActivePortfolioContext {
+  id: string
+  name: string
+  portfolioIds: string[]
+  isCombined: boolean
+  holdings: PMHolding[]
+  cashValue: number
+  optionsCount: number
+  futuresCount: number
+  positionCount: number
+  hasData: boolean
+}
+
+export function notifyPortfolioContextChanged() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(PORTFOLIO_CONTEXT_EVENT))
+}
 
 // Accrued value of a cash balance: principal × (1 + rate)^(years since `since`).
 // Mirrors PortfolioManager.cashValue so imports match what the PM shows.
@@ -54,7 +72,7 @@ export function readPMPortfolios(): PMPortfolio[] {
 
 // Merge holdings across portfolios into one aggregated set (same ticker sums
 // shares, share-weighted average cost) — the same math the PM overview uses.
-function mergeHoldings(ps: PMPortfolio[]): PMHolding[] {
+export function mergeHoldings(ps: PMPortfolio[]): PMHolding[] {
   const map = new Map<string, { ticker: string; shares: number; costSum: number }>()
   for (const p of ps) for (const h of (p.holdings ?? [])) {
     const ticker = normalizeTicker(h.ticker)
@@ -67,6 +85,47 @@ function mergeHoldings(ps: PMPortfolio[]): PMHolding[] {
 }
 
 export const COMBINED_BOOK_ID = '__overview_combined__'
+
+export function readActivePortfolioContext(): ActivePortfolioContext {
+  const empty: ActivePortfolioContext = {
+    id: '', name: 'No active portfolio', portfolioIds: [], isCombined: false,
+    holdings: [], cashValue: 0, optionsCount: 0, futuresCount: 0,
+    positionCount: 0, hasData: false,
+  }
+  try {
+    const all = readPMPortfolios()
+    if (!all.length) return empty
+    const raw = localStorage.getItem(PORTFOLIOS_KEY)
+    const state = raw ? JSON.parse(raw) : {}
+    const validIds = Array.isArray(state.overviewIds)
+      ? state.overviewIds.filter((id: string) => all.some(p => p.id === id))
+      : []
+    const activeId = all.some(p => p.id === state.activeId) ? state.activeId : all[0].id
+    const selectedIds = validIds.length ? validIds : [activeId]
+    const selected = all.filter(p => selectedIds.includes(p.id))
+    if (!selected.length) return empty
+
+    const isCombined = selected.length > 1
+    const holdings = isCombined ? mergeHoldings(selected) : selected[0].holdings
+    const totalCash = selected.flatMap(p => p.cash ?? []).reduce((sum, c) => sum + cashValue(c), 0)
+    const optionsCount = selected.reduce((sum, p) => sum + p.optionsCount, 0)
+    const futuresCount = selected.reduce((sum, p) => sum + p.futuresCount, 0)
+    return {
+      id: isCombined ? COMBINED_BOOK_ID : selected[0].id,
+      name: isCombined ? `Combined · ${selected.length} portfolios` : selected[0].name,
+      portfolioIds: selected.map(p => p.id),
+      isCombined,
+      holdings,
+      cashValue: totalCash,
+      optionsCount,
+      futuresCount,
+      positionCount: holdings.length + optionsCount + futuresCount,
+      hasData: holdings.length > 0 || totalCash > 0 || optionsCount > 0 || futuresCount > 0,
+    }
+  } catch {
+    return empty
+  }
+}
 
 // The user's Portfolio Manager Overview selection as ONE synthetic aggregated
 // book, so analysis tools can run on the combined portfolios. Uses the persisted
@@ -162,6 +221,7 @@ export function addHoldingsToPortfolio(
   state.activeId = targetId
 
   localStorage.setItem(PORTFOLIOS_KEY, JSON.stringify(state))
+  notifyPortfolioContextChanged()
   return { name: targetName, added, skipped }
 }
 
