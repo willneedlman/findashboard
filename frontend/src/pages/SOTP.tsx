@@ -6,79 +6,99 @@ import EmptyState from '../components/EmptyState'
 import TickerInput from '../components/TickerInput'
 import {
   INPUT, LABEL, SECTION, RailSection, PRIMARY_BTN, GHOST_BTN, READOUT_ROW,
-  TH, TD, PANEL, STACK, fmtM, VerdictStrip, upsidePrimary, LabeledPanel,
+  PANEL, STACK, fmtM, VerdictStrip, upsidePrimary, LabeledPanel,
 } from './valuationShared'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip } from '../lib/reportCaptureRegistry'
 
-// Gold ramp across segments so the value stack / bars read as one family.
-const RAMP: number[][] = [[216, 184, 90], [201, 168, 76], [178, 146, 63], [156, 126, 53], [134, 105, 43]]
-function ramp(i: number, n: number): string {
-  const x = (n <= 1 ? 0 : i / (n - 1)) * (RAMP.length - 1)
-  const lo = Math.floor(x), hi = Math.min(lo + 1, RAMP.length - 1), f = x - lo
-  const c = RAMP[lo].map((v, k) => Math.round(v + (RAMP[hi][k] - v) * f))
-  return `rgb(${c[0]}, ${c[1]}, ${c[2]})`
-}
+// Revenue → value is one measure at two stages, so it takes one hue at two steps
+// rather than two categorical colours. Validated against the #101c2e surface:
+// chroma, 3:1 contrast and normal-vision separation all pass, lightness monotone.
+const C_REV = '#2563eb'
+const C_VAL = '#60a5fa'
 const HAIR = '1px solid var(--theme-border, rgba(255,255,255,0.08))'
+const MUTED = 'var(--theme-secondary, #8099b0)'
+const TEXT = 'var(--theme-text, #d7e3fc)'
+const GOLD = 'var(--theme-primary, #c9a84c)'
 
-// 100%-width bar split by each segment's share of total implied value.
-function ValueStack({ rows, total }: { rows: { name: string; value: number }[]; total: number }) {
-  return (
-    <div>
-      <div style={{ display: 'flex', height: 44, width: '100%', border: HAIR, overflow: 'hidden' }}>
-        {rows.map((r, i) => {
-          const pct = total > 0 ? (r.value / total) * 100 : 0
-          return (
-            <div key={r.name} title={`${r.name} · ${fmtM(r.value)}`} style={{ width: `${pct}%`, background: ramp(i, rows.length), display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: i < rows.length - 1 ? '1px solid #0a1628' : 'none' }}>
-              {pct >= 4 && <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, fontWeight: 700, color: '#0a1628' }}>{pct.toFixed(1)}%</span>}
-            </div>
-          )
-        })}
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', marginTop: 12 }}>
-        {rows.map((r, i) => (
-          <span key={r.name} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'var(--theme-mono)', fontSize: 10 }}>
-            <span style={{ width: 9, height: 9, background: ramp(i, rows.length), flex: 'none' }} />
-            <span style={{ color: 'var(--theme-text, #d7e3fc)' }}>{r.name}</span>
-            <span style={{ color: 'var(--theme-secondary, #99907e)' }}>{fmtM(r.value)}</span>
-          </span>
-        ))}
-      </div>
-    </div>
-  )
+const pct1 = (v: number) => `${v.toFixed(1)}%`
+
+type Seg = {
+  name: string; revenue: number; pct: number | null
+  peer_group?: string | null; peer_ps?: number | null; peer_note?: string | null
 }
-
-// Per-segment revenue bar (blue) over value bar (segment ramp) — the multiple's lift.
-function RevValueBars({ rows }: { rows: { name: string; revenue: number; value: number }[] }) {
-  const maxRev = Math.max(...rows.map(r => r.revenue)) || 1
-  const maxVal = Math.max(...rows.map(r => r.value)) || 1
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {rows.map((r, i) => (
-        <div key={r.name} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 92, flex: 'none', textAlign: 'right', fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-text, #d7e3fc)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <div style={{ height: 8, width: `${(r.revenue / maxRev) * 100}%`, background: 'var(--theme-tertiary, #60a5fa)', opacity: 0.75, flex: 'none' }} />
-              <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary, #99907e)', whiteSpace: 'nowrap' }}>rev {fmtM(r.revenue)}</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ height: 12, width: `${(r.value / maxVal) * 100}%`, background: ramp(i, rows.length), flex: 'none' }} />
-              <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-text, #d7e3fc)', whiteSpace: 'nowrap' }}>value {fmtM(r.value)}</span>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-type Seg = { name: string; revenue: number; pct: number | null; sector?: string | null }
+type PeerGroup = { name: string; ps: number; family: string; note: string }
 type SotpData = {
   ticker: string; fiscalYear?: number | string; currency?: string; source?: string
-  segments: Seg[]; total_revenue?: number; net_debt?: number; shares?: number; market_price?: number | null
-  suggested_multiple?: number | null; sector_ps?: Record<string, number>; note?: string
+  segments: Seg[]; total_revenue?: number; net_debt?: number | null
+  shares?: number | null; market_price?: number | null; market_cap?: number | null
+  suggested_multiple?: number | null; peer_groups?: PeerGroup[]; note?: string
+}
+type Row = Seg & { mult: number; value: number; share: number; basis: string }
+
+// One row per segment: the two bars carry magnitude, the numbers carry precision,
+// and the peer picker sits where its effect is visible. Ten segments is past the
+// point where colour can carry identity, so identity is the label.
+function SegmentRow({ r, maxValue, peerGroups, onMult, onPeer }: {
+  r: Row; maxValue: number; peerGroups: PeerGroup[]
+  onMult: (v: number) => void; onPeer: (g: string) => void
+}) {
+  const families = useMemo(() => {
+    const out: Record<string, PeerGroup[]> = {}
+    for (const g of peerGroups) (out[g.family] ??= []).push(g)
+    return out
+  }, [peerGroups])
+
+  return (
+    <div style={{
+      display: 'grid', gap: '4px 14px', alignItems: 'center', padding: '11px 0', borderBottom: HAIR,
+      gridTemplateColumns: 'minmax(190px, 1.5fr) minmax(120px, 1.6fr) 82px 74px 92px 56px',
+    }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 12, color: TEXT, lineHeight: 1.35 }}>{r.name}</div>
+        <select value={r.peer_group ?? ''} onChange={e => onPeer(e.target.value)} title={r.peer_note ?? ''}
+          style={{
+            ...INPUT, marginTop: 5, padding: '3px 22px 3px 6px', fontSize: 10, cursor: 'pointer',
+            width: '100%', color: r.peer_group ? TEXT : MUTED,
+            appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none',
+            backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238099b0' stroke-width='2.5'><path d='M6 9l6 6 6-6'/></svg>")`,
+            backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px center',
+          }}>
+          <option value="">No comp — company blended</option>
+          {Object.entries(families).map(([fam, gs]) => (
+            <optgroup key={fam} label={fam}>
+              {gs.map(g => <option key={g.name} value={g.name}>{g.name} · {g.ps}x</option>)}
+            </optgroup>
+          ))}
+        </select>
+      </div>
+
+      {/* Revenue → value. Same hue, two steps: the gap is the multiple's lift. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+        <div title={`Revenue ${fmtM(r.revenue)}`}
+          style={{ height: 5, width: `${Math.min(100, (r.revenue / maxValue) * 100)}%`, background: C_REV, borderRadius: '0 3px 3px 0', minWidth: 2 }} />
+        <div title={`Segment value ${fmtM(r.value)}`}
+          style={{ height: 9, width: `${Math.min(100, (r.value / maxValue) * 100)}%`, background: C_VAL, borderRadius: '0 3px 3px 0', minWidth: 2 }} />
+      </div>
+
+      <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: MUTED, textAlign: 'right' }}>{fmtM(r.revenue)}</span>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 3, justifyContent: 'flex-end' }}>
+        <input type="number" min={0} step={0.05} value={Number(r.mult.toFixed(2))}
+          onChange={e => onMult(Number(e.target.value))}
+          style={{ ...INPUT, width: 56, padding: '3px 5px', textAlign: 'right', fontSize: 11, color: GOLD }} />
+        <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: MUTED }}>x</span>
+      </div>
+
+      <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 12, fontWeight: 700, color: TEXT, textAlign: 'right' }}>{fmtM(r.value)}</span>
+      <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: MUTED, textAlign: 'right' }}>{pct1(r.share)}</span>
+
+      <div style={{ gridColumn: '1 / -1', fontFamily: 'var(--theme-mono)', fontSize: 9.5, letterSpacing: '0.04em', color: MUTED }}>
+        {r.basis}{r.peer_note ? ` · ${r.peer_note}` : ''}
+      </div>
+    </div>
+  )
 }
 
 export function SOTPContent() {
@@ -86,7 +106,7 @@ export function SOTPContent() {
   const [inputsOpen, setInputsOpen] = useState(true)
   const [data, setData] = useState<SotpData | null>(null)
   const [mult, setMult] = useState<Record<string, number>>({})
-  const [sector, setSector] = useState<Record<string, string>>({})
+  const [peer, setPeer] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // How far to pull each tagged segment toward its pure-play peer multiple. 0 =
@@ -95,12 +115,14 @@ export function SOTPContent() {
   const [peerWeight, setPeerWeight] = useState(0.5)
 
   const blended = data?.suggested_multiple ?? null
-  const sectorPS = data?.sector_ps ?? {}
+  const peerGroups = data?.peer_groups ?? []
+  const peerPS = useMemo(() => Object.fromEntries(peerGroups.map(g => [g.name, g.ps])), [peerGroups])
+  const peerNote = useMemo(() => Object.fromEntries(peerGroups.map(g => [g.name, g.note])), [peerGroups])
 
   // Segment multiple = peerWeight·peer + (1−peerWeight)·blended.
-  const weightedMult = (peer: number, w: number) => {
-    const b = blended ?? peer
-    return Math.round((w * peer + (1 - w) * b) * 100) / 100
+  const weightedMult = (p: number, w: number) => {
+    const b = blended ?? p
+    return Math.round((w * p + (1 - w) * b) * 100) / 100
   }
 
   async function load() {
@@ -109,17 +131,22 @@ export function SOTPContent() {
       const res = await axios.get(`/api/valuation/sotp?ticker=${ticker.trim().toUpperCase()}`)
       const d: SotpData = res.data
       setData(d)
-      // Default: seed every segment at the company's blended P/S, so SOTP opens
-      // exactly at fair value. The peer multiples are an opt-in overlay below.
-      const start = d.suggested_multiple ?? 3.0
-      const seed: Record<string, number> = {}
-      const sec: Record<string, string> = {}
+      // Seed each segment at its own peer comp, blended halfway to the company's
+      // own P/S. Seeding everything at the blended multiple instead left every
+      // row showing the same number while its picker advertised a different one.
+      const b = d.suggested_multiple
+      const seedMult: Record<string, number> = {}
+      const seedPeer: Record<string, string> = {}
       for (const s of d.segments) {
-        seed[s.name] = start
-        if (s.sector) sec[s.name] = s.sector
+        if (s.peer_group) seedPeer[s.name] = s.peer_group
+        const p = s.peer_ps
+        seedMult[s.name] = p != null && b != null
+          ? Math.round((0.5 * p + 0.5 * b) * 100) / 100
+          : (p ?? b ?? 1.0)
       }
-      setMult(seed)
-      setSector(sec)
+      setMult(seedMult)
+      setPeer(seedPeer)
+      setPeerWeight(0.5)
     } catch (e: any) {
       setError(e?.response?.data?.detail || 'Could not load segment data.')
       setData(null)
@@ -128,30 +155,18 @@ export function SOTPContent() {
     }
   }
 
-  // Tag a segment to a peer group and apply the peer-weighted P/S immediately. An
-  // empty selection clears the tag and falls back to the blended multiple.
-  function applySector(segName: string, sec: string) {
-    setSector(s => ({ ...s, [segName]: sec }))
-    const ps = sectorPS[sec]
+  function applyPeer(segName: string, group: string) {
+    setPeer(p => ({ ...p, [segName]: group }))
+    const ps = peerPS[group]
     setMult(m => ({ ...m, [segName]: ps != null ? weightedMult(ps, peerWeight) : (blended ?? m[segName]) }))
   }
-  function applyPeerAll() {
-    setMult(m => {
-      const next = { ...m }
-      for (const s of data?.segments ?? []) {
-        const ps = sectorPS[sector[s.name]]
-        if (ps != null) next[s.name] = weightedMult(ps, peerWeight)
-      }
-      return next
-    })
-  }
-  // Live: moving the weight re-blends every tagged segment.
+  // Live: moving the weight re-blends every segment that has a comp.
   function changeWeight(w: number) {
     setPeerWeight(w)
     setMult(m => {
       const next = { ...m }
       for (const s of data?.segments ?? []) {
-        const ps = sectorPS[sector[s.name]]
+        const ps = peerPS[peer[s.name]]
         if (ps != null) next[s.name] = weightedMult(ps, w)
       }
       return next
@@ -161,23 +176,41 @@ export function SOTPContent() {
     if (blended == null) return
     setMult(m => Object.fromEntries(Object.keys(m).map(k => [k, blended])))
   }
+  function applyPurePeer() {
+    changeWeight(1)
+  }
 
   const calc = useMemo(() => {
     if (!data || !data.segments.length) return null
-    // P/S is an equity multiple, so segment value sums straight to equity (no net-debt step).
-    const rows = data.segments.map(s => ({ ...s, mult: mult[s.name] ?? 1.0, value: s.revenue * (mult[s.name] ?? 1.0) }))
-    const total = rows.reduce((a, r) => a + r.value, 0)
-    const perShare = data.shares ? total / data.shares : 0
-    const upside = data.market_price ? (perShare / data.market_price - 1) * 100 : null
-    return { rows, total, perShare, upside }
-  }, [data, mult])
+    const fallback = blended ?? 1.0
+    const priced = data.segments.map(s => {
+      const group = peer[s.name] || null
+      const ps = group ? peerPS[group] : null
+      const m = mult[s.name] ?? fallback
+      const weighted = ps != null ? weightedMult(ps, peerWeight) : null
+      const basis = ps != null && weighted != null && Math.abs(m - weighted) < 0.005
+        ? `${group} ${ps}x · ${Math.round(peerWeight * 100)}% peer`
+        : blended != null && Math.abs(m - blended) < 0.005
+          ? `Company blended ${blended}x`
+          : 'Custom'
+      return { ...s, peer_group: group, peer_note: group ? peerNote[group] : null, mult: m, value: s.revenue * m, basis }
+    })
+    const total = priced.reduce((a, r) => a + r.value, 0)
+    const rows: Row[] = priced
+      .map(r => ({ ...r, share: total > 0 ? (r.value / total) * 100 : 0 }))
+      .sort((a, b) => b.value - a.value)
+    const perShare = data.shares ? total / data.shares : null
+    const upside = perShare != null && data.market_price ? (perShare / data.market_price - 1) * 100 : null
+    const totalRev = priced.reduce((a, r) => a + r.revenue, 0)
+    return { rows, total, perShare, upside, impliedPS: totalRev > 0 ? total / totalRev : null }
+  }, [data, mult, peer, peerWeight, blended])
 
   useReportCapture(() => {
     if (!data || !calc) return null
     const tkr = data.ticker ? ` · ${data.ticker}` : ''
     const pieces: ClipDraft[] = [
       kpiClip('Sum of the Parts', `SOTP Verdict${tkr}`, [
-        { label: 'Value / Share', value: `$${calc.perShare.toFixed(2)}` },
+        { label: 'Value / Share', value: calc.perShare != null ? `$${calc.perShare.toFixed(2)}` : 'n/a' },
         ...(data.market_price != null ? [{ label: 'Market Price', value: `$${data.market_price.toFixed(2)}` }] : []),
         ...(calc.upside != null ? [{ label: 'Upside', value: `${calc.upside >= 0 ? '+' : '−'}${Math.abs(calc.upside).toFixed(1)}%` }] : []),
         { label: 'Implied Equity Value', value: fmtM(calc.total) },
@@ -185,12 +218,14 @@ export function SOTPContent() {
       tableClip(
         'Sum of the Parts',
         `Segment Values${tkr}`,
-        ['Segment', 'Revenue', 'P/S', 'Value'],
-        calc.rows.map(r => [r.name, fmtM(r.revenue), r.mult.toFixed(2), fmtM(r.value)]),
+        ['Segment', 'Peer comp', 'Revenue', 'P/S', 'Value'],
+        calc.rows.map(r => [r.name, r.peer_group ?? 'Blended', fmtM(r.revenue), `${r.mult.toFixed(2)}x`, fmtM(r.value)]),
       ),
     ]
     return pieces
   }, { disabled: !data || !calc, sourceTab: 'Sum of the Parts' })
+
+  const comped = calc ? calc.rows.filter(r => r.peer_group).length : 0
 
   return (
     <SidebarLayout sidebarWidth={250} sidebarTitle="" sidebar={
@@ -205,59 +240,45 @@ export function SOTPContent() {
         </div>
 
         {calc && <>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={SECTION}>P / S per segment</div>
-            {blended != null && (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={applyPeerAll} style={{ ...PRIMARY_BTN, flex: 1, padding: '5px 6px', fontSize: 10 }}>
-                  Apply peer P/S
-                </button>
-                <button onClick={resetBlended} style={{ ...GHOST_BTN, flex: 1, padding: '5px 6px', fontSize: 10 }}>
-                  Reset to blended
-                </button>
-              </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={SECTION}>Comp weighting</div>
+            {blended != null ? (
+              <>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+                    <label style={{ ...LABEL, marginBottom: 0 }}>Peer weight</label>
+                    <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: GOLD }}>{Math.round(peerWeight * 100)}%</span>
+                  </div>
+                  <input type="range" min={0} max={1} step={0.05} value={peerWeight}
+                    onChange={e => changeWeight(Number(e.target.value))}
+                    style={{ width: '100%', accentColor: 'var(--theme-primary, #c9a84c)' }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--theme-mono)', fontSize: 8.5, color: MUTED }}>
+                    <span>company blended</span><span>pure peer</span>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={applyPurePeer} style={{ ...PRIMARY_BTN, flex: 1, padding: '5px 6px', fontSize: 10 }}>Pure peer</button>
+                  <button onClick={resetBlended} style={{ ...GHOST_BTN, flex: 1, padding: '5px 6px', fontSize: 10 }}>All blended</button>
+                </div>
+                <p style={{ fontFamily: 'var(--theme-mono)', fontSize: 9.5, lineHeight: 1.6, color: MUTED, margin: 0 }}>
+                  At 0% every part carries the company's own P/S, so the sum reproduces today's market cap.
+                  At 100% each part carries its pure-play comp.
+                </p>
+              </>
+            ) : (
+              <p style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, lineHeight: 1.6, color: MUTED, margin: 0 }}>
+                No live price or share count for this issuer, so there is no company blended P/S to weight against.
+                Segments carry their peer comps directly.
+              </p>
             )}
-            {blended != null && (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-                  <label style={{ ...LABEL, marginBottom: 0 }}>Peer weight</label>
-                  <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-primary, #c9a84c)' }}>{Math.round(peerWeight * 100)}%</span>
-                </div>
-                <input type="range" min={0} max={1} step={0.05} value={peerWeight}
-                  onChange={e => changeWeight(Number(e.target.value))}
-                  style={{ width: '100%', accentColor: 'var(--theme-primary, #c9a84c)' }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--theme-mono)', fontSize: 8.5, color: 'var(--theme-secondary, #99907e)' }}>
-                  <span>company blended</span><span>pure peer</span>
-                </div>
-              </div>
-            )}
-            {calc.rows.map(r => (
-              <div key={r.name}>
-                <label style={{ ...LABEL, textTransform: 'none', letterSpacing: 0, fontSize: 11, color: 'var(--theme-text, #d7e3fc)', marginBottom: 6 }}>{r.name}</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <input type="range" min={0.1} max={15} step={0.05} value={r.mult}
-                    onChange={e => setMult(m => ({ ...m, [r.name]: Number(e.target.value) }))}
-                    style={{ flex: 1, accentColor: 'var(--theme-primary, #c9a84c)' }} />
-                  <input type="number" min={0} step={0.05} value={Number(r.mult.toFixed(2))}
-                    onChange={e => setMult(m => ({ ...m, [r.name]: Number(e.target.value) }))}
-                    style={{ ...INPUT, width: 64, padding: '4px 6px', textAlign: 'right', color: 'var(--theme-primary, #c9a84c)' }} />
-                </div>
-                {/* Pick a peer group → its P/S is applied to this segment immediately. */}
-                <select value={sector[r.name] ?? ''} onChange={e => applySector(r.name, e.target.value)}
-                  style={{ ...INPUT, marginTop: 6, padding: '5px 28px 5px 8px', fontSize: 11, cursor: 'pointer',
-                    appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none',
-                    backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2399907e' stroke-width='2.5'><path d='M6 9l6 6 6-6'/></svg>")`,
-                    backgroundRepeat: 'no-repeat', backgroundPosition: 'right 9px center' }}>
-                  <option value="">Peer group — blended</option>
-                  {Object.entries(sectorPS).map(([name, ps]) => (
-                    <option key={name} value={name}>{name} · {ps}x</option>
-                  ))}
-                </select>
-              </div>
-            ))}
           </div>
-          <div style={{ paddingTop: 4, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
-            <div style={READOUT_ROW}><span>Shares</span><span>{data!.shares?.toFixed(0)}M</span></div>
+
+          <div style={{ paddingTop: 4, borderTop: HAIR }}>
+            <div style={READOUT_ROW}><span>Segments</span><span>{calc.rows.length}</span></div>
+            <div style={READOUT_ROW}><span>With peer comp</span><span>{comped} / {calc.rows.length}</span></div>
+            <div style={READOUT_ROW}><span>Shares</span><span>{data!.shares != null ? `${data!.shares.toFixed(0)}M` : 'n/a'}</span></div>
+            {blended != null && <div style={READOUT_ROW}><span>Blended P/S</span><span>{blended.toFixed(2)}x</span></div>}
+            {calc.impliedPS != null && <div style={READOUT_ROW}><span>Implied P/S</span><span>{calc.impliedPS.toFixed(2)}x</span></div>}
             {data!.fiscalYear && <div style={READOUT_ROW}><span>Segments FY</span><span>{data!.fiscalYear}</span></div>}
           </div>
         </>}
@@ -269,13 +290,13 @@ export function SOTPContent() {
 
       {!data && !error && (
         <EmptyState title="Sum-of-the-Parts"
-          hint="Value each business segment on its own P/S multiple, then sum to an equity value. Enter a ticker and Load segments."
+          hint="Value each business segment on its own pure-play P/S multiple, then sum to an equity value. Enter a ticker and Load segments."
           keys={['Enter']} kpis={['Equity Value', 'Per Share', 'Upside', 'Segments']}
-          preview="table" previewLabel="Segment Valuation" columns={['Segment', 'Revenue', 'Multiple', 'Value']} action="Load segments" />
+          preview="table" previewLabel="Segment Valuation" columns={['Segment', 'Peer comp', 'Revenue', 'P/S', 'Value']} action="Load segments" />
       )}
 
       {data && !data.segments.length && (
-        <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 13, color: 'var(--theme-text, #d7e3fc)', lineHeight: 1.7, maxWidth: 620 }}>
+        <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 13, color: TEXT, lineHeight: 1.7, maxWidth: 620 }}>
           {data.note || 'No segment breakdown available for this issuer.'}
         </div>
       )}
@@ -284,72 +305,65 @@ export function SOTPContent() {
         <div style={STACK}>
           <div style={PANEL}>
             <VerdictStrip
-              primary={upsidePrimary(calc.upside ?? null, `$${calc.perShare.toFixed(2)}`, data!.market_price != null ? `$${data!.market_price.toFixed(2)}` : null)}
+              primary={upsidePrimary(
+                calc.upside ?? null,
+                calc.perShare != null ? `$${calc.perShare.toFixed(2)}` : 'n/a',
+                data!.market_price != null ? `$${data!.market_price.toFixed(2)}` : null,
+              )}
               cells={[
-                { label: 'Implied Market Value', value: fmtM(calc.total) },
-                { label: 'Value / Share', value: `$${calc.perShare.toFixed(2)}` },
-                { label: 'Market Price', value: data!.market_price != null ? `$${data!.market_price.toFixed(2)}` : 'n/a' },
+                { label: 'Implied Equity Value', value: fmtM(calc.total) },
+                { label: 'Value / Share', value: calc.perShare != null ? `$${calc.perShare.toFixed(2)}` : 'n/a' },
+                { label: 'Market Cap', value: data!.market_cap != null ? fmtM(data!.market_cap) : 'n/a' },
+                { label: 'Implied P/S', value: calc.impliedPS != null ? `${calc.impliedPS.toFixed(2)}x` : 'n/a' },
               ]}
             />
           </div>
 
           {(data!.source || data!.fiscalYear) && (
-            <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9.5, letterSpacing: '0.08em', color: 'var(--theme-secondary, #99907e)', marginTop: -8 }}>
+            <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9.5, letterSpacing: '0.08em', color: MUTED, marginTop: -8 }}>
               Segment revenue: {data!.source ?? 'data'}{data!.fiscalYear ? ` · FY${data!.fiscalYear}` : ''}
+              {blended != null && ` · company blended P/S ${blended.toFixed(2)}x`}
             </div>
           )}
 
-          {/* Value stack — each segment's share of total implied value */}
-          <LabeledPanel title="Value stack">
-            <ValueStack rows={calc.rows} total={calc.total} />
-          </LabeledPanel>
-
-          {(() => {
-            const maxVal = Math.max(...calc.rows.map(r => r.value)) || 1
-            return (
-              <div style={PANEL}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead><tr>
-                    <th style={{ ...TH, textAlign: 'left' }}>Segment</th>
-                    <th style={TH}>Revenue</th><th style={TH}>% mix</th><th style={TH}>P/S</th><th style={TH}>Segment value</th>
-                  </tr></thead>
-                  <tbody>
-                    {calc.rows.map((r, i) => {
-                      const sel = sector[r.name]
-                      const peer = sectorPS[sel]
-                      const weighted = peer != null ? weightedMult(peer, peerWeight) : null
-                      const onBlended = blended != null && Math.abs(r.mult - blended) < 0.01
-                      const onPeer = weighted != null && Math.abs(r.mult - weighted) < 0.01
-                      const basis = onBlended ? 'Blended' : onPeer ? `${sel} · ${Math.round(peerWeight * 100)}% peer` : 'Custom'
-                      return (
-                        <tr key={r.name}>
-                          <td style={{ ...TD, textAlign: 'left', fontWeight: 700 }}>
-                            {r.name}
-                            <span style={{ display: 'block', fontWeight: 400, fontSize: 9.5, letterSpacing: '0.04em', color: 'var(--theme-secondary, #99907e)' }}>
-                              {basis}
-                            </span>
-                          </td>
-                          <td style={TD}>{fmtM(r.revenue)}</td>
-                          <td style={{ ...TD, color: 'var(--theme-secondary, #99907e)' }}>{r.pct != null ? `${r.pct}%` : '—'}</td>
-                          <td style={{ ...TD, color: 'var(--theme-primary, #c9a84c)' }}>{r.mult.toFixed(2)}x</td>
-                          <td style={TD}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
-                              <div style={{ height: 8, width: 64 * (r.value / maxVal), background: ramp(i, calc.rows.length), flex: 'none' }} />
-                              <span>{fmtM(r.value)}</span>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )
-          })()}
-
-          {/* Revenue → value: the multiple's lift, per segment */}
-          <LabeledPanel title="Revenue → value" right={`at ${(calc.total / (calc.rows.reduce((a, r) => a + r.revenue, 0) || 1)).toFixed(2)}× blended P/S`}>
-            <RevValueBars rows={calc.rows} />
+          <LabeledPanel title="Segment build-up" right={`${calc.rows.length} segments · ${comped} with a peer comp`}>
+            {/* Two series, so a legend is always present. */}
+            <div style={{ display: 'flex', gap: 18, marginBottom: 10, fontFamily: 'var(--theme-mono)', fontSize: 10, color: MUTED }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 12, height: 5, background: C_REV, borderRadius: 2 }} />Revenue
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 12, height: 9, background: C_VAL, borderRadius: 2 }} />Segment value
+              </span>
+            </div>
+            <div style={{
+              display: 'grid', gap: '4px 14px', paddingBottom: 6, borderBottom: HAIR,
+              gridTemplateColumns: 'minmax(190px, 1.5fr) minmax(120px, 1.6fr) 82px 74px 92px 56px',
+              fontFamily: 'var(--theme-mono)', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: MUTED,
+            }}>
+              <span>Segment / peer comp</span><span>Revenue → value</span>
+              <span style={{ textAlign: 'right' }}>Revenue</span>
+              <span style={{ textAlign: 'right' }}>P/S</span>
+              <span style={{ textAlign: 'right' }}>Value</span>
+              <span style={{ textAlign: 'right' }}>% of sum</span>
+            </div>
+            {calc.rows.map(r => (
+              <SegmentRow key={r.name} r={r} maxValue={Math.max(...calc.rows.map(x => x.value)) || 1}
+                peerGroups={peerGroups}
+                onMult={v => setMult(m => ({ ...m, [r.name]: v }))}
+                onPeer={g => applyPeer(r.name, g)} />
+            ))}
+            <div style={{
+              display: 'grid', gap: '4px 14px', paddingTop: 10,
+              gridTemplateColumns: 'minmax(190px, 1.5fr) minmax(120px, 1.6fr) 82px 74px 92px 56px',
+              fontFamily: 'var(--theme-mono)', fontSize: 11, color: TEXT, fontWeight: 700,
+            }}>
+              <span>Sum of the parts</span><span />
+              <span style={{ textAlign: 'right', color: MUTED }}>{fmtM(calc.rows.reduce((a, r) => a + r.revenue, 0))}</span>
+              <span style={{ textAlign: 'right', color: GOLD }}>{calc.impliedPS != null ? `${calc.impliedPS.toFixed(2)}x` : '—'}</span>
+              <span style={{ textAlign: 'right' }}>{fmtM(calc.total)}</span>
+              <span style={{ textAlign: 'right', color: MUTED }}>100.0%</span>
+            </div>
           </LabeledPanel>
         </div>
       )}

@@ -700,9 +700,18 @@ def _statements_first(ticker: str) -> tuple[list, dict, dict]:
         import sec_fundamentals
         if sec_fundamentals.statements_available(ticker):
             _log.info("DCF %s statements ← SEC EDGAR", sym)
-            return (sec_fundamentals.get_income(ticker, 2),
-                    sec_fundamentals.get_balance(ticker),
-                    sec_fundamentals.get_cashflow(ticker))
+            income = sec_fundamentals.get_income(ticker, 2)
+            balance = sec_fundamentals.get_balance(ticker)
+            cashflow = sec_fundamentals.get_cashflow(ticker)
+            # Top up only the cash-flow lines SEC left untagged; a partial SEC
+            # bundle still beats discarding its share count and revenue.
+            missing = [k for k, v in cashflow.items() if v is None]
+            if missing:
+                fallback = get_cashflow(ticker) or {}
+                for k in missing:
+                    if fallback.get(k) is not None:
+                        cashflow[k] = fallback[k]
+            return income, balance, cashflow
     except Exception as e:
         _log.warning("SEC statements failed for %s, using FMP: %s", sym, e)
     _log.info("DCF %s statements ← FMP fallback (SEC missing/corrupt)", sym)
@@ -750,8 +759,11 @@ def get_dcf_fundamentals(ticker: str) -> dict:
     op_inc    = income.get("operatingIncome") or 0
     op_margin = round((op_inc / rev_raw * 100) if rev_raw else 15.0, 1)
 
-    # Diluted shares (millions)
-    shares = round((income.get("weightedAverageShsOutDil") or 100e6) / 1e6, 1)
+    # Diluted shares (millions). None when untagged — a fabricated placeholder
+    # here reads as a real share count downstream and silently produces per-share
+    # figures that are wrong by orders of magnitude.
+    shares_raw = income.get("weightedAverageShsOutDil")
+    shares = round(shares_raw / 1e6, 1) if shares_raw else None
 
     # Net debt — FMP computes this directly; fall back to debt - cash
     net_debt_raw = balance.get("netDebt")
@@ -821,7 +833,7 @@ def get_dcf_fundamentals(ticker: str) -> dict:
         "revenue":       max(0.0, revenue),
         "op_margin":     op_margin,
         "target_margin": target_margin,
-        "shares":        max(0.1, shares),
+        "shares":        max(0.1, shares) if shares else None,
         "net_debt":      net_debt,
         "rev_growth":    rev_growth,
         "capex_pct":     max(0.0, capex_pct),

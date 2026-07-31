@@ -59,20 +59,28 @@ _CASHFLOW = {   # durations
                                     "DepreciationAmortizationAndAccretionNet", "DepreciationAndAmortization"],
     "changeInWorkingCapital": ["IncreaseDecreaseInOperatingCapital"],
 }
+# Filers that never tag a combined D&A line (Microsoft is one) report the pieces
+# separately, so add them up rather than treating D&A as missing.
+_DA_PARTS = (["Depreciation", "DepreciationNonproduction"],
+             ["AmortizationOfIntangibleAssets", "AmortizationOfIntangibleAssetsExcludingGoodwill"])
 # Shares are reported in "shares" units; everything else in USD.
 _SHARE_FIELDS = {"weightedAverageShsOutDil"}
 
 
 def _annual_map(us: dict, concepts: list[str], want_shares: bool, instant: bool) -> dict[int, float]:
-    """{fiscal_year: value} from annual (10-K, fp=FY) facts for the first concept
-    synonym that has data. For durations, only ~12-month periods are kept (drops
+    """{fiscal_year: value} from annual (10-K, fp=FY) facts, merged across concept
+    synonyms: the earliest-listed concept wins for any year it covers, and later
+    synonyms only fill years it does not. Filers switch tags mid-history (Nvidia
+    dropped RevenueFromContractWithCustomer... after FY2022 for Revenues), so
+    taking the first synonym that has *any* data silently freezes the series
+    years in the past. For durations only ~12-month periods are kept (drops
     quarterly/cumulative facts); the latest restatement per year wins."""
+    merged: dict[int, float] = {}
     for concept in concepts:
         node = us.get(concept)
         if not node:
             continue
-        units = node.get("units", {})
-        facts = units.get("shares" if want_shares else "USD")
+        facts = node.get("units", {}).get("shares" if want_shares else "USD")
         if not facts:
             continue
         picked: dict[int, tuple[str, float]] = {}
@@ -97,9 +105,9 @@ def _annual_map(us: dict, concepts: list[str], want_shares: bool, instant: bool)
             prev = picked.get(fy)
             if prev is None or end >= prev[0]:         # latest-filed restatement wins
                 picked[fy] = (end, float(val))
-        if picked:
-            return {fy: v for fy, (_e, v) in picked.items()}
-    return {}
+        for fy, (_e, v) in picked.items():
+            merged.setdefault(fy, v)
+    return merged
 
 
 _MATURITY_TAGS = [
@@ -213,33 +221,34 @@ def _build(sym: str) -> dict | None:
         # no netDebt: SEC has no such tag, so get_dcf_fundamentals derives debt−cash.
     }
     cashflow = {k: cash_maps[k].get(by) for k in _CASHFLOW}
+    if cashflow.get("depreciationAndAmortization") is None:
+        parts = [_annual_map(us, c, False, instant=False).get(by) for c in _DA_PARTS]
+        if any(p is not None for p in parts):
+            cashflow["depreciationAndAmortization"] = sum(p or 0.0 for p in parts)
     return {"income": income, "balance": balance, "cashflow": cashflow}
 
 
 def _sane(bundle: dict | None) -> bool:
-    """A bundle is only usable if it carries every line the DCF engine actually
-    derives from. Revenue + shares alone is not enough: a filer with those but no
-    OperatingIncomeLoss (banks/insurers report no operating-income line) or no
-    capex/D&A would silently produce a 0% margin and 0 reinvestment, a badly wrong
-    valuation. Missing any of these → treat as a miss so FMP (which has them) fills
-    in. changeInWorkingCapital is intentionally excluded: it's rarely tagged and the
-    DCF already clamps its absence to a harmless default."""
+    """A bundle is usable when it carries the income lines nothing else can supply:
+    revenue, diluted shares, and operating income (banks/insurers report no
+    operating-income line, so their absence really is a miss). Capex and D&A are
+    checked separately and topped up from FMP per field — rejecting the whole
+    bundle over one untagged cash-flow line used to throw away a perfectly good
+    share count and fall through to a fabricated one whenever FMP was also dry.
+    changeInWorkingCapital is excluded: rarely tagged, and the DCF clamps it."""
     if not bundle or not bundle.get("income"):
         return False
     inc = bundle["income"][0]
-    cf = bundle.get("cashflow") or {}
     return bool(
         (inc.get("revenue") or 0) > 0
         and (inc.get("weightedAverageShsOutDil") or 0) > 0
         and inc.get("operatingIncome") is not None
-        and cf.get("capitalExpenditure") is not None
-        and cf.get("depreciationAndAmortization") is not None
     )
 
 
 def _bundle(sym: str) -> dict | None:
     sym = sym.strip().upper()
-    dk = f"sec:fund:v1:{sym}"
+    dk = f"sec:fund:v3:{sym}"
     cached = disk_get(dk)
     if cached is not None:
         return cached or None                         # cached {} sentinel = known-empty

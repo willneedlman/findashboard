@@ -9,78 +9,25 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import fmp
 import sec_segments
+import peer_multiples
 from validation import validate_ticker
 
 router = APIRouter()
 
 
 def _fundamentals(ticker: str) -> dict:
-    """Shares (M), net debt ($M), market price — reused across the SOTP/DDM tabs."""
-    if fmp.available():
-        try:
-            return fmp.get_dcf_fundamentals(ticker)
-        except Exception:
-            pass
-    from cache import get_info
-    info = get_info(ticker)
-    shares     = (info.get("sharesOutstanding") or 0) / 1e6
-    total_debt = (info.get("totalDebt") or 0) / 1e6
-    cash       = (info.get("totalCash") or info.get("cashAndCashEquivalents") or 0) / 1e6
-    price      = float(info.get("currentPrice") or info.get("regularMarketPrice") or 0) or None
-    return {"shares": shares, "net_debt": total_debt - cash, "market_price": price}
+    """Shares (M), net debt ($M), market price — reused across the SOTP/DDM tabs.
 
-
-# Bundled sector P/S reference snapshot (US median price/sales, refresh annually —
-# same fallback pattern as data/damodaran.json). These are the "if each part traded
-# like its pure-play peers" anchors the SOTP tab offers as a one-click apply.
-SECTOR_PS = {
-    "Software / Cloud":       7.5,
-    "Semiconductors":         6.0,
-    "Payments / Fintech":     6.0,
-    "Internet / Media":       4.5,
-    "Healthcare / Pharma":    3.5,
-    "Gaming / Entertainment": 3.0,
-    "Financials / Banks":     2.5,
-    "Advertising":            2.5,
-    "Consumer Electronics":   2.2,
-    "Hardware / Devices":     2.0,
-    "Aerospace / Defense":    1.9,
-    "Industrials":            1.8,
-    "Telecom":                1.5,
-    "Consumer Staples":       1.4,
-    "E-commerce / Retail":    1.2,
-    "Energy":                 1.1,
-    "Automotive":             0.8,
-}
-
-# Keyword → sector, checked in order so more specific tags win. Best-effort: the
-# UI pre-selects the guess but never forces it into the headline value.
-_SECTOR_KEYWORDS = [
-    ("Semiconductors",         ("semiconduct", "chip", "silicon", "processor", "gpu", "foundry", "data center", "datacenter")),
-    ("Software / Cloud",       ("cloud", "azure", "aws", "saas", "software", "platform", "subscription", "license")),
-    ("Payments / Fintech",     ("payment", "fintech", "merchant", "card network")),
-    ("Gaming / Entertainment", ("gaming", "game", "xbox", "console", "studio")),
-    ("Advertising",            ("advertis", "ad ", "ads", "marketing")),
-    ("Internet / Media",       ("service", "search", "youtube", "media", "streaming", "content", "network")),
-    ("Consumer Electronics",   ("wearable", "accessor", "audio", "headphone")),
-    ("Hardware / Devices",     ("iphone", "mac", "ipad", "device", "hardware", "equipment", "instrument")),
-    ("Automotive",             ("auto", "vehicle", "automotive", "mobility")),
-    ("Energy",                 ("energy", "oil", "gas", "petroleum", "refining")),
-    ("Financials / Banks",     ("bank", "lending", "credit", "deposit", "insurance")),
-    ("Healthcare / Pharma",    ("health", "pharma", "drug", "medical", "biotech", "therapeut")),
-    ("Aerospace / Defense",    ("aerospace", "defense", "aviation", "space")),
-    ("E-commerce / Retail",    ("retail", "store", "commerce", "marketplace", "merchandise")),
-    ("Industrials",            ("industrial", "manufactur", "logistics", "machinery")),
-    ("Consumer Staples",       ("food", "beverage", "household", "staple")),
-]
-
-
-def _guess_sector(name: str) -> str | None:
-    low = name.lower()
-    for sector, keys in _SECTOR_KEYWORDS:
-        if any(k in low for k in keys):
-            return sector
-    return None
+    Delegates to the DCF tab's resolver rather than calling FMP directly: that one
+    already backstops price and share count from yfinance when FMP's profile call
+    is quota-dry, which is the normal state on the free tier. Calling FMP straight
+    used to hand SOTP a null price and a placeholder share count."""
+    from routers.dcf import _base_fundamentals
+    try:
+        return _base_fundamentals(ticker)
+    except Exception:
+        logger.warning("fundamentals unavailable for %s", ticker)
+        return {}
 
 
 @router.get("/sotp")
@@ -108,21 +55,38 @@ def sotp(ticker: str):
                 "Use the DCF or Reverse DCF tabs instead.")
         return {"ticker": sym, "segments": [], "note": note, "error": False}
 
-    segments = [{"name": s["name"], "revenue": round(s["value"] / 1e6, 1), "pct": s.get("pct"),
-                 "sector": _guess_sector(s["name"])}
-                for s in latest if s.get("value", 0) > 0]
+    # The issuer's own industry disambiguates labels that mean different
+    # businesses at different filers ("Gaming" is silicon at Nvidia).
+    context = None
+    try:
+        from cache import get_info
+        info = get_info(sym) or {}
+        context = peer_multiples.context_for(info.get("industry"), info.get("sector"))
+    except Exception:
+        pass
+
+    segments = []
+    for s in latest:
+        if s.get("value", 0) <= 0:
+            continue
+        group = peer_multiples.classify(s["name"], context)
+        segments.append({"name": s["name"], "revenue": round(s["value"] / 1e6, 1),
+                         "pct": s.get("pct"), "peer_group": group,
+                         "peer_ps": peer_multiples.PEER_PS.get(group),
+                         "peer_note": peer_multiples.PEER_NOTE.get(group)})
     total_rev = round(sum(s["revenue"] for s in segments), 1)
 
     f = _fundamentals(sym)
-    net_debt = round(f.get("net_debt") or 0, 1)
-    shares   = round(f.get("shares") or 0, 1)
+    net_debt = round(f["net_debt"], 1) if f.get("net_debt") is not None else None
+    shares   = round(f["shares"], 1) if f.get("shares") else None
     price    = f.get("market_price")
 
-    # Seed the UI at the company's current blended P/S so SOTP starts near the
-    # market price and the user tunes individual segments up or down from fair.
-    suggested = None
+    # The company's own blended P/S — the level at which SOTP reproduces today's
+    # market cap. Segments with no peer comp fall back to it, and it is the
+    # reference the per-segment multiples are judged against.
+    blended = None
     if price and shares and total_rev:
-        suggested = round(max(0.1, min(price * shares / total_rev, 25.0)), 2)
+        blended = round(max(0.1, min(price * shares / total_rev, 40.0)), 2)
 
     return {
         "ticker":             sym,
@@ -134,8 +98,9 @@ def sotp(ticker: str):
         "net_debt":           net_debt,
         "shares":             shares,
         "market_price":       price,
-        "suggested_multiple": suggested,
-        "sector_ps":          SECTOR_PS,
+        "market_cap":         round(price * shares, 1) if price and shares else None,
+        "suggested_multiple": blended,
+        "peer_groups":        peer_multiples.catalogue(),
     }
 
 

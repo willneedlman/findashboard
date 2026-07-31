@@ -101,20 +101,59 @@ def _sane_bundle(**income_over):
             "cashflow": {"capitalExpenditure": 5.0, "depreciationAndAmortization": 4.0}}
 
 
-def test_sane_guard_requires_all_dcf_drivers():
+def test_sane_guard_requires_the_income_core():
     assert m._sane(_sane_bundle()) is True
     # revenue / shares
     assert m._sane(_sane_bundle(revenue=0)) is False
     assert m._sane(_sane_bundle(weightedAverageShsOutDil=None)) is False
     # a bank-style filer: revenue+shares present but NO operating income -> must miss
     assert m._sane(_sane_bundle(operatingIncome=None)) is False
-    # missing capex / D&A -> must miss (would zero out reinvestment in the DCF)
-    b = _sane_bundle(); b["cashflow"]["capitalExpenditure"] = None
-    assert m._sane(b) is False
-    b = _sane_bundle(); b["cashflow"]["depreciationAndAmortization"] = None
-    assert m._sane(b) is False
     assert m._sane({"income": []}) is False
     assert m._sane(None) is False
+
+
+def test_missing_cashflow_line_keeps_the_bundle():
+    """Capex and D&A are topped up from FMP per field. Rejecting the whole bundle
+    over one untagged cash-flow line threw away a good share count too, and when
+    FMP was quota-dry that fell through to a fabricated 100M-share placeholder."""
+    b = _sane_bundle(); b["cashflow"]["capitalExpenditure"] = None
+    assert m._sane(b) is True
+    b = _sane_bundle(); b["cashflow"]["depreciationAndAmortization"] = None
+    assert m._sane(b) is True
+
+
+def test_da_composed_when_no_combined_tag(monkeypatch):
+    """Microsoft never tags a combined D&A line — it reports Depreciation and
+    AmortizationOfIntangibleAssets separately, which must be added."""
+    facts = {
+        "Revenues": _usd(_annual(2026, 331.8, "2025-07-01", "2026-06-30")),
+        "OperatingIncomeLoss": _usd(_annual(2026, 155.2, "2025-07-01", "2026-06-30")),
+        "WeightedAverageNumberOfDilutedSharesOutstanding":
+            _shares(_annual(2026, 7453.0, "2025-07-01", "2026-06-30")),
+        "Depreciation": _usd(_annual(2026, 34.3, "2025-07-01", "2026-06-30")),
+        "AmortizationOfIntangibleAssets": _usd(_annual(2026, 4.7, "2025-07-01", "2026-06-30")),
+    }
+    monkeypatch.setattr(m, "_fetch_facts", lambda sym: facts)
+    b = m._build("MSFT")
+    assert b["cashflow"]["depreciationAndAmortization"] == 39.0
+
+
+def test_annual_map_merges_across_tag_switches(monkeypatch):
+    """Nvidia stopped tagging RevenueFromContractWithCustomer... after FY2022 and
+    moved to Revenues. Taking the first synonym with any data froze revenue in
+    2022 and, with it, a pre-split share count."""
+    facts = {
+        "RevenueFromContractWithCustomerExcludingAssessedTax": _usd(
+            _annual(2021, 16.7, "2020-01-27", "2021-01-31"),
+            _annual(2022, 26.9, "2021-02-01", "2022-01-30")),
+        "Revenues": _usd(
+            _annual(2025, 130.5, "2024-01-29", "2025-01-26"),
+            _annual(2026, 215.9, "2025-01-27", "2026-01-25")),
+    }
+    got = m._annual_map(facts, m._INCOME["revenue"], False, instant=False)
+    assert got[2022] == 26.9        # earlier-listed synonym wins where it has data
+    assert got[2026] == 215.9       # later synonym fills the years it does not
+    assert max(got) == 2026
 
 
 def test_statements_available_false_when_no_facts(monkeypatch):
