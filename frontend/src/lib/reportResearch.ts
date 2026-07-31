@@ -391,6 +391,107 @@ const clamp = (value: number, low: number, high: number) => Math.min(high, Math.
 const routeFor = (route: string, ticker?: string) =>
   ticker ? `${route}?ticker=${encodeURIComponent(ticker)}` : route
 
+/** A screen saved in the Stock Screener's own library. Read straight from its
+ * storage key rather than importing the page, which would pull the whole screener
+ * into this bundle. Shape mirrors StockScreener's `Preset`. */
+export interface SavedScreen {
+  id: string
+  name: string
+  desc?: string
+  universes?: string[]
+  sortBy: string
+  sortDir: 'asc' | 'desc'
+  sortParam?: string
+  filters: { field: string; operator: string; value: string | number; param?: string }[]
+}
+
+export const SAVED_SCREENS_STORAGE_KEY = 'fdb_screener_saved_screens_v1'
+
+export function readSavedScreens(): SavedScreen[] {
+  if (typeof localStorage === 'undefined') return []
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SAVED_SCREENS_STORAGE_KEY) ?? 'null')
+    if (!Array.isArray(parsed)) return []
+    return parsed.flatMap((raw): SavedScreen[] => {
+      const s = record(raw)
+      const id = plain(s.id)
+      const name = plain(s.name)
+      if (id === '—' || name === '—') return []
+      return [{
+        id,
+        name,
+        desc: s.desc ? plain(s.desc) : undefined,
+        universes: array(s.universes).map(u => plain(u)).filter(u => u !== '—'),
+        sortBy: plain(s.sortBy) === '—' ? 'marketCap' : plain(s.sortBy),
+        sortDir: plain(s.sortDir).toLowerCase() === 'asc' ? 'asc' : 'desc',
+        sortParam: s.sortParam ? plain(s.sortParam) : undefined,
+        filters: array(s.filters).flatMap(f => {
+          const item = record(f)
+          const field = plain(item.field)
+          if (field === '—' || item.value === '' || item.value == null) return []
+          return [{
+            field,
+            operator: plain(item.operator),
+            value: item.value as string | number,
+            param: item.param ? plain(item.param) : undefined,
+          }]
+        }),
+      }]
+    })
+  } catch {
+    return []
+  }
+}
+
+/** Run a saved screen and return its top symbols. Skips the AI parse entirely —
+ * the criteria are already structured, so there is nothing to interpret. */
+export async function runSavedScreen(
+  screen: SavedScreen,
+  limit = 8,
+  client: ResearchClient = DEFAULT_CLIENT,
+): Promise<ReportScreenerSelection> {
+  const filters: ReportScreenerFilter[] = screen.filters.flatMap(f => {
+    const value = finite(f.value)
+    if (value == null || !['gt', 'gte', 'lt', 'lte', 'between'].includes(f.operator)) return []
+    return [{
+      field: f.field,
+      operator: f.operator as ReportScreenerFilter['operator'],
+      value,
+      value2: null,
+      param: f.param ?? null,
+    }]
+  })
+  const capped = clamp(Math.trunc(limit), 1, 8)
+  const screenRun = record(await client.post('/api/screener/run', {
+    filters,
+    universe: screen.universes?.length ? screen.universes[0] : null,
+    sector: null,
+    exchange: null,
+    region: null,
+    sort_by: screen.sortBy,
+    sort_dir: screen.sortDir,
+    sort_param: screen.sortParam ?? null,
+    limit: capped,
+  }))
+  const symbols = unique(
+    array(screenRun.results)
+      .map(row => normalizeTicker(plain(record(row).ticker)))
+      .filter(symbol => /^[A-Z0-9^][A-Z0-9^=-]{0,11}$/.test(symbol)),
+  ).slice(0, capped)
+  return {
+    symbols,
+    total: Math.max(symbols.length, Math.trunc(finite(screenRun.total) ?? symbols.length)),
+    explanation: `Ran the saved screen "${screen.name}".`,
+    filters,
+    sector: null,
+    universe: screen.universes?.length ? screen.universes[0] : null,
+    exchange: null,
+    region: null,
+    sortBy: screen.sortBy,
+    sortDir: screen.sortDir,
+  }
+}
+
 export async function screenReportSymbols(
   query: string,
   client: ResearchClient = DEFAULT_CLIENT,

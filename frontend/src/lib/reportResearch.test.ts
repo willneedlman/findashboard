@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defaultScope, mergeAlphaTapeClips, type ReportClip } from './reportCreator'
 import {
   collectReportResearch,
@@ -7,6 +7,9 @@ import {
   parseResearchSymbols,
   planReportResearch,
   screenReportSymbols,
+  runSavedScreen,
+  readSavedScreens,
+  SAVED_SCREENS_STORAGE_KEY,
 } from './reportResearch'
 import type { ActivePortfolioContext } from './pmImport'
 
@@ -902,5 +905,90 @@ describe('Report Creator AlphaTape research', () => {
         sub: '1 smaller position omitted',
       }))
     }
+  })
+})
+
+describe('report subject imports', () => {
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it('runs a saved screen without going through the AI parser', async () => {
+    const requests: Array<{ url: string; body: any }> = []
+    const selection = await runSavedScreen(
+      {
+        id: 's1', name: 'Deep Value', sortBy: 'peRatio', sortDir: 'asc',
+        universes: ['sp500'],
+        filters: [
+          { field: 'peRatio', operator: 'lt', value: '15' },
+          { field: 'pbRatio', operator: 'lt', value: 3 },
+        ],
+      },
+      8,
+      {
+        get: async () => ({}),
+        post: async (url, body) => {
+          requests.push({ url, body })
+          return { total: 42, results: [{ ticker: 'ibm' }, { ticker: 'F' }, { ticker: 'ibm' }] }
+        },
+      },
+    )
+    // The criteria are already structured — nothing to interpret.
+    expect(requests.map(r => r.url)).toEqual(['/api/screener/run'])
+    expect(requests[0].body.sort_by).toBe('peRatio')
+    expect(requests[0].body.sort_dir).toBe('asc')
+    expect(requests[0].body.universe).toBe('sp500')
+    // String values from the saved-screen store are coerced to numbers.
+    expect(requests[0].body.filters).toEqual([
+      { field: 'peRatio', operator: 'lt', value: 15, value2: null, param: null },
+      { field: 'pbRatio', operator: 'lt', value: 3, value2: null, param: null },
+    ])
+    expect(selection.symbols).toEqual(['IBM', 'F'])   // normalized and deduped
+    expect(selection.total).toBe(42)
+  })
+
+  it('drops saved-screen filters the screener cannot run', async () => {
+    const requests: any[] = []
+    await runSavedScreen(
+      {
+        id: 's2', name: 'Mixed', sortBy: 'marketCap', sortDir: 'desc',
+        filters: [
+          { field: 'roe', operator: 'gt', value: '15' },
+          { field: 'name', operator: 'contains', value: 'bank' },   // unsupported operator
+          { field: 'peRatio', operator: 'lt', value: 'n/a' },       // unparseable value
+        ],
+      },
+      8,
+      { get: async () => ({}), post: async (_u, body) => { requests.push(body); return { total: 1, results: [] } } },
+    )
+    expect(requests[0].filters).toEqual([
+      { field: 'roe', operator: 'gt', value: 15, value2: null, param: null },
+    ])
+  })
+
+  it('returns nothing when there is no storage at all (print route, SSR)', () => {
+    expect(readSavedScreens()).toEqual([])
+  })
+
+  it('reads the screener library and skips malformed entries', () => {
+    const store = new Map<string, string>()
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => { store.set(k, v) },
+      removeItem: (k: string) => { store.delete(k) },
+    })
+    localStorage.setItem(SAVED_SCREENS_STORAGE_KEY, JSON.stringify([
+      { id: 'a', name: 'Quality', sortBy: 'roe', sortDir: 'asc', filters: [{ field: 'roe', operator: 'gt', value: '15' }] },
+      { id: 'b' },                       // no name
+      { name: 'No id' },                 // no id
+      'nonsense',
+    ]))
+    const screens = readSavedScreens()
+    expect(screens.map(s => s.id)).toEqual(['a'])
+    expect(screens[0].sortDir).toBe('asc')
+    expect(screens[0].filters).toHaveLength(1)
+
+    localStorage.setItem(SAVED_SCREENS_STORAGE_KEY, 'not json')
+    expect(readSavedScreens()).toEqual([])
+    localStorage.removeItem(SAVED_SCREENS_STORAGE_KEY)
+    expect(readSavedScreens()).toEqual([])
   })
 })

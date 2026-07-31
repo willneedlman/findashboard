@@ -1,12 +1,14 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   FileText, GitCompare, Globe, Briefcase, ListFilter, BookOpen,
-  ChevronLeft, ChevronRight, Check, Sparkles,
+  ChevronLeft, ChevronRight, Check, Sparkles, Keyboard, Wand2, AlertTriangle,
 } from 'lucide-react'
 import { T } from '../../lib/theme'
 import type {
   LayoutPreset, LookbackPreset, LookforwardPreset, ReportLength, ReportScope, ReportType,
 } from '../../lib/reportCreator'
+import { readPMBooks, CASH_SYMBOL } from '../../lib/pmImport'
+import { readSavedScreens, runSavedScreen, screenReportSymbols, type SavedScreen } from '../../lib/reportResearch'
 
 // Setup runs before anything is generated: the report's kind, its question, its
 // evidence and its composition are decisions the model cannot make for you, and
@@ -180,6 +182,197 @@ function StepRail({ step, furthest, onJump }: { step: number; furthest: number; 
   )
 }
 
+// Subjects can come from four places. Whichever you use, the result lands in the
+// same researchSymbols string, so everything downstream stays deterministic.
+type SubjectSource = 'manual' | 'portfolio' | 'saved-screen' | 'ai-screen'
+
+const SUBJECT_SOURCES: { k: SubjectSource; label: string; Icon: typeof Keyboard }[] = [
+  { k: 'manual', label: 'Type tickers', Icon: Keyboard },
+  { k: 'portfolio', label: 'From a portfolio', Icon: Briefcase },
+  { k: 'saved-screen', label: 'From a saved screen', Icon: ListFilter },
+  { k: 'ai-screen', label: 'AI runs a screen', Icon: Wand2 },
+]
+
+function SubjectPicker({ scope, onChange, isMobile }: {
+  scope: ReportScope; onChange: (patch: Partial<ReportScope>) => void; isMobile: boolean
+}) {
+  const [source, setSource] = useState<SubjectSource>(() => (scope.screenerQuery.trim() ? 'ai-screen' : 'manual'))
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [note, setNote] = useState<string | null>(null)
+
+  const books = useMemo(() => readPMBooks(), [])
+  const screens = useMemo(() => readSavedScreens(), [])
+
+  const symbols = scope.researchSymbols.split(',').map(s => s.trim()).filter(Boolean)
+
+  // Importing from a book or a saved screen must clear the AI brief, or the
+  // research panel would still block on an unapplied query that no longer
+  // produced these symbols.
+  const setSymbols = (list: string[], why: string) => {
+    onChange({ researchSymbols: list.join(', '), screenerQuery: '', screenerAppliedQuery: '' })
+    setNote(why)
+    setError(null)
+  }
+
+  const importPortfolio = (id: string) => {
+    const book = books.find(b => b.id === id)
+    if (!book) return
+    const tickers = [...new Set(book.holdings
+      .filter(h => h.shares > 0 && h.ticker && h.ticker.toUpperCase() !== CASH_SYMBOL)
+      .map(h => h.ticker.toUpperCase()))]
+    if (!tickers.length) {
+      setError(`${book.name} has no share positions to import.`)
+      return
+    }
+    setSymbols(tickers, `${tickers.length} holding${tickers.length === 1 ? '' : 's'} from ${book.name}.`)
+  }
+
+  const importSavedScreen = async (screen: SavedScreen) => {
+    setBusy(true); setError(null); setNote(null)
+    try {
+      const sel = await runSavedScreen(screen)
+      if (!sel.symbols.length) {
+        setError(`"${screen.name}" returned no matches. Widen it in the Stock Screener and try again.`)
+        return
+      }
+      setSymbols(sel.symbols, `${sel.symbols.length} of ${sel.total} matches from "${screen.name}".`)
+    } catch {
+      setError('Could not run that screen. It may use criteria the screener no longer supports.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const runAiScreen = async () => {
+    const query = scope.screenerQuery.trim()
+    if (!query || busy) return
+    setBusy(true); setError(null); setNote(null)
+    try {
+      const sel = await screenReportSymbols(query)
+      if (!sel.symbols.length) {
+        setError('That screen returned no matches. Broaden the criteria and try again.')
+        return
+      }
+      onChange({ researchSymbols: sel.symbols.join(', '), screenerAppliedQuery: query })
+      setNote(`${sel.symbols.length} of ${sel.total} matches. ${sel.explanation}`)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not run that screen.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const pickerStyle: React.CSSProperties = {
+    ...field, fontFamily: T.mono, fontSize: 11, cursor: 'pointer',
+    appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none',
+    backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238099b0' stroke-width='2.5'><path d='M6 9l6 6 6-6'/></svg>")`,
+    backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', paddingRight: 30,
+  }
+
+  return (
+    <div>
+      <span style={label}>Subjects</span>
+      <div style={{ display: 'grid', gap: 5, gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', marginBottom: 10 }}>
+        {SUBJECT_SOURCES.map(s => {
+          const on = source === s.k
+          return (
+            <button key={s.k} type="button" onClick={() => { setSource(s.k); setError(null); setNote(null) }}
+              style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                fontFamily: T.mono, fontSize: 9.5, fontWeight: on ? 700 : 400, padding: '7px 6px', cursor: 'pointer',
+                background: on ? T.goldTint(14) : 'transparent', color: on ? T.gold : T.muted,
+                border: `1px solid ${on ? T.gold : T.border}`,
+              }}>
+              <s.Icon size={12} /> {s.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {source === 'manual' && (
+        <input value={scope.researchSymbols} onChange={e => onChange({ researchSymbols: e.target.value })}
+          placeholder="Tickers, comma separated — e.g. MSFT, NVDA" style={{ ...field, fontFamily: T.mono, fontSize: 11 }} />
+      )}
+
+      {source === 'portfolio' && (
+        books.length ? (
+          <select defaultValue="" onChange={e => e.target.value && importPortfolio(e.target.value)} style={pickerStyle}>
+            <option value="">Pick a portfolio to import…</option>
+            {books.map(b => (
+              <option key={b.id} value={b.id}>
+                {b.name} · {b.holdings.filter(h => h.shares > 0).length} positions
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div style={{ fontFamily: T.mono, fontSize: 10, color: T.muted, lineHeight: 1.6 }}>
+            No saved portfolios. Build one in Portfolio Manager, then import it here.
+          </div>
+        )
+      )}
+
+      {source === 'saved-screen' && (
+        screens.length ? (
+          <select defaultValue="" disabled={busy}
+            onChange={e => {
+              const screen = screens.find(s => s.id === e.target.value)
+              if (screen) void importSavedScreen(screen)
+            }} style={pickerStyle}>
+            <option value="">{busy ? 'Running screen…' : 'Pick a saved screen to run…'}</option>
+            {screens.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        ) : (
+          <div style={{ fontFamily: T.mono, fontSize: 10, color: T.muted, lineHeight: 1.6 }}>
+            No saved screens. Save one in the Stock Screener, then run it here.
+          </div>
+        )
+      )}
+
+      {source === 'ai-screen' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <textarea value={scope.screenerQuery} rows={2}
+            onChange={e => onChange({ screenerQuery: e.target.value })}
+            placeholder="Describe the screen — e.g. profitable US software names under 25x earnings growing revenue over 20%"
+            style={field} />
+          <button type="button" onClick={() => void runAiScreen()} disabled={busy || !scope.screenerQuery.trim()}
+            style={{
+              alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: 'transparent', border: `1px solid ${scope.screenerQuery.trim() ? T.gold : T.border}`,
+              color: scope.screenerQuery.trim() ? T.gold : T.muted,
+              fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
+              textTransform: 'uppercase', padding: '7px 11px',
+              cursor: (busy || !scope.screenerQuery.trim()) ? 'default' : 'pointer',
+              opacity: busy ? 0.6 : 1,
+            }}>
+            <Wand2 size={12} /> {busy ? 'Running…' : 'Run screen'}
+          </button>
+        </div>
+      )}
+
+      {error && (
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontFamily: T.mono, fontSize: 9.5, color: T.warn, lineHeight: 1.55, marginTop: 8 }}>
+          <AlertTriangle size={11} style={{ flexShrink: 0, marginTop: 2 }} /> <span>{error}</span>
+        </div>
+      )}
+      {note && !error && (
+        <div style={{ fontFamily: T.mono, fontSize: 9.5, color: T.muted, lineHeight: 1.55, marginTop: 8 }}>{note}</div>
+      )}
+
+      {symbols.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 10 }}>
+          {symbols.map(s => (
+            <span key={s} style={{
+              fontFamily: T.mono, fontSize: 9.5, color: T.text,
+              border: `1px solid ${T.border}`, background: T.bg, padding: '3px 7px',
+            }}>{s}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function Summary({ rows }: { rows: [string, string][] }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', border: `1px solid ${T.border}` }}>
@@ -232,6 +425,13 @@ export default function ReportSetupWizard({
   const pickType = (t: typeof REPORT_TYPES[number]) => {
     if (t.k === scope.reportType) return
     onChange({ reportType: t.k, ...t.defaults })
+  }
+
+  const subjectsText = () => {
+    const list = scope.researchSymbols.split(',').map(s => s.trim()).filter(Boolean)
+    if (!list.length) return 'Taken from the question'
+    const shown = list.slice(0, 8).join(', ')
+    return list.length > 8 ? `${list.length} subjects — ${shown}, +${list.length - 8} more` : shown
   }
 
   const horizonText = () => {
@@ -319,11 +519,7 @@ export default function ReportSetupWizard({
               })}
             </div>
 
-            <div>
-              <label style={label}>Subjects</label>
-              <input value={scope.researchSymbols} onChange={e => onChange({ researchSymbols: e.target.value })}
-                placeholder="Tickers, comma separated — e.g. MSFT, NVDA" style={{ ...field, fontFamily: T.mono, fontSize: 11 }} />
-            </div>
+            <SubjectPicker scope={scope} onChange={onChange} isMobile={isMobile} />
 
             <label style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer' }}>
               <span style={{
@@ -415,7 +611,7 @@ export default function ReportSetupWizard({
             ['Question', goal || 'Not set'],
             ['Must include', scope.mustInclude.trim() || 'Nothing forced'],
             ['Evidence', scope.evidenceMode === 'alphatape' ? 'AlphaTape research run' : `Manual clips (${clipCount})`],
-            ['Subjects', scope.researchSymbols.trim() || 'From the question'],
+            ['Subjects', subjectsText()],
             ['Portfolio', scope.includePortfolio ? 'Included as context' : 'Excluded'],
             ['Horizon', horizonText()],
             ['Layout', `${LAYOUTS.find(l => l.k === scope.layoutPreset)?.label} · ${LENGTH.find(l => l.k === scope.length)?.label}`],
