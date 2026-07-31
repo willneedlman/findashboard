@@ -1849,6 +1849,9 @@ class ReportResearchToolIn(BaseModel):
 # Headroom over the current catalogue so new tools reach the planner as they are
 # added. Bounded only to keep one prompt from growing without limit.
 _RESEARCH_CATALOG_CAP = 64
+# Beyond the deterministic baseline. Four was tight enough that a broad objective
+# could not reach the evidence it needed.
+_RESEARCH_MAX_ADDITIONS = 8
 
 
 class ReportResearchPlanRequest(BaseModel):
@@ -1867,14 +1870,26 @@ The deterministic baseline tools are already included. Do not repeat them.
 Prefer a chart-producing tool when a visual relationship, trend, distribution, or comparison would make the conclusion clearer.
 Do not add tools merely for breadth. Every selection must close a specific evidence gap.
 Respect targetMode: symbol tools need symbols, portfolio tools need a supported active portfolio, and market tools need neither.
+You also DIRECT each tool you want configured, rather than accepting its default view.
+A directive is one plain-English sentence saying how to set that tool up for this objective:
+which lines, indicators, overlays, comparisons, or windows it should show. Write directives
+only where a non-default setup genuinely helps; a tool with no directive runs its default view.
+Examples of useful directives:
+  "price-history": "chart it against SPY with 50 and 200 day moving averages and RSI"
+  "market-compare": "index all names to 100 at the start of the lookback"
+  "correlation": "use a 90 day rolling window against the benchmark"
+Name overlays by ticker and indicators by their common name and period.
+
 Return only valid JSON:
 {
   "summary": "one short sentence describing the evidence strategy",
   "additions": [
     {"id": "exact catalog id", "reason": "specific evidence gap this tool closes"}
-  ]
+  ],
+  "directives": {"exact catalog id": "one sentence configuring that tool"}
 }
-Select at most 4 additions. An empty additions array is valid when the baseline is sufficient."""
+Directives may target baseline tools as well as additions.
+Select at most 8 additions. An empty additions array is valid when the baseline is sufficient."""
 
 
 def _normalize_report_research_plan(raw, allowed: set[str], baseline: set[str]) -> dict:
@@ -1893,9 +1908,23 @@ def _normalize_report_research_plan(raw, allowed: set[str], baseline: set[str]) 
             continue
         additions.append({"id": source_id, "reason": reason})
         seen.add(source_id)
-        if len(additions) >= 4:
+        if len(additions) >= _RESEARCH_MAX_ADDITIONS:
             break
-    return {"summary": summary, "additions": additions}
+
+    # Per-tool setup instructions, for baseline tools as well as additions. Kept
+    # as prose: the client resolves each one against what that tool can actually
+    # do, so an unusable instruction degrades to the default view.
+    directives: dict[str, str] = {}
+    raw_directives = data.get("directives")
+    if isinstance(raw_directives, dict):
+        for source_id, text in raw_directives.items():
+            key = str(source_id).strip()
+            if key not in allowed:
+                continue
+            body = re.sub(r"\s+", " ", str(text).strip())[:240]
+            if body:
+                directives[key] = body
+    return {"summary": summary, "additions": additions, "directives": directives}
 
 
 @router.post("/report-research-plan")

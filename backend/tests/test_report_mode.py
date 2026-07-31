@@ -61,6 +61,35 @@ def test_report_research_planner_keeps_only_supported_nonbaseline_tools(monkeypa
             {"id": "correlation", "reason": "Show whether the subjects diversify one another."},
             {"id": "rate-engine", "reason": "Frame duration-sensitive valuation risk."},
         ],
+        "directives": {},
+    }
+
+
+def test_planner_directives_are_kept_only_for_known_tools():
+    """Directives configure a tool instead of accepting its default view. They may
+    target baseline tools as well as additions, but never an unknown id."""
+    ai.groq_complete = staticmethod(lambda *a, **k: """{
+      "summary": "Chart the pair with trend context.",
+      "additions": [{"id": "correlation", "reason": "Show co-movement."}],
+      "directives": {
+        "company": "  pull the   latest quarter  ",
+        "correlation": "use a 90 day rolling window",
+        "invented": "should be dropped"
+      }
+    }""")
+    req = ai.ReportResearchPlanRequest(
+        objective="Compare AAPL and MSFT",
+        symbols=["AAPL", "MSFT"],
+        baselineSourceIds=["company"],
+        tools=[
+            ai.ReportResearchToolIn(id="company", label="Company"),
+            ai.ReportResearchToolIn(id="correlation", label="Correlation"),
+        ],
+    )
+    got = ai.plan_report_research(req)["directives"]
+    assert got == {
+        "company": "pull the latest quarter",          # whitespace collapsed
+        "correlation": "use a 90 day rolling window",
     }
 
 

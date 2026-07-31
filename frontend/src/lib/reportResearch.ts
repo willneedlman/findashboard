@@ -1,6 +1,8 @@
 import axios from 'axios'
 import { chartClip, kpiClip, tableClip, textClip } from './reportCaptureRegistry'
 import type { ActivePortfolioContext } from './pmImport'
+import { smaArr, emaArr, rsiArr, hvArr, bollinger } from './indicators'
+import { parseChartDirective } from './researchDirective'
 import { normalizeTicker } from './pmImport'
 import type { ClipDraft, ReportScope } from './reportCreator'
 
@@ -46,6 +48,11 @@ export interface ReportResearchSource {
   reason: string
   targets: string[]
   selectionOrigin?: 'baseline' | 'ai'
+  /** Plain-English setup instruction from the planner ("chart it against SPY with
+   * 50 and 200 day moving averages"). Resolved deterministically by the collector
+   * against what the tool can actually do, so an unusable instruction degrades to
+   * the default view rather than failing the source. */
+  directive?: string
 }
 
 export interface ReportResearchPlan {
@@ -734,9 +741,17 @@ export async function enhanceReportResearchPlan(
     })
     added += 1
   }
+
+  // Per-tool setup instructions, applied to baseline tools as well as additions.
+  const directives = record(response.directives)
+  const directed = sources.map(source => {
+    const text = plain(directives[source.id])
+    return text && text !== '—' ? { ...source, directive: text } : source
+  })
+
   return {
     ...baseline,
-    sources,
+    sources: directed,
     aiEnhanced: true,
     aiSummary: String(response.summary ?? '').replace(/\s+/g, ' ').trim().slice(0, 240),
   }
@@ -1155,17 +1170,75 @@ async function runSource(
         const data = record(await client.get(
           `/api/market/history?ticker=${encodeURIComponent(ticker)}&start=${range.start}&end=${range.end}`,
         ))
-        const rows = thin(array(data.price).map(point => ({
+        const full = array(data.price).map(point => ({
           date: plain(record(point).date),
           price: finite(record(point).value),
-        })).filter(point => point.price != null))
-        if (!rows.length) return null
+        })).filter(point => point.price != null) as { date: string; price: number }[]
+        if (!full.length) return null
+
+        const plan = parseChartDirective(source.directive, [ticker])
+        const closes = full.map(p => p.price)
+        const series: { key: string; label: string }[] = [{ key: 'price', label: ticker }]
+        const priced: Record<string, (number | null)[]> = {}
+
+        // Only same-scale indicators belong on the price axis. RSI, MACD and HV
+        // live on their own scale, so they become a separate exhibit rather than
+        // a second y-axis on this one.
+        for (const ind of plan.indicators) {
+          if (ind.kind === 'sma') priced[ind.label] = smaArr(closes, ind.period)
+          else if (ind.kind === 'ema') priced[ind.label] = emaArr(closes, ind.period)
+          else if (ind.kind === 'bollinger') {
+            const b = bollinger(closes, ind.period)
+            priced[`${ind.label} upper`] = b.upper
+            priced[`${ind.label} lower`] = b.lower
+          }
+        }
+
+        // Overlay tickers are re-based to the subject's first close so two price
+        // levels can share one axis honestly.
+        const overlaySeries: Record<string, Record<string, number>> = {}
+        for (const sym of plan.overlays) {
+          try {
+            const o = record(await client.get(
+              `/api/market/history?ticker=${encodeURIComponent(sym)}&start=${range.start}&end=${range.end}`,
+            ))
+            const pts = array(o.price).map(p => ({ date: plain(record(p).date), value: finite(record(p).value) }))
+              .filter(p => p.value != null) as { date: string; value: number }[]
+            if (pts.length < 2) continue
+            const scale = full[0].price / pts[0].value
+            overlaySeries[sym] = Object.fromEntries(pts.map(p => [p.date, p.value * scale]))
+          } catch { /* an overlay that will not load is dropped, not fatal */ }
+        }
+
+        const merged = full.map((point, i) => {
+          const row: Record<string, string | number | null> = { date: point.date, price: point.price }
+          for (const [key, values] of Object.entries(priced)) row[key] = values[i]
+          for (const [sym, byDate] of Object.entries(overlaySeries)) row[sym] = byDate[point.date] ?? null
+          return row
+        })
+        for (const key of Object.keys(priced)) series.push({ key, label: key })
+        for (const sym of Object.keys(overlaySeries)) series.push({ key: sym, label: `${sym} (rebased)` })
+
         const metrics = record(data.metrics)
-        const clip = chartClip('Chart Studio', `${ticker} price history`, 'line', 'date', rows, [
-          { key: 'price', label: ticker },
-        ])
-        clip.payload.title = `${ticker} price history · ${percent(metrics.total_return)} return · ${percent(metrics.max_drawdown)} max drawdown`
-        return tagClip(clip, source, ticker, ticker)
+        const clip = chartClip('Chart Studio', `${ticker} price history`, 'line', 'date', thin(merged), series)
+        const extras = series.length > 1 ? ` · with ${series.slice(1).map(s => s.label).join(', ')}` : ''
+        clip.payload.title = `${ticker} price history · ${percent(metrics.total_return)} return · ${percent(metrics.max_drawdown)} max drawdown${extras}`
+        const out = [tagClip(clip, source, ticker, ticker)]
+
+        const oscillators = plan.indicators.filter(i => i.kind === 'rsi' || i.kind === 'hv')
+        if (oscillators.length) {
+          const oscRows = full.map((point, i) => {
+            const row: Record<string, string | number | null> = { date: point.date }
+            for (const ind of oscillators) {
+              row[ind.label] = ind.kind === 'rsi' ? rsiArr(closes, ind.period)[i] : hvArr(closes, ind.period)[i]
+            }
+            return row
+          })
+          const oscClip = chartClip('Chart Studio', `${ticker} ${oscillators.map(o => o.label).join(' and ')}`,
+            'line', 'date', thin(oscRows), oscillators.map(o => ({ key: o.label, label: o.label })))
+          out.push(tagClip(oscClip, source, `${ticker}-osc`, ticker))
+        }
+        return out
       })
 
     case 'market-compare': {
