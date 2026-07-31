@@ -992,3 +992,63 @@ describe('report subject imports', () => {
     expect(readSavedScreens()).toEqual([])
   })
 })
+
+describe('relationship tools get more than one subject', () => {
+  it('never leaves a relationship tool with one target, whatever the intent', () => {
+    // intent is 'portfolio' / 'company' here, not 'comparison', which is exactly
+    // the case both planners used to truncate to a single name.
+    for (const goal of [
+      'Assess concentration and diversification in my portfolio',
+      'Is NVDA still worth holding',
+      'Explain what drove the move',
+    ]) {
+      const plan = planReportResearch({
+        ...defaultScope(), evidenceMode: 'alphatape', researchSymbols: 'NVDA, MSFT, QCOM, MU', goal,
+      }, emptyPortfolio)
+      for (const s of plan.sources) {
+        if (s.id === 'correlation' || s.id === 'regression' || s.id === 'market-compare') {
+          expect(s.targets.length, `${s.id} for "${goal}"`).toBeGreaterThanOrEqual(2)
+        }
+      }
+    }
+  })
+
+  it('gives an AI-added correlation every symbol, not the single-name slice', async () => {
+    const baseline = planReportResearch({
+      ...defaultScope(),
+      evidenceMode: 'alphatape',
+      researchSymbols: 'NVDA, MSFT, QCOM, MU',
+      goal: 'Review the risk in my book',
+    }, emptyPortfolio)
+
+    const enhanced = await enhanceReportResearchPlan(baseline, {
+      ...defaultScope(), researchSymbols: 'NVDA, MSFT, QCOM, MU', goal: 'Review the risk in my book',
+    }, emptyPortfolio, {
+      get: async () => ({}),
+      post: async () => ({
+        summary: 'Add dependence evidence.',
+        additions: [{ id: 'correlation', reason: 'Show whether the holdings diversify.' }],
+      }),
+    })
+
+    const correlation = enhanced.sources.find(s => s.id === 'correlation')
+    expect(correlation).toBeDefined()
+    expect(correlation!.targets).toEqual(['NVDA', 'MSFT', 'QCOM', 'MU'])
+  })
+
+  it('single-subject tools still get just the subject', async () => {
+    const baseline = planReportResearch({
+      ...defaultScope(), evidenceMode: 'alphatape', researchSymbols: 'NVDA, MSFT', goal: 'Is NVDA a buy',
+    }, emptyPortfolio)
+    const enhanced = await enhanceReportResearchPlan(baseline, {
+      ...defaultScope(), researchSymbols: 'NVDA, MSFT', goal: 'Is NVDA a buy',
+    }, emptyPortfolio, {
+      get: async () => ({}),
+      post: async () => ({
+        summary: 'Add valuation.',
+        additions: [{ id: 'dcf-valuation', reason: 'Fundamental anchor.' }],
+      }),
+    })
+    expect(enhanced.sources.find(s => s.id === 'dcf-valuation')!.targets).toEqual(['NVDA'])
+  })
+})

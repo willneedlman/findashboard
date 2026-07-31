@@ -275,7 +275,11 @@ export function planReportResearch(
 
   const add = (id: ReportResearchSourceId, reason: string, targets: string[] = []) => {
     if (sources.some(source => source.id === id) || !sourceMatchesHorizon(id, scope)) return
-    sources.push({ ...SOURCE_META[id], reason, targets, selectionOrigin: 'baseline' })
+    // A relationship tool gets the whole symbol set, not the single-name slice.
+    const resolved = MULTI_ASSET_SOURCES.has(id) && targets.length
+      ? targetsForSource(id, symbols)
+      : targets
+    sources.push({ ...SOURCE_META[id], reason, targets: resolved, selectionOrigin: 'baseline' })
   }
 
   if (!objective) {
@@ -673,6 +677,13 @@ export function researchSourceProducesVisuals(sourceId: ReportResearchSourceId):
   return REPORT_RESEARCH_TOOL_CATALOG.find(item => item.id === sourceId)?.producesVisuals ?? false
 }
 
+// Tools that measure a relationship BETWEEN assets. One target is not a reduced
+// version of their output, it is no output at all — correlation of a thing with
+// itself is 1. Both planners truncate the symbol list to a single name unless the
+// intent is literally 'comparison', which handed these tools one ticker and made
+// them fail every time the planner chose them for a portfolio or macro report.
+const MULTI_ASSET_SOURCES = new Set<ReportResearchSourceId>(['correlation', 'regression', 'market-compare'])
+
 function targetsForSource(sourceId: ReportResearchSourceId, symbols: string[]): string[] {
   const limit = sourceId === 'dcf-valuation' || sourceId === 'volatility-skew'
     || sourceId === 'dealer-gex' || sourceId === 'implied-probability'
@@ -736,7 +747,9 @@ export async function enhanceReportResearchPlan(
       reason,
       targets: item.targetMode === 'market' || item.targetMode === 'portfolio'
         ? []
-        : targetsForSource(id, baseline.intent === 'comparison' ? baseline.symbols : baseline.symbols.slice(0, 1)),
+        : targetsForSource(id, MULTI_ASSET_SOURCES.has(id) || baseline.intent === 'comparison'
+          ? baseline.symbols
+          : baseline.symbols.slice(0, 1)),
       selectionOrigin: 'ai',
     })
     added += 1
@@ -1674,7 +1687,9 @@ async function runSource(
     }
 
     case 'regression': {
-      if (source.targets.length < 2) return []
+      if (source.targets.length < 2) {
+        throw new Error(`Regression needs a dependent and at least one independent subject, got ${source.targets.length || 'none'}.`)
+      }
       const dependent = source.targets[0]
       const independent = source.targets.slice(1, 5)
       const data = record(await client.post('/api/regression/analyze', {
@@ -1752,7 +1767,11 @@ async function runSource(
     }
 
     case 'correlation': {
-      if (source.targets.length < 2) return []
+      // Returning [] here surfaced as a bare "no usable data" and hid the real
+      // cause, which was always the plan handing this tool one ticker.
+      if (source.targets.length < 2) {
+        throw new Error(`Correlation needs at least 2 subjects, got ${source.targets.length || 'none'}.`)
+      }
       const period = correlationPeriod(scope)
       const rollingWindow = Math.max(5, Math.min(60, Math.floor(inclusiveDays(lookbackRange(scope)) / 2)))
       const data = record(await client.post('/api/regression/correlation', {
