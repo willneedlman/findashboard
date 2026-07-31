@@ -13,7 +13,7 @@ import {
   useReportCreator, timeframeLabel, clipTitle,
   type ReportClip, type ClipPayload,
 } from '../lib/reportCreator'
-import { exportReportPdf } from '../lib/exportReportPdf'
+import { exportReportPdf, reportPdfBaseName } from '../lib/exportReportPdf'
 import { selectReportAppendixData } from '../lib/reportPresentation'
 import { useTheme } from '../contexts/ThemeContext'
 import { buildReportPalette, toClipPalette, type ReportPalette } from '../lib/reportTheme'
@@ -28,23 +28,21 @@ function fmtDateLong(d = new Date()): string {
   return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`
 }
 
-function fmtDateFile(d = new Date()): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+function addDays(date: Date, days: number): Date {
+  const result = new Date(date)
+  result.setDate(result.getDate() + days)
+  return result
 }
 
-function sanitizeFilePart(s: string): string {
-  return s
-    .replace(/[\\/:*?"<>|]+/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 80) || 'Report'
-}
-
-function pdfBaseName(reportName: string, d = new Date()): string {
-  return `${sanitizeFilePart(reportName)} — ${fmtDateFile(d)}`
+function allocationTickers(clips: ReportClip[], max = 4): string[] {
+  const allocation = clips.find(clip => clip.payload.kind === 'table' && /\bcurrent allocation\b/i.test(clip.payload.title || ''))
+  if (!allocation || allocation.payload.kind !== 'table') return []
+  const tickerIndex = allocation.payload.columns.findIndex(column => /^ticker$/i.test(column))
+  if (tickerIndex < 0) return []
+  return allocation.payload.rows
+    .map(row => String(row[tickerIndex] ?? '').trim().toUpperCase())
+    .filter(ticker => ticker && ticker !== 'CASH')
+    .slice(0, max)
 }
 
 // keyResult.value ranges from a short "$280–$310" to a longer open-mode
@@ -85,8 +83,34 @@ function AppendixBlock({ clip, palette, compact = false }: { clip: ReportClip; p
     )
   }
   if (p.kind === 'table') {
-    const rowLimit = p.columns.some(column => /\b(headline|event|name)\b/i.test(column)) ? 6 : 8
-    const slim: ClipPayload = { ...p, rows: p.rows.slice(0, rowLimit) }
+    const allocation = /\bcurrent allocation\b/i.test(p.title || '')
+    const rowLimit = allocation ? 18 : p.columns.some(column => /\b(headline|event|name)\b/i.test(column)) ? 6 : 10
+    let slim: ClipPayload = { ...p, rows: p.rows.slice(0, rowLimit) }
+    if (allocation) {
+      const columnIndex = (pattern: RegExp) => p.columns.findIndex(column => pattern.test(column))
+      const ticker = columnIndex(/^ticker$/i)
+      const marketValue = columnIndex(/market value/i)
+      const weight = columnIndex(/weight/i)
+      const sector = columnIndex(/sector classification/i)
+      if ([ticker, marketValue, weight, sector].every(index => index >= 0)) {
+        slim = {
+          kind: 'table',
+          title: p.title,
+          columns: ['Ticker', 'Market value', 'Weight %', 'Asset class', 'Sector'],
+          rows: p.rows.slice(0, rowLimit).map(row => {
+            const classification = String(row[sector] ?? 'Unclassified')
+            const isFund = /exchange[- ]traded fund|\betf\b/i.test(classification)
+            return [
+              row[ticker],
+              row[marketValue],
+              row[weight],
+              isFund ? 'ETF' : row[ticker] === 'CASH' ? 'Cash' : 'Equity',
+              isFund ? 'Look-through required' : classification,
+            ]
+          }),
+        }
+      }
+    }
     return (
       <div style={frame}>
         <div style={head}>{title}</div>
@@ -94,7 +118,7 @@ function AppendixBlock({ clip, palette, compact = false }: { clip: ReportClip; p
           <ClipRenderer payload={slim} mode="print" compact={compact} maxTableRows={rowLimit} palette={clipPal} />
           {p.rows.length > rowLimit && (
             <div style={{ fontFamily: palette.mono, fontSize: 8, color: palette.muted, marginTop: 4 }}>
-              Showing {rowLimit} of {p.rows.length} rows.
+              Showing {rowLimit} of {p.rows.length} rows. Full data remains in the saved project.
             </div>
           )}
         </div>
@@ -142,6 +166,8 @@ export default function ReportPrint() {
   const allClips = renderClips
   const reportTickers = useMemo(
     () => {
+      const portfolioSubjects = allocationTickers(allClips)
+      if (portfolioSubjects.length) return portfolioSubjects
       const multiSubject = /\b(compare|comparison|versus|vs\.?|screen|ranking|rank|portfolio|holdings|book)\b/i
         .test(`${renderScope?.goal ?? ''} ${renderScope?.purpose ?? ''}`)
       return reportTickerSymbols(
@@ -189,8 +215,9 @@ export default function ReportPrint() {
   }, [gen?.generatedAt])
 
   const dateLong = fmtDateLong(reportDate)
+  const reviewDate = fmtDateLong(addDays(reportDate, 90))
   const reportTitle = gen?.headline?.trim() || renderName || 'Report'
-  const fileName = pdfBaseName(reportTitle, reportDate)
+  const fileName = reportPdfBaseName(renderName || reportTitle)
 
   const eyebrow: React.CSSProperties = {
     fontFamily: palette.sans, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em',
@@ -252,7 +279,7 @@ export default function ReportPrint() {
   for (const s of gen?.sections ?? []) {
     for (const f of s.keyFigures ?? []) {
       const k = f.label.toLowerCase()
-      if (!seen.has(k) && keyData.length < 5) {
+      if (!seen.has(k) && keyData.length < 4) {
         seen.add(k)
         keyData.push({ label: f.label, value: f.value })
       }
@@ -299,6 +326,7 @@ export default function ReportPrint() {
               .rc-report-sections { display: block !important; }
               .rc-report-section-half { margin-bottom: 12px; }
             }
+            .rc-atomic { break-inside: avoid; page-break-inside: avoid; }
           `}</style>
           <header className="rc-keep" style={{ background: palette.masthead, color: palette.onMasthead }}>
             <div style={{
@@ -416,6 +444,7 @@ export default function ReportPrint() {
             <div>
               <span style={{ ...eyebrow, display: 'inline', marginRight: 8 }}>Horizon</span>
               {renderScope ? timeframeLabel(renderScope) : ''}
+              {renderScope?.lookforwardPreset === 'unlimited' ? ` · Review ${reviewDate}` : ''}
             </div>
             {gen?.stance?.lean && (
               <div>
@@ -472,67 +501,81 @@ export default function ReportPrint() {
                   </section>
                 )}
 
-                <section className="rc-keep" style={{ marginBottom: 14 }}>
+                <section className="rc-keep rc-atomic" style={{ marginBottom: 16 }}>
                   <h2 style={bandHead}>Investment View</h2>
-                  <p style={prose}>{gen.executiveSummary || '—'}</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    {(gen.executiveSummary || '—').split(/(?<=[.!?])\s+/).filter(Boolean).slice(0, 3).map((sentence, index) => (
+                      <p key={index} style={prose}>{sentence}</p>
+                    ))}
+                  </div>
                 </section>
 
                 <div
                   className="rc-report-sections"
                   style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                    gap: '13px 14px',
-                    alignItems: 'start',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 16,
                   }}
                 >
                   {gen.sections.map((s, i) => {
                     const clip = clipById.get(s.clipId)
                     const sectionKey = reportSectionAssignmentKey(gen.sections, i)
                     const assigned = bodyVisuals.get(sectionKey)
-                    const half = s.placement === 'half'
+                    const whatHappened = /\bwhat happened\b/i.test(s.heading)
+                    const performanceClip = whatHappened
+                      ? allClips.find(candidate => candidate.payload.kind === 'kpi' && /\brisk metrics\b/i.test(candidate.payload.title || ''))
+                      : undefined
+                    const performanceFigures = performanceClip?.payload.kind === 'kpi'
+                      ? (() => {
+                          const cells = performanceClip.payload.cells
+                          const find = (pattern: RegExp) => cells.find(cell => pattern.test(cell.label))
+                          const portfolioReturn = find(/^Period return$|^CAGR$/i)
+                          const spyReturn = find(/^SPY (?:period return|cagr)$/i)
+                          const activeReturn = find(/^Active return vs SPY$/i)
+                          const portfolioVol = find(/^Portfolio volatility$/i)
+                          const spyVol = find(/^SPY volatility$/i)
+                          const portfolioDrawdown = find(/^Portfolio max drawdown$/i)
+                          const spyDrawdown = find(/^SPY max drawdown$/i)
+                          return [portfolioReturn, spyReturn, activeReturn, portfolioVol, spyVol]
+                            .filter((cell): cell is NonNullable<typeof cell> => !!cell)
+                            .map(cell => ({ label: cell.label, value: cell.value }))
+                            .concat(portfolioDrawdown && spyDrawdown ? [{
+                              label: 'Maximum drawdown',
+                              value: `${portfolioDrawdown.value} portfolio · ${spyDrawdown.value} SPY`,
+                            }] : [])
+                        })()
+                      : s.keyFigures
                     return (
                       <section
                         key={sectionKey}
-                        className={`rc-section${half ? ' rc-report-section-half' : ''}`}
-                        data-placement={half ? 'half' : 'full'}
+                        className="rc-section rc-keep rc-atomic"
+                        data-placement="full"
                         style={{
                           minWidth: 0,
-                          gridColumn: half ? 'span 1' : '1 / -1',
                           borderTop: `1px solid ${palette.border}`,
-                          paddingTop: 7,
+                          paddingTop: 10,
                         }}
                       >
                         <div className="rc-section-heading" style={{
                           display: 'flex',
                           alignItems: 'baseline',
-                          justifyContent: 'space-between',
-                          gap: 12,
-                          marginBottom: 5,
+                          gap: 8,
+                          marginBottom: 7,
                           paddingTop: 2,
                         }}>
-                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, minWidth: 0 }}>
-                            <span style={{ ...eyebrow, color: palette.accent, flexShrink: 0 }}>
-                              {String(i + 1).padStart(2, '0')}
-                            </span>
-                            <h3 style={secTitle}>{s.heading}</h3>
-                          </div>
-                          {clip && (
-                            <span style={{ ...secMeta, margin: 0, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                              {clip.sourceTab}
-                            </span>
-                          )}
+                          <h3 style={secTitle}>{s.heading}</h3>
                         </div>
                         <SectionLayout
                           analysis={s.analysis}
                           clip={clip}
-                          keyFigures={s.keyFigures}
+                          keyFigures={performanceFigures}
                           index={i}
-                          layout={s.layout}
+                          layout="full-width"
                           projectClips={allClips}
                           visual={assigned?.visual}
-                          showKeyFigures={assigned?.showKeyFigures}
-                          column={half}
+                          showKeyFigures={whatHappened}
+                          column={false}
                           figureNumber={figureNumbers.get(sectionKey)}
                           palette={palette}
                         />
@@ -541,7 +584,7 @@ export default function ReportPrint() {
                   })}
                 </div>
 
-                <section className="rc-keep" style={{
+                <section className="rc-keep rc-atomic" style={{
                   marginTop: 14,
                   border: `1px solid ${palette.border}`,
                   background: palette.panel,
@@ -557,11 +600,10 @@ export default function ReportPrint() {
 
                 {appendixData.length > 0 && (
                   <section style={{ marginTop: 20 }}>
-                    <h2 style={bandHead}>Data Appendix</h2>
+                    <h2 className="rc-keep rc-keep-tight" style={bandHead}>Data Appendix</h2>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 2 }}>
                       {appendixData.map(c => (
-                        <div key={c.id} className={c.payload.kind === 'table' ? 'rc-keep rc-keep-tight' : 'rc-keep'}>
-                          <div style={secMeta}>{c.sourceTab} · {c.dataType}</div>
+                        <div key={c.id} className="rc-keep rc-atomic">
                           <AppendixBlock clip={c} palette={palette} />
                         </div>
                       ))}
@@ -609,7 +651,6 @@ export default function ReportPrint() {
               fontFamily: palette.sans, fontSize: 8.5, color: palette.muted, lineHeight: 1.45,
             }}>
               Generated by Alphatape for research and educational purposes. Not investment advice.
-              Verify all figures against primary sources before acting.
             </footer>
           </div>
         </div>

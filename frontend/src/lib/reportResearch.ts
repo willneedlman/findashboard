@@ -265,8 +265,9 @@ export function planReportResearch(
   const explicit = parseResearchSymbols(scope.researchSymbols)
   const inferred = inferResearchSymbols(objective)
   const bookSymbols = scope.includePortfolio && portfolio.hasData ? portfolioSymbols(portfolio) : []
-  const symbols = unique(explicit.length ? explicit : inferred.length ? inferred : bookSymbols)
-  const intent = detectIntent(objective, symbols.length)
+  const requestedSymbols = unique(explicit.length ? explicit : inferred.length ? inferred : bookSymbols)
+  const intent = detectIntent(objective, requestedSymbols.length)
+  const symbols = intent === 'portfolio' && bookSymbols.length ? bookSymbols : requestedSymbols
   const researchTargets = intent === 'comparison' ? symbols : symbols.slice(0, 1)
   const catalystRequested = /\b(catalyst|moving|mover|selloff|rally|surge|drop|news|event)\b/i.test(objective)
   const valuationRequested = /\b(valuation|value|fair value|multiple|p\/e|peg|cheap|expensive|peer|intrinsic)\b/i.test(objective)
@@ -304,6 +305,8 @@ export function planReportResearch(
     if (scope.includePortfolio && portfolio.hasData) {
       add('portfolio', 'Establish holdings, cash, and concentration from the active book.')
       add('portfolio-risk', 'Measure return, volatility, beta, drawdown, and benchmark-relative performance.')
+      add('factor-decomposition', 'Separate systematic exposure from name-specific risk and quantify concentration.', bookSymbols)
+      if (bookSymbols.length >= 2) add('correlation', 'Test whether the holdings provide real diversification under a common window.', bookSymbols)
     }
     if (!(scope.includePortfolio && portfolio.hasData) && symbols.length === 0) {
       return {
@@ -311,9 +314,13 @@ export function planReportResearch(
         blockedReason: 'Select an active portfolio or add ticker symbols for this risk report.',
       }
     }
-    add('global-markets', 'Frame the book against the current cross-asset session.')
-    add('macro-events', 'Identify scheduled events that can change portfolio risk.')
-    add('earnings', 'Check near-term earnings risk in the selected names.', symbols)
+    if (/\b(macro|cross.asset|market regime|global markets?)\b/i.test(objective)) {
+      add('global-markets', 'Frame the book against the current cross-asset session.')
+    }
+    if (/\b(inflation|cpi|pce|rates?|fed|fomc|macro|catalyst|event)\b/i.test(objective)) {
+      add('macro-events', 'Identify scheduled events that can change portfolio risk.')
+    }
+    add('earnings', 'Check near-term earnings risk only for actual portfolio holdings.', bookSymbols.length ? bookSymbols : symbols)
   } else if (intent === 'macro') {
     add('global-markets', 'Establish the current cross-asset regime.')
     add('macro-events', 'Map the upcoming policy and economic calendar.')
@@ -633,14 +640,41 @@ function lookforwardRange(scope: ReportScope, today = new Date()): ResearchDateR
   const start = customStart ?? today
   const customEnd = scope.lookforwardPreset === 'custom' ? validDate(scope.forwardCustomEnd) : null
   if (customEnd) return { start: isoDate(start), end: isoDate(customEnd) }
+  const years = scope.lookforwardPreset === 'next3y' ? 3
+    : scope.lookforwardPreset === 'next5y' ? 5
+      : scope.lookforwardPreset === 'next10y' ? 10
+        : 0
+  if (years) {
+    const end = new Date(start)
+    end.setUTCFullYear(end.getUTCFullYear() + years)
+    end.setUTCDate(end.getUTCDate() - 1)
+    return { start: isoDate(start), end: isoDate(end) }
+  }
   const days = scope.lookforwardPreset === 'next7' ? 7
     : scope.lookforwardPreset === 'next30' ? 30
       : scope.lookforwardPreset === 'next90' ? 90
         : scope.lookforwardPreset === 'next180' ? 180
-          : 14
+          : scope.lookforwardPreset === 'next365' || scope.lookforwardPreset === 'unlimited' ? 365
+            : 14
   const end = new Date(start)
   end.setUTCDate(end.getUTCDate() + (days - 1))
   return { start: isoDate(start), end: isoDate(end) }
+}
+
+function outlookRangeDescription(scope: ReportScope): string {
+  if (scope.lookforwardPreset === 'unlimited') return 'open-ended outlook with no fixed end date'
+  const range = lookforwardRange(scope)
+  return `${range.start} to ${range.end}`
+}
+
+function eventResearchRange(scope: ReportScope): { range: ResearchDateRange; capped: boolean } {
+  const requested = lookforwardRange(scope)
+  const capped = scope.lookforwardPreset === 'unlimited' || inclusiveDays(requested) > 365
+  if (!capped) return { range: requested, capped: false }
+  const start = validDate(requested.start) ?? new Date()
+  const end = new Date(start)
+  end.setUTCDate(end.getUTCDate() + 364)
+  return { range: { start: isoDate(start), end: isoDate(end) }, capped: true }
 }
 
 function inclusiveDays(range: ResearchDateRange): number {
@@ -707,7 +741,7 @@ export async function enhanceReportResearchPlan(
     : `${lookbackRange(scope).start} to ${lookbackRange(scope).end}`
   const forwardWindow = scope.lookforwardPreset === 'none'
     ? 'forward outlook disabled'
-    : `${lookforwardRange(scope).start} to ${lookforwardRange(scope).end}`
+    : outlookRangeDescription(scope)
   const response = record(await client.post('/api/ai/report-research-plan', {
     objective: baseline.objective,
     mustInclude: scope.mustInclude,
@@ -1121,7 +1155,7 @@ async function runSource(
         const clips: ClipDraft[] = [
           tagClip(kpiClip('DCF Valuation', `DCF verdict · ${ticker}`, [
             { label: 'Intrinsic / share', value: money(intrinsic) },
-            { label: 'Market price', value: money(marketPrice) },
+            { label: 'Market price', value: money(marketPrice), sub: 'Latest value returned by the fundamentals source; verify quote time before acting' },
             { label: 'Upside to intrinsic', value: upside == null ? '—' : percent(upside) },
             { label: 'Enterprise value', value: moneyMillions(data.enterprise_value) },
             { label: 'PV of explicit FCF', value: moneyMillions(data.pv_fcfs) },
@@ -1129,22 +1163,56 @@ async function runSource(
           ]), source, ticker, ticker),
         ]
         if (fcfs.length) {
+          const firstRevenue = finite(fcfs[0].revenue)
+          const lastRevenue = finite(fcfs[fcfs.length - 1].revenue)
+          const intervals = Math.max(0, fcfs.length - 1)
+          const projectionCagr = firstRevenue != null && firstRevenue > 0 && lastRevenue != null && intervals > 0
+            ? (Math.pow(lastRevenue / firstRevenue, 1 / intervals) - 1) * 100
+            : null
+          const cumulativeGrowth = firstRevenue != null && firstRevenue > 0 && lastRevenue != null
+            ? ((lastRevenue / firstRevenue) - 1) * 100
+            : null
+          clips.push(tagClip(kpiClip('DCF Valuation', `Projection math · ${ticker}`, [
+            { label: 'Starting revenue', value: moneyMillions(revenue), sub: 'Model input; USD millions' },
+            { label: 'Year 1 revenue', value: moneyMillions(firstRevenue), sub: 'Model output; USD millions' },
+            { label: `Year ${plain(fcfs[fcfs.length - 1].year)} revenue`, value: moneyMillions(lastRevenue), sub: 'Model output; USD millions' },
+            { label: `Y1–Y${plain(fcfs[fcfs.length - 1].year)} CAGR`, value: projectionCagr == null ? '—' : percent(projectionCagr), sub: `${intervals} compounding intervals` },
+            { label: 'Cumulative growth', value: cumulativeGrowth == null ? '—' : percent(cumulativeGrowth), sub: 'Not an annualized rate' },
+          ]), source, `${ticker}:projection-math`, ticker))
           clips.push(tagClip(chartClip(
             'DCF Valuation',
             `${ticker} revenue projection`,
             'bar',
             'year',
-            fcfs.map(row => ({ year: `Y${plain(row.year)}`, revenue: finite(row.revenue) })),
-            [{ key: 'revenue', label: 'Revenue ($M)' }],
+            fcfs.map(row => ({ year: `Y${plain(row.year)}`, revenue: finite(row.revenue) == null ? null : finite(row.revenue)! / 1000 })),
+            [{ key: 'revenue', label: 'Revenue (USD billions)' }],
           ), source, `${ticker}:revenue-visual`, ticker))
           clips.push(tagClip(chartClip(
             'DCF Valuation',
             `${ticker} free cash flow projection`,
             'line',
             'year',
-            fcfs.map(row => ({ year: `Y${plain(row.year)}`, fcf: finite(row.fcf), presentValue: finite(row.pv_fcf) })),
-            [{ key: 'fcf', label: 'Free cash flow ($M)' }, { key: 'presentValue', label: 'PV of FCF ($M)' }],
+            fcfs.map(row => ({
+              year: `Y${plain(row.year)}`,
+              fcf: finite(row.fcf) == null ? null : finite(row.fcf)! / 1000,
+              presentValue: finite(row.pv_fcf) == null ? null : finite(row.pv_fcf)! / 1000,
+            })),
+            [{ key: 'fcf', label: 'Free cash flow (USD billions)' }, { key: 'presentValue', label: 'PV of FCF (USD billions)' }],
           ), source, `${ticker}:fcf-visual`, ticker))
+          clips.push(tagClip(tableClip(
+            'DCF Valuation',
+            `DCF projection bridge · ${ticker}`,
+            ['Year', 'Revenue $B', 'Growth %', 'Op margin %', 'EBIT $B', 'FCF $B', 'PV FCF $B'],
+            fcfs.map(row => [
+              `Y${plain(row.year)}`,
+              finite(row.revenue) == null ? null : +(finite(row.revenue)! / 1000).toFixed(2),
+              finite(row.growth),
+              finite(row.margin),
+              finite(row.ebit) == null ? null : +(finite(row.ebit)! / 1000).toFixed(2),
+              finite(row.fcf) == null ? null : +(finite(row.fcf)! / 1000).toFixed(2),
+              finite(row.pv_fcf) == null ? null : +(finite(row.pv_fcf)! / 1000).toFixed(2),
+            ]),
+          ), source, `${ticker}:projection-bridge`, ticker))
         }
         const sensitivity = array(data.tornado).map(record)
         if (sensitivity.length) {
@@ -1165,14 +1233,33 @@ async function runSource(
               { key: 'high', label: 'High $/share' },
             ],
           ), source, `${ticker}:sensitivity-visual`, ticker))
+          clips.push(tagClip(tableClip(
+            'DCF Valuation',
+            `DCF sensitivity assumptions · ${ticker}`,
+            ['Driver', 'Tested range', 'Low value/share', 'Base value/share', 'High value/share'],
+            sensitivity.map(row => [
+              plain(row.label),
+              plain(row.range),
+              finite(row.lo),
+              intrinsic,
+              finite(row.hi),
+            ]),
+          ), source, `${ticker}:sensitivity-assumptions`, ticker))
         }
         clips.push(tagClip(kpiClip('DCF Valuation', `Model assumptions · ${ticker}`, [
+          { label: 'Revenue input', value: moneyMillions(revenue), sub: 'USD millions' },
+          { label: 'Shares', value: `${shares.toLocaleString('en-US', { maximumFractionDigits: 1 })}M` },
+          { label: 'Net debt', value: moneyMillions(request.net_debt), sub: 'USD millions' },
+          { label: 'Tax rate', value: `${request.tax_rate.toFixed(1)}%` },
           { label: 'WACC', value: `${wacc.toFixed(1)}%`, sub: 'AI-assisted assumption' },
           { label: 'Terminal growth', value: `${terminalGrowth.toFixed(1)}%`, sub: 'AI-assisted assumption' },
           { label: 'Target margin', value: `${targetMargin.toFixed(1)}%`, sub: `current ${currentMargin.toFixed(1)}%` },
           { label: 'Years 1–3 growth', value: `${growth1.toFixed(1)}%` },
           { label: 'Years 4–7 growth', value: `${growth2.toFixed(1)}%` },
           { label: 'Years 8–10 growth', value: `${growth3.toFixed(1)}%` },
+          { label: 'CapEx / revenue', value: `${capexPct.toFixed(1)}%` },
+          { label: 'D&A / revenue', value: `${daPct.toFixed(1)}%` },
+          { label: 'Working capital / revenue', value: `${wcPct.toFixed(1)}%`, sub: `fades to ${(wcPct * 0.5).toFixed(1)}%` },
         ]), source, `${ticker}:assumptions`, ticker))
         return clips
       })
@@ -1519,7 +1606,7 @@ async function runSource(
 
     case 'earnings': {
       if (!source.targets.length) return []
-      const range = lookforwardRange(scope)
+      const { range, capped } = eventResearchRange(scope)
       const totalDays = inclusiveDays(range)
       const first = validDate(range.start)!
       const requests: Promise<unknown>[] = []
@@ -1532,26 +1619,47 @@ async function runSource(
       }
       const responses = await Promise.all(requests)
       const targets = new Set(source.targets)
-      const rows = responses.flatMap(data => array(record(data).rows))
+      const candidateRows = responses.flatMap(data => array(record(data).rows))
         .filter(row => targets.has(normalizeTicker(plain(record(row).symbol))))
         .map(row => {
           const item = record(row)
-          return [plain(item.symbol), plain(item.date), plain(item.hour), finite(item.epsEstimate)]
+          return [normalizeTicker(plain(item.symbol)), plain(item.date), plain(item.hour)] as [string, string, string]
         })
-      const horizon = `${range.start} to ${range.end}`
+        .sort((a, b) => a[1].localeCompare(b[1]))
+      const seenTickers = new Set<string>()
+      const rows = candidateRows.filter(row => {
+        if (seenTickers.has(row[0])) return false
+        seenTickers.add(row[0])
+        return true
+      })
+      const horizon = `${range.start} to ${range.end}${capped ? ' · first year of longer outlook' : ''}`
       if (!rows.length) {
         return [tagClip(textClip(
           'Earnings Scanner',
           `Upcoming earnings · ${horizon}`,
-          `No scheduled earnings were found for ${source.targets.join(', ')} from ${range.start} through ${range.end}.`,
+          `No scheduled earnings were found for ${source.targets.join(', ')} from ${range.start} through ${range.end}.`
+          + (capped ? ' Calendar evidence is intentionally limited to the first year of the longer analytical outlook.' : ''),
         ), source, source.targets.join('-'))]
       }
-      return [tagClip(tableClip(
-        'Earnings Scanner',
-        `Upcoming earnings · ${horizon}`,
-        ['Ticker', 'Date', 'Session', 'EPS estimate'],
-        rows,
-      ), source, source.targets.join('-'))]
+      const hasCompleteSessionData = rows.every(row => !/^(?:|—|-)$/i.test(row[2].trim()))
+      return [
+        tagClip(tableClip(
+          'Earnings Scanner',
+          `Upcoming portfolio earnings schedule · ${horizon}`,
+          hasCompleteSessionData ? ['Portfolio holding', 'Report date', 'Session'] : ['Portfolio holding', 'Report date'],
+          hasCompleteSessionData ? rows : rows.map(([ticker, date]) => [ticker, date]),
+        ), source, source.targets.join('-')),
+        tagClip(tableClip(
+          'Earnings Scanner',
+          'Earnings schedule methodology',
+          ['Item', 'Definition'],
+          [
+            ['Coverage', `Nearest scheduled event per requested portfolio holding from ${range.start} through ${range.end}`],
+            ['Comparison rule', 'Absolute EPS estimates are omitted because EPS levels are not comparable across issuers'],
+            ['Directional evidence', 'Use company-specific growth, revisions, dispersion, guidance, and historical reaction'],
+          ],
+        ), source, `${source.targets.join('-')}:methodology`),
+      ]
     }
 
     case 'global-markets': {
@@ -1562,7 +1670,7 @@ async function runSource(
           const row = record(item)
           return [plain(group.name), plain(row.label), finite(row.price), finite(row.change_pct), plain(row.status)]
         })
-      }).slice(0, 40)
+      }).filter(row => !/delay|stale|unavailable/i.test(String(row[4]))).slice(0, 40)
       if (!rows.length) return []
       const clips = [tagClip(tableClip(
         'Global Markets',
@@ -1590,14 +1698,20 @@ async function runSource(
 
     case 'macro-events': {
       const data = record(await client.get('/api/macro-events'))
-      const rows = array(data.events).slice(0, 24).map(item => {
-        const row = record(item)
-        return [plain(row.datetime), plain(row.name), plain(row.impact), plain(row.category), plain(row.region)]
-      })
+      const today = isoDate(new Date())
+      const rows = array(data.events)
+        .map(record)
+        .filter(row => {
+          const eventDate = plain(row.datetime).slice(0, 10)
+          return /^\d{4}-\d{2}-\d{2}$/.test(eventDate) && eventDate >= today
+        })
+        .sort((a, b) => plain(a.datetime).localeCompare(plain(b.datetime)))
+        .slice(0, 24)
+        .map(row => [plain(row.datetime), plain(row.name), plain(row.impact), plain(row.category), plain(row.region)])
       if (!rows.length) return []
       return [tagClip(tableClip(
         'Macro Event Hub',
-        'Upcoming macro events',
+        `Upcoming macro events · collected ${today}`,
         ['Date and time', 'Event', 'Impact', 'Category', 'Region'],
         rows,
       ), source, 'calendar')]
@@ -1780,16 +1894,16 @@ async function runSource(
         use_returns: true,
         benchmark: 'SPY',
         rolling_window: rollingWindow,
-        pair: source.targets.slice(0, 2),
       }))
       const summary = record(data.summary)
       const strongest = record(summary.strongest_pair)
       const negative = record(summary.most_negative_pair)
+      const lowestCorrelation = finite(negative.value)
       const clips: ClipDraft[] = [
         tagClip(kpiClip('Correlation', 'Correlation structure', [
-          { label: 'Avg |correlation|', value: finite(summary.avg_abs_correlation)?.toFixed(3) ?? '—' },
+          { label: 'Avg |correlation|', value: finite(summary.avg_abs_correlation)?.toFixed(2) ?? '—' },
           { label: 'Strongest pair', value: finite(strongest.value)?.toFixed(2) ?? '—', sub: [strongest.a, strongest.b].filter(Boolean).join(' ↔ ') },
-          { label: 'Most negative', value: finite(negative.value)?.toFixed(2) ?? '—', sub: [negative.a, negative.b].filter(Boolean).join(' ↔ ') },
+          { label: lowestCorrelation != null && lowestCorrelation < 0 ? 'Most negative' : 'Lowest correlation', value: lowestCorrelation?.toFixed(2) ?? '—', sub: [negative.a, negative.b].filter(Boolean).join(' ↔ ') },
           { label: 'Observations', value: plain(data.observations), sub: period },
         ]), source, `${source.targets.join('-')}:summary`),
       ]
@@ -1806,7 +1920,10 @@ async function runSource(
           ['', ...tickers],
           tickers.map(rowTicker => [
             rowTicker,
-            ...tickers.map(columnTicker => lookup.get(`${rowTicker}|${columnTicker}`) ?? null),
+            ...tickers.map(columnTicker => {
+              const value = lookup.get(`${rowTicker}|${columnTicker}`)
+              return value == null ? null : +value.toFixed(2)
+            }),
           ]),
         ), source, `${source.targets.join('-')}:matrix`))
       }
@@ -1840,6 +1957,18 @@ async function runSource(
       const values = array(rolling.corr)
       if (dates.length && values.length) {
         const pair = array(rolling.pair).map(String)
+        const numericValues = values.map(finite).filter((value): value is number => value != null)
+        const first = numericValues[0]
+        const latest = numericValues[numericValues.length - 1]
+        const average = numericValues.length ? numericValues.reduce((sum, value) => sum + value, 0) / numericValues.length : null
+        clips.push(tagClip(kpiClip('Correlation', `Rolling correlation summary · ${pair.join(' ↔ ')}`, [
+          { label: 'Pair', value: pair.join(' ↔ '), sub: `${plain(rolling.window)} trading-day Pearson correlation of daily returns` },
+          { label: 'First', value: first == null ? '—' : first.toFixed(2), sub: plain(dates[0]) },
+          { label: 'Latest', value: latest == null ? '—' : latest.toFixed(2), sub: plain(dates[dates.length - 1]) },
+          { label: 'Average', value: average == null ? '—' : average.toFixed(2), sub: 'Mean of displayed rolling observations' },
+          { label: 'Range', value: numericValues.length ? `${Math.min(...numericValues).toFixed(2)} to ${Math.max(...numericValues).toFixed(2)}` : '—' },
+          { label: 'Windows', value: String(numericValues.length) },
+        ]), source, `${source.targets.join('-')}:rolling-summary`))
         clips.push(tagClip(chartClip(
           'Correlation',
           `Rolling correlation · ${pair.join(' ↔ ')}`,
@@ -1877,13 +2006,18 @@ async function runSource(
       for (const response of responses) {
         const data = response.data
         const factors = array(data.factors).map(record)
+        const bookBetas = record(data.book_betas)
         clips.push(tagClip(kpiClip('Factor Decomposition', `Factor decomposition · ${response.mode}`, [
           { label: 'Annual volatility', value: percent(data.ann_vol_pct) },
-          { label: 'Systematic', value: percent(data.systematic_pct) },
-          { label: 'Idiosyncratic', value: percent(data.idiosyncratic_pct) },
+          { label: 'Systematic share of variance', value: finite(data.systematic_pct) == null ? '—' : `${finite(data.systematic_pct)!.toFixed(1)}%` },
+          { label: 'Idiosyncratic share of variance', value: finite(data.idiosyncratic_pct) == null ? '—' : `${finite(data.idiosyncratic_pct)!.toFixed(1)}%` },
           { label: 'Annual alpha', value: percent(data.alpha_ann_pct) },
+          { label: 'Model R²', value: finite(data.r_squared) == null ? '—' : finite(data.r_squared)!.toFixed(3) },
+          { label: 'Multifactor market coefficient', value: finite(bookBetas.market) == null ? '—' : finite(bookBetas.market)!.toFixed(3), sub: `Portfolio OLS coefficient · benchmark ${plain(data.benchmark)}` },
           { label: 'Effective N', value: finite(record(data.concentration).effective_n)?.toFixed(1) ?? '—' },
           { label: 'Observations', value: plain(data.observations) },
+          { label: 'Weighting', value: plain(data.weighting) },
+          { label: 'Data source', value: plain(data.source) },
         ]), source, `${response.mode}:summary`))
         if (factors.length) {
           clips.push(tagClip(chartClip(
@@ -1894,20 +2028,59 @@ async function runSource(
             factors.map(factor => ({ factor: plain(factor.factor), beta: finite(factor.beta) })),
             [{ key: 'beta', label: 'Beta' }],
           ), source, `${response.mode}:betas`))
+          clips.push(tagClip(tableClip(
+            'Factor Decomposition',
+            `${response.mode === 'macro' ? 'Macro' : 'Style'} factor model coefficients`,
+            ['Factor', 'Proxy', 'Beta', 't-statistic', 'Share of portfolio return variance %'],
+            factors.map(factor => [
+              plain(factor.factor),
+              plain(factor.proxy),
+              finite(factor.beta),
+              finite(factor.t_stat),
+              finite(factor.risk_pct),
+            ]),
+          ), source, `${response.mode}:factor-table`))
+        }
+        const holdingsDetail = array(data.holdings_detail).map(record)
+        if (holdingsDetail.length) {
+          clips.push(tagClip(tableClip(
+            'Factor Decomposition',
+            'Holding-level beta and portfolio risk contribution',
+            ['Holding', 'Weight %', 'Market beta', 'Book variance share %', 'Idiosyncratic share %'],
+            holdingsDetail.map(holding => [
+              plain(holding.ticker),
+              finite(holding.weight),
+              finite(record(holding.betas).market),
+              finite(holding.book_var_share_pct),
+              finite(holding.idiosyncratic_pct),
+            ]),
+          ), source, `${response.mode}:holding-contributions`))
         }
         const rolling = record(data.rolling)
         const rollingEntry = Object.entries(rolling).find(([, value]) => array(value).length)
         if (rollingEntry) {
           const [factor, points] = rollingEntry
+          const rollingPoints = array(points).map(point => ({
+            date: plain(record(point).date),
+            beta: finite(record(point).beta),
+          })).filter(point => point.beta != null) as { date: string; beta: number }[]
+          if (rollingPoints.length) {
+            const betas = rollingPoints.map(point => point.beta)
+            clips.push(tagClip(kpiClip('Factor Decomposition', `Rolling multifactor ${factor} coefficient summary`, [
+              { label: 'First beta', value: betas[0].toFixed(3), sub: rollingPoints[0].date },
+              { label: 'Latest beta', value: betas[betas.length - 1].toFixed(3), sub: rollingPoints[rollingPoints.length - 1].date },
+              { label: 'Minimum beta', value: Math.min(...betas).toFixed(3) },
+              { label: 'Maximum beta', value: Math.max(...betas).toFixed(3) },
+              { label: 'Rolling window', value: `${plain(data.roll_window)} trading days` },
+              { label: 'Method', value: 'Multivariate OLS', sub: `Portfolio returns on ${response.mode} factors` },
+            ]), source, `${response.mode}:rolling-${factor}-summary`))
+          }
           clips.push(tagClip(chartClip(
             'Factor Decomposition',
-            `Rolling ${factor} exposure`,
+            `Rolling multifactor ${factor} coefficient`,
             'line',
             'date',
-            thin(array(points).map(point => ({
-              date: plain(record(point).date),
-              beta: finite(record(point).beta),
-            })), 100),
+            thin(rollingPoints, 100),
             [{ key: 'beta', label: 'Beta' }],
           ), source, `${response.mode}:rolling-${factor}`))
         }
@@ -2017,24 +2190,123 @@ async function runSource(
 
     case 'portfolio': {
       if (!portfolio.hasData) return []
-      const total = portfolio.holdings.reduce((sum, holding) => sum + Math.max(0, holding.shares * holding.avgCost), 0) + portfolio.cashValue
+      const portfolioName = /^default$/i.test(portfolio.name.trim()) ? 'Portfolio' : portfolio.name
+      const holdings = portfolio.holdings
+        .map(holding => ({ ...holding, ticker: normalizeTicker(holding.ticker) }))
+        .filter(holding => holding.ticker && holding.shares > 0)
+      let quotes: Record<string, unknown> = {}
+      try {
+        quotes = record(await client.get(`/api/alerts/quotes?tickers=${encodeURIComponent(holdings.map(holding => holding.ticker).join(','))}`))
+      } catch {
+        quotes = {}
+      }
+      const valued = holdings.map(holding => {
+        const liveMark = finite(record(quotes[holding.ticker]).current_price)
+        const savedMark = holding.avgCost > 0 ? holding.avgCost : null
+        const mark = liveMark ?? savedMark
+        return {
+          ...holding,
+          mark,
+          markSource: liveMark != null ? 'live quote' : savedMark != null ? 'saved cost fallback' : 'unpriced',
+          value: mark == null ? null : Math.max(0, holding.shares * mark),
+        }
+      })
+      const sectorPairs = await Promise.all(valued.slice(0, 30).map(async holding => {
+        try {
+          const company = record(await client.get(`/api/corporate/hub?ticker=${encodeURIComponent(holding.ticker)}`))
+          const sector = plain(company.sector)
+          return [holding.ticker, sector === '—' ? 'Unclassified' : sector] as const
+        } catch {
+          return [holding.ticker, 'Unclassified'] as const
+        }
+      }))
+      const sectorByTicker = new Map(sectorPairs)
+      const pricedTotal = valued.reduce((sum, holding) => sum + (holding.value ?? 0), 0)
+      const total = pricedTotal + portfolio.cashValue
       const rows = [...portfolio.holdings]
-        .map(holding => {
-          const value = Math.max(0, holding.shares * holding.avgCost)
-          return [holding.ticker, holding.shares, money(holding.avgCost), money(value), total > 0 ? +((value / total) * 100).toFixed(2) : null]
-        })
+        .map(original => valued.find(holding => holding.ticker === normalizeTicker(original.ticker)))
+        .filter((holding): holding is NonNullable<typeof holding> => holding != null)
+        .map(holding => [
+          holding.ticker,
+          holding.shares,
+          holding.mark == null ? 'Unpriced' : money(holding.mark),
+          holding.value == null ? 'Unpriced' : money(holding.value),
+          holding.value != null && total > 0 ? +((holding.value / total) * 100).toFixed(2) : null,
+          sectorByTicker.get(holding.ticker) ?? 'Unclassified',
+          holding.markSource,
+        ])
         .sort((a, b) => Number(b[4] ?? 0) - Number(a[4] ?? 0))
-      if (portfolio.cashValue > 0) rows.push(['CASH', null, null, money(portfolio.cashValue), total > 0 ? +((portfolio.cashValue / total) * 100).toFixed(2) : null])
-      return [tagClip(tableClip(
+      if (portfolio.cashValue > 0) rows.push(['CASH', null, null, money(portfolio.cashValue), total > 0 ? +((portfolio.cashValue / total) * 100).toFixed(2) : null, 'Cash', 'saved cash'])
+      const unpriced = valued.filter(holding => holding.mark == null)
+      const fallbacks = valued.filter(holding => holding.markSource === 'saved cost fallback')
+      const clips = [tagClip(tableClip(
         'Portfolio Manager',
-        `${portfolio.name} · saved positions`,
-        ['Ticker', 'Shares', 'Cost basis', 'Saved value', 'Weight %'],
+        `${portfolioName} · current allocation`,
+        ['Ticker', 'Shares', 'Mark', 'Market value', 'Weight %', 'Sector classification', 'Valuation source'],
         rows,
       ), source, portfolio.id)]
+      const sectorWeights = new Map<string, number>()
+      let fundLookThroughWeight = 0
+      for (const holding of valued) {
+        if (holding.value == null || total <= 0) continue
+        const sector = sectorByTicker.get(holding.ticker) ?? 'Unclassified'
+        const weight = (holding.value / total) * 100
+        if (/exchange[- ]traded fund|\betf\b/i.test(sector)) {
+          fundLookThroughWeight += weight
+        } else {
+          sectorWeights.set(sector, (sectorWeights.get(sector) ?? 0) + weight)
+        }
+      }
+      if (portfolio.cashValue > 0 && total > 0) sectorWeights.set('Cash', (portfolio.cashValue / total) * 100)
+      if (fundLookThroughWeight > 0) sectorWeights.set('Fund look-through required', fundLookThroughWeight)
+      const sectorRows = [...sectorWeights.entries()].sort((a, b) => b[1] - a[1])
+      if (sectorRows.length) {
+        clips.push(tagClip(tableClip(
+          'Portfolio Manager',
+          `${portfolioName} · direct issuer sector allocation`,
+          ['Classification', 'Portfolio weight %', 'Basis'],
+          sectorRows.map(([sector, weight]) => [
+            sector,
+            +weight.toFixed(2),
+            sector === 'Cash' ? 'Portfolio cash balance'
+              : sector === 'Fund look-through required' ? 'Underlying fund holdings are not included in direct issuer sector weights'
+                : 'Corporate Hub provider classification',
+          ]),
+        ), source, `${portfolio.id}:sector-allocation`))
+        clips.push(tagClip(chartClip(
+          'Portfolio Manager',
+          `${portfolioName} direct issuer sector weights`,
+          'bar',
+          'sector',
+          sectorRows.map(([sector, weight]) => ({ sector, weight: +weight.toFixed(2) })),
+          [{ key: 'weight', label: 'Portfolio weight %' }],
+          { barOrientation: 'horizontal' },
+        ), source, `${portfolio.id}:sector-allocation-visual`))
+        if (fundLookThroughWeight > 0) {
+          clips.push(tagClip(textClip(
+            'Portfolio Manager',
+            `${portfolioName} · fund look-through limitation`,
+            `${fundLookThroughWeight.toFixed(1)}% of portfolio value is held through funds whose underlying sector exposures are not included in the direct issuer sector totals. Do not describe a directly classified technology weight as the portfolio's total economic technology exposure.`,
+          ), source, `${portfolio.id}:fund-look-through`))
+        }
+      }
+      if (unpriced.length || fallbacks.length) {
+        clips.push(tagClip(textClip(
+          'Portfolio Manager',
+          `${portfolioName} · allocation data quality`,
+          [
+            unpriced.length ? `${unpriced.length} position(s) are unpriced and excluded from portfolio weights: ${unpriced.map(holding => holding.ticker).join(', ')}.` : '',
+            fallbacks.length ? `${fallbacks.length} position(s) use saved cost instead of a current quote: ${fallbacks.map(holding => holding.ticker).join(', ')}.` : '',
+            'Do not recommend maintaining or changing the current allocation until every material position has a current mark.',
+          ].filter(Boolean).join(' '),
+        ), source, `${portfolio.id}:data-quality`))
+      }
+      return clips
     }
 
     case 'portfolio-risk': {
       if (!portfolio.holdings.length) return []
+      const portfolioName = /^default$/i.test(portfolio.name.trim()) ? 'Portfolio' : portfolio.name
       const holdings = portfolio.holdings
         .map(holding => ({ ...holding, ticker: normalizeTicker(holding.ticker) }))
         .filter(holding => holding.ticker && holding.shares > 0)
@@ -2074,8 +2346,8 @@ async function runSource(
       const omittedCount = priced.length - selected.length
       const coverage = (analysisTotal / fullTotal) * 100
       const analysisName = omittedCount
-        ? `${portfolio.name} · top ${selected.length} equity sleeve`
-        : portfolio.name
+        ? `${portfolioName} · top ${selected.length} equity sleeve`
+        : portfolioName
       const horizon = `${range.start} to ${range.end}`
       const data = record(await client.post('/api/portfolio/compare', {
         portfolios: [
@@ -2087,14 +2359,25 @@ async function runSource(
         end: range.end,
       }))
       const metric = record(array(data.metrics)[0])
+      const benchmarkMetric = record(array(data.metrics)[1])
       const series = record(array(data.series)[0])
+      const periodReturn = finite(metric.period_return) ?? finite(metric.cagr)
+      const benchmarkReturn = finite(benchmarkMetric.period_return) ?? finite(benchmarkMetric.cagr)
+      const activeReturn = periodReturn != null && benchmarkReturn != null ? periodReturn - benchmarkReturn : null
+      const periodDays = finite(metric.period_days)
+      const returnLabel = periodDays != null && periodDays < 365 ? 'Period return' : 'CAGR'
       const clips: ClipDraft[] = [
         tagClip(kpiClip('Portfolio Compare', `${analysisName} risk metrics · ${horizon}`, [
-          { label: 'CAGR', value: percent(metric.cagr) },
-          { label: 'Volatility', value: percent(metric.vol) },
-          { label: 'Sharpe', value: finite(metric.sharpe) == null ? '—' : finite(metric.sharpe)!.toFixed(2) },
-          { label: 'Max drawdown', value: percent(metric.max_drawdown) },
-          { label: 'Beta vs SPY', value: finite(metric.beta) == null ? '—' : finite(metric.beta)!.toFixed(2) },
+          { label: returnLabel, value: percent(periodReturn), sub: `${horizon} · auto-adjusted close` },
+          { label: `SPY ${returnLabel.toLowerCase()}`, value: percent(benchmarkReturn), sub: 'same dates and return method' },
+          { label: 'Active return vs SPY', value: percent(activeReturn), sub: activeReturn == null ? 'Unavailable' : activeReturn >= 0 ? 'Outperformance' : 'Underperformance' },
+          { label: 'Portfolio volatility', value: percent(metric.vol), sub: 'Daily returns annualized by √252' },
+          { label: 'SPY volatility', value: percent(benchmarkMetric.vol), sub: 'Same dates and method' },
+          { label: 'Portfolio Sharpe', value: finite(metric.sharpe) == null ? '—' : finite(metric.sharpe)!.toFixed(2), sub: `Annualized · ${finite(metric.risk_free_rate_pct)?.toFixed(2) ?? '—'}% risk-free rate` },
+          { label: 'SPY Sharpe', value: finite(benchmarkMetric.sharpe) == null ? '—' : finite(benchmarkMetric.sharpe)!.toFixed(2), sub: 'Same dates, frequency, and risk-free rate' },
+          { label: 'Portfolio max drawdown', value: percent(metric.max_drawdown) },
+          { label: 'SPY max drawdown', value: percent(benchmarkMetric.max_drawdown) },
+          { label: 'Portfolio single-factor beta vs SPY', value: finite(metric.beta) == null ? '—' : finite(metric.beta)!.toFixed(2), sub: `${horizon} · daily covariance / SPY variance` },
           { label: 'Sortino', value: finite(metric.sortino) == null ? '—' : finite(metric.sortino)!.toFixed(2) },
           {
             label: 'Book coverage',
@@ -2106,22 +2389,83 @@ async function runSource(
             value: fallbackTickers.length ? `${fallbackTickers.length} fallback` : 'Live',
             sub: fallbackTickers.length ? `Saved cost: ${fallbackTickers.join(', ')}` : 'Current quotes',
           },
+          {
+            label: 'Sample',
+            value: finite(metric.observations) == null ? '—' : `${finite(metric.observations)} observations`,
+            sub: periodDays == null ? horizon : `${periodDays} calendar days`,
+          },
         ]), source, `${portfolio.id}:metrics`),
+        tagClip(tableClip(
+          'Portfolio Compare',
+          `${analysisName} · performance methodology`,
+          ['Item', 'Definition'],
+          [
+            ['Data and period', `Yahoo Finance adjusted daily closes · ${horizon}`],
+            ['Return', `Ending index / starting index - 1 · ${periodDays != null && periodDays < 365 ? 'period return' : 'CAGR'}`],
+            ['Risk', 'Daily volatility annualized by √252. Drawdown uses the running peak.'],
+            ['Beta', 'Portfolio single-factor covariance with SPY / SPY variance'],
+            ['Sharpe / Sortino', `Annualized daily excess return · ${finite(metric.risk_free_rate_pct)?.toFixed(3) ?? '—'}% risk-free rate`],
+            ['Scope', 'SPY is an analytical reference. Beta shocks are linear and exclude fees, taxes, gaps, and nonlinear holdings.'],
+          ],
+        ), source, `${portfolio.id}:methodology`),
       ]
+      const portfolioBeta = finite(metric.beta)
+      if (portfolioBeta != null) {
+        clips.push(tagClip(tableClip(
+          'Portfolio Compare',
+          `${analysisName} market-shock scenario losses · beta-only sensitivity`,
+          ['SPY shock', 'Beta-implied portfolio move'],
+          [-5, -10, -15].map(shock => [
+            `${shock}%`,
+            `${(shock * portfolioBeta).toFixed(1)}%`,
+          ]),
+        ), source, `${portfolio.id}:beta-scenarios`))
+      }
       const points = thin(array(series.points).map(point => ({
         date: plain(record(point).date),
         portfolio: finite(record(point).value),
       })).filter(point => point.portfolio != null))
       const benchmark = new Map(array(data.benchmark_points).map(point => [plain(record(point).date), finite(record(point).value)]))
       if (points.length) {
+        const indexedRows = points.map(point => ({ ...point, SPY: benchmark.get(point.date) ?? null }))
         clips.push(tagClip(chartClip(
           'Portfolio Compare',
           `${analysisName} vs SPY · ${horizon}`,
           'line',
           'date',
-          points.map(point => ({ ...point, SPY: benchmark.get(point.date) ?? null })),
+          indexedRows,
           [{ key: 'portfolio', label: analysisName }, { key: 'SPY', label: 'SPY' }],
         ), source, `${portfolio.id}:performance`))
+        clips.push(tagClip(chartClip(
+          'Portfolio Compare',
+          `${analysisName} active return vs SPY · ${horizon}`,
+          'line',
+          'date',
+          indexedRows.map(point => ({
+            date: point.date,
+            activeReturn: point.SPY == null ? null : +(Number(point.portfolio) - Number(point.SPY)).toFixed(3),
+          })),
+          [{ key: 'activeReturn', label: 'Cumulative active return (pp)' }],
+        ), source, `${portfolio.id}:active-return`))
+        let portfolioPeak = -Infinity
+        let benchmarkPeak = -Infinity
+        const drawdowns = indexedRows.map(point => {
+          portfolioPeak = Math.max(portfolioPeak, Number(point.portfolio))
+          if (point.SPY != null) benchmarkPeak = Math.max(benchmarkPeak, Number(point.SPY))
+          return {
+            date: point.date,
+            portfolioDrawdown: portfolioPeak > 0 ? ((Number(point.portfolio) / portfolioPeak) - 1) * 100 : null,
+            benchmarkDrawdown: point.SPY != null && benchmarkPeak > 0 ? ((Number(point.SPY) / benchmarkPeak) - 1) * 100 : null,
+          }
+        })
+        clips.push(tagClip(chartClip(
+          'Portfolio Compare',
+          `${analysisName} drawdown vs SPY · ${horizon}`,
+          'line',
+          'date',
+          drawdowns,
+          [{ key: 'portfolioDrawdown', label: `${analysisName} drawdown %` }, { key: 'benchmarkDrawdown', label: 'SPY drawdown %' }],
+        ), source, `${portfolio.id}:drawdown`))
       }
       return clips
     }

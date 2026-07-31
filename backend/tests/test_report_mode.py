@@ -306,7 +306,7 @@ def test_outline_targets_three_pages_but_keeps_material_evidence(monkeypatch):
 
     assert long_outline is not None
     assert short_outline is not None
-    assert len(long_outline["sections"]) == 12
+    assert len(long_outline["sections"]) == 8
     assert len(short_outline["sections"]) == 2
     assert "Target a compact two-to-three-page decision note" in captured["system"]
     assert "Continue beyond three pages only when material evidence" in captured["system"]
@@ -1352,3 +1352,168 @@ def test_book_level_reports_never_use_range_mode():
     assert _report_mode(single, ["NVDA"]) == "range"
     # Same wording routed as a portfolio review must not produce a range.
     assert _book_level_report(_book_req("What is the fair value price target for NVDA", "portfolio-review"), ["NVDA"]) is True
+
+
+def test_portfolio_linter_cannot_reverse_negative_active_return():
+    clips = [
+        _clip(
+            "risk", "Portfolio Compare", "Book risk metrics",
+            "Period return: 8.1%; SPY period return: 8.4%; Active return vs SPY: -0.3% (Underperformance)",
+        ),
+    ]
+    text = "Growth tilt drives outperformance. The portfolio outperformed SPY."
+
+    fixed = ai._fix_portfolio_performance_claims(text, clips)
+
+    assert "outperformance" not in fixed.lower()
+    assert "underperformed SPY" in fixed
+    assert "associated with underperformance" in fixed
+
+
+def test_portfolio_quality_gate_blocks_incomplete_allocation_and_unsupported_inflation_thesis():
+    req = ReportGenRequest(
+        reportType="portfolio-review",
+        goal="Assess my portfolio and whether sticky inflation threatens upside",
+        clips=[
+            _clip(
+                "holdings", "Portfolio Manager", "Book allocation data quality",
+                "NVDA is unpriced and excluded from portfolio weights. Do not recommend maintaining allocation.",
+            ),
+            _clip(
+                "risk", "Portfolio Compare", "Book risk metrics",
+                "Period return: 8.1%; SPY period return: 8.4%; Active return vs SPY: -0.3% (Underperformance)",
+            ),
+        ],
+    )
+
+    warnings = ai._report_quality_warnings(req, True)
+    codes = {warning["code"] for warning in warnings if warning["severity"] == "blocking"}
+
+    assert "allocation-incomplete" in codes
+    assert "inflation-evidence-missing" in codes
+    assert "benchmark-comparison-missing" not in codes
+
+
+def test_portfolio_action_filter_removes_unsupported_recommendations_from_prose():
+    text = (
+        "NVDA retains strong operating momentum. We recommend adding NVDA to the portfolio. "
+        "Investors should increase exposure while demand remains durable."
+    )
+
+    fixed = ai._remove_unsupported_portfolio_actions(text)
+
+    assert fixed == "NVDA retains strong operating momentum."
+    assert "recommend" not in fixed.lower()
+    assert "increase exposure" not in fixed.lower()
+
+
+def test_beta_does_not_become_an_unsupported_explanation_for_active_return():
+    clips = [
+        _clip(
+            "risk", "Portfolio Compare", "Book risk metrics",
+            "Period return: 8.1%; SPY period return: 8.4%; Active return vs SPY: -0.3% (Underperformance); Beta vs SPY: 1.11",
+        ),
+    ]
+
+    fixed = ai._fix_portfolio_performance_claims(
+        "The portfolio lagged SPY, driven by beta of 1.11.", clips,
+    )
+
+    assert "does not determine whether active return arose" in fixed
+    assert "allocation, security selection, cash, fees, or trading" in fixed
+
+
+def test_direct_sector_weight_is_not_presented_as_total_exposure_with_funds():
+    clips = [
+        _clip(
+            "sector-limit", "Portfolio Manager", "Fund look-through limitation",
+            "ETF and fund positions represent 61% of portfolio value. Direct issuer sector weights exclude fund look-through.",
+        ),
+    ]
+
+    fixed = ai._clarify_direct_sector_weights(
+        "Technology accounts for 9% of portfolio value.", clips,
+    )
+
+    assert fixed == (
+        "Directly held technology securities represent 9% of the portfolio. "
+        "Total economic technology exposure cannot be determined without fund holdings look-through."
+    )
+
+
+def test_portfolio_action_filter_removes_gerund_reallocation_language():
+    fixed = ai._remove_unsupported_portfolio_actions(
+        "Reducing tech exposure and adding low-beta bonds will lower volatility. Current risk remains measurable."
+    )
+
+    assert fixed == "Current risk remains measurable."
+
+
+def test_beta_due_to_language_is_not_treated_as_active_return_attribution():
+    clips = [_clip(
+        "risk", "Portfolio Compare", "Portfolio risk metrics",
+        "Active return vs SPY: -0.7% (Underperformance); Beta vs SPY: 1.21",
+    )]
+
+    fixed = ai._fix_portfolio_performance_claims(
+        "The portfolio underperformed SPY by 0.7% due to a 1.21 beta.", clips,
+    )
+
+    assert "does not determine whether active return arose" in fixed
+    assert "market exposure" in fixed
+
+
+def test_portfolio_outline_is_always_the_four_decision_stages(monkeypatch):
+    response = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps({
+        "thesis": "Risk remains elevated.",
+        "sections": [{"heading": "Risk", "argues": "Beta is high.", "chartHint": "risk"}],
+    })))])
+    monkeypatch.setattr(ai, "groq_chat", lambda *_args, **_kwargs: response)
+
+    outline = ai._generate_outline({"reportLength": "medium", "reportType": "portfolio-review"})
+
+    assert outline is not None
+    assert [section["heading"].split(":")[0] for section in outline["sections"]] == [
+        "What Happened", "Why It Happened", "What Could Happen Next", "What Action Follows",
+    ]
+    assert "Valuation" not in outline["sections"][2]["heading"]
+
+
+def test_unfinished_fund_lookthrough_does_not_block_report_generation():
+    req = ReportGenRequest(
+        reportType="portfolio-review",
+        goal="Assess my portfolio",
+        clips=[
+            _clip("holdings", "Portfolio Manager", "Current allocation", "VOO weight: 60%"),
+            _clip("sector", "Portfolio Manager", "Fund look-through limitation", "60% requires fund holdings look-through"),
+            _clip("risk", "Portfolio Compare", "Book risk metrics", "Active return vs SPY: -0.3%"),
+        ],
+    )
+
+    warnings = ai._report_quality_warnings(req, True)
+
+    assert not any(warning["code"] == "fund-lookthrough-incomplete" for warning in warnings)
+
+
+def test_portfolio_trade_requires_proposal_and_quantified_impact():
+    current_only = [
+        _clip("allocation", "Portfolio Manager", "Current allocation", "NVDA weight: 30%"),
+        _clip("risk", "Portfolio Compare", "Scenario losses", "SPY -10%: portfolio -11%"),
+    ]
+    complete = current_only + [
+        _clip(
+            "proposal", "Portfolio Optimizer", "Proposed allocation and trade impact",
+            "Target allocation: NVDA 20%. Post-trade expected portfolio beta: 0.98. Before and after scenario loss supplied.",
+        ),
+    ]
+
+    assert ai._has_portfolio_trade_impact_evidence(current_only) is False
+    assert ai._has_portfolio_trade_impact_evidence(complete) is True
+
+
+def test_portfolio_prompt_makes_computed_evidence_authoritative():
+    prompt = _report_system_prompt("open", "medium", "", "portfolio-review", True)
+
+    assert "Never describe a negative active return as outperformance" in prompt
+    assert "period return, not CAGR" in prompt
+    assert "holding-level or factor attribution" in prompt

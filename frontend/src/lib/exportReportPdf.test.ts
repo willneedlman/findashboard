@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { choosePdfSlicePlan, computePdfSlices } from './exportReportPdf'
+import { choosePdfSlicePlan, computePdfSlices, reportPdfBaseName } from './exportReportPdf'
+
+describe('reportPdfBaseName', () => {
+  it('uses the entered project name with the alphatape PDF suffix', () => {
+    expect(reportPdfBaseName('Portfolio Analysis 7')).toBe('Portfolio Analysis 7.alphatape')
+    expect(reportPdfBaseName('Portfolio Analysis 7.pdf')).toBe('Portfolio Analysis 7.alphatape')
+    expect(reportPdfBaseName('Portfolio Analysis 7.alphatape.pdf')).toBe('Portfolio Analysis 7.alphatape')
+  })
+})
 
 describe('computePdfSlices', () => {
   it('moves a page boundary ahead of a protected report block', () => {
@@ -7,8 +15,8 @@ describe('computePdfSlices', () => {
       { top: 820, bottom: 1_180 },
       { top: 1_520, bottom: 1_820 },
     ])
-    expect(slices[0]).toEqual({ start: 0, height: 818 })
-    expect(slices[1].start).toBe(818)
+    expect(slices[0]).toEqual({ start: 0, height: 812 })
+    expect(slices[1].start).toBe(812)
     expect(slices.reduce((sum, slice) => sum + slice.height, 0)).toBe(2_200)
   })
 
@@ -31,14 +39,35 @@ describe('computePdfSlices', () => {
     const slices = computePdfSlices(1_700, 1_000, [
       { top: 540, bottom: 1_080, preferEarlierBreak: true },
     ])
-    expect(slices[0]).toEqual({ start: 0, height: 538 })
+    expect(slices[0]).toEqual({ start: 0, height: 532 })
+  })
+
+  it('moves an atomic section even when the current page is mostly empty', () => {
+    const slices = computePdfSlices(1_600, 1_000, [
+      { top: 120, bottom: 1_050, strict: true },
+    ])
+
+    expect(slices[0]).toEqual({ start: 0, height: 112 })
+    expect(slices[1].start).toBe(112)
+  })
+
+  it('keeps a page-start atomic block intact after an earlier break', () => {
+    const slices = computePdfSlices(1_900, 1_000, [
+      { top: 620, bottom: 1_450, strict: true },
+    ])
+
+    expect(slices[0]).toEqual({ start: 0, height: 612 })
+    expect(slices[1]).toEqual({ start: 612, height: 1_000 })
+    expect(slices[2]).toEqual({ start: 1_612, height: 288 })
+    expect(slices.some(slice => slice.start < 1_450 && slice.start + slice.height > 1_450)).toBe(true)
+    expect(slices.slice(0, -1).map(slice => slice.start + slice.height)).not.toContain(1_000)
   })
 
   it('keeps a block clear of the page edge when raster rounding nearly fits it', () => {
     const slices = computePdfSlices(1_700, 1_000, [
       { top: 920, bottom: 990 },
     ])
-    expect(slices[0]).toEqual({ start: 0, height: 918 })
+    expect(slices[0]).toEqual({ start: 0, height: 912 })
   })
 
   it('rechecks protected blocks after moving a boundary for the next section', () => {
@@ -46,7 +75,7 @@ describe('computePdfSlices', () => {
       { top: 850, bottom: 950 },
       { top: 940, bottom: 1_250 },
     ])
-    expect(slices[0]).toEqual({ start: 0, height: 848 })
+    expect(slices[0]).toEqual({ start: 0, height: 842 })
   })
 
   it('does not cascade past a completed block after moving the boundary', () => {
@@ -54,7 +83,7 @@ describe('computePdfSlices', () => {
       { top: 760, bottom: 875 },
       { top: 898, bottom: 1_080 },
     ])
-    expect(slices[0]).toEqual({ start: 0, height: 896 })
+    expect(slices[0]).toEqual({ start: 0, height: 890 })
   })
 
   it('packs a representative research report into two well-filled pages', () => {
@@ -76,8 +105,8 @@ describe('computePdfSlices', () => {
       { top: 1_752, bottom: 1_830 },
     ])
     expect(slices).toEqual([
-      { start: 0, height: 1_006 },
-      { start: 1_006, height: 844 },
+      { start: 0, height: 1_001 },
+      { start: 1_001, height: 849 },
     ])
   })
 
@@ -88,8 +117,8 @@ describe('computePdfSlices', () => {
 
     expect(plan.scaleFactor).toBe(1.05)
     expect(plan.slices).toEqual([
-      { start: 0, height: 817 },
-      { start: 817, height: 1_033 },
+      { start: 0, height: 812 },
+      { start: 812, height: 1_038 },
     ])
   })
 
@@ -100,13 +129,29 @@ describe('computePdfSlices', () => {
     expect(slices[slices.length - 1]).toEqual({ start: 4_000, height: 600 })
   })
 
+  it('packs a four-stage portfolio report without cutting atomic evidence', () => {
+    const atomic = [
+      { top: 760, bottom: 1_120, strict: true },
+      { top: 1_820, bottom: 2_040, strict: true },
+      { top: 2_760, bottom: 3_180, strict: true },
+      { top: 3_680, bottom: 3_940, strict: true },
+    ]
+    const plan = choosePdfSlicePlan(4_080, 1_000, atomic)
+    const boundaries = plan.slices.slice(0, -1).map(slice => slice.start + slice.height)
+
+    expect(plan.slices).toHaveLength(4)
+    for (const boundary of boundaries) {
+      expect(atomic.some(span => span.top < boundary && span.bottom > boundary)).toBe(false)
+    }
+  })
+
   it('moves a tight block instead of leaving a clipped fragment', () => {
     const slices = computePdfSlices(1_700, 1_000, [
       { top: 80, bottom: 1_050 },
       { top: 930, bottom: 1_050, preferEarlierBreak: true },
     ])
 
-    expect(slices[0]).toEqual({ start: 0, height: 928 })
-    expect(slices[1].start).toBe(928)
+    expect(slices[0]).toEqual({ start: 0, height: 922 })
+    expect(slices[1].start).toBe(922)
   })
 })

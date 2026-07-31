@@ -94,7 +94,7 @@ describe('report section composition', () => {
     })).toBe('full-width')
   })
 
-  it('does not let the AI waste a full row on a compact visual', () => {
+  it('honors an explicit full-width editorial layout', () => {
     const compact = chart('compact', 'Small Comparison')
     compact.payload = {
       kind: 'chart',
@@ -110,7 +110,7 @@ describe('report section composition', () => {
       visual: compact,
       analysis: 'A concise comparison should sit beside its interpretation.',
       index: 1,
-    })).toBe('visual-right')
+    })).toBe('full-width')
   })
 
   it('turns a repetitive split into text wrap when the prose can reclaim the visual depth', () => {
@@ -304,6 +304,17 @@ describe('assignBodyVisuals', () => {
     expect(promoted?.chartType).toBe('bar')
     expect(promoted?.barOrientation).toBe('horizontal')
     expect(promoted?.series[0].label).toBe('Upside %')
+  })
+
+  it('never turns event dates into numeric chart values', () => {
+    const promoted = promoteTableToChart({
+      kind: 'table',
+      title: 'Portfolio Earnings Schedule',
+      columns: ['Ticker', 'Earnings date', 'Days until'],
+      rows: [['NVDA', '2026-08-26', 26], ['AMZN', '2026-10-29', 90]],
+    })
+
+    expect(promoted).toBeUndefined()
   })
 
   it('turns sector leadership tables into a momentum ranking with supporting horizons', () => {
@@ -512,5 +523,40 @@ describe('assignBodyVisuals', () => {
       [metrics, performance],
     )
     expect(assigned.get('k1')?.visual?.id).toBe('c1')
+  })
+
+  it('gives portfolio stages one decision-specific visual each', () => {
+    const allocation: ReportClip = {
+      id: 'allocation', sourceTab: 'Portfolio Manager', dataType: 'table', capturedAt: '', projectId: 'p1',
+      payload: { kind: 'table', title: 'Portfolio · current allocation', columns: ['Ticker', 'Weight %'], rows: [['NVDA', 5.6]] },
+    }
+    const metrics = { ...kpi('metrics', 'Portfolio Compare'), payload: {
+      kind: 'kpi' as const, title: 'Portfolio risk metrics · 2026-07-01 to 2026-07-31', cells: [{ label: 'Period return', value: '4.2%' }],
+    } }
+    const performance = chart('performance', 'Portfolio vs SPY · 2026-07-01 to 2026-07-31', 'Portfolio Compare')
+    const rolling = chart('rolling', 'Rolling multifactor market coefficient', 'Factor Decomposition')
+    const schedule: ReportClip = {
+      id: 'schedule', sourceTab: 'Earnings Scanner', dataType: 'table', capturedAt: '', projectId: 'p1',
+      payload: { kind: 'table', title: 'Upcoming portfolio earnings schedule', columns: ['Holding', 'Report date'], rows: [['NVDA', '2026-08-26']] },
+    }
+    const clips = [allocation, metrics, performance, rolling, schedule]
+    const sections = [
+      { clipId: 'metrics', heading: 'What Happened: Return and Risk Versus SPY', analysis: 'Performance evidence.' },
+      { clipId: 'metrics', heading: 'Why It Happened: Market Sensitivity and Name-Specific Risk', analysis: 'Risk evidence.' },
+      { clipId: 'metrics', heading: 'What Could Happen Next: Stress, Valuation, and Dated Catalysts', analysis: 'Forward evidence.' },
+      { clipId: 'metrics', heading: 'What Action Follows: Evidence Before Reallocation', analysis: 'No tested trade.' },
+    ]
+
+    const assigned = assignReportBodyVisuals(
+      sections,
+      new Map(clips.map(clip => [clip.id, clip])),
+      clips,
+      { projectId: 'p1', generatedAt: '2026-07-31T00:00:00Z' },
+    )
+
+    expect(assigned.get(reportSectionAssignmentKey(sections, 0))?.visual?.payload.title).toContain('Portfolio vs SPY')
+    expect(assigned.get(reportSectionAssignmentKey(sections, 1))?.visual?.payload.title).toContain('Rolling multifactor')
+    expect(assigned.get(reportSectionAssignmentKey(sections, 2))?.visual?.payload.title).toContain('Upcoming portfolio earnings')
+    expect(assigned.get(reportSectionAssignmentKey(sections, 3))?.visual).toBeUndefined()
   })
 })

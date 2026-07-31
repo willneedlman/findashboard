@@ -1,0 +1,428 @@
+
+> finance-terminal@2.0.0 dev
+> vite
+
+You or a plugin you are using have set `optimizeDeps.esbuildOptions` but this option is now deprecated. Vite now uses Rolldown to optimize the dependencies. Please use `optimizeDeps.rolldownOptions` instead.
+
+  VITE v8.0.16  ready in 215 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+10:20:24 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+10:20:24 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+12:53:56 PM [vite] (client) hmr update /src/index.css, /src/components/ReportCaptureHost.tsx, /src/components/ReportCaptureButton.tsx
+12:54:06 PM [vite] (client) hmr update /src/index.css, /src/components/ReportCaptureHost.tsx, /src/components/ReportCaptureButton.tsx
+12:54:11 PM [vite] (client) hmr update /src/index.css, /src/components/ReportCaptureHost.tsx, /src/components/ReportCaptureButton.tsx
+12:54:16 PM [vite] (client) hmr update /src/index.css, /src/components/ReportCaptureHost.tsx, /src/components/ReportCaptureButton.tsx
+12:54:22 PM [vite] (client) hmr update /src/index.css, /src/components/ReportCaptureHost.tsx, /src/components/ReportCaptureButton.tsx
+12:56:33 PM [vite] (client) hmr update /src/index.css
+12:56:42 PM [vite] (client) hmr update /src/index.css
+12:56:47 PM [vite] (client) hmr update /src/index.css
+12:56:51 PM [vite] (client) hmr update /src/index.css
+12:57:07 PM [vite] (client) hmr update /src/index.css
+12:57:11 PM [vite] (client) hmr update /src/index.css
+12:57:15 PM [vite] (client) hmr update /src/index.css
+12:57:22 PM [vite] (client) hmr update /src/index.css
+12:57:28 PM [vite] (client) hmr update /src/index.css
+12:57:34 PM [vite] (client) hmr update /src/index.css
+12:57:38 PM [vite] (client) hmr update /src/index.css
+12:57:58 PM [vite] (client) hmr update /src/index.css
+1:14:24 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+1:14:24 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+1:14:24 PM [vite] (client) [console.warn] motion() is deprecated. Use motion.create() instead.
+1:14:24 PM [vite] (client) [console.warn] Please ensure that the container has a non-static position, like 'relative', 'fixed', or 'absolute' to ensure scroll offset is calculated correctly.
+1:17:02 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx
+1:17:12 PM [vite] (client) hmr update /src/index.css, /src/components/report/ReportSetupWizard.tsx
+1:17:12 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+1:17:12 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+1:17:33 PM [vite] (client) hmr update /src/index.css, /src/components/report/ReportSetupWizard.tsx
+1:17:33 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+1:17:33 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+1:17:42 PM [vite] (client) hmr update /src/index.css, /src/components/report/ReportSetupWizard.tsx
+1:17:42 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+1:17:42 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+1:18:17 PM [vite] (client) hmr update /src/index.css, /src/components/report/ReportSetupWizard.tsx
+1:18:17 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+1:18:17 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+1:19:04 PM [vite] (client) hmr update /src/index.css
+1:19:13 PM [vite] (client) hmr update /src/index.css
+1:19:18 PM [vite] (client) hmr update /src/index.css
+1:19:45 PM [vite] (client) hmr update /src/index.css, /src/components/report/ReportSetupWizard.tsx
+1:19:45 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+1:19:45 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+1:19:49 PM [vite] (client) hmr update /src/index.css, /src/components/report/ReportSetupWizard.tsx
+1:19:49 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+1:19:49 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+1:28:06 PM [vite] (client) hmr update /src/index.css, /src/components/report/ReviseControls.tsx
+1:28:06 PM [vite] (client) hmr invalidate /src/components/report/ReviseControls.tsx Could not Fast Refresh ("applyPatch" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+1:28:06 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx
+1:31:33 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+1:31:33 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+1:47:53 PM [vite] (client) hmr update /src/index.css
+1:48:13 PM [vite] (client) hmr update /src/index.css
+1:55:01 PM [vite] (client) hmr update /src/index.css, /src/components/report/ReportSetupWizard.tsx
+1:55:01 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+1:55:01 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+1:55:29 PM [vite] (client) hmr update /src/index.css, /src/components/report/ReportSetupWizard.tsx
+1:55:29 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+1:55:29 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+1:55:36 PM [vite] (client) hmr update /src/index.css, /src/components/report/ReportSetupWizard.tsx
+1:55:36 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+1:55:36 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+1:55:44 PM [vite] (client) hmr update /src/index.css, /src/components/report/ReportSetupWizard.tsx
+1:55:44 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+1:55:44 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+1:55:53 PM [vite] (client) hmr update /src/index.css, /src/components/report/ReportSetupWizard.tsx
+1:55:53 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+1:55:53 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+1:56:00 PM [vite] (client) hmr update /src/index.css, /src/components/report/ReportSetupWizard.tsx
+1:56:00 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+1:56:00 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+1:56:24 PM [vite] (client) hmr update /src/index.css, /src/components/report/ReportSetupWizard.tsx
+1:56:24 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+1:56:24 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+1:56:42 PM [vite] (client) hmr update /src/index.css, /src/components/report/ReportSetupWizard.tsx
+1:56:42 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+1:56:42 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+1:56:47 PM [vite] (client) hmr update /src/index.css, /src/components/report/ReportSetupWizard.tsx
+1:56:47 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+1:56:47 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+1:56:51 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/index.css
+1:57:27 PM [vite] (client) hmr update /src/index.css, /src/components/report/ReportSetupWizard.tsx
+1:57:27 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+1:57:27 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+1:57:31 PM [vite] (client) hmr update /src/index.css, /src/components/report/ReportSetupWizard.tsx
+1:57:31 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+1:57:31 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:02:52 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:02:53 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:02:53 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:02:58 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:02:58 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:02:58 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:04:03 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:04:03 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:04:03 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:04:08 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:04:08 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:04:08 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:05:16 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:05:16 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:05:16 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:05:24 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:05:24 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:05:24 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:05:32 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:05:32 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:05:32 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:05:51 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:05:51 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:05:51 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:13:43 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:13:44 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:13:44 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:13:51 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:13:51 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:13:51 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:13:55 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:13:55 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:13:55 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:14:04 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:14:04 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:14:04 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:14:15 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:14:15 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:14:15 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:14:30 PM [vite] (client) hmr update /src/index.css
+2:14:41 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:14:41 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:14:41 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:14:41 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:14:42 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:14:42 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:14:59 PM [vite] (client) hmr update /src/index.css
+2:26:27 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:26:27 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:26:27 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:26:56 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:26:56 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:26:56 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:28:23 PM [vite] (client) hmr update /src/index.css, /src/components/ReportCaptureHost.tsx, /src/components/ReportCaptureButton.tsx, /src/pages/ReportCreator.tsx, /src/components/report/SectionLayout.tsx, /src/components/report/ReviseControls.tsx, /src/pages/ReportPrint.tsx
+2:28:23 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/index.css
+2:28:23 PM [vite] (client) hmr invalidate /src/components/report/SectionLayout.tsx Could not Fast Refresh ("assignBodyVisuals" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:28:23 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/pages/ReportPrint.tsx
+2:28:23 PM [vite] (client) hmr invalidate /src/components/report/ReviseControls.tsx Could not Fast Refresh ("applyPatch" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:28:23 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx
+2:28:23 PM [vite] (client) hmr update /src/pages/ReportPrint.tsx, /src/index.css
+2:29:32 PM [vite] (client) hmr update /src/index.css
+2:29:46 PM [vite] (client) hmr update /src/index.css
+2:30:38 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportPrint.tsx
+2:31:41 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:31:42 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:31:42 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:32:57 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportPrint.tsx
+2:33:15 PM [vite] (client) hmr update /src/index.css
+2:35:38 PM [vite] (client) hmr update /src/index.css, /src/components/ReportCaptureHost.tsx, /src/components/ReportCaptureButton.tsx, /src/pages/ReportCreator.tsx, /src/components/report/SectionLayout.tsx, /src/components/report/ReviseControls.tsx, /src/pages/ReportPrint.tsx
+2:35:38 PM [vite] (client) hmr update /src/index.css, /src/components/report/ReportWizardForm.tsx
+2:35:38 PM [vite] (client) hmr invalidate /src/components/report/SectionLayout.tsx Could not Fast Refresh ("assignBodyVisuals" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:35:38 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/pages/ReportPrint.tsx
+2:35:38 PM [vite] (client) hmr invalidate /src/components/report/ReviseControls.tsx Could not Fast Refresh ("applyPatch" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:35:38 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx
+2:35:38 PM [vite] (client) hmr update /src/index.css, /src/components/report/ReportSetupWizard.tsx
+2:35:38 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:35:38 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:35:59 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:36:00 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:36:00 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:36:06 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:36:06 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:36:06 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:36:29 PM [vite] (client) hmr update /src/index.css
+2:36:29 PM [vite] (client) hmr update /src/index.css
+2:55:40 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:55:40 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:55:40 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:56:22 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:56:22 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:56:22 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+2:56:57 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:56:57 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:56:57 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+3:06:50 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+3:06:50 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+3:17:58 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+3:17:58 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+3:17:58 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+3:18:18 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+3:18:18 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+3:18:18 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+3:18:33 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+3:18:34 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+3:18:34 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+3:18:50 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+3:18:50 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+3:18:50 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+3:19:04 PM [vite] (client) hmr update /src/pages/ReportPrint.tsx, /src/index.css
+3:19:04 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/index.css
+3:19:04 PM [vite] (client) hmr update /src/index.css, /src/components/ReportCaptureHost.tsx, /src/components/ReportCaptureButton.tsx, /src/pages/ReportCreator.tsx, /src/components/report/SectionLayout.tsx, /src/components/report/ReviseControls.tsx, /src/pages/ReportPrint.tsx
+3:19:04 PM [vite] (client) hmr invalidate /src/components/report/SectionLayout.tsx Could not Fast Refresh ("assignBodyVisuals" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+3:19:04 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/pages/ReportPrint.tsx
+3:19:04 PM [vite] (client) hmr invalidate /src/components/report/ReviseControls.tsx Could not Fast Refresh ("applyPatch" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+3:19:04 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx
+3:20:46 PM [vite] (client) hmr update /src/pages/ReportPrint.tsx, /src/index.css
+3:21:45 PM [vite] (client) hmr update /src/index.css
+3:22:34 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+3:22:34 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+3:22:34 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+3:41:36 PM [vite] (client) [console.error] Warning: Encountered two children with the same key, `ETH`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at div
+    at div
+    at SubjectPicker (http://localhost:5173/src/components/report/ReportSetupWizard.tsx?t=1785529354207:575:26)
+    at div
+    at div
+    at div
+    at ReportSetupWizard (http://localhost:5173/src/components/report/ReportSetupWizard.tsx?t=1785529354207:1282:45)
+    at div
+    at div
+    at div
+    at MotionComponent (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:1194:35)
+    at PageWrapper (http://localhost:5173/src/components/PageWrapper.tsx:34:39)
+    at ReportCreator (http://localhost:5173/src/pages/ReportCreator.tsx?t=1785529354207:2746:19)
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3329:8)
+    at Outlet (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3700:25)
+    at Suspense
+    at PresenceChild (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:113:24)
+    at AnimatePresence (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:279:26)
+    at div
+    at div
+    at main
+    at div
+    at Layout (http://localhost:5173/src/components/Layout.tsx?t=1785526538186:18:34)
+    at TerminalChrome (http://localhost:5173/src/App.tsx?t=1785527817086:277:19)
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3329:8)
+    at Routes (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3772:8)
+    at Suspense
+    at PortfolioProvider (http://localhost:5173/src/contexts/PortfolioContext.tsx:58:37)
+    at ThemeProvider (http://localhost:5173/src/contexts/ThemeContext.tsx:253:33)
+    at Router (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3720:18)
+    at BrowserRouter (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:4395:8)
+    at App
+    at AnalysisProvider (http://localhost:5173/src/context/AnalysisContext.tsx:7:36)
+    at QueryClientProvider (http://localhost:5173/node_modules/.vite/deps/@tanstack_react-query.js?v=6249f826:2549:30)
+    at ErrorBoundary (http://localhost:5173/src/components/ErrorBoundary.tsx:6:16)
+3:41:36 PM [vite] (client) [console.error] Warning: Encountered two children with the same key, `ETH`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at div
+    at div
+    at SubjectPicker (http://localhost:5173/src/components/report/ReportSetupWizard.tsx?t=1785529354207:575:26)
+    at div
+    at div
+    at div
+    at ReportSetupWizard (http://localhost:5173/src/components/report/ReportSetupWizard.tsx?t=1785529354207:1282:45)
+    at div
+    at div
+    at div
+    at MotionComponent (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:1194:35)
+    at PageWrapper (http://localhost:5173/src/components/PageWrapper.tsx:34:39)
+    at ReportCreator (http://localhost:5173/src/pages/ReportCreator.tsx?t=1785529354207:2746:19)
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3329:8)
+    at Outlet (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3700:25)
+    at Suspense
+    at PresenceChild (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:113:24)
+    at AnimatePresence (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:279:26)
+    at div
+    at div
+    at main
+    at div
+    at Layout (http://localhost:5173/src/components/Layout.tsx?t=1785526538186:18:34)
+    at TerminalChrome (http://localhost:5173/src/App.tsx?t=1785527817086:277:19)
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3329:8)
+    at Routes (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3772:8)
+    at Suspense
+    at PortfolioProvider (http://localhost:5173/src/contexts/PortfolioContext.tsx:58:37)
+    at ThemeProvider (http://localhost:5173/src/contexts/ThemeContext.tsx:253:33)
+    at Router (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3720:18)
+    at BrowserRouter (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:4395:8)
+    at App
+    at AnalysisProvider (http://localhost:5173/src/context/AnalysisContext.tsx:7:36)
+    at QueryClientProvider (http://localhost:5173/node_modules/.vite/deps/@tanstack_react-query.js?v=6249f826:2549:30)
+    at ErrorBoundary (http://localhost:5173/src/components/ErrorBoundary.tsx:6:16)
+3:41:41 PM [vite] (client) [console.error] Warning: Encountered two children with the same key, `XRP`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at div
+    at div
+    at SubjectPicker (http://localhost:5173/src/components/report/ReportSetupWizard.tsx?t=1785529354207:575:26)
+    at div
+    at div
+    at div
+    at ReportSetupWizard (http://localhost:5173/src/components/report/ReportSetupWizard.tsx?t=1785529354207:1282:45)
+    at div
+    at div
+    at div
+    at MotionComponent (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:1194:35)
+    at PageWrapper (http://localhost:5173/src/components/PageWrapper.tsx:34:39)
+    at ReportCreator (http://localhost:5173/src/pages/ReportCreator.tsx?t=1785529354207:2746:19)
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3329:8)
+    at Outlet (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3700:25)
+    at Suspense
+    at PresenceChild (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:113:24)
+    at AnimatePresence (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:279:26)
+    at div
+    at div
+    at main
+    at div
+    at Layout (http://localhost:5173/src/components/Layout.tsx?t=1785526538186:18:34)
+    at TerminalChrome (http://localhost:5173/src/App.tsx?t=1785527817086:277:19)
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3329:8)
+    at Routes (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3772:8)
+    at Suspense
+    at PortfolioProvider (http://localhost:5173/src/contexts/PortfolioContext.tsx:58:37)
+    at ThemeProvider (http://localhost:5173/src/contexts/ThemeContext.tsx:253:33)
+    at Router (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3720:18)
+    at BrowserRouter (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:4395:8)
+    at App
+    at AnalysisProvider (http://localhost:5173/src/context/AnalysisContext.tsx:7:36)
+    at QueryClientProvider (http://localhost:5173/node_modules/.vite/deps/@tanstack_react-query.js?v=6249f826:2549:30)
+    at ErrorBoundary (http://localhost:5173/src/components/ErrorBoundary.tsx:6:16)
+3:41:41 PM [vite] (client) [console.error] Warning: Encountered two children with the same key, `XRP`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at div
+    at div
+    at SubjectPicker (http://localhost:5173/src/components/report/ReportSetupWizard.tsx?t=1785529354207:575:26)
+    at div
+    at div
+    at div
+    at ReportSetupWizard (http://localhost:5173/src/components/report/ReportSetupWizard.tsx?t=1785529354207:1282:45)
+    at div
+    at div
+    at div
+    at MotionComponent (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:1194:35)
+    at PageWrapper (http://localhost:5173/src/components/PageWrapper.tsx:34:39)
+    at ReportCreator (http://localhost:5173/src/pages/ReportCreator.tsx?t=1785529354207:2746:19)
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3329:8)
+    at Outlet (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3700:25)
+    at Suspense
+    at PresenceChild (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:113:24)
+    at AnimatePresence (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:279:26)
+    at div
+    at div
+    at main
+    at div
+    at Layout (http://localhost:5173/src/components/Layout.tsx?t=1785526538186:18:34)
+    at TerminalChrome (http://localhost:5173/src/App.tsx?t=1785527817086:277:19)
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3329:8)
+    at Routes (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3772:8)
+    at Suspense
+    at PortfolioProvider (http://localhost:5173/src/contexts/PortfolioContext.tsx:58:37)
+    at ThemeProvider (http://localhost:5173/src/contexts/ThemeContext.tsx:253:33)
+    at Router (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3720:18)
+    at BrowserRouter (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:4395:8)
+    at App
+    at AnalysisProvider (http://localhost:5173/src/context/AnalysisContext.tsx:7:36)
+    at QueryClientProvider (http://localhost:5173/node_modules/.vite/deps/@tanstack_react-query.js?v=6249f826:2549:30)
+    at ErrorBoundary (http://localhost:5173/src/components/ErrorBoundary.tsx:6:16)
+3:42:43 PM [vite] (client) hmr update /src/index.css, /src/components/report/SectionLayout.tsx
+3:42:43 PM [vite] (client) hmr invalidate /src/components/report/SectionLayout.tsx Could not Fast Refresh ("assignBodyVisuals" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+3:42:43 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/pages/ReportPrint.tsx
+3:43:22 PM [vite] (client) hmr update /src/pages/ReportPrint.tsx, /src/index.css
+3:43:39 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportPrint.tsx
+3:44:45 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+3:44:45 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+3:44:45 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+3:45:09 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+3:45:09 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+3:45:09 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+3:48:51 PM [vite] (client) hmr update /src/index.css, /src/components/report/ClipRenderer.tsx
+3:48:51 PM [vite] (client) hmr invalidate /src/components/report/ClipRenderer.tsx Could not Fast Refresh ("reportChartHeight" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+3:48:51 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/SectionLayout.tsx, /src/pages/ReportPrint.tsx
+3:48:51 PM [vite] (client) hmr invalidate /src/components/report/SectionLayout.tsx Could not Fast Refresh ("assignBodyVisuals" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+3:48:51 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/pages/ReportPrint.tsx
+3:49:23 PM [vite] (client) hmr update /src/index.css
+3:49:23 PM [vite] (client) hmr update /src/index.css
+3:49:54 PM [vite] (client) hmr update /src/index.css
+3:51:19 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+3:51:19 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:12:41 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+4:12:41 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:12:41 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+4:12:57 PM [vite] (client) hmr update /src/index.css, /src/components/report/ClipRenderer.tsx
+4:12:57 PM [vite] (client) hmr update /src/index.css, /src/components/report/SectionLayout.tsx
+4:12:57 PM [vite] (client) hmr invalidate /src/components/report/ClipRenderer.tsx Could not Fast Refresh ("reportChartHeight" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:12:57 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/SectionLayout.tsx, /src/pages/ReportPrint.tsx
+4:12:57 PM [vite] (client) hmr invalidate /src/components/report/SectionLayout.tsx Could not Fast Refresh ("assignBodyVisuals" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:12:57 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/pages/ReportPrint.tsx
+4:12:57 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportPrint.tsx
+4:13:17 PM [vite] (client) hmr update /src/index.css, /src/components/report/SectionLayout.tsx
+4:13:17 PM [vite] (client) hmr invalidate /src/components/report/SectionLayout.tsx Could not Fast Refresh ("assignBodyVisuals" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:13:17 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/pages/ReportPrint.tsx
+4:13:25 PM [vite] (client) hmr update /src/index.css, /src/components/report/SectionLayout.tsx
+4:13:25 PM [vite] (client) hmr invalidate /src/components/report/SectionLayout.tsx Could not Fast Refresh ("assignBodyVisuals" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:13:25 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/pages/ReportPrint.tsx
+4:13:43 PM [vite] (client) hmr update /src/pages/ReportPrint.tsx, /src/index.css
+4:14:38 PM [vite] (client) hmr update /src/index.css
+4:15:31 PM [vite] (client) hmr update /src/pages/ReportPrint.tsx, /src/index.css
+4:15:49 PM [vite] (client) hmr update /src/index.css
+4:17:38 PM [vite] (client) hmr update /src/index.css
+4:18:32 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+4:18:33 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:18:33 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+4:36:12 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportPrint.tsx
+4:36:12 PM [vite] (client) hmr update /src/index.css
+4:36:12 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+4:36:12 PM [vite] (client) hmr update /src/pages/ReportPrint.tsx, /src/index.css
+4:36:12 PM [vite] (client) hmr invalidate /src/components/report/ReportSetupWizard.tsx Could not Fast Refresh ("REPORT_TYPES" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:36:12 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/ReportWizardForm.tsx
+4:37:27 PM [vite] (client) hmr update /src/pages/ReportPrint.tsx, /src/index.css
+4:39:37 PM [vite] (client) hmr update /src/pages/ReportPrint.tsx, /src/index.css
+4:39:37 PM [vite] (client) hmr update /src/index.css, /src/components/report/ClipRenderer.tsx
+4:39:37 PM [vite] (client) hmr invalidate /src/components/report/ClipRenderer.tsx Could not Fast Refresh ("reportChartHeight" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:39:37 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/SectionLayout.tsx, /src/pages/ReportPrint.tsx
+4:39:37 PM [vite] (client) hmr invalidate /src/components/report/SectionLayout.tsx Could not Fast Refresh ("assignBodyVisuals" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:39:37 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/pages/ReportPrint.tsx
+4:41:02 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+4:41:02 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:41:41 PM [vite] (client) hmr update /src/index.css, /src/components/report/ClipRenderer.tsx
+4:41:41 PM [vite] (client) hmr invalidate /src/components/report/ClipRenderer.tsx Could not Fast Refresh ("reportChartHeight" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:41:41 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/components/report/SectionLayout.tsx, /src/pages/ReportPrint.tsx
+4:41:41 PM [vite] (client) hmr invalidate /src/components/report/SectionLayout.tsx Could not Fast Refresh ("assignBodyVisuals" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:41:41 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/pages/ReportPrint.tsx
+4:43:45 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportPrint.tsx
+4:43:45 PM [vite] (client) hmr update /src/index.css
+4:43:46 PM [vite] (client) hmr update /src/pages/ReportPrint.tsx, /src/index.css

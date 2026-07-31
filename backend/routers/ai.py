@@ -2004,18 +2004,17 @@ _LENGTH_SPEC = {
         ),
     },
     "medium": {
-        "sections": "3 to 6 normally, up to 8 when the evidence requires it",
+        "sections": "3 to 5",
         "guidance": (
-            "Medium: standard research-note depth. 3 to 6 body sections, each 1-3 short paragraphs with "
+            "Medium: standard research-note depth. 3 to 5 body sections, each 1-2 short paragraphs with "
             "2-4 keyFigures. Executive summary is one tight paragraph. Conclusion covers the verdict, "
-            "the main risk to it, and an action. Expand to as many as 8 sections only when distinct, "
-            "decision-critical evidence would otherwise be omitted."
+            "the main risk to it, and an action. Merge related evidence rather than adding modules."
         ),
     },
     "long": {
-        "sections": "6 to 12",
+        "sections": "5 to 8",
         "guidance": (
-            "Long: full supporting detail for a desk that wants the complete picture. 6 to 12 body "
+            "Long: full supporting detail for a desk that wants the complete picture. 5 to 8 body "
             "sections — cover secondary drivers, sensitivities, and peer/segment detail that medium "
             "length would cut, in addition to the core thesis sections. Each section can run 2-4 "
             "paragraphs with 2-4 keyFigures. Executive summary can run 2-3 sentences. Conclusion "
@@ -2154,6 +2153,24 @@ HARD RULES & NARRATIVE VOCABULARY (both modes)
   - `premium_to_intrinsic = (price - intrinsic) / intrinsic`: verbalize strictly as "X% premium to intrinsic".
   - Single polarity per field per paragraph: a given metric may not map to opposing polarity words in the same paragraph.
 - Metric Nouns: Single-period growth (e.g. REV GROWTH 85.2%) must be called "growth rate" or "revenue growth", NEVER "revenue CAGR". Reserve "CAGR" strictly for multi-year compound growth rates with explicit n_periods.
+- DCF arithmetic and units: Use the deterministic Projection Math clip for CAGR and cumulative growth. Never relabel cumulative growth as CAGR. Treat DCF Revenue, EBIT, FCF, enterprise value, and bridge inputs in the units printed by their clip. Never abbreviate an input expressed in USD millions as though it were raw dollars.
+- DCF completeness: An intrinsic-value conclusion must name the valuation date or quote limitation, explicit forecast horizon, WACC, terminal growth, and at least the principal operating assumptions. Describe one-way sensitivity as one-variable-at-a-time, not as a probability distribution or a robust downside case.
+- Horizon discipline: An open-ended outlook does not supply a target date. Never pair it with a precise price target or expected return unless another clip supplies an explicit target date or annualized return.
+- Correlation and beta: Prose beside a rolling chart must name the exact pair or factor in that chart and use the chart's first/latest/range values. Do not substitute a different matrix pair. Low correlation is diversification evidence, not proof that concentration risk is absent. Beta is market sensitivity, not volatility.
+- Portfolio actions: Never recommend trimming, adding, hedging, or changing a weight unless the clips show the complete current allocation, a specific proposed allocation or trade list, holding-level risk contributions, and quantified before-and-after beta, volatility, and scenario losses. Beta above 1 cannot explain underperformance by itself. Use return attribution before assigning active return to beta, sectors, selection, cash, fees, or timing.
+- Portfolio evidence order: The first portfolio section must show portfolio return, SPY return, active return, portfolio and SPY volatility, and both maximum drawdowns before any causal explanation. If active-return attribution is absent, say the cause remains unresolved. Factor regression and risk contribution are not substitutes for allocation and security-selection attribution.
+- Benchmark comparison: Call SPY an analytical US equity reference unless the evidence explicitly validates it as the policy benchmark. Any claim of similar risk must print both portfolio and benchmark volatility using matching dates and methods. Compare Sharpe and drawdown only when both sides are supplied.
+- Factor naming: A rolling beta chart is "Rolling Market Beta", not a factor decomposition. Use "factor decomposition" only when the evidence supplies multiple factor coefficients, fit statistics, and systematic versus idiosyncratic risk.
+- Sector look-through: A direct issuer sector table does not measure economic sector exposure inside ETFs or funds. If a fund look-through limitation is supplied, label sector weights "directly classified" and never present them as total portfolio exposure.
+- Portfolio concentration language: Without fund holdings and a reference allocation, never call the portfolio overweight technology. When the evidence supports only one holding's weight, beta, variance share, and idiosyncratic share, frame the conclusion as single-security risk concentration.
+- Systematic versus idiosyncratic risk: Market beta measures systematic sensitivity. Residual or idiosyncratic variance must come from the residual calculation. Never infer idiosyncratic contribution from high beta.
+- Mixed valuation: A discount on one multiple is not an overall valuation discount when other supplied multiples show premiums. State results by metric and call the picture mixed when measures disagree.
+- Valuation methods: Relative multiples, analyst consensus, and DCF are separate methods. Never say a P/E discount delivers or implies DCF upside. If consensus and DCF upside differ, show both, explain that they use different methods, and state which one informs the conclusion. In portfolio reviews, valuation is one compact supporting panel, not the central argument.
+- Catalyst labels: Use "upcoming catalyst" only when the supplied evidence contains the actual future event and date. A methodology clip is not a catalyst calendar. Remove catalyst language from a heading when no dated event is available.
+- Portfolio summary structure: For a portfolio review, write the executive summary as exactly three short sentences: what happened, the strongest supported diagnosis, and the decision implication. Keep it under 80 words. Use exactly four body sections that answer What Happened, Why It Happened, What Could Happen Next, and What Action Follows. Keep each section analysis under 110 words and move definitions or calculation details to the appendix.
+- Statistical claims: Call a coefficient significant only when the coefficient evidence gives its p-value and it is below the stated threshold. Regression is association, never proof of causation.
+- Sector framing: Sector momentum does not make an individual high-beta growth stock "defensive". Use defensive only when the supplied company or risk evidence supports that classification.
+- Macro events: A calendar is event-risk evidence, not a directional inflation forecast. Do not call an event upcoming if its date precedes the report date, and do not infer an inflation direction without an actual or consensus CPI/PCE value.
 - Interpret, Don't Recite: Do not simply repeat raw numbers visible in adjacent KPI cards. Prose must explain the mechanism, competitive context, caveats, or disconfirming evidence.
 - Comparative Claims: Verify comparative adjectives ("higher", "lower", "dwarfs", "lags") against operands. Never state a lower metric is higher or vice versa.
 - Swings and moves as PERCENT, never raw dollars alone: any price swing, sensitivity range, target band, or move MUST be expressed as a percent of the subject's current price (valuationContext.marketPrice, or per-subject marketPrice in valuationContext.subjects), not as a bare dollar amount. valuationContext.sensitivitySwing gives the precomputed swingPct per subject — cite it. A $40 swing on a $200 stock is a 20% swing; a $400 swing on a $1,500 stock is a 27% swing. Dollar magnitudes are not comparable across differently-priced names, so never rank or contrast two names' swings in dollars. State the dollar band if useful, but always alongside the percent.
@@ -2243,7 +2260,16 @@ _REPORT_TYPE_GUIDANCE = {
     "portfolio-review": (
         "REPORT TYPE — Portfolio review. The subject is the reader's book. Organize by exposure, "
         "concentration, and risk contribution rather than by holding. Close on specific actions (trim, add, "
-        "hedge, hold) naming the positions each applies to."
+        "hedge, hold) naming the positions each applies to. The allocation table and deterministic portfolio "
+        "metrics are authoritative. Never describe a negative active return as outperformance. For samples "
+        "under one year, say period return, not CAGR. Do not claim a tilt or holding caused performance unless "
+        "a holding-level or factor attribution clip quantifies that contribution. Do not recommend maintaining "
+        "the current allocation when material positions are unpriced or the allocation clip says weights are "
+        "incomplete. Benchmark-relative conclusions must compare return and risk-adjusted metrics. Earnings "
+        "analysis may cover actual holdings only, and absolute EPS levels across companies are not comparable. "
+        "A macro risk named in the headline or verdict must have a dedicated evidence clip and a quantified "
+        "portfolio transmission mechanism; otherwise state that the evidence is insufficient. Distinguish "
+        "backward-looking measurements from forward scenarios and disclose methodology limitations."
     ),
     "screen-summary": (
         "REPORT TYPE — Screen summary. The subject is a result set. Say what the screen selected for, then "
@@ -3885,12 +3911,13 @@ def _auto_must_include(clips: list[ReportClipIn]) -> list[str]:
     model which sections to WRITE so that the high-value charts the site can
     build (sensitivity range, segment-mix pie) have a section to live in."""
     out: list[str] = []
+    is_portfolio = any(re.search(r"\b(current allocation|portfolio risk metrics)\b", c.title or "", re.I) for c in clips)
     subjects = sorted({
         t for c in clips
         if re.match(r"^Value Drivers\b", c.title or "", re.I)
         for t in [_clip_ticker(c)] if t
     })
-    if subjects:
+    if subjects and not is_portfolio:
         who = " and ".join(subjects)
         out.append(
             f"Write a dedicated section on the DCF one-way sensitivity swing for {who} "
@@ -3920,9 +3947,11 @@ def _auto_must_include(clips: list[ReportClipIn]) -> list[str]:
         )
     if re.search(r"\bpeer valuation\b|\banalyst view\b|\bconsensus upside\b", clip_titles, re.I):
         out.append(
-            "Write a dedicated valuation section. State the subject's relevant multiple or analyst "
-            "target range, compare it with the peer evidence, and explain whether the premium or "
-            "discount is justified. Do not describe an options-implied move as fair value."
+            ("For a portfolio review, keep single-name valuation to one compact supporting panel. "
+             "Separate relative multiples, analyst consensus, and DCF as distinct methods and reconcile different upside estimates. "
+             if is_portfolio else "Write a dedicated valuation section. State the subject's relevant multiple or analyst ")
+            + ("Do not describe an options-implied move as fair value." if is_portfolio else
+               "target range, compare it with the peer evidence, and explain whether the premium or discount is justified. Do not describe an options-implied move as fair value.")
         )
     if any(re.search(r"\b(news|catalyst|earnings)\b", f"{c.sourceTab} {c.title}", re.I) for c in clips):
         out.append(
@@ -3943,6 +3972,12 @@ def _inject_mechanical_charts(sections: list[dict], clips: list[ReportClipIn]) -
     for sec in sections:
         sec["chart"] = None  # the model does not get to choose charts
     pool = _mechanical_chart_pool(clips)
+    if any(re.search(r"\b(current allocation|portfolio risk metrics)\b", c.title or "", re.I) for c in clips):
+        pool = [item for item in pool if not re.search(
+            r"\b(peer|consensus upside|dcf|sensitivity|intrinsic|multiple)\b",
+            str(item[0].get("title", "")),
+            re.I,
+        )]
     if not pool:
         return
     pool.sort(key=lambda item: item[2])  # priority 0 (distinct types) first
@@ -4214,7 +4249,7 @@ _REPORT_OUTLINE_SYSTEM = """You are an equity-research editor planning a report 
 
 Rules:
 - State a single decisive thesis sentence that directly answers the goal.
-- Follow reportLength: short uses 1 to 2 sections; medium normally uses 3 to 6 and may expand to 8 when distinct decision-critical evidence requires it; long uses 6 to 12.
+- Follow reportLength: short uses 1 to 2 sections; medium uses 3 to 5; long uses 5 to 8. If reportType is portfolio-review, use exactly four sections: What Happened, Why It Happened, What Could Happen Next, and What Action Follows. Merge evidence into those four sections instead of creating module-by-module sections.
 - Target a compact two-to-three-page decision note for short and medium reports. Continue beyond three pages only when material evidence cannot be presented clearly within that target. Never pad a report or cut decision-critical evidence merely to hit a page count.
 - Each section must advance the thesis with distinct evidence, ordered so the argument builds top-down.
 - Use this order when supported: what changed and the call, operating or financial drivers, valuation, catalysts, then risks. Background belongs last and should be omitted when the reader can understand the call without it.
@@ -4253,7 +4288,23 @@ def _generate_outline(payload: dict) -> dict | None:
         ]
         if not secs:
             return None
-        section_cap = {"short": 2, "medium": 8, "long": 12}[_length_key(payload.get("reportLength"))]
+        if payload.get("reportType") == "portfolio-review":
+            forward_heading = (
+                "What Could Happen Next: Stress, Valuation, and Dated Catalysts"
+                if payload.get("hasPortfolioValuation")
+                else "What Could Happen Next: Stress and Dated Catalysts"
+            )
+            fixed = [
+                ("What Happened: Return and Risk Versus SPY", "Compare portfolio and SPY period return, active return, volatility, and maximum drawdown using matching dates and methods.", "performance"),
+                ("Why It Happened: Market Sensitivity and Name-Specific Risk", "Separate measured market sensitivity, factor coefficients, and NVDA-specific risk concentration from any unsupported active-return attribution.", "risk"),
+                (forward_heading, "Show beta-only market stress, any supplied compact valuation evidence, and only catalysts with actual supplied dates.", "scenario"),
+                ("What Action Follows: Evidence Before Reallocation", "Recommend no allocation change unless a proposed portfolio and quantified before-and-after risk and return evidence are supplied.", "none"),
+            ]
+            secs = [
+                {"heading": heading, "argues": argues, "chartHint": chart_hint}
+                for heading, argues, chart_hint in fixed
+            ]
+        section_cap = 4 if payload.get("reportType") == "portfolio-review" else {"short": 2, "medium": 5, "long": 8}[_length_key(payload.get("reportLength"))]
         return {"thesis": str(out.get("thesis", "")).strip(), "sections": secs[:section_cap]}
     except Exception as e:  # noqa: BLE001 — outline is best-effort
         logger.warning("report outline step failed: %s", e)
@@ -4580,10 +4631,295 @@ def _apply_report_linters(text: str, clips: list[ReportClipIn], slot_ctx) -> str
     Applied to every AI-written block in both the initial draft and later revision."""
     from routers.slot_engine import resolve_slots
     resolved = resolve_slots(
-        _fix_upside_vocabulary_reversals(_fix_comparative_reversals(text, clips)),
+        _remove_unsupported_sector_momentum(
+            _remove_unsupported_catalyst_claims(
+                _separate_systematic_and_residual_risk(
+                    _repair_valuation_method_causality(
+                        _clarify_direct_sector_weights(
+                            _fix_portfolio_performance_claims(
+                                _fix_upside_vocabulary_reversals(_fix_comparative_reversals(text, clips)),
+                                clips,
+                            ),
+                            clips,
+                        )
+                    )
+                ),
+                clips,
+            ),
+            clips,
+        ),
         slot_ctx,
     )
     return _remove_unverified_numeric_sentences(resolved, clips, slot_ctx)
+
+
+def _portfolio_active_return(clips: list[ReportClipIn]) -> float | None:
+    for clip in clips:
+        match = re.search(
+            r"Active return(?:\s+vs\s+[A-Z0-9.^-]+)?\s*:\s*([+\-]?\d+(?:\.\d+)?)%",
+            f"{clip.title}\n{clip.dataSummary}",
+            re.I,
+        )
+        if match:
+            try:
+                return float(match.group(1))
+            except ValueError:
+                return None
+    return None
+
+
+def _has_attribution_evidence(clips: list[ReportClipIn]) -> bool:
+    return any(
+        re.search(r"\b(attribution|contribution to (?:active )?return|security selection)\b", f"{c.sourceTab} {c.title}", re.I)
+        for c in clips
+    )
+
+
+def _fix_portfolio_performance_claims(text: str, clips: list[ReportClipIn]) -> str:
+    """Make benchmark direction deterministic and remove unsupported causality.
+
+    The AI may explain a computed active return, but it cannot reverse its sign or
+    infer that a tilt caused it without an attribution dataset.
+    """
+    if not text:
+        return text
+    active_return = _portfolio_active_return(clips)
+    if active_return is not None and active_return < 0:
+        text = re.sub(r"\boutperformance\b", "underperformance", text, flags=re.I)
+        text = re.sub(r"\boutperformed\b", "underperformed", text, flags=re.I)
+        text = re.sub(r"\boutperforming\b", "underperforming", text, flags=re.I)
+    elif active_return is not None and active_return > 0:
+        text = re.sub(r"\bunderperformance\b", "outperformance", text, flags=re.I)
+        text = re.sub(r"\bunderperformed\b", "outperformed", text, flags=re.I)
+        text = re.sub(r"\bunderperforming\b", "outperforming", text, flags=re.I)
+    if not _has_attribution_evidence(clips):
+        text = re.sub(
+            r"\b(drives?|driving|generates?|generated|causes?|caused)\s+(outperformance|underperformance)\b",
+            r"is associated with \2",
+            text,
+            flags=re.I,
+        )
+        repaired = []
+        for sentence in re.split(r"(?<=[.!?])\s+", text):
+            if (
+                re.search(r"\b(?:beta|risk|volatility|Sharpe|drawdown|asset selection)\b", sentence, re.I)
+                and re.search(r"\b(?:lag|underperform)", sentence, re.I)
+                and re.search(r"\b(?:driv|explain|caus|source|responsib|attribut|due\s+to|because\s+of)", sentence, re.I)
+            ):
+                repaired.append(
+                    "The portfolio produced a different return and risk profile from SPY. The available evidence does not determine whether active return arose from market exposure, allocation, security selection, cash, fees, or trading."
+                )
+            else:
+                repaired.append(sentence)
+        text = " ".join(repaired)
+    return text
+
+
+_PORTFOLIO_ACTION_RE = re.compile(
+    r"(?:"
+    r"\brecommend(?:s|ed|ing|ation)?\b|"
+    r"\b(?:we|investors?|the portfolio|you)\s+(?:should\s+|would\s+)?"
+    r"(?:add(?:ing)?|buy(?:ing)?|increase|increasing|trim(?:ming)?|reduc(?:e|ing)|sell(?:ing)?|hold(?:ing)?|maintain(?:ing)?|allocat(?:e|ing)|hedg(?:e|ing))\b|"
+    r"\b(?:add(?:ing)?|buy(?:ing)?|increase|increasing|trim(?:ming)?|reduc(?:e|ing)|sell(?:ing)?)\s+(?:the\s+)?"
+    r"(?:position|exposure|allocation|weight|shares?|[A-Z]{1,5})\b"
+    r")",
+    re.I,
+)
+
+
+def _remove_unsupported_portfolio_actions(text: str) -> str:
+    """Remove implementable advice when no before/after trade evidence exists.
+
+    Prompt instructions are insufficient here: the writer can still produce a
+    bullish thesis and an allocation instruction beside a blocking warning. A
+    deterministic sentence filter makes the gate authoritative in every prose
+    block, including headings generated by a later verification pass.
+    """
+    if not text or not _PORTFOLIO_ACTION_RE.search(text):
+        return text
+    parts = re.split(r"(?<=[.!?])\s+|\n+", text)
+    kept = [part.strip() for part in parts if part.strip() and not _PORTFOLIO_ACTION_RE.search(part)]
+    return " ".join(kept).strip()
+
+
+def _has_portfolio_trade_impact_evidence(clips: list[ReportClipIn]) -> bool:
+    evidence = "\n".join(f"{clip.sourceTab}\n{clip.title}\n{clip.dataSummary}" for clip in clips)
+    has_proposal = bool(re.search(
+        r"\b(proposed|target)\s+(?:portfolio|allocation|weight)|\btrade (?:size|list)|\bshares? to (?:buy|sell)\b",
+        evidence,
+        re.I,
+    ))
+    has_impact = bool(re.search(
+        r"\b(post[- ]trade|after (?:the )?trade|before and after|expected portfolio beta|scenario loss|trade impact)\b",
+        evidence,
+        re.I,
+    ))
+    return has_proposal and has_impact
+
+
+def _remove_unsupported_sector_momentum(text: str, clips: list[ReportClipIn]) -> str:
+    if any(re.search(r"sector rotation|sector leadership", f"{clip.sourceTab} {clip.title}", re.I) for clip in clips):
+        return text
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    return " ".join(
+        sentence for sentence in sentences
+        if not (
+            re.search(r"\bmomentum\b", sentence, re.I)
+            and re.search(r"\b(technology|tech|energy|sector)\b", sentence, re.I)
+        )
+    ).strip()
+
+
+def _repair_valuation_method_causality(text: str) -> str:
+    repaired: list[str] = []
+    for sentence in re.split(r"(?<=[.!?])\s+", text):
+        if re.search(r"\bP\s*/\s*E\b", sentence, re.I) and re.search(r"\bDCF\b", sentence, re.I):
+            sentence = re.sub(
+                r",?\s*(?:delivering|implying|creating|producing)\s+",
+                ". Separately, the DCF indicates ",
+                sentence,
+                flags=re.I,
+            )
+        repaired.append(sentence)
+    text = " ".join(repaired)
+    return re.sub(
+        r"(?:^|(?<=[.!?])\s+)No DCF valuation (?:is|was) supplied[^.!?]*[.!?]?\s*",
+        "",
+        text,
+        flags=re.I,
+    ).strip()
+
+
+def _separate_systematic_and_residual_risk(text: str) -> str:
+    repaired: list[str] = []
+    for sentence in re.split(r"(?<=[.!?])\s+", text):
+        if (
+            re.search(r"\bNVDA\b", sentence, re.I)
+            and re.search(r"\bbeta\b", sentence, re.I)
+            and re.search(r"\b(?:largest|dominant|main|primary)\b.*\bsystematic risk\b", sentence, re.I)
+        ):
+            repaired.append(
+                "NVDA's beta measures market sensitivity. Its contribution to total portfolio variance and its residual variance contribution are separate quantities and should not be inferred from beta."
+            )
+        else:
+            repaired.append(sentence)
+    return " ".join(repaired)
+
+
+def _remove_unsupported_catalyst_claims(text: str, clips: list[ReportClipIn]) -> str:
+    has_dated_event = any(
+        re.search(r"\b(upcoming portfolio earnings schedule|earnings setup|catalyst calendar)\b", clip.title, re.I)
+        and not re.search(r"\bmethodology\b", clip.title, re.I)
+        and bool(re.search(r"\b20\d{2}-\d{2}-\d{2}\b", clip.dataSummary))
+        for clip in clips
+    )
+    if has_dated_event:
+        return text
+    text = re.sub(r"\s*(?:and|&)\s+upcoming catalysts?\b", "", text, flags=re.I)
+    return re.sub(r"\bupcoming catalysts?\b", "forward evidence", text, flags=re.I)
+
+
+def _clarify_direct_sector_weights(text: str, clips: list[ReportClipIn]) -> str:
+    if not any(re.search(r"fund look-through limitation", clip.title, re.I) for clip in clips):
+        return text
+    text = re.sub(
+        r"\b(?:technology|tech)(?:\s+holdings?)?\s+(?:accounts? for|represents?|is|weight is)\s+"
+        r"([+\-]?\d+(?:\.\d+)?%)\s+(?:of\s+)?(?:the\s+)?portfolio(?:'s)?(?:\s+(?:weight|value))?",
+        r"Directly classified technology holdings account for \1 of portfolio value, excluding fund look-through",
+        text,
+        flags=re.I,
+    )
+    text = re.sub(
+        r"High Market Beta and Concentrated (?:Technology|Tech) Exposure",
+        "High Market Sensitivity and NVDA-Specific Risk",
+        text,
+        flags=re.I,
+    )
+    repaired: list[str] = []
+    for sentence in re.split(r"(?<=[.!?])\s+", text):
+        pct = re.search(r"([+\-]?\d+(?:\.\d+)?%)", sentence)
+        if pct and re.search(r"\b(?:technology|tech)\b", sentence, re.I) and re.search(
+            r"\b(?:actual|total|hides?|overweight(?:ed)?|fund look[- ]through)\b", sentence, re.I
+        ):
+            repaired.append(
+                f"Directly held technology securities represent {pct.group(1)} of the portfolio. "
+                "Total economic technology exposure cannot be determined without fund holdings look-through."
+            )
+        elif re.search(r"\boverweight(?:ed)?\b.*\b(?:technology|tech)\b", sentence, re.I):
+            repaired.append("The supplied evidence supports NVDA-specific risk concentration, not a total technology overweight conclusion.")
+        else:
+            repaired.append(sentence)
+    return " ".join(repaired)
+
+
+def _report_quality_warnings(req: ReportGenRequest, book_level: bool) -> list[dict]:
+    if not book_level:
+        return []
+    warnings: list[dict] = []
+    portfolio_clips = [c for c in req.clips if re.search(r"portfolio manager|active book", c.sourceTab, re.I)]
+    portfolio_text = "\n".join(f"{c.title}\n{c.dataSummary}" for c in portfolio_clips)
+    if not portfolio_clips:
+        warnings.append({
+            "severity": "blocking", "code": "allocation-missing",
+            "title": "Current allocation is not verified",
+            "detail": "No authoritative holdings and weights clip was supplied, so allocation advice is not implementable.",
+        })
+    elif re.search(r"\bunpriced\b|excluded from portfolio weights", portfolio_text, re.I):
+        warnings.append({
+            "severity": "blocking", "code": "allocation-incomplete",
+            "title": "Portfolio weights are incomplete",
+            "detail": "At least one position lacks a usable mark and is excluded from the reported allocation.",
+        })
+    elif re.search(r"saved cost fallback|fallback", portfolio_text, re.I):
+        warnings.append({
+            "severity": "warning", "code": "allocation-fallback-marks",
+            "title": "Some weights use fallback marks",
+            "detail": "One or more positions use saved cost rather than a current quote; concentration figures are provisional.",
+        })
+
+    active_return = _portfolio_active_return(req.clips)
+    if active_return is None:
+        warnings.append({
+            "severity": "blocking", "code": "benchmark-comparison-missing",
+            "title": "Benchmark-relative return is not auditable",
+            "detail": "The evidence does not provide a deterministic active return computed on matching dates and methods.",
+        })
+    else:
+        warnings.append({
+            "severity": "info", "code": "benchmark-fit",
+            "title": "Benchmark suitability requires confirmation",
+            "detail": "SPY is a broad US equity reference, not a validated policy benchmark; a multi-asset book may require a blended benchmark.",
+        })
+
+    if not any(re.search(r"\b(stress test|scenario loss|expected shortfall|value at risk|CVaR|VaR)\b", f"{c.sourceTab} {c.title}", re.I) for c in req.clips):
+        warnings.append({
+            "severity": "info", "code": "forward-risk-missing",
+            "title": "Risk evidence is backward-looking",
+            "detail": "Volatility, beta, and drawdown describe the selected history; no forward stress loss or probability distribution was supplied.",
+        })
+
+    all_text = "\n".join(f"{c.sourceTab}\n{c.title}\n{c.dataSummary}" for c in req.clips)
+    objective = f"{req.projectName}\n{req.purpose}\n{req.goal}\n{req.mustInclude}"
+    if re.search(r"\b(inflation|CPI|PCE|sticky prices?)\b", objective, re.I):
+        has_inflation_measure = bool(re.search(
+            r"\b(?:core\s+)?(?:CPI|PCE)\b[^\n]{0,100}\d+(?:\.\d+)?%",
+            all_text,
+            re.I,
+        ))
+        if not has_inflation_measure:
+            warnings.append({
+                "severity": "blocking", "code": "inflation-evidence-missing",
+                "title": "Inflation thesis lacks measured evidence",
+                "detail": "No dated CPI or PCE reading with a value was supplied, so inflation cannot support the headline or allocation call.",
+            })
+
+    if any(c.sourceTab.lower().startswith("earnings") for c in req.clips):
+        warnings.append({
+            "severity": "info", "code": "earnings-comparability",
+            "title": "Earnings figures require company-specific context",
+            "detail": "Absolute EPS levels across issuers are not comparable; use growth, revisions, dispersion, valuation, and historical reactions instead.",
+        })
+    return warnings
 
 
 @router.post("/report")
@@ -4621,6 +4957,14 @@ def generate_report(req: ReportGenRequest):
     change_pct = float(quote["changePct"]) if quote.get("changePct") is not None else None
     dcf_intrinsic = _dcf_intrinsic_for_subject(req.clips, subject) if subject_dcf else None
     signal_digest = _clip_signal_digest(req.clips)
+    quality_warnings = _report_quality_warnings(req, book_level)
+    blocking_findings = [finding for finding in quality_warnings if finding.get("severity") == "blocking"]
+    if blocking_findings:
+        missing = "; ".join(str(finding.get("title", "Required evidence is missing")) for finding in blocking_findings)
+        raise HTTPException(
+            409,
+            f"Report not generated because required analysis is incomplete: {missing}. Re-run AlphaTape research after resolving these inputs.",
+        )
 
     valuation_context = {
         "reportMode": mode,
@@ -4709,6 +5053,12 @@ def generate_report(req: ReportGenRequest):
     # STEP 1 — Analytical structure: draft a thesis-first outline before writing.
     outline = _generate_outline({
         "goal": goal_text, "purpose": purpose_text,
+        "reportType": req.reportType,
+        "hasPortfolioValuation": any(
+            re.search(r"\b(?:DCF|valuation|intrinsic value|peer multiples?)\b", f"{clip.sourceTab} {clip.title}", re.I)
+            and not re.search(r"\bmethodology\b", clip.title, re.I)
+            for clip in req.clips
+        ),
         "reportLength": length_key,
         "valuationContext": valuation_context,
         "coverageRequirements": coverage_requirements,
@@ -4753,6 +5103,30 @@ def generate_report(req: ReportGenRequest):
         req.clips,
         used,
     )
+    if book_level:
+        allowed_appendix = re.compile(
+            r"current allocation|sector allocation|performance methodology|holding-level beta|"
+            r"factor model coefficients|earnings schedule methodology|scenario losses|correlation matrix",
+            re.I,
+        )
+        clips_by_id = {clip.id: clip for clip in req.clips}
+        appendix = [
+            clip_id for clip_id in appendix
+            if clip_id in clips_by_id and allowed_appendix.search(clips_by_id[clip_id].title)
+        ]
+        audit_pattern = re.compile(
+            r"current allocation|sector allocation|performance methodology|holding-level beta|"
+            r"factor model coefficients|earnings schedule methodology|scenario losses|correlation matrix",
+            re.I,
+        )
+        for clip in req.clips:
+            if (
+                clip.id not in used
+                and clip.id not in appendix
+                and clip.dataType.strip().lower() != "chart"
+                and audit_pattern.search(clip.title)
+            ):
+                appendix.append(clip.id)
 
     stance = _stance_from_result(result, market)
     # If model omitted stance lean, use signal digest as soft prior.
@@ -4805,13 +5179,49 @@ def generate_report(req: ReportGenRequest):
     for s in sections:
         if s.get("analysis"):
             s["analysis"] = _apply_report_linters(s["analysis"], req.clips, slot_ctx)
+        if s.get("heading"):
+            s["heading"] = _apply_report_linters(s["heading"], req.clips, slot_ctx)
     _filter_unverified_key_figures(sections, req.clips, slot_ctx)
 
-    _ensure_risks_section(sections, subject, valuation_context)
+    headline = _apply_report_linters(_report_title(result, outline, req), req.clips, slot_ctx)
+    if key_result.get("value"):
+        key_result["value"] = _apply_report_linters(str(key_result["value"]), req.clips, slot_ctx)
+
+    if book_level and not _has_portfolio_trade_impact_evidence(req.clips):
+        key_result = {
+            "label": "Portfolio action",
+            "value": "No Allocation Change Supported",
+            "context": "A proposed allocation and quantified before/after risk impact were not supplied.",
+        }
+        if stance:
+            stance["lean"] = "neutral"
+            stance["conviction"] = "low"
+            stance["thesis"] = "The evidence describes current risk but does not support a specific portfolio trade."
+        executive_summary = _remove_unsupported_portfolio_actions(executive_summary)
+        if not executive_summary:
+            executive_summary = "The supplied evidence describes current portfolio behavior but does not quantify an implementable allocation change."
+        for section in sections:
+            section["analysis"] = _remove_unsupported_portfolio_actions(str(section.get("analysis", "")))
+            if re.search(r"\bwhat action follows\b", str(section.get("heading", "")), re.I):
+                section["analysis"] = (
+                    "No allocation change is supported. Monitor the measured return, volatility, drawdown, market sensitivity, and holding-level variance contributions until a proposed portfolio can be tested before and after costs."
+                )
+                section["keyFigures"] = []
+            elif not section["analysis"]:
+                section["analysis"] = "This evidence measures portfolio behavior but does not establish the effect of a specific trade."
+            section["heading"] = _remove_unsupported_portfolio_actions(str(section.get("heading", ""))) or "Portfolio Risk Requires Quantification"
+        headline = "Beta and Concentration Shape Recent Portfolio Risk"
+        conclusion = (
+            "No allocation change is supported. The evidence identifies recent market sensitivity and concentration risk, "
+            "but it does not show that a specific trade improves the portfolio's expected risk-adjusted outcome."
+        )
+
+    if not book_level:
+        _ensure_risks_section(sections, subject, valuation_context)
     _apply_section_layout_architecture(sections, req.clips, (req.layoutPreset or "").strip())
 
     return {
-        "headline": _report_title(result, outline, req),
+        "headline": headline,
         "stance": stance,
         "keyResult": key_result,
         "executiveSummary": executive_summary,

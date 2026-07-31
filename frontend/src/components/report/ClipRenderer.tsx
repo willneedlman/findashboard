@@ -87,10 +87,20 @@ function TableClip({ p, pal, maxRows, print }: { p: TablePayload; pal: Palette; 
     ? p.columns.findIndex(column => /\b(headline|event|name|instrument|driver)\b/i.test(column))
     : -1
   const tickerColumn = p.columns.findIndex(column => /^(ticker|symbol)$/i.test(column.trim()))
+  const correlationMatrix = /\bcorrelation matrix\b/i.test(p.title || '')
+  const heatBackground = (cell: string | number | null, column: number) => {
+    if (!correlationMatrix || column === 0) return undefined
+    const value = Number(cell)
+    if (!Number.isFinite(value) || Math.abs(value) > 1) return undefined
+    const opacity = 0.05 + Math.abs(value) * 0.22
+    return value < 0
+      ? `rgba(239, 68, 68, ${opacity.toFixed(3)})`
+      : `rgba(96, 165, 250, ${opacity.toFixed(3)})`
+  }
   return (
     <div style={{ overflowX: print ? 'hidden' : 'auto', maxWidth: '100%' }}>
       <table style={{
-        width: '100%', borderCollapse: 'collapse', fontFamily: MONO, fontSize: 10,
+        width: '100%', borderCollapse: 'collapse', fontFamily: MONO, fontSize: print ? 10.5 : 10,
         tableLayout: print ? 'fixed' : 'auto',
       }}>
         {narrativeIndex >= 0 && (
@@ -107,8 +117,8 @@ function TableClip({ p, pal, maxRows, print }: { p: TablePayload; pal: Palette; 
           <tr>
             {p.columns.map((c, i) => (
               <th key={i} style={{
-                padding: '5px 8px', textAlign: isTextColumn(i) ? 'left' : 'right', color: pal.muted,
-                fontFamily: SANS, fontSize: 8, fontWeight: 700, letterSpacing: '0.06em',
+                padding: print ? '6px 8px' : '5px 8px', textAlign: isTextColumn(i) ? 'left' : 'right', color: pal.muted,
+                fontFamily: SANS, fontSize: print ? 9 : 8, fontWeight: 700, letterSpacing: '0.06em',
                 textTransform: 'uppercase', borderBottom: `1px solid ${pal.border}`,
                 background: pal.headBg, whiteSpace: print ? 'normal' : 'nowrap',
                 overflowWrap: print ? 'anywhere' : undefined,
@@ -121,12 +131,13 @@ function TableClip({ p, pal, maxRows, print }: { p: TablePayload; pal: Palette; 
             <tr key={r}>
               {row.map((cell, c) => (
                 <td key={c} style={{
-                  padding: '4px 8px', textAlign: isTextColumn(c) ? 'left' : 'right', color: pal.ink,
+                  padding: print ? '6px 8px' : '4px 8px', textAlign: isTextColumn(c) ? 'left' : 'right', color: pal.ink,
                   borderBottom: `1px solid ${pal.border}`, fontVariantNumeric: 'tabular-nums',
                   whiteSpace: print ? 'normal' : 'nowrap',
                   overflowWrap: print ? 'anywhere' : undefined,
                   wordBreak: print ? 'break-word' : undefined,
                   verticalAlign: 'top',
+                  background: heatBackground(cell, c),
                 }}>
                   {print && c === tickerColumn && typeof cell === 'string' && isTickerSymbol(cell) ? (
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
@@ -181,7 +192,9 @@ function KpiClip({ p, pal }: { p: KpiPayload; pal: Palette }) {
             borderTop: ri === 0 ? 'none' : `1px solid ${pal.border}`,
           }}
         >
-          {row.map((k, ci) => (
+          {row.map((k, ci) => {
+            const longValue = String(k.value ?? '').length > 24
+            return (
             <div
               key={ci}
               style={{
@@ -197,8 +210,8 @@ function KpiClip({ p, pal }: { p: KpiPayload; pal: Palette }) {
                 whiteSpace: 'normal', wordBreak: 'break-word',
               }}>{k.label}</div>
               <div style={{
-                fontFamily: MONO, fontSize: 15, fontWeight: 700, lineHeight: 1.35, minHeight: 22, color: pal.ink, marginTop: 3,
-                whiteSpace: 'nowrap', overflow: 'visible', textOverflow: 'ellipsis',
+                fontFamily: MONO, fontSize: longValue ? 10.5 : 15, fontWeight: 700, lineHeight: 1.35, minHeight: 22, color: pal.ink, marginTop: 3,
+                whiteSpace: longValue ? 'normal' : 'nowrap', overflow: 'visible', overflowWrap: longValue ? 'anywhere' : undefined,
               }}>{k.value}</div>
               {k.sub && (
                 <div style={{
@@ -207,7 +220,7 @@ function KpiClip({ p, pal }: { p: KpiPayload; pal: Palette }) {
                 }}>{k.sub}</div>
               )}
             </div>
-          ))}
+          )})}
         </div>
       ))}
     </div>
@@ -558,7 +571,7 @@ function ChartClip({
     rightKind = 'auto'
   }
   const dual = right.length > 0
-  const axisTick = { fontFamily: MONO, fontSize: print ? 8 : 9, fill: pal.muted }
+  const axisTick = { fontFamily: MONO, fontSize: 9, fill: pal.muted }
   const xLabel = humanizeAxisLabel(p.xKey)
   const leftMeasure = measureLabel(left, leftKind, p.title)
   const rightMeasure = dual ? measureLabel(right, rightKind, p.title) : ''
@@ -570,7 +583,7 @@ function ChartClip({
 
   // X ticks: limit count for readability
   const xCount = data.length
-  const xInterval = xCount <= 8 ? 0 : xCount <= 16 ? 1 : Math.floor(xCount / 6)
+  const xInterval = xCount <= 6 ? 0 : Math.max(1, Math.ceil(xCount / 5) - 1)
 
   // Categorical labels (segment/metric/driver names) are often long ("Professional
   // Visualization", "Operating Margin"). Angle them instead of clipping to "Profe…"
@@ -584,7 +597,7 @@ function ChartClip({
   const yTick = (kind: typeof leftKind) => (v: number) => fmtTick(v, kind)
 
   const margin = print
-    ? { top: 8, right: dual ? 36 : 8, left: 2, bottom: longLabels ? 6 : 2 }
+    ? { top: 10, right: dual ? 42 : 14, left: 8, bottom: longLabels ? 8 : 4 }
     : { top: 8, right: dual ? 44 : 12, left: 2, bottom: longLabels ? 4 : 0 }
 
   const leftKeys = new Set(left.map(s => s.key))
@@ -597,7 +610,7 @@ function ChartClip({
   const showValueLabels = markCount > 0 && markCount <= 20
   const showRangeValueLabels = markCount > 0 && markCount <= 10
   const seriesKind = (key: string): typeof leftKind => (leftKeys.has(key) || !dual) ? leftKind : rightKind
-  const valueLabelFontSize = print ? 8 : 9
+  const valueLabelFontSize = 9
   const valueLabel = (key: string) => (v: unknown) => fmtTick(Number(v), seriesKind(key))
 
   const leftMinVal = left.length ? Math.min(...left.map(s => s.min)) : 0
@@ -622,7 +635,7 @@ function ChartClip({
         offset: print ? -1 : -2,
         fill: pal.muted,
         fontFamily: SANS,
-        fontSize: print ? 7 : 8,
+        fontSize: print ? 8 : 8,
         fontWeight: 700,
       }}
     />
@@ -635,7 +648,7 @@ function ChartClip({
       tick={axisTick}
       tickLine={false}
       axisLine={false}
-      width={print ? 42 : 48}
+      width={print ? 52 : 48}
       tickFormatter={yTick(leftKind)}
       domain={leftDomain}
       label={{
@@ -644,7 +657,7 @@ function ChartClip({
         position: 'insideLeft',
         fill: pal.muted,
         fontFamily: SANS,
-        fontSize: print ? 7 : 8,
+        fontSize: print ? 8 : 8,
         fontWeight: 700,
       }}
     />
@@ -656,7 +669,7 @@ function ChartClip({
       tick={axisTick}
       tickLine={false}
       axisLine={false}
-      width={print ? 36 : 44}
+      width={print ? 46 : 44}
       tickFormatter={yTick(rightKind)}
       domain={['auto', 'auto']}
       label={{
@@ -665,7 +678,7 @@ function ChartClip({
         position: 'insideRight',
         fill: pal.muted,
         fontFamily: SANS,
-        fontSize: print ? 7 : 8,
+        fontSize: print ? 8 : 8,
         fontWeight: 700,
       }}
     />
@@ -1068,7 +1081,7 @@ function ChartClip({
                   stroke={c}
                   fill={c}
                   fillOpacity={0.12}
-                  strokeWidth={1.6}
+                  strokeWidth={print ? 2.2 : 1.8}
                   isAnimationActive={false}
                 />
               )
@@ -1091,7 +1104,8 @@ function ChartClip({
                 name={s.label}
                 stroke={p.chartType === 'dot' ? 'none' : fillFor(s, i)}
                 dot={p.chartType === 'dot' ? { r: print ? 3.5 : 4.5, fill: fillFor(s, i), strokeWidth: 0 } : false}
-                strokeWidth={1.7}
+                strokeWidth={print ? 2.3 : 1.9}
+                strokeDasharray={p.chartType !== 'dot' && i === 1 ? '6 3' : undefined}
                 connectNulls
                 isAnimationActive={false}
               >
@@ -1145,7 +1159,7 @@ export function reportChartHeight(
   inline = false,
 ): number {
   const baseChartH = print
-    ? (inline ? 112 : compact ? 168 : 210)
+    ? (inline ? 118 : compact ? 176 : 220)
     : (inline ? 126 : compact ? 170 : 230)
   if (
     payload.kind !== 'chart'

@@ -27,6 +27,11 @@ const LOOKFORWARD: { k: LookforwardPreset; label: string }[] = [
   { k: 'next30', label: '30D' },
   { k: 'next90', label: '90D' },
   { k: 'next180', label: '180D' },
+  { k: 'next365', label: '1Y' },
+  { k: 'next3y', label: '3Y' },
+  { k: 'next5y', label: '5Y' },
+  { k: 'next10y', label: '10Y' },
+  { k: 'unlimited', label: 'No limit' },
   { k: 'custom', label: 'Custom' },
 ]
 

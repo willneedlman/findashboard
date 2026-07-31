@@ -80,7 +80,18 @@ export interface ReportClip {
 export type TimeframePreset = 'last7' | 'last30' | 'last90' | 'qtd' | 'ytd' | 'custom'
 
 export type LookbackPreset = 'none' | 'last7' | 'last30' | 'last90' | 'qtd' | 'ytd' | 'custom'
-export type LookforwardPreset = 'none' | 'next7' | 'next30' | 'next90' | 'next180' | 'custom'
+export type LookforwardPreset =
+  | 'none'
+  | 'next7'
+  | 'next30'
+  | 'next90'
+  | 'next180'
+  | 'next365'
+  | 'next3y'
+  | 'next5y'
+  | 'next10y'
+  | 'unlimited'
+  | 'custom'
 export type ReportLength = 'short' | 'medium' | 'long'
 export type EvidenceMode = 'manual' | 'alphatape'
 /** What the note is, which decides its argument shape and what counts as a verdict. */
@@ -244,7 +255,9 @@ export const defaultScope = (): ReportScope => ({
 })
 
 const LOOKBACK_OK = new Set<LookbackPreset>(['none', 'last7', 'last30', 'last90', 'qtd', 'ytd', 'custom'])
-const LOOKFORWARD_OK = new Set<LookforwardPreset>(['none', 'next7', 'next30', 'next90', 'next180', 'custom'])
+const LOOKFORWARD_OK = new Set<LookforwardPreset>([
+  'none', 'next7', 'next30', 'next90', 'next180', 'next365', 'next3y', 'next5y', 'next10y', 'unlimited', 'custom',
+])
 const LENGTH_OK = new Set<ReportLength>(['short', 'medium', 'long'])
 const TYPE_OK = new Set<ReportType>([
   'equity-note', 'comparison', 'macro-brief', 'portfolio-review', 'screen-summary', 'thesis',
@@ -731,6 +744,11 @@ function lookforwardLabel(scope: ReportScope): string | null {
     case 'next30':  return 'Next 30 days'
     case 'next90':  return 'Next 90 days'
     case 'next180': return 'Next 180 days'
+    case 'next365': return 'Next 1 year'
+    case 'next3y':  return 'Next 3 years'
+    case 'next5y':  return 'Next 5 years'
+    case 'next10y': return 'Next 10 years'
+    case 'unlimited': return 'Open-ended outlook'
     case 'custom': {
       const s = scope.forwardCustomStart ? new Date(scope.forwardCustomStart + 'T00:00:00') : null
       const e = scope.forwardCustomEnd ? new Date(scope.forwardCustomEnd + 'T00:00:00') : null

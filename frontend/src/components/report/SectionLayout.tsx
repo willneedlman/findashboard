@@ -74,12 +74,8 @@ export function resolveReportSectionLayout({
   const wordCount = (analysis ?? '').trim().split(/\s+/).filter(Boolean).length
 
   if (!hasVisual) return figureCount >= 2 ? 'metric-rail' : 'full-width'
+  if (normalized === 'full-width') return 'full-width'
   if (visualIsDense(visual)) return 'full-width'
-  if (normalized === 'full-width' && visualCanWrap(visual)) {
-    return wordCount >= 40
-      ? (index % 2 === 0 ? 'wrap-left' : 'wrap-right')
-      : (index % 2 === 0 ? 'visual-left' : 'visual-right')
-  }
   if ((normalized === 'wrap-left' || normalized === 'wrap-right') && !visualCanWrap(visual)) {
     return normalized === 'wrap-left' ? 'visual-left' : 'visual-right'
   }
@@ -254,7 +250,7 @@ function FigureFrame({
   style?: React.CSSProperties
 }) {
   return (
-    <figure className="rc-keep" style={{
+    <figure className="rc-keep rc-atomic rc-figure" style={{
       margin: 0,
       padding: 0,
       border: `1px solid ${palette.border}`,
@@ -340,6 +336,10 @@ function tableMetricScore(column: string, title: string): number {
  */
 export function promoteTableToChart(table: TablePayload): ChartPayload | undefined {
   if (table.rows.length < 2 || table.rows.length > 14 || table.columns.length < 2) return undefined
+  if (
+    /\b(earnings|event)\s+(?:schedule|calendar)\b/i.test(table.title || '')
+    || table.columns.some(column => /\b(date|datetime|fiscal period|days until)\b/i.test(column))
+  ) return undefined
 
   const sectorLeadership = /\bsector (?:leadership|rotation)\b/i.test(table.title || '')
   if (sectorLeadership) {
@@ -708,6 +708,7 @@ export function assignReportBodyVisuals(
   projectClips: ReportClip[],
   meta: { projectId: string; generatedAt: string },
 ): Map<string, { visual: ReportClip | undefined; showKeyFigures: boolean }> {
+  const rejectedVisuals = new Set<string>()
   const keyedSections = sections.map((section, index) => ({
     ...section,
     clipId: reportSectionAssignmentKey(sections, index),
@@ -721,6 +722,15 @@ export function assignReportBodyVisuals(
     const assignmentKey = reportSectionAssignmentKey(sections, index)
     const sourceVisual = assigned.get(assignmentKey)?.visual
     const sectionClip = clipById.get(section.clipId)
+    if (sourceVisual?.payload.kind === 'chart' && /rolling correlation\s*·/i.test(sourceVisual.payload.title || '')) {
+      const pair = (sourceVisual.payload.title || '').split('·').pop()?.match(/[A-Z][A-Z0-9.-]{0,9}/g) ?? []
+      const sectionText = `${section.heading} ${section.analysis}`.toUpperCase()
+      if (pair.length >= 2 && !pair.slice(0, 2).every(ticker => sectionText.includes(ticker))) {
+        assigned.set(assignmentKey, { visual: undefined, showKeyFigures: true })
+        rejectedVisuals.add(assignmentKey)
+        continue
+      }
+    }
     const isOwnNativeChart = sourceVisual?.payload.kind === 'chart' && sourceVisual.id === sectionClip?.id
     if (isOwnNativeChart) continue
     const tableChart = sourceVisual?.payload.kind === 'table' ? promoteTableToChart(sourceVisual.payload) : undefined
@@ -747,6 +757,36 @@ export function assignReportBodyVisuals(
     })
   }
 
+  const portfolioReport = projectClips.some(clip => /\bportfolio\b.*\bcurrent allocation\b/i.test(clip.payload.title || ''))
+    && projectClips.some(clip => /\brisk metrics\b/i.test(clip.payload.title || ''))
+  if (portfolioReport) {
+    const findVisual = (pattern: RegExp, kind?: ClipPayload['kind']) => projectClips.find(clip => (
+      (!kind || clip.payload.kind === kind) && pattern.test(clip.payload.title || '')
+    ))
+    for (const [index, section] of sections.entries()) {
+      const assignmentKey = reportSectionAssignmentKey(sections, index)
+      const heading = section.heading.toLowerCase()
+      let visual: ReportClip | undefined
+      let showKeyFigures = false
+      if (heading.includes('what happened')) {
+        visual = projectClips.find(clip => clip.payload.kind === 'chart'
+          && /\bvs SPY\b/i.test(clip.payload.title || '')
+          && !/\b(active return|drawdown)\b/i.test(clip.payload.title || ''))
+        showKeyFigures = true
+      } else if (heading.includes('why it happened')) {
+        visual = findVisual(/rolling multifactor market coefficient/i, 'chart')
+          ?? findVisual(/holding-level beta and portfolio risk contribution/i, 'table')
+      } else if (heading.includes('what could happen next')) {
+        visual = findVisual(/upcoming portfolio earnings schedule/i, 'table')
+          ?? findVisual(/market-shock scenario losses/i, 'table')
+      } else if (heading.includes('what action follows')) {
+        visual = findVisual(/proposed allocation|trade impact|before and after/i, 'table')
+        if (!visual) rejectedVisuals.add(assignmentKey)
+      }
+      assigned.set(assignmentKey, { visual, showKeyFigures })
+    }
+  }
+
   const chartGroups = new Map<string, Array<{ section: GeneratedSection; visual: ReportClip }>>()
   for (const [index, section] of sections.entries()) {
     const visual = assigned.get(reportSectionAssignmentKey(sections, index))?.visual
@@ -767,6 +807,7 @@ export function assignReportBodyVisuals(
   }
   for (const [index, section] of sections.entries()) {
     const assignmentKey = reportSectionAssignmentKey(sections, index)
+    if (rejectedVisuals.has(assignmentKey)) continue
     if (assigned.get(assignmentKey)?.visual) continue
     const fallback = promoteKeyFiguresToChart(section.keyFigures, section.heading)
     if (!fallback) continue
@@ -858,7 +899,7 @@ export default function SectionLayout({
   const visual = assigned.visual
   const showKeyFigures = assigned.showKeyFigures
   const figures = (keyFigures?.filter(f => f.label || f.value) ?? [])
-    .slice(0, visual?.payload.kind === 'chart' ? 3 : 4)
+    .slice(0, visual?.payload.kind === 'chart' ? 6 : 4)
   const isChart = visual?.payload.kind === 'chart'
   const hasVisual = !!visual && visual.payload.kind !== 'text'
   const textBody = analysis?.trim() || ''

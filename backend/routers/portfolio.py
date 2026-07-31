@@ -58,12 +58,20 @@ def _lever_equity(cum_gross: pd.Series, leverage: float, borrow_rate: float) -> 
 
 def _series_metrics(equity: pd.Series, bench_ret: pd.Series, rf: float) -> dict:
     """Risk/return metrics from a wealth-index series and the benchmark's daily returns."""
-    years = max((equity.index[-1] - equity.index[0]).days / 365.25, 1.0)
+    elapsed_days = max(int((equity.index[-1] - equity.index[0]).days), 0)
+    actual_years = elapsed_days / 365.25
+    years = max(actual_years, 1.0)
     start_val, end_val = float(equity.iloc[0]), float(equity.iloc[-1])
+    period_return = end_val / start_val - 1 if start_val > 0 else -1.0
     cagr = (end_val / start_val) ** (1 / years) - 1 if end_val > 0 and start_val > 0 else -1.0
+    annualized_return = (
+        (end_val / start_val) ** (1 / actual_years) - 1
+        if actual_years > 0 and end_val > 0 and start_val > 0 else period_return
+    )
     ret = equity.pct_change().replace([np.inf, -np.inf], np.nan).dropna()
     vol = float(ret.std() * np.sqrt(252)) if len(ret) > 1 else 0.0
-    sharpe = (cagr - rf) / vol if vol else 0.0
+    arithmetic_ann_return = float(ret.mean() * 252) if len(ret) else annualized_return
+    sharpe = (arithmetic_ann_return - rf) / vol if vol else 0.0
     cummax = equity.cummax()
     max_dd = float(((equity - cummax) / cummax).min())
     common = ret.index.intersection(bench_ret.index)
@@ -73,10 +81,22 @@ def _series_metrics(equity: pd.Series, bench_ret: pd.Series, rf: float) -> dict:
         beta = 0.0
     neg = ret[ret < 0]
     down_vol = float(neg.std() * np.sqrt(252)) if len(neg) > 1 else vol
-    sortino = (cagr - rf) / down_vol if down_vol else 0.0
-    calmar = cagr / abs(max_dd) if max_dd != 0 else 0.0
+    sortino = (arithmetic_ann_return - rf) / down_vol if down_vol else 0.0
+    calmar = annualized_return / abs(max_dd) if max_dd != 0 else 0.0
     return {
-        "cagr": round(cagr * 100, 2), "vol": round(vol * 100, 2), "sharpe": round(sharpe, 2),
+        "period_return": round(period_return * 100, 2),
+        "cagr": round(cagr * 100, 2),
+        "cagr_applicable": actual_years >= 1,
+        "annualized_return": round(annualized_return * 100, 2),
+        "period_days": elapsed_days,
+        "observations": int(len(equity)),
+        "start_date": str(equity.index[0].date()),
+        "end_date": str(equity.index[-1].date()),
+        "cumulative_return_method": "auto-adjusted close, daily time-weighted proxy",
+        "return_frequency": "daily",
+        "annualization_factor": 252,
+        "risk_free_rate_pct": round(rf * 100, 3),
+        "vol": round(vol * 100, 2), "sharpe": round(sharpe, 2),
         "max_drawdown": round(max_dd * 100, 2), "sortino": round(sortino, 2),
         "calmar": round(calmar, 2), "beta": round(beta, 2),
     }

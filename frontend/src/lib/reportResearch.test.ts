@@ -196,11 +196,66 @@ describe('Report Creator AlphaTape research', () => {
     expect(plan.sources.map(source => source.id)).toEqual([
       'portfolio',
       'portfolio-risk',
-      'global-markets',
-      'macro-events',
+      'factor-decomposition',
+      'correlation',
       'earnings',
     ])
     expect(plan.symbols).toEqual(['AAPL', 'MSFT'])
+  })
+
+  it('keeps portfolio catalysts tied to holdings and adds macro evidence only when requested', () => {
+    const plan = planReportResearch({
+      ...defaultScope(),
+      evidenceMode: 'alphatape' as const,
+      researchSymbols: 'JOBY, VST, OWL',
+      goal: 'Assess inflation and rate risk in my portfolio',
+    }, portfolio)
+
+    expect(plan.sources.map(source => source.id)).toContain('macro-events')
+    expect(plan.sources.map(source => source.id)).not.toContain('global-markets')
+    expect(plan.sources.find(source => source.id === 'earnings')?.targets).toEqual(['AAPL', 'MSFT'])
+  })
+
+  it('builds allocation weights from current marks and flags unpriced positions', async () => {
+    const book: ActivePortfolioContext = {
+      ...portfolio,
+      holdings: [
+        { ticker: 'AAPL', shares: 2, avgCost: 100 },
+        { ticker: 'NVDA', shares: 1, avgCost: 0 },
+      ],
+      cashValue: 0,
+    }
+    const source = {
+      id: 'portfolio' as const,
+      label: 'Active book',
+      tool: 'Portfolio Manager',
+      route: '/portfolio-manager',
+      reason: 'Test current allocation',
+      targets: [],
+    }
+    const result = await collectReportResearch(
+      { ...planReportResearch({ ...defaultScope(), goal: 'Assess my portfolio' }, book), sources: [source] },
+      { ...defaultScope(), goal: 'Assess my portfolio' },
+      book,
+      undefined,
+      {
+        get: async () => ({ AAPL: { current_price: 150 } }),
+        post: async () => ({}),
+      },
+    )
+
+    const allocation = result.clips.find(clip => clip.payload.kind === 'table')
+    expect(allocation?.payload).toMatchObject({
+      kind: 'table',
+      columns: ['Ticker', 'Shares', 'Mark', 'Market value', 'Weight %', 'Sector classification', 'Valuation source'],
+      rows: [
+        ['AAPL', 2, '$150', '$300', 100, 'Unclassified', 'live quote'],
+        ['NVDA', 1, 'Unpriced', 'Unpriced', null, 'Unclassified', 'unpriced'],
+      ],
+    })
+    const warning = result.clips.find(clip => clip.payload.kind === 'text')
+    expect(warning?.payload).toMatchObject({ kind: 'text' })
+    if (warning?.payload.kind === 'text') expect(warning.payload.body).toContain('NVDA')
   })
 
   it('selects options and catalyst tools from the objective', () => {
@@ -362,6 +417,27 @@ describe('Report Creator AlphaTape research', () => {
     expect(plannerRequest.tools.map((tool: { id: string }) => tool.id)).not.toContain('price-history')
     expect(plannerRequest.tools.map((tool: { id: string }) => tool.id)).not.toContain('earnings')
     expect(enhanced.sources.map(source => source.id)).toEqual(['company', 'news', 'rate-engine'])
+  })
+
+  it('passes an unlimited outlook to the planner without inventing an end date', async () => {
+    const scope = {
+      ...defaultScope(),
+      evidenceMode: 'alphatape' as const,
+      researchSymbols: 'AAPL',
+      goal: 'Assess AAPL over an open-ended horizon',
+      lookforwardPreset: 'unlimited' as const,
+    }
+    const baseline = planReportResearch(scope, emptyPortfolio)
+    let plannerRequest: any
+    await enhanceReportResearchPlan(baseline, scope, emptyPortfolio, {
+      get: async () => ({}),
+      post: async (_url, body) => {
+        plannerRequest = body
+        return { additions: [] }
+      },
+    })
+
+    expect(plannerRequest.timeframe).toContain('open-ended outlook with no fixed end date')
   })
 
   it('blocks company research until a subject is available', () => {

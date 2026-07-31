@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { defaultScope, normalizeScope } from './reportCreator'
+import { defaultScope, normalizeScope, timeframeLabel } from './reportCreator'
 
 describe('report setup scope', () => {
   it('starts a new project in the setup flow', () => {
@@ -42,5 +42,13 @@ describe('report setup scope', () => {
     for (const l of ['editorial', 'visual-first', 'data-dense', 'narrative'] as const) {
       expect(normalizeScope({ layoutPreset: l }).layoutPreset).toBe(l)
     }
+  })
+
+  it('supports fixed long-range and open-ended outlooks', () => {
+    for (const lookforwardPreset of ['next365', 'next3y', 'next5y', 'next10y', 'unlimited'] as const) {
+      expect(normalizeScope({ lookforwardPreset }).lookforwardPreset).toBe(lookforwardPreset)
+    }
+    expect(timeframeLabel({ ...defaultScope(), lookbackPreset: 'none', lookforwardPreset: 'next10y' })).toBe('Next 10 years')
+    expect(timeframeLabel({ ...defaultScope(), lookbackPreset: 'none', lookforwardPreset: 'unlimited' })).toBe('Open-ended outlook')
   })
 })
