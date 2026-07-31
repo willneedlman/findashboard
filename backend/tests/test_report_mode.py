@@ -1270,3 +1270,56 @@ def test_report_type_guidance_does_not_leak_renderer_presets():
         prompt = _report_system_prompt("open", "medium", "", t)
         assert "metric-rail" not in prompt
         assert "visual-left" not in prompt
+
+
+def _book_req(goal, report_type="", clips=None):
+    from routers.ai import ReportGenRequest
+    return ReportGenRequest(
+        goal=goal, reportType=report_type,
+        clips=clips or [ReportClipIn(id="c", dataType="table", title="Holdings")],
+    )
+
+
+def test_portfolio_objective_is_book_level_even_without_a_report_type():
+    """The regression: a project stored before the setup flow carries the default
+    'equity-note', so the objective has to be what routes it. This is the report
+    that came back rated 'Hold NVDA' on a four-holding book."""
+    from routers.ai import _book_level_report
+    req = _book_req("Assess risk and concentration in my portfolio", "equity-note")
+    assert _book_level_report(req, ["NVDA", "MSFT", "QCOM", "MU"]) is True
+
+
+def test_explicit_types_decide_without_consulting_the_objective():
+    from routers.ai import _book_level_report
+    assert _book_level_report(_book_req("anything", "portfolio-review"), ["NVDA"]) is True
+    assert _book_level_report(_book_req("anything", "macro-brief"), []) is True
+    assert _book_level_report(_book_req("anything", "screen-summary"), []) is True
+    # A named-subject type is never overridden by portfolio words in the goal.
+    assert _book_level_report(_book_req("NVDA vs MSFT in my portfolio", "comparison"), ["NVDA", "MSFT"]) is False
+
+
+def test_a_single_name_note_mentioning_a_portfolio_keeps_its_subject():
+    """Requiring 2+ candidates stops 'should I add NVDA to my portfolio' from
+    losing the subject equity it genuinely has."""
+    from routers.ai import _book_level_report
+    assert _book_level_report(_book_req("Should I add NVDA to my portfolio?"), ["NVDA"]) is False
+    assert _book_level_report(_book_req("Is MSFT worth holding?"), ["MSFT"]) is False
+    assert _book_level_report(_book_req("Compare NVDA and AAPL"), ["NVDA", "AAPL"]) is False
+
+
+def test_book_level_prompt_forbids_a_single_name_verdict():
+    prompt = _report_system_prompt("open", "medium", "", "", True)
+    assert "AGGREGATE SUBJECT" in prompt
+    assert "Hold NVDA" in prompt              # named as the wrong answer
+    assert "never a single ticker" in prompt
+    # And stays absent for an ordinary single-name note.
+    assert "AGGREGATE SUBJECT" not in _report_system_prompt("open", "medium", "", "equity-note", False)
+
+
+def test_book_level_reports_never_use_range_mode():
+    """A price range needs one issuer to price. A book has none."""
+    from routers.ai import _report_mode, _book_level_report
+    single = _book_req("What is the fair value price target for NVDA", "equity-note")
+    assert _report_mode(single, ["NVDA"]) == "range"
+    # Same wording routed as a portfolio review must not produce a range.
+    assert _book_level_report(_book_req("What is the fair value price target for NVDA", "portfolio-review"), ["NVDA"]) is True

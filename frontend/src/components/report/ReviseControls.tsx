@@ -63,6 +63,7 @@ async function requestRevise(project: ReportProject, scope: Scope, instruction: 
     timeframe: timeframeLabel(project.scope),
     purpose: project.scope.purpose,
     goal: project.scope.goal,
+    reportType: project.scope.reportType,
     instruction, scope, field, clipId,
     generated: genView(gen),
     clips: reqClips(project),

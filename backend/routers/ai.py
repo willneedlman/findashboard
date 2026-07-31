@@ -2160,6 +2160,31 @@ Respond ONLY with valid JSON (no markdown, no code fences):
 Every clipId must be one of the provided clip ids."""
 
 
+# Report types whose subject is an aggregate — a book, a regime, a result set —
+# rather than one issuer. For these, resolving a single subject equity is always
+# wrong: the highest-scoring constituent would become the report's subject.
+_BOOK_LEVEL_TYPES = frozenset({"portfolio-review", "macro-brief", "screen-summary"})
+_NAMED_SUBJECT_TYPES = frozenset({"comparison", "thesis"})
+# Same test the research planner uses to classify portfolio intent. The planner
+# already routed these to portfolio tools while the generator went on resolving a
+# single subject equity, which is the disagreement that rated a four-holding book
+# review as a Hold on one holding.
+_PORTFOLIO_INTENT_RE = re.compile(r"\b(portfolio|holdings|book|positions|allocation|my account)\b", re.I)
+
+
+def _book_level_report(req, subjects_ranked: list[str]) -> bool:
+    """True when the report's subject is an aggregate rather than one issuer."""
+    if req.reportType in _BOOK_LEVEL_TYPES:
+        return True
+    if req.reportType in _NAMED_SUBJECT_TYPES:
+        return False
+    # 'equity-note' is also the stored default for projects created before the
+    # setup flow existed, so it cannot be read as a deliberate choice. Fall back
+    # to the objective — but require more than one candidate subject, so a real
+    # single-name note that merely mentions a portfolio keeps its subject.
+    text = f"{getattr(req, 'goal', '')}\n{getattr(req, 'purpose', '')}"
+    return len(subjects_ranked) >= 2 and bool(_PORTFOLIO_INTENT_RE.search(text))
+
 # Chosen in the setup flow. Each names the argument shape and the verdict the
 # reader is owed, which the generic prompt cannot infer from the goal alone.
 _REPORT_TYPE_GUIDANCE = {
@@ -2194,13 +2219,29 @@ _REPORT_TYPE_GUIDANCE = {
     ),
 }
 
+_BOOK_LEVEL_VERDICT_GUIDANCE = (
+    "AGGREGATE SUBJECT — this report is about a book, a regime, or a result set, not one issuer.\n"
+    "- Do NOT headline a single ticker and do NOT make the verdict a rating on one name. "
+    "\"Hold NVDA\" is wrong here even if one holding dominates the evidence.\n"
+    "- keyResult.value is an action on the whole subject, such as \"Trim Semis Concentration\", "
+    "\"Reduce Tech Risk\", or \"Add Duration\".\n"
+    "- stance.baseCase names the aggregate or the theme, never a single ticker.\n"
+    "- Individual names appear as evidence for the aggregate read, not as the thing being rated."
+)
+
+
 def _report_system_prompt(mode: str, length_key: str, must_include: str,
-                          report_type: str = "") -> str:
+                          report_type: str = "", book_level: bool = False) -> str:
     """The layout preset is deliberately NOT passed here: renderer preset names are
     kept out of the model's vocabulary (it emits a coarse `design` intent instead)
     and layout is resolved deterministically in _apply_section_layout_architecture."""
     mode_key = "range" if mode == "range" else "open"
     mode_guidance = _REPORT_RANGE_GUIDANCE if mode_key == "range" else _REPORT_OPEN_GUIDANCE
+    # Independent of report type: a project stored before the setup flow existed
+    # carries no type, so the aggregate direction has to attach to the detection
+    # rather than to the type alone.
+    if book_level:
+        mode_guidance = f"{mode_guidance}\n\n{_BOOK_LEVEL_VERDICT_GUIDANCE}"
     type_guidance = _REPORT_TYPE_GUIDANCE.get(report_type, "")
     if type_guidance:
         mode_guidance = f"{mode_guidance}\n\n{type_guidance}"
@@ -4516,6 +4557,13 @@ def generate_report(req: ReportGenRequest):
 
     subject = _subject_ticker(req)
     subjects_ranked = _ranked_subjects(req)
+    # A book, a regime and a result set have no single subject equity. Resolving
+    # one anyway hands the model a subjectTicker with live spot and an
+    # instruction to always cite it, which is how a four-holding portfolio review
+    # came back as a Hold rating on whichever holding had the most clips.
+    book_level = _book_level_report(req, subjects_ranked)
+    if book_level:
+        subject = None
     evidence_subjects = _subject_evidence_tickers(req.clips)
     if subject and evidence_subjects and subject not in evidence_subjects:
         evidence_subject = sorted(
@@ -4527,7 +4575,7 @@ def generate_report(req: ReportGenRequest):
             f"Report objective resolves to {subject}, but the collected company evidence is for "
             f"{evidence_subject}. Re-run AlphaTape research for {subject} before generating.",
         )
-    mode = _report_mode(req, subjects_ranked)
+    mode = "open" if book_level else _report_mode(req, subjects_ranked)
     length_key = _length_key(req.length)
     dcf_names = sorted(_dcf_tickers_from_clips(req.clips))
     subject_dcf = _subject_dcf_present(req.clips, subject)
@@ -4561,7 +4609,18 @@ def generate_report(req: ReportGenRequest):
         ),
     }
 
-    if mode == "open" and len(subjects_ranked) >= 2:
+    if book_level:
+        valuation_context["note"] = (
+            "This report has NO single subject equity — the subject is the book, regime, or result "
+            "set as a whole. subjectTicker is deliberately null: do not promote any one constituent "
+            "into the report's subject, do not headline a single ticker, and do not issue a per-name "
+            "Buy/Hold/Sell rating as the report's verdict. valuationContext.subjects lists the "
+            "constituents with live spot; use them as components of the aggregate picture. "
+            "signalDigest summarizes directional cues already in the clips. "
+            "Integrate every clip family into one argument."
+        )
+
+    if (mode == "open" and len(subjects_ranked) >= 2) or (book_level and subjects_ranked):
         subj_ctx = []
         for t in subjects_ranked[:4]:
             q = quote if t == subject else _fetch_market_quote(t)
@@ -4634,6 +4693,7 @@ def generate_report(req: ReportGenRequest):
         length_key,
         _must_include_section(req.mustInclude, coverage_requirements),
         (req.reportType or "").strip(),
+        book_level,
     )
     messages = [
         {"role": "system", "content": sys_prompt},
@@ -4739,6 +4799,9 @@ class ReportReviseRequest(BaseModel):
     purpose: str = ""
     goal: str = ""
     subjectTicker: str = ""
+    # Carried through so a revision cannot reintroduce a single-name anchor on a
+    # report whose subject is a book, a regime, or a result set.
+    reportType: str = ""
     instruction: str = ""
     scope: str = "block"        # "block" (one field) | "report" (any prose blocks)
     field: str = ""             # block scope: which field to revise
@@ -4806,9 +4869,10 @@ def revise_report(req: ReportReviseRequest):
         projectName=req.projectName, purpose=req.purpose, goal=req.goal,
         subjectTicker=req.subjectTicker, clips=req.clips,
     )
-    subject = _subject_ticker(gen_req)
     subjects_ranked = _ranked_subjects(gen_req)
-    mode = _report_mode(gen_req, subjects_ranked)
+    book_level = _book_level_report(req, subjects_ranked)
+    subject = None if book_level else _subject_ticker(gen_req)
+    mode = "open" if book_level else _report_mode(gen_req, subjects_ranked)
     quote = _fetch_market_quote(subject)
     market = float(quote["price"]) if quote.get("price") else None
     dcf_intrinsic = _dcf_intrinsic_for_subject(req.clips, subject) if _subject_dcf_present(req.clips, subject) else None
@@ -4817,7 +4881,7 @@ def revise_report(req: ReportReviseRequest):
     if subject and market:
         price_by_subject[subject.upper()] = market
     subjects_ctx = []
-    if mode == "open" and len(subjects_ranked) >= 2:
+    if (mode == "open" and len(subjects_ranked) >= 2) or (book_level and subjects_ranked):
         for t in subjects_ranked[:4]:
             q = quote if t == subject else _fetch_market_quote(t)
             mkt_t = float(q["price"]) if q.get("price") else None
