@@ -13,6 +13,7 @@ import TickerLogo from '../components/TickerLogo'
 import useIsMobile from '../hooks/useIsMobile'
 import useActivePortfolio from '../hooks/useActivePortfolio'
 import ReportWizardForm from '../components/report/ReportWizardForm'
+import ReportSetupWizard from '../components/report/ReportSetupWizard'
 import ClipRenderer from '../components/report/ClipRenderer'
 import { assignReportBodyVisuals, reportSectionAssignmentKey } from '../components/report/SectionLayout'
 import {
@@ -973,6 +974,8 @@ export default function ReportCreator() {
         purpose: active.scope.purpose,
         goal: active.scope.goal,
         length: active.scope.length,
+        reportType: active.scope.reportType,
+        layoutPreset: active.scope.layoutPreset,
         mustInclude: active.scope.mustInclude,
         clips: active.clips.map(c => ({ id: c.id, sourceTab: c.sourceTab, dataType: c.dataType, title: clipTitle(c), userDescription: c.userDescription ?? '', dataSummary: summarizeClipForAI(c) })),
       }
@@ -1094,7 +1097,8 @@ export default function ReportCreator() {
   }
 
   const clips = active?.clips ?? []
-  const canGenerate = !!active && clips.length > 0 && !researching && !planningResearch
+  const inSetup = !!active && !active.scope.setupComplete
+  const canGenerate = !!active && clips.length > 0 && !researching && !planningResearch && !inSetup
   const scopeIncomplete = !!active && !active.scope.goal.trim() && !active.scope.purpose.trim()
   const researchedClipCount = clips.filter(clip => clip.origin === 'alphatape').length
   const manualClipCount = clips.length - researchedClipCount
@@ -1166,18 +1170,23 @@ export default function ReportCreator() {
                 onFocus={e => { e.target.style.borderBottomColor = T.border }}
               />
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                {justDone && !generating && (
+                {inSetup && (
+                  <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted, border: `1px solid ${T.border}`, padding: '6px 9px' }}>
+                    Setting up
+                  </span>
+                )}
+                {!inSetup && justDone && !generating && (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.pos, border: `1px solid ${T.pos}`, background: T.posTint(8), padding: '6px 9px' }}>
                     <Check size={12} /> Report ready
                   </span>
                 )}
-                {active.generated && (
+                {!inSetup && active.generated && (
                   <button onClick={generate} disabled={generating || !canGenerate} title="Regenerate from the current clips and scope"
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent', border: `1px solid ${T.border}`, color: T.muted, fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '8px 12px', cursor: (generating || !canGenerate) ? 'default' : 'pointer', opacity: (generating || !canGenerate) ? 0.6 : 1 }}>
                     {!generating && <RefreshCw size={12} />} {generating ? 'Regenerating…' : 'Regenerate'}
                   </button>
                 )}
-                {active.generated ? (
+                {inSetup ? null : active.generated ? (
                   <button onClick={() => navigate(`/report-creator/print/${active.id}`)} style={primaryAction}>
                     <FileDown size={13} /> Export PDF
                   </button>
@@ -1199,11 +1208,29 @@ export default function ReportCreator() {
               </div>
             )}
 
-            <Section label="Report scope" meta={timeframeLabel(active.scope)} collapsible defaultOpen={!active.generated}>
-              <ReportWizardForm scope={active.scope} onChange={patch => updateScope(active.id, patch)} />
-            </Section>
+            {inSetup && (
+              <ReportSetupWizard
+                scope={active.scope}
+                clipCount={clips.length}
+                generating={generating}
+                isMobile={isMobile}
+                onChange={patch => updateScope(active.id, patch)}
+                onFinish={() => updateScope(active.id, { setupComplete: true })}
+                onGenerate={generate}
+              />
+            )}
 
-            {researchPlan && (
+            {!inSetup && (
+            <Section label="Report scope" meta={timeframeLabel(active.scope)} collapsible defaultOpen={!active.generated}>
+              <ReportWizardForm
+                scope={active.scope}
+                onChange={patch => updateScope(active.id, patch)}
+                onEditSetup={() => updateScope(active.id, { setupComplete: false })}
+              />
+            </Section>
+            )}
+
+            {!inSetup && researchPlan && (
               <Section label="Evidence sourcing" meta={active.scope.evidenceMode === 'alphatape' ? 'AlphaTape research' : 'Manual clips'} collapsible defaultOpen={!active.generated}>
                 <ResearchPanel
                   project={active}
@@ -1222,6 +1249,7 @@ export default function ReportCreator() {
               </Section>
             )}
 
+            {!inSetup && (
             <Section
               label="Clips"
               meta={researchedClipCount ? `${researchedClipCount} researched · ${manualClipCount} manual` : `${clips.length} in order`}
@@ -1240,8 +1268,9 @@ export default function ReportCreator() {
                 </div>
               )}
             </Section>
+            )}
 
-            {!active.generated && canGenerate && scopeIncomplete && (
+            {!inSetup && !active.generated && canGenerate && scopeIncomplete && (
               <div style={{ fontFamily: T.mono, fontSize: 9.5, color: T.warn }}>
                 Add an objective so the AI can anchor the report to your intent.
               </div>

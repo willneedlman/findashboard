@@ -1205,3 +1205,68 @@ def test_revise_block_before_resolves_fields_and_sections():
     assert _revise_block_before(gen, "section.heading", "c1") == "Sec One"
     assert _revise_block_before(gen, "section.analysis", "missing") is None
     assert _ALLOWED_REVISE_FIELDS == {"headline", "executiveSummary", "conclusion", "section.analysis", "section.heading"}
+
+
+def _setup_sections(n=2):
+    clips = [ReportClipIn(id=f"c{i}", dataType="chart", title=f"Exhibit {i}") for i in range(n)]
+    sections = [
+        {
+            "clipId": c.id, "heading": c.title, "analysis": "The evidence supports the thesis.",
+            "keyFigures": [{"label": "Lead", "value": "12%"}, {"label": "Gap", "value": "4 pp"}],
+            "chart": None, "design": "visual",
+        }
+        for c in clips
+    ]
+    return sections, clips
+
+
+def test_layout_preset_outranks_the_models_per_section_intent():
+    """The preset is an explicit user instruction; 'design: visual' is an inference."""
+    for preset, expected in [
+        ("visual-first", ["evidence-band", "full-width"]),
+        ("data-dense", ["metric-rail-left", "metric-rail"]),
+        ("narrative", ["analysis-first", "analysis-first"]),
+    ]:
+        sections, clips = _setup_sections()
+        _apply_section_layout_architecture(sections, clips, preset)
+        assert [s["layout"] for s in sections] == expected, preset
+
+
+def test_editorial_preset_and_no_preset_keep_the_historical_behaviour():
+    for preset in ("editorial", ""):
+        sections, clips = _setup_sections()
+        _apply_section_layout_architecture(sections, clips, preset)
+        assert [s["layout"] for s in sections] == ["visual-left", "visual-right"], preset
+
+
+def test_layout_preset_never_overrides_the_renderer_safety_rules():
+    """A section with no visual cannot take a side-by-side layout however the user
+    set the preset, and a dense table still claims the full width."""
+    clip = ReportClipIn(id="t", dataType="table", title="Holdings")
+    section = {
+        "clipId": "t", "heading": "Book", "analysis": "Concentration is the risk.",
+        "keyFigures": [{"label": "Top 5", "value": "48%"}], "chart": None, "design": "visual",
+    }
+    _apply_section_layout_architecture([section], [clip], "visual-first")
+    assert section["layout"] in {"full-width", "metric-rail"}
+
+
+def test_report_type_guidance_reaches_the_prompt_and_unknown_types_are_ignored():
+    comparison = _report_system_prompt("open", "medium", "", "comparison")
+    assert "REPORT TYPE — Comparison" in comparison
+    assert "never one section per subject" in comparison
+
+    portfolio = _report_system_prompt("open", "medium", "", "portfolio-review")
+    assert "the reader's book" in portfolio
+    assert "REPORT TYPE — Comparison" not in portfolio
+
+    for unknown in ("", "not-a-type"):
+        assert "REPORT TYPE" not in _report_system_prompt("open", "medium", "", unknown)
+
+
+def test_report_type_guidance_does_not_leak_renderer_presets():
+    """Layout stays out of the model's vocabulary no matter which type is picked."""
+    for t in ("equity-note", "comparison", "macro-brief", "portfolio-review", "screen-summary", "thesis"):
+        prompt = _report_system_prompt("open", "medium", "", t)
+        assert "metric-rail" not in prompt
+        assert "visual-left" not in prompt

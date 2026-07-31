@@ -1,7 +1,15 @@
+import { Settings2 } from 'lucide-react'
 import { T } from '../../lib/theme'
 import type { LookbackPreset, LookforwardPreset, ReportLength, ReportScope } from '../../lib/reportCreator'
+import { REPORT_TYPES } from './ReportSetupWizard'
 
-// Scope form: dual horizon (lookback + lookforward), purpose, and goal.
+// Scope form: dual horizon (lookback + lookforward), purpose, and goal. The type
+// and layout chosen during setup are shown but not edited here — changing either
+// re-seeds the other answers, so it belongs back in the stepper.
+
+const LAYOUT_LABEL: Record<string, string> = {
+  editorial: 'Editorial', 'visual-first': 'Visual first', 'data-dense': 'Data dense', narrative: 'Narrative',
+}
 
 const LOOKBACK: { k: LookbackPreset; label: string }[] = [
   { k: 'none', label: 'None' },
@@ -65,9 +73,33 @@ function ChipRow<K extends string>({
   )
 }
 
-export default function ReportWizardForm({ scope, onChange }: { scope: ReportScope; onChange: (patch: Partial<ReportScope>) => void }) {
+export default function ReportWizardForm({ scope, onChange, onEditSetup }: {
+  scope: ReportScope; onChange: (patch: Partial<ReportScope>) => void; onEditSetup?: () => void
+}) {
+  const type = REPORT_TYPES.find(t => t.k === scope.reportType)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {onEditSetup && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+          flexWrap: 'wrap', border: `1px solid ${T.border}`, background: T.bg, padding: '9px 11px',
+        }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+            {type && <type.Icon size={14} color={T.gold} />}
+            <span style={{ fontFamily: T.label, fontSize: 11.5, fontWeight: 700, color: T.text }}>{type?.label ?? 'Report'}</span>
+            <span style={{ fontFamily: T.mono, fontSize: 10, color: T.muted }}>
+              {LAYOUT_LABEL[scope.layoutPreset] ?? scope.layoutPreset} layout
+            </span>
+          </span>
+          <button type="button" onClick={onEditSetup} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5, background: 'transparent',
+            border: `1px solid ${T.border}`, color: T.muted, fontFamily: T.label, fontSize: 8.5,
+            fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '5px 9px', cursor: 'pointer',
+          }}>
+            <Settings2 size={11} /> Change
+          </button>
+        </div>
+      )}
       <div>
         <span style={label}>Horizon</span>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

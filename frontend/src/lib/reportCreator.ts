@@ -83,8 +83,26 @@ export type LookbackPreset = 'none' | 'last7' | 'last30' | 'last90' | 'qtd' | 'y
 export type LookforwardPreset = 'none' | 'next7' | 'next30' | 'next90' | 'next180' | 'custom'
 export type ReportLength = 'short' | 'medium' | 'long'
 export type EvidenceMode = 'manual' | 'alphatape'
+/** What the note is, which decides its argument shape and what counts as a verdict. */
+export type ReportType =
+  | 'equity-note'
+  | 'comparison'
+  | 'macro-brief'
+  | 'portfolio-review'
+  | 'screen-summary'
+  | 'thesis'
+/** How the page is composed: which of prose, visuals or figures leads. */
+export type LayoutPreset = 'editorial' | 'visual-first' | 'data-dense' | 'narrative'
 
 export interface ReportScope {
+  /** What kind of note this is. Set in step 1 of the setup flow. */
+  reportType: ReportType
+  /** Page composition preference. Steers the AI's per-section layout choice. */
+  layoutPreset: LayoutPreset
+  /** True once the setup steps have been answered. Until then the project opens
+   * in the stepper and generation is held back, so no report is ever built from
+   * an unanswered scope. Legacy projects are treated as already set up. */
+  setupComplete: boolean
   /** Historical context window (what happened). */
   lookbackPreset: LookbackPreset
   /** Forward outlook window (what the report is projecting into). */
@@ -209,6 +227,9 @@ const uid = () =>
 const nowISO = () => new Date().toISOString()
 
 export const defaultScope = (): ReportScope => ({
+  reportType: 'equity-note',
+  layoutPreset: 'editorial',
+  setupComplete: false,
   lookbackPreset: 'last30',
   lookforwardPreset: 'next90',
   purpose: '',
@@ -225,6 +246,10 @@ export const defaultScope = (): ReportScope => ({
 const LOOKBACK_OK = new Set<LookbackPreset>(['none', 'last7', 'last30', 'last90', 'qtd', 'ytd', 'custom'])
 const LOOKFORWARD_OK = new Set<LookforwardPreset>(['none', 'next7', 'next30', 'next90', 'next180', 'custom'])
 const LENGTH_OK = new Set<ReportLength>(['short', 'medium', 'long'])
+const TYPE_OK = new Set<ReportType>([
+  'equity-note', 'comparison', 'macro-brief', 'portfolio-review', 'screen-summary', 'thesis',
+])
+const LAYOUT_OK = new Set<LayoutPreset>(['editorial', 'visual-first', 'data-dense', 'narrative'])
 
 /** Normalize stored scope: dual horizon + legacy single timeframePreset. */
 export function normalizeScope(raw: Partial<ReportScope> | null | undefined): ReportScope {
@@ -250,7 +275,14 @@ export function normalizeScope(raw: Partial<ReportScope> | null | undefined): Re
     if (!raw.lookforwardPreset) lookforward = 'none'
   }
 
+  // A project stored before the setup flow existed has already been configured by
+  // hand, so never send it back through the stepper.
+  const legacyProject = raw.setupComplete === undefined && (!!goal || !!purpose || !!raw.researchSymbols)
+
   return {
+    reportType: TYPE_OK.has(raw.reportType as ReportType) ? (raw.reportType as ReportType) : base.reportType,
+    layoutPreset: LAYOUT_OK.has(raw.layoutPreset as LayoutPreset) ? (raw.layoutPreset as LayoutPreset) : base.layoutPreset,
+    setupComplete: raw.setupComplete === true || legacyProject,
     lookbackPreset: lookback,
     lookforwardPreset: lookforward,
     customStart: raw.customStart || undefined,

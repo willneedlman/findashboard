@@ -1,0 +1,490 @@
+import { useState } from 'react'
+import {
+  FileText, GitCompare, Globe, Briefcase, ListFilter, BookOpen,
+  ChevronLeft, ChevronRight, Check, Sparkles,
+} from 'lucide-react'
+import { T } from '../../lib/theme'
+import type {
+  LayoutPreset, LookbackPreset, LookforwardPreset, ReportLength, ReportScope, ReportType,
+} from '../../lib/reportCreator'
+
+// Setup runs before anything is generated: the report's kind, its question, its
+// evidence and its composition are decisions the model cannot make for you, and
+// a note built from an unanswered scope is the one that comes back wrong.
+
+export const REPORT_TYPES: {
+  k: ReportType; label: string; blurb: string; Icon: typeof FileText
+  defaults: Partial<ReportScope>; placeholder: string
+}[] = [
+  {
+    k: 'equity-note', label: 'Equity note', blurb: 'One issuer, one verdict', Icon: FileText,
+    defaults: { length: 'medium', layoutPreset: 'editorial', lookbackPreset: 'last90', lookforwardPreset: 'next90' },
+    placeholder: 'e.g. Is MSFT still worth holding after the FY2026 print?',
+  },
+  {
+    k: 'comparison', label: 'Comparison', blurb: 'A versus B, head to head', Icon: GitCompare,
+    defaults: { length: 'medium', layoutPreset: 'data-dense', lookbackPreset: 'last90', lookforwardPreset: 'next90' },
+    placeholder: 'e.g. Which is the better value between NVDA and AAPL on growth and valuation?',
+  },
+  {
+    k: 'macro-brief', label: 'Macro brief', blurb: 'Cross-asset or thematic', Icon: Globe,
+    defaults: { length: 'short', layoutPreset: 'visual-first', lookbackPreset: 'last30', lookforwardPreset: 'next30' },
+    placeholder: 'e.g. What do rates and credit spreads imply for risk assets into year end?',
+  },
+  {
+    k: 'portfolio-review', label: 'Portfolio review', blurb: 'Your book, exposure and risk', Icon: Briefcase,
+    defaults: { length: 'medium', layoutPreset: 'data-dense', includePortfolio: true, lookbackPreset: 'qtd', lookforwardPreset: 'next90' },
+    placeholder: 'e.g. Where is the concentration risk in my book and what should I trim?',
+  },
+  {
+    k: 'screen-summary', label: 'Screen summary', blurb: 'Write up a result set', Icon: ListFilter,
+    defaults: { length: 'short', layoutPreset: 'data-dense', evidenceMode: 'alphatape', lookbackPreset: 'last30', lookforwardPreset: 'none' },
+    placeholder: 'e.g. Which names from this screen deserve a closer look, and why?',
+  },
+  {
+    k: 'thesis', label: 'Thesis', blurb: 'Long-form deep dive', Icon: BookOpen,
+    defaults: { length: 'long', layoutPreset: 'narrative', lookbackPreset: 'ytd', lookforwardPreset: 'next180' },
+    placeholder: 'e.g. Build the bull and bear case for the AI capex cycle over the next two years.',
+  },
+]
+
+// Layout is a spatial choice, so each option is drawn rather than described: the
+// glyph is a miniature of the page it produces.
+function LayoutGlyph({ preset, on }: { preset: LayoutPreset; on: boolean }) {
+  const ink = on ? T.gold : T.muted
+  const fill = on ? T.gold : T.muted
+  const line = (x: number, y: number, w: number) =>
+    <rect key={`${x}-${y}`} x={x} y={y} width={w} height="2" fill={ink} opacity={0.55} />
+  return (
+    <svg width="56" height="38" viewBox="0 0 56 38" aria-hidden="true" style={{ display: 'block' }}>
+      <rect x="0.5" y="0.5" width="55" height="37" fill="none" stroke={ink} strokeOpacity={0.35} />
+      {preset === 'editorial' && <>
+        <rect x="6" y="6" width="20" height="3" fill={fill} />
+        {[13, 18, 23, 28].map(y => line(6, y, 20))}
+        <rect x="32" y="6" width="18" height="26" fill={fill} opacity={0.3} />
+      </>}
+      {preset === 'visual-first' && <>
+        <rect x="6" y="6" width="44" height="15" fill={fill} opacity={0.3} />
+        {[25, 30].map(y => line(6, y, 44))}
+      </>}
+      {preset === 'data-dense' && <>
+        {[6, 18, 30].map(x => <rect key={x} x={x} y="6" width="10" height="9" fill={fill} opacity={0.32} />)}
+        <rect x="42" y="6" width="8" height="9" fill={fill} opacity={0.32} />
+        {[20, 25, 30].map(y => line(6, y, 44))}
+      </>}
+      {preset === 'narrative' && <>
+        <rect x="6" y="6" width="26" height="3" fill={fill} />
+        {[13, 18, 23, 28].map(y => line(6, y, 44))}
+      </>}
+    </svg>
+  )
+}
+
+const LAYOUTS: { k: LayoutPreset; label: string; blurb: string }[] = [
+  { k: 'editorial', label: 'Editorial', blurb: 'Prose leads, one visual beside each argument' },
+  { k: 'visual-first', label: 'Visual first', blurb: 'Chart or table opens each section, analysis follows' },
+  { k: 'data-dense', label: 'Data dense', blurb: 'Figure rails and tables carry the page' },
+  { k: 'narrative', label: 'Narrative', blurb: 'Full-width prose, visuals only where they decide something' },
+]
+
+const LENGTH: { k: ReportLength; label: string; hint: string }[] = [
+  { k: 'short', label: 'Short', hint: '1-2 sections · headline verdict only' },
+  { k: 'medium', label: 'Medium', hint: '3-6 sections · expands when evidence requires' },
+  { k: 'long', label: 'Long', hint: '6-12 sections · full supporting detail' },
+]
+const LOOKBACK: { k: LookbackPreset; label: string }[] = [
+  { k: 'none', label: 'None' }, { k: 'last7', label: '7D' }, { k: 'last30', label: '30D' },
+  { k: 'last90', label: '90D' }, { k: 'qtd', label: 'QTD' }, { k: 'ytd', label: 'YTD' }, { k: 'custom', label: 'Custom' },
+]
+const LOOKFORWARD: { k: LookforwardPreset; label: string }[] = [
+  { k: 'none', label: 'None' }, { k: 'next7', label: '7D' }, { k: 'next30', label: '30D' },
+  { k: 'next90', label: '90D' }, { k: 'next180', label: '180D' }, { k: 'custom', label: 'Custom' },
+]
+
+const STEPS = ['Type', 'Question', 'Data', 'Layout', 'Review'] as const
+
+const label: React.CSSProperties = {
+  display: 'block', fontFamily: T.label, fontSize: 8.5, fontWeight: 700,
+  letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted, marginBottom: 7,
+}
+const field: React.CSSProperties = {
+  background: T.bg, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.label,
+  fontSize: 11.5, lineHeight: 1.55, padding: '8px 10px', width: '100%', outline: 'none',
+  boxSizing: 'border-box', resize: 'vertical',
+}
+const dateInp: React.CSSProperties = {
+  background: T.bg, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.mono,
+  fontSize: 10.5, padding: '5px 8px', outline: 'none',
+  colorScheme: 'var(--theme-color-scheme, dark)' as React.CSSProperties['colorScheme'],
+}
+const chipOn = (on: boolean): React.CSSProperties => ({
+  fontFamily: T.mono, fontSize: 10, fontWeight: on ? 700 : 400, padding: '5px 11px', cursor: 'pointer',
+  background: on ? T.goldTint(14) : 'transparent', color: on ? T.gold : T.muted,
+  border: `1px solid ${on ? T.gold : T.border}`,
+})
+const cardOn = (on: boolean): React.CSSProperties => ({
+  display: 'flex', flexDirection: 'column', gap: 7, alignItems: 'flex-start', textAlign: 'left',
+  padding: '13px 14px', cursor: 'pointer', minWidth: 0,
+  background: on ? T.goldTint(10) : T.bg,
+  border: `1px solid ${on ? T.gold : T.border}`,
+})
+
+function ChipRow<K extends string>({ options, value, onPick }: {
+  options: { k: K; label: string }[]; value: K; onPick: (k: K) => void
+}) {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+      {options.map(p => (
+        <button key={p.k} type="button" onClick={() => onPick(p.k)} style={chipOn(value === p.k)}>{p.label}</button>
+      ))}
+    </div>
+  )
+}
+
+function StepRail({ step, furthest, onJump }: { step: number; furthest: number; onJump: (i: number) => void }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0, marginBottom: 22, flexWrap: 'wrap' }}>
+      {STEPS.map((name, i) => {
+        const done = i < furthest
+        const here = i === step
+        const reachable = i <= furthest
+        const ink = here ? T.gold : done ? T.text : T.muted
+        return (
+          <div key={name} style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+            <button type="button" disabled={!reachable} onClick={() => reachable && onJump(i)}
+              aria-current={here ? 'step' : undefined}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, padding: '2px 8px',
+                background: 'transparent', border: 'none', cursor: reachable ? 'pointer' : 'default',
+              }}>
+              <span style={{
+                width: 22, height: 22, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                borderRadius: '50%', border: `1px solid ${here ? T.gold : done ? T.text : T.border}`,
+                background: here ? T.goldTint(16) : 'transparent',
+                fontFamily: T.mono, fontSize: 10, fontWeight: 700, color: ink,
+              }}>
+                {done ? <Check size={11} /> : i + 1}
+              </span>
+              <span style={{
+                fontFamily: T.label, fontSize: 8.5, fontWeight: here ? 700 : 500, letterSpacing: '0.1em',
+                textTransform: 'uppercase', color: ink, whiteSpace: 'nowrap',
+              }}>{name}</span>
+            </button>
+            {i < STEPS.length - 1 && (
+              <span style={{ width: 26, height: 1, background: i < furthest ? T.text : T.border, opacity: i < furthest ? 0.5 : 1, marginBottom: 14 }} />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function Summary({ rows }: { rows: [string, string][] }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', border: `1px solid ${T.border}` }}>
+      {rows.map(([k, v], i) => (
+        <div key={k} style={{
+          display: 'flex', gap: 14, padding: '9px 12px',
+          borderTop: i === 0 ? 'none' : `1px solid ${T.border}`,
+        }}>
+          <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted, width: 108, flexShrink: 0 }}>{k}</span>
+          <span style={{ fontFamily: T.mono, fontSize: 11, color: T.text, lineHeight: 1.5, minWidth: 0 }}>{v}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export default function ReportSetupWizard({
+  scope, clipCount, generating, onChange, onFinish, onGenerate, isMobile,
+}: {
+  scope: ReportScope
+  clipCount: number
+  generating: boolean
+  onChange: (patch: Partial<ReportScope>) => void
+  onFinish: () => void
+  onGenerate: () => void
+  isMobile: boolean
+}) {
+  const [step, setStep] = useState(0)
+  // Re-entering setup on a configured project (the Change button) should not make
+  // you click Next through answers you already gave — open every step at once.
+  const [furthest, setFurthest] = useState(
+    () => ((scope.goal || scope.purpose).trim() ? STEPS.length - 1 : 0),
+  )
+
+  const type = REPORT_TYPES.find(t => t.k === scope.reportType) ?? REPORT_TYPES[0]
+  const goal = (scope.goal || scope.purpose).trim()
+  // Only the question is truly required — everything else has a defensible default.
+  const canAdvance = step !== 1 || goal.length > 0
+
+  const go = (next: number) => {
+    const clamped = Math.max(0, Math.min(STEPS.length - 1, next))
+    setStep(clamped)
+    setFurthest(f => Math.max(f, clamped))
+  }
+
+  // Picking a type re-seeds the choices that type usually implies. Later steps
+  // stay editable, so this is a starting point rather than a lock-in — but only
+  // on a real change, or re-clicking the current type would silently discard the
+  // layout, length and horizon you set in the steps after this one.
+  const pickType = (t: typeof REPORT_TYPES[number]) => {
+    if (t.k === scope.reportType) return
+    onChange({ reportType: t.k, ...t.defaults })
+  }
+
+  const horizonText = () => {
+    const b = LOOKBACK.find(l => l.k === scope.lookbackPreset)?.label ?? '—'
+    const f = LOOKFORWARD.find(l => l.k === scope.lookforwardPreset)?.label ?? '—'
+    return `${b} back · ${f} forward`
+  }
+
+  return (
+    <div style={{ border: `1px solid ${T.border}`, background: T.surface, padding: isMobile ? '18px 16px' : '22px 24px' }}>
+      <StepRail step={step} furthest={furthest} onJump={go} />
+
+      {step === 0 && (
+        <div>
+          <h2 style={{ fontFamily: T.label, fontSize: 14, fontWeight: 700, color: T.text, margin: '0 0 5px' }}>What kind of report?</h2>
+          <p style={{ fontFamily: T.mono, fontSize: 10.5, color: T.muted, lineHeight: 1.6, margin: '0 0 16px' }}>
+            This sets the argument shape and what counts as a verdict. It also seeds the horizon, length and layout, all of which you can change later.
+          </p>
+          <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)' }}>
+            {REPORT_TYPES.map(t => {
+              const on = scope.reportType === t.k
+              return (
+                <button key={t.k} type="button" onClick={() => pickType(t)} style={cardOn(on)}>
+                  <t.Icon size={17} color={on ? T.gold : T.muted} />
+                  <span style={{ fontFamily: T.label, fontSize: 12, fontWeight: 700, color: on ? T.gold : T.text }}>{t.label}</span>
+                  <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.muted, lineHeight: 1.45 }}>{t.blurb}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {step === 1 && (
+        <div>
+          <h2 style={{ fontFamily: T.label, fontSize: 14, fontWeight: 700, color: T.text, margin: '0 0 5px' }}>What should it answer?</h2>
+          <p style={{ fontFamily: T.mono, fontSize: 10.5, color: T.muted, lineHeight: 1.6, margin: '0 0 16px' }}>
+            One specific question, naming the subjects and what you want decided. This is the only answer the report is graded against.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div>
+              <label style={label}>Objective</label>
+              <textarea value={scope.goal || scope.purpose} rows={3} autoFocus
+                onChange={e => onChange({ goal: e.target.value, purpose: '' })}
+                placeholder={type.placeholder} style={field} />
+              {!goal && (
+                <div style={{ fontFamily: T.mono, fontSize: 9, color: T.warn, marginTop: 6 }}>
+                  Required. Without it the report has nothing to conclude.
+                </div>
+              )}
+            </div>
+            <div>
+              <label style={label}>Must include</label>
+              <textarea value={scope.mustInclude} rows={3}
+                onChange={e => onChange({ mustInclude: e.target.value })}
+                placeholder={'One requirement per line — a stat, a verdict, a chart\ne.g. PEG ratio comparison chart\nstate the analyst price target explicitly'}
+                style={field} />
+              <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, marginTop: 6 }}>
+                Forced in even if the model would cut them. If the data is not in your evidence, it says so instead of inventing it.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div>
+          <h2 style={{ fontFamily: T.label, fontSize: 14, fontWeight: 700, color: T.text, margin: '0 0 5px' }}>Where does the evidence come from?</h2>
+          <p style={{ fontFamily: T.mono, fontSize: 10.5, color: T.muted, lineHeight: 1.6, margin: '0 0 16px' }}>
+            Nothing is written from the model's own memory. Every figure in the report traces to evidence you supply here.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
+              {([
+                ['alphatape', 'AlphaTape gathers it', 'Plans a research run across the terminal tools and collects the clips for you.'],
+                ['manual', 'My clips only', `Uses what you send with Send to Report. ${clipCount} clip${clipCount === 1 ? '' : 's'} so far.`],
+              ] as const).map(([mode, title, blurb]) => {
+                const on = scope.evidenceMode === mode
+                return (
+                  <button key={mode} type="button" onClick={() => onChange({ evidenceMode: mode })} style={cardOn(on)}>
+                    <span style={{ fontFamily: T.label, fontSize: 12, fontWeight: 700, color: on ? T.gold : T.text }}>{title}</span>
+                    <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.muted, lineHeight: 1.45 }}>{blurb}</span>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div>
+              <label style={label}>Subjects</label>
+              <input value={scope.researchSymbols} onChange={e => onChange({ researchSymbols: e.target.value })}
+                placeholder="Tickers, comma separated — e.g. MSFT, NVDA" style={{ ...field, fontFamily: T.mono, fontSize: 11 }} />
+            </div>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer' }}>
+              <span style={{
+                width: 15, height: 15, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                border: `1px solid ${scope.includePortfolio ? T.gold : T.muted}`,
+                background: scope.includePortfolio ? T.goldTint(14) : 'transparent', color: T.gold,
+              }}>{scope.includePortfolio && <Check size={10} />}</span>
+              <input type="checkbox" checked={scope.includePortfolio} onChange={e => onChange({ includePortfolio: e.target.checked })}
+                style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }} />
+              <span style={{ fontFamily: T.label, fontSize: 11.5, color: T.text }}>Include my portfolio as context</span>
+            </label>
+
+            <div>
+              <span style={label}>Horizon</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div>
+                  <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Lookback · historical context</div>
+                  <ChipRow options={LOOKBACK} value={scope.lookbackPreset} onPick={k => onChange({ lookbackPreset: k })} />
+                  {scope.lookbackPreset === 'custom' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                      <input type="date" value={scope.customStart ?? ''} max={scope.customEnd || undefined}
+                        onChange={e => onChange({ customStart: e.target.value })} aria-label="Lookback start" style={dateInp} />
+                      <span style={{ fontFamily: T.mono, fontSize: 10, color: T.muted }}>to</span>
+                      <input type="date" value={scope.customEnd ?? ''} min={scope.customStart || undefined}
+                        onChange={e => onChange({ customEnd: e.target.value })} aria-label="Lookback end" style={dateInp} />
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Lookforward · outlook window</div>
+                  <ChipRow options={LOOKFORWARD} value={scope.lookforwardPreset} onPick={k => onChange({ lookforwardPreset: k })} />
+                  {scope.lookforwardPreset === 'custom' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                      <input type="date" value={scope.forwardCustomStart ?? ''} max={scope.forwardCustomEnd || undefined}
+                        onChange={e => onChange({ forwardCustomStart: e.target.value })} aria-label="Lookforward start" style={dateInp} />
+                      <span style={{ fontFamily: T.mono, fontSize: 10, color: T.muted }}>to</span>
+                      <input type="date" value={scope.forwardCustomEnd ?? ''} min={scope.forwardCustomStart || undefined}
+                        onChange={e => onChange({ forwardCustomEnd: e.target.value })} aria-label="Lookforward end" style={dateInp} />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === 3 && (
+        <div>
+          <h2 style={{ fontFamily: T.label, fontSize: 14, fontWeight: 700, color: T.text, margin: '0 0 5px' }}>How should it read?</h2>
+          <p style={{ fontFamily: T.mono, fontSize: 10.5, color: T.muted, lineHeight: 1.6, margin: '0 0 16px' }}>
+            Composition preference and depth. The renderer still adapts a section when its actual visual will not fit the chosen shape.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <div>
+              <span style={label}>Layout</span>
+              <div style={{ display: 'grid', gap: 10, gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)' }}>
+                {LAYOUTS.map(l => {
+                  const on = scope.layoutPreset === l.k
+                  return (
+                    <button key={l.k} type="button" onClick={() => onChange({ layoutPreset: l.k })} style={{ ...cardOn(on), alignItems: 'stretch' }}>
+                      <LayoutGlyph preset={l.k} on={on} />
+                      <span style={{ fontFamily: T.label, fontSize: 11.5, fontWeight: 700, color: on ? T.gold : T.text }}>{l.label}</span>
+                      <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, lineHeight: 1.45 }}>{l.blurb}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            <div>
+              <span style={label}>Length</span>
+              <ChipRow options={LENGTH} value={scope.length} onPick={k => onChange({ length: k })} />
+              <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, marginTop: 6 }}>
+                {LENGTH.find(l => l.k === scope.length)?.hint}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === 4 && (
+        <div>
+          <h2 style={{ fontFamily: T.label, fontSize: 14, fontWeight: 700, color: T.text, margin: '0 0 5px' }}>Ready to build</h2>
+          <p style={{ fontFamily: T.mono, fontSize: 10.5, color: T.muted, lineHeight: 1.6, margin: '0 0 16px' }}>
+            Check the setup, then generate. Everything here stays editable afterwards.
+          </p>
+          <Summary rows={[
+            ['Type', `${type.label} — ${type.blurb}`],
+            ['Question', goal || 'Not set'],
+            ['Must include', scope.mustInclude.trim() || 'Nothing forced'],
+            ['Evidence', scope.evidenceMode === 'alphatape' ? 'AlphaTape research run' : `Manual clips (${clipCount})`],
+            ['Subjects', scope.researchSymbols.trim() || 'From the question'],
+            ['Portfolio', scope.includePortfolio ? 'Included as context' : 'Excluded'],
+            ['Horizon', horizonText()],
+            ['Layout', `${LAYOUTS.find(l => l.k === scope.layoutPreset)?.label} · ${LENGTH.find(l => l.k === scope.length)?.label}`],
+          ]} />
+          {clipCount === 0 && (
+            <div style={{ fontFamily: T.mono, fontSize: 10, color: T.warn, lineHeight: 1.6, marginTop: 12 }}>
+              {scope.evidenceMode === 'alphatape'
+                ? 'No evidence yet. Finish setup, then run the AlphaTape research pass to collect it.'
+                : 'No clips yet. Finish setup, then use Send to Report on any tool to collect evidence.'}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        marginTop: 22, paddingTop: 16, borderTop: `1px solid ${T.border}`,
+      }}>
+        <button type="button" onClick={() => go(step - 1)} disabled={step === 0}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent',
+            border: `1px solid ${T.border}`, color: T.muted, fontFamily: T.label, fontSize: 9,
+            fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '8px 12px',
+            cursor: step === 0 ? 'default' : 'pointer', opacity: step === 0 ? 0.4 : 1,
+          }}>
+          <ChevronLeft size={12} /> Back
+        </button>
+
+        <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>Step {step + 1} of {STEPS.length}</span>
+
+        {step < STEPS.length - 1 ? (
+          <button type="button" onClick={() => canAdvance && go(step + 1)} disabled={!canAdvance}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: canAdvance ? T.gold : 'transparent',
+              border: `1px solid ${canAdvance ? T.gold : T.border}`,
+              color: canAdvance ? 'var(--theme-bg)' : T.muted,
+              fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
+              textTransform: 'uppercase', padding: '8px 14px',
+              cursor: canAdvance ? 'pointer' : 'default', opacity: canAdvance ? 1 : 0.5,
+            }}>
+            Next <ChevronRight size={12} />
+          </button>
+        ) : (
+          <span style={{ display: 'inline-flex', gap: 8 }}>
+            <button type="button" onClick={onFinish}
+              style={{
+                background: 'transparent', border: `1px solid ${T.border}`, color: T.muted,
+                fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
+                textTransform: 'uppercase', padding: '8px 12px', cursor: 'pointer',
+              }}>
+              Skip to evidence
+            </button>
+            <button type="button" onClick={() => { onFinish(); onGenerate() }} disabled={generating || clipCount === 0}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                background: clipCount === 0 ? 'transparent' : T.gold,
+                border: `1px solid ${clipCount === 0 ? T.border : T.gold}`,
+                color: clipCount === 0 ? T.muted : 'var(--theme-bg)',
+                fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
+                textTransform: 'uppercase', padding: '8px 14px',
+                cursor: (generating || clipCount === 0) ? 'default' : 'pointer',
+                opacity: (generating || clipCount === 0) ? 0.55 : 1,
+              }}>
+              <Sparkles size={12} /> {generating ? 'Generating…' : 'Generate report'}
+            </button>
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}

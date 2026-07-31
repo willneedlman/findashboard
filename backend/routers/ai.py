@@ -1947,6 +1947,11 @@ class ReportGenRequest(BaseModel):
     subjectTicker: str = ""
     # 'short' | 'medium' | 'long' — how much depth the note should have. Unknown/missing → 'medium'.
     length: str = "medium"
+    # What kind of note this is, chosen in setup. Decides the argument shape.
+    # Unknown/missing → no type-specific direction is added.
+    reportType: str = ""
+    # Page-composition preference, chosen in setup. Biases the per-section layout.
+    layoutPreset: str = ""
     # Free-text requirements the report must satisfy (a stat, a verdict, a chart,
     # a specific figure) — not curated away even if the model wouldn't otherwise pick them.
     mustInclude: str = ""
@@ -2155,9 +2160,50 @@ Respond ONLY with valid JSON (no markdown, no code fences):
 Every clipId must be one of the provided clip ids."""
 
 
-def _report_system_prompt(mode: str, length_key: str, must_include: str) -> str:
+# Chosen in the setup flow. Each names the argument shape and the verdict the
+# reader is owed, which the generic prompt cannot infer from the goal alone.
+_REPORT_TYPE_GUIDANCE = {
+    "equity-note": (
+        "REPORT TYPE — Equity note. One issuer. Organize by driver (demand, margin, capital allocation, "
+        "valuation), not by data source. Close on a Buy/Hold/Avoid/Watch verdict with the single condition "
+        "that would change it."
+    ),
+    "comparison": (
+        "REPORT TYPE — Comparison. Two or more subjects judged against each other. Every body section is one "
+        "comparative theme covering all subjects together; never one section per subject. Each section names "
+        "which subject wins that theme and by how much. Close by naming the winner outright."
+    ),
+    "macro-brief": (
+        "REPORT TYPE — Macro brief. Cross-asset or thematic; no single issuer is the subject. Lead with the "
+        "regime read, then the assets it implicates. State what would falsify the read. Keep single-name "
+        "detail out unless it evidences the macro point."
+    ),
+    "portfolio-review": (
+        "REPORT TYPE — Portfolio review. The subject is the reader's book. Organize by exposure, "
+        "concentration, and risk contribution rather than by holding. Close on specific actions (trim, add, "
+        "hedge, hold) naming the positions each applies to."
+    ),
+    "screen-summary": (
+        "REPORT TYPE — Screen summary. The subject is a result set. Say what the screen selected for, then "
+        "rank the names that survive scrutiny and say plainly which fail it and why. Close with the shortlist."
+    ),
+    "thesis": (
+        "REPORT TYPE — Thesis. Long-form. Build the case in full: the setup, the mechanism, the evidence, the "
+        "bear case argued at its strongest, and what would break the thesis. Do not compress to a verdict too "
+        "early; the argument is the product."
+    ),
+}
+
+def _report_system_prompt(mode: str, length_key: str, must_include: str,
+                          report_type: str = "") -> str:
+    """The layout preset is deliberately NOT passed here: renderer preset names are
+    kept out of the model's vocabulary (it emits a coarse `design` intent instead)
+    and layout is resolved deterministically in _apply_section_layout_architecture."""
     mode_key = "range" if mode == "range" else "open"
     mode_guidance = _REPORT_RANGE_GUIDANCE if mode_key == "range" else _REPORT_OPEN_GUIDANCE
+    type_guidance = _REPORT_TYPE_GUIDANCE.get(report_type, "")
+    if type_guidance:
+        mode_guidance = f"{mode_guidance}\n\n{type_guidance}"
     schema = _REPORT_SCHEMA_BY_MODE[mode_key]
     return (
         _REPORT_SYSTEM
@@ -3956,11 +4002,20 @@ def _can_share_editorial_row(profile: dict, layout: str, role: str, index: int) 
 def _apply_section_layout_architecture(
     sections: list[dict],
     clips: list[ReportClipIn],
+    preset: str = "",
 ) -> None:
-    """Convert simple editorial intent into renderer-safe research-note compositions."""
+    """Convert simple editorial intent into renderer-safe research-note compositions.
+
+    `preset` is the composition the user picked during setup. It outranks the
+    model's per-section intent and the role heuristics, because it is an explicit
+    instruction rather than an inference — but it never outranks the two renderer
+    safety rules above it (a dense table needs the full width; a section with no
+    visual cannot use a side-by-side layout). 'editorial' is the historical
+    default and deliberately falls through to the unchanged behaviour."""
     clips_by_id = {clip.id: clip for clip in clips}
     side_index = 0
     rail_index = 0
+    band_index = 0
     last_layout = ""
     profiles: list[dict] = []
     roles: list[str] = []
@@ -3972,11 +4027,23 @@ def _apply_section_layout_architecture(
         roles.append(role)
         intent = section.pop("design", None) or _default_section_design(profile)
         figures = profile["figureCount"]
+        preset_locked = False
 
         if profile["dense"]:
             layout = "full-width"
         elif not profile["hasVisual"]:
             layout = "metric-rail" if figures >= 2 else "full-width"
+        elif preset == "visual-first":
+            layout = "evidence-band" if band_index % 2 == 0 else "full-width"
+            band_index += 1
+            preset_locked = True
+        elif preset == "data-dense" and figures >= 2:
+            layout = "metric-rail-left" if rail_index % 2 == 0 else "metric-rail"
+            rail_index += 1
+            preset_locked = True
+        elif preset == "narrative":
+            layout = "analysis-first" if figures < 3 else "full-width"
+            preset_locked = True
         elif role == "valuation" and figures >= 2:
             layout = "evidence-band"
         elif role in {"risk", "catalyst"}:
@@ -4001,7 +4068,10 @@ def _apply_section_layout_architecture(
             layout = "visual-right" if side_index % 2 == 0 else "visual-left"
             side_index += 1
 
-        if layout == last_layout and layout != "full-width":
+        # Alternating consecutive repeats keeps a default-composed note from
+        # reading as a template, but a preset the user chose is meant to repeat —
+        # mirroring it away is how "narrative" ended up rendering side-by-side.
+        if layout == last_layout and layout != "full-width" and not preset_locked:
             mirrors = {
                 "visual-left": "visual-right",
                 "visual-right": "visual-left",
@@ -4563,6 +4633,7 @@ def generate_report(req: ReportGenRequest):
         mode,
         length_key,
         _must_include_section(req.mustInclude, coverage_requirements),
+        (req.reportType or "").strip(),
     )
     messages = [
         {"role": "system", "content": sys_prompt},
@@ -4640,7 +4711,7 @@ def generate_report(req: ReportGenRequest):
     _filter_unverified_key_figures(sections, req.clips, slot_ctx)
 
     _ensure_risks_section(sections, subject, valuation_context)
-    _apply_section_layout_architecture(sections, req.clips)
+    _apply_section_layout_architecture(sections, req.clips, (req.layoutPreset or "").strip())
 
     return {
         "headline": _report_title(result, outline, req),
