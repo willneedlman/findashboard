@@ -4860,13 +4860,13 @@ def _report_quality_warnings(req: ReportGenRequest, book_level: bool) -> list[di
     portfolio_text = "\n".join(f"{c.title}\n{c.dataSummary}" for c in portfolio_clips)
     if not portfolio_clips:
         warnings.append({
-            "severity": "blocking", "code": "allocation-missing",
+            "severity": "warning", "code": "allocation-missing",
             "title": "Current allocation is not verified",
             "detail": "No authoritative holdings and weights clip was supplied, so allocation advice is not implementable.",
         })
     elif re.search(r"\bunpriced\b|excluded from portfolio weights", portfolio_text, re.I):
         warnings.append({
-            "severity": "blocking", "code": "allocation-incomplete",
+            "severity": "warning", "code": "allocation-incomplete",
             "title": "Portfolio weights are incomplete",
             "detail": "At least one position lacks a usable mark and is excluded from the reported allocation.",
         })
@@ -4880,7 +4880,7 @@ def _report_quality_warnings(req: ReportGenRequest, book_level: bool) -> list[di
     active_return = _portfolio_active_return(req.clips)
     if active_return is None:
         warnings.append({
-            "severity": "blocking", "code": "benchmark-comparison-missing",
+            "severity": "warning", "code": "benchmark-comparison-missing",
             "title": "Benchmark-relative return is not auditable",
             "detail": "The evidence does not provide a deterministic active return computed on matching dates and methods.",
         })
@@ -4908,7 +4908,7 @@ def _report_quality_warnings(req: ReportGenRequest, book_level: bool) -> list[di
         ))
         if not has_inflation_measure:
             warnings.append({
-                "severity": "blocking", "code": "inflation-evidence-missing",
+                "severity": "warning", "code": "inflation-evidence-missing",
                 "title": "Inflation thesis lacks measured evidence",
                 "detail": "No dated CPI or PCE reading with a value was supplied, so inflation cannot support the headline or allocation call.",
             })
@@ -4958,14 +4958,6 @@ def generate_report(req: ReportGenRequest):
     dcf_intrinsic = _dcf_intrinsic_for_subject(req.clips, subject) if subject_dcf else None
     signal_digest = _clip_signal_digest(req.clips)
     quality_warnings = _report_quality_warnings(req, book_level)
-    blocking_findings = [finding for finding in quality_warnings if finding.get("severity") == "blocking"]
-    if blocking_findings:
-        missing = "; ".join(str(finding.get("title", "Required evidence is missing")) for finding in blocking_findings)
-        raise HTTPException(
-            409,
-            f"Report not generated because required analysis is incomplete: {missing}. Re-run AlphaTape research after resolving these inputs.",
-        )
-
     valuation_context = {
         "reportMode": mode,
         "reportLength": length_key,
@@ -4978,6 +4970,7 @@ def generate_report(req: ReportGenRequest):
         "subjectDcfIntrinsic": round(dcf_intrinsic, 4) if dcf_intrinsic else None,
         "dcfTickersInClips": dcf_names,
         "signalDigest": signal_digest,
+        "qualityWarnings": quality_warnings,
         "note": (
             "marketPrice is LIVE spot for subjectTicker — always cite it. "
             "signalDigest summarizes directional cues already in the clips (GEX, call%, IV, cone). "
@@ -4985,6 +4978,7 @@ def generate_report(req: ReportGenRequest):
             "When signalDigest.suggestedLean is bullish or bearish, the research range must encode that lean "
             "(mid shifted and/or asymmetric wings). Do not publish spot ± impliedMove as the whole thesis. "
             "Integrate every clip family into one argument. "
+            "qualityWarnings are advisory limitations to disclose in the analysis; they never prevent generation. "
             "subjectDcfIntrinsic is one input, not the answer. "
             "reportMode tells you the shape keyResult must take — see system prompt."
         ),
@@ -4998,6 +4992,7 @@ def generate_report(req: ReportGenRequest):
             "Buy/Hold/Sell rating as the report's verdict. valuationContext.subjects lists the "
             "constituents with live spot; use them as components of the aggregate picture. "
             "signalDigest summarizes directional cues already in the clips. "
+            "qualityWarnings are advisory limitations to disclose, never reasons to refuse the report. "
             "Integrate every clip family into one argument."
         )
 

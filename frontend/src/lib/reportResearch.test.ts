@@ -198,12 +198,20 @@ describe('Report Creator AlphaTape research', () => {
       'portfolio-risk',
       'factor-decomposition',
       'correlation',
+      'company',
+      'price-history',
+      'news',
+      'global-markets',
+      'sector-rotation',
+      'credit-spreads',
+      'rate-engine',
+      'macro-events',
       'earnings',
     ])
     expect(plan.symbols).toEqual(['AAPL', 'MSFT'])
   })
 
-  it('keeps portfolio catalysts tied to holdings and adds macro evidence only when requested', () => {
+  it('keeps portfolio catalysts tied to actual holdings and adds event evidence when requested', () => {
     const plan = planReportResearch({
       ...defaultScope(),
       evidenceMode: 'alphatape' as const,
@@ -212,7 +220,7 @@ describe('Report Creator AlphaTape research', () => {
     }, portfolio)
 
     expect(plan.sources.map(source => source.id)).toContain('macro-events')
-    expect(plan.sources.map(source => source.id)).not.toContain('global-markets')
+    expect(plan.sources.map(source => source.id)).toContain('global-markets')
     expect(plan.sources.find(source => source.id === 'earnings')?.targets).toEqual(['AAPL', 'MSFT'])
   })
 
@@ -288,14 +296,51 @@ describe('Report Creator AlphaTape research', () => {
     expect(plan.sources.map(source => source.id)).toContain('options')
   })
 
-  it('requires an included portfolio or symbols for a portfolio report', () => {
+  it('uses the active book for a portfolio-review report even when the legacy context flag is off', () => {
     const plan = planReportResearch({
       ...defaultScope(),
+      reportType: 'portfolio-review',
       evidenceMode: 'alphatape',
       includePortfolio: false,
       goal: 'Assess risk and concentration in my portfolio',
     }, portfolio)
-    expect(plan.blockedReason).toMatch(/active portfolio|ticker/i)
+    expect(plan.blockedReason).toBeUndefined()
+    expect(plan.symbols).toEqual(['AAPL', 'MSFT'])
+    expect(plan.sources.map(source => source.id)).toEqual(expect.arrayContaining([
+      'portfolio',
+      'portfolio-risk',
+      'factor-decomposition',
+      'correlation',
+    ]))
+  })
+
+  it('uses a comprehensive tool suite for a full portfolio objective', () => {
+    const plan = planReportResearch({
+      ...defaultScope(),
+      reportType: 'portfolio-review',
+      evidenceMode: 'alphatape',
+      includePortfolio: false,
+      goal: 'Produce a full decision-grade analysis of my entire portfolio covering risk, downside, growth, valuation, catalysts, and macro conditions',
+    }, portfolio)
+
+    expect(plan.sources.map(source => source.id)).toEqual(expect.arrayContaining([
+      'portfolio',
+      'portfolio-risk',
+      'factor-decomposition',
+      'correlation',
+      'company',
+      'price-history',
+      'news',
+      'global-markets',
+      'sector-rotation',
+      'credit-spreads',
+      'rate-engine',
+      'macro-events',
+      'sentiment',
+      'peer-valuation',
+      'dcf-valuation',
+      'earnings',
+    ]))
   })
 
   it('blocks incomplete automated research for books with derivatives', () => {

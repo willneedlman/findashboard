@@ -257,6 +257,10 @@ function portfolioSymbols(portfolio: ActivePortfolioContext): string[] {
     .slice(0, 8)
 }
 
+function usesActivePortfolio(scope: ReportScope, portfolio: ActivePortfolioContext): boolean {
+  return portfolio.hasData && (scope.includePortfolio || scope.reportType === 'portfolio-review')
+}
+
 export function planReportResearch(
   scope: ReportScope,
   portfolio: ActivePortfolioContext,
@@ -264,13 +268,16 @@ export function planReportResearch(
   const objective = [scope.goal || scope.purpose, scope.mustInclude].filter(Boolean).join('\n').trim()
   const explicit = parseResearchSymbols(scope.researchSymbols)
   const inferred = inferResearchSymbols(objective)
-  const bookSymbols = scope.includePortfolio && portfolio.hasData ? portfolioSymbols(portfolio) : []
+  const hasActivePortfolio = usesActivePortfolio(scope, portfolio)
+  const bookSymbols = hasActivePortfolio ? portfolioSymbols(portfolio) : []
   const requestedSymbols = unique(explicit.length ? explicit : inferred.length ? inferred : bookSymbols)
   const intent = detectIntent(objective, requestedSymbols.length)
   const symbols = intent === 'portfolio' && bookSymbols.length ? bookSymbols : requestedSymbols
   const researchTargets = intent === 'comparison' ? symbols : symbols.slice(0, 1)
   const catalystRequested = /\b(catalyst|moving|mover|selloff|rally|surge|drop|news|event)\b/i.test(objective)
   const valuationRequested = /\b(valuation|value|fair value|multiple|p\/e|peg|cheap|expensive|peer|intrinsic)\b/i.test(objective)
+  const fullPortfolioRequested = intent === 'portfolio' && /\b(complete|entire|full|comprehensive|decision.grade|all elements|all aspects)\b/i.test(objective)
+  const macroRiskRequested = /\b(macro|cross.asset|market regime|global markets?|inflation|cpi|pce|rates?|fed|fomc|credit|recession|downside|risk)\b/i.test(objective)
   const gammaRequested = /\b(gamma|gex|dealer positioning|call wall|put wall)\b/i.test(objective)
   const sources: ReportResearchSource[] = []
 
@@ -287,7 +294,7 @@ export function planReportResearch(
     return { objective, intent, symbols, sources, blockedReason: 'Add an objective so AlphaTape can choose relevant tools.' }
   }
 
-  if (scope.includePortfolio && portfolio.hasData && (portfolio.optionsCount > 0 || portfolio.futuresCount > 0)) {
+  if (hasActivePortfolio && (portfolio.optionsCount > 0 || portfolio.futuresCount > 0)) {
     const unsupported = [
       portfolio.optionsCount ? `${portfolio.optionsCount} option position${portfolio.optionsCount === 1 ? '' : 's'}` : '',
       portfolio.futuresCount ? `${portfolio.futuresCount} futures position${portfolio.futuresCount === 1 ? '' : 's'}` : '',
@@ -302,23 +309,36 @@ export function planReportResearch(
   }
 
   if (intent === 'portfolio') {
-    if (scope.includePortfolio && portfolio.hasData) {
+    if (hasActivePortfolio) {
       add('portfolio', 'Establish holdings, cash, and concentration from the active book.')
       add('portfolio-risk', 'Measure return, volatility, beta, drawdown, and benchmark-relative performance.')
       add('factor-decomposition', 'Separate systematic exposure from name-specific risk and quantify concentration.', bookSymbols)
       if (bookSymbols.length >= 2) add('correlation', 'Test whether the holdings provide real diversification under a common window.', bookSymbols)
+      add('company', 'Review fundamentals, growth, valuation, analyst expectations, and company-specific risks for the largest actual holdings.', bookSymbols)
+      add('price-history', 'Measure return paths and drawdowns across the largest actual holdings.', bookSymbols)
+      add('news', 'Capture current catalysts and changes in the information set for the largest actual holdings.', bookSymbols)
+      add('global-markets', 'Frame the book against the current cross-asset regime.')
+      add('sector-rotation', 'Test the portfolio tilt against current sector leadership and momentum.')
     }
-    if (!(scope.includePortfolio && portfolio.hasData) && symbols.length === 0) {
+    if (!hasActivePortfolio && symbols.length === 0) {
       return {
         objective, intent, symbols, sources,
         blockedReason: 'Select an active portfolio or add ticker symbols for this risk report.',
       }
     }
-    if (/\b(macro|cross.asset|market regime|global markets?)\b/i.test(objective)) {
-      add('global-markets', 'Frame the book against the current cross-asset session.')
+    if (macroRiskRequested || fullPortfolioRequested) {
+      add('credit-spreads', 'Identify whether the credit regime is amplifying or cushioning portfolio downside.')
+      add('rate-engine', 'Connect duration-sensitive holdings and valuation risk to the yield curve and expected Fed path.')
     }
-    if (/\b(inflation|cpi|pce|rates?|fed|fomc|macro|catalyst|event)\b/i.test(objective)) {
+    if (macroRiskRequested || catalystRequested || fullPortfolioRequested) {
       add('macro-events', 'Identify scheduled events that can change portfolio risk.')
+    }
+    if (catalystRequested || fullPortfolioRequested) {
+      add('sentiment', 'Measure whether the current news tape confirms or contradicts the portfolio thesis.')
+    }
+    if (valuationRequested || fullPortfolioRequested) {
+      add('peer-valuation', 'Benchmark the largest holdings against relevant peers, operating quality, and consensus targets.', bookSymbols)
+      add('dcf-valuation', 'Build intrinsic-value anchors and sensitivities for the largest holdings.', bookSymbols)
     }
     add('earnings', 'Check near-term earnings risk only for actual portfolio holdings.', bookSymbols.length ? bookSymbols : symbols)
   } else if (intent === 'macro') {
@@ -365,7 +385,7 @@ export function planReportResearch(
     }
   }
 
-  if (scope.includePortfolio && portfolio.hasData && intent !== 'portfolio') {
+  if (hasActivePortfolio && intent !== 'portfolio') {
     add('portfolio', 'Show whether the researched names are material to the active book.')
   }
 
@@ -748,7 +768,7 @@ export async function enhanceReportResearchPlan(
     timeframe: `${historicalWindow}; ${forwardWindow}`,
     symbols: baseline.symbols,
     portfolio: {
-      included: scope.includePortfolio && portfolio.hasData,
+      included: usesActivePortfolio(scope, portfolio),
       name: portfolio.name,
       positionCount: portfolio.positionCount,
       equityCount: portfolio.holdings.length,
@@ -764,12 +784,12 @@ export async function enhanceReportResearchPlan(
   const sources = [...baseline.sources]
   let added = 0
   for (const raw of additions) {
-    if (added >= 4) break
+    if (added >= 8) break
     const addition = record(raw)
     const id = String(addition.id ?? '') as ReportResearchSourceId
     const item = catalog.get(id)
     if (!item || sources.some(source => source.id === id)) continue
-    const hasPortfolio = scope.includePortfolio && portfolio.hasData
+    const hasPortfolio = usesActivePortfolio(scope, portfolio)
     if (item.targetMode === 'symbols' && baseline.symbols.length === 0) continue
     if (item.targetMode === 'portfolio' && !hasPortfolio) continue
     if (item.targetMode === 'portfolio-or-symbols' && !hasPortfolio && baseline.symbols.length === 0) continue
@@ -781,7 +801,7 @@ export async function enhanceReportResearchPlan(
       reason,
       targets: item.targetMode === 'market' || item.targetMode === 'portfolio'
         ? []
-        : targetsForSource(id, MULTI_ASSET_SOURCES.has(id) || baseline.intent === 'comparison'
+        : targetsForSource(id, MULTI_ASSET_SOURCES.has(id) || baseline.intent === 'comparison' || baseline.intent === 'portfolio'
           ? baseline.symbols
           : baseline.symbols.slice(0, 1)),
       selectionOrigin: 'ai',
@@ -1982,7 +2002,7 @@ async function runSource(
     }
 
     case 'factor-decomposition': {
-      const holdings = scope.includePortfolio && portfolio.hasData
+      const holdings = usesActivePortfolio(scope, portfolio)
         ? portfolio.holdings
           .filter(holding => holding.ticker && holding.shares > 0)
           .map(holding => ({ ticker: normalizeTicker(holding.ticker), shares: holding.shares }))

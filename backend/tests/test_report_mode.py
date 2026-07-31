@@ -1370,7 +1370,7 @@ def test_portfolio_linter_cannot_reverse_negative_active_return():
     assert "associated with underperformance" in fixed
 
 
-def test_portfolio_quality_gate_blocks_incomplete_allocation_and_unsupported_inflation_thesis():
+def test_portfolio_quality_findings_are_advisory_for_incomplete_inputs():
     req = ReportGenRequest(
         reportType="portfolio-review",
         goal="Assess my portfolio and whether sticky inflation threatens upside",
@@ -1387,11 +1387,12 @@ def test_portfolio_quality_gate_blocks_incomplete_allocation_and_unsupported_inf
     )
 
     warnings = ai._report_quality_warnings(req, True)
-    codes = {warning["code"] for warning in warnings if warning["severity"] == "blocking"}
+    codes = {warning["code"] for warning in warnings if warning["severity"] == "warning"}
 
     assert "allocation-incomplete" in codes
     assert "inflation-evidence-missing" in codes
     assert "benchmark-comparison-missing" not in codes
+    assert not any(warning["severity"] == "blocking" for warning in warnings)
 
 
 def test_portfolio_action_filter_removes_unsupported_recommendations_from_prose():
