@@ -956,6 +956,15 @@ export default function PortfolioManager() {
                                   <span style={{ color: l.side === 'long' ? T.pos : T.neg, fontWeight: 700 }}>{l.side === 'long' ? '+' : '−'}{l.contracts}</span>{' '}
                                   {fmtStrike(l.strike)}{l.type === 'call' ? 'C' : 'P'} {fmtExp(l.expiry)}
                                   {l.mark != null && <span style={{ color: T.muted }}> @ ${l.mark.toFixed(2)}</span>}
+                                  {/* A model price is not a traded price — say so. */}
+                                  {l.mark != null && l.source?.startsWith('bs') && (
+                                    <span title={l.source === 'bs-extended'
+                                      ? "Market closed. Black-Scholes off the extended-hours underlying, at the chain's implied volatility."
+                                      : 'Contract not quoted. Black-Scholes off the chain spot and implied volatility.'}
+                                      style={{ color: T.muted, fontSize: 8, marginLeft: 4, border: `1px solid ${T.border}`, padding: '0 3px', letterSpacing: '0.06em' }}>
+                                      MODEL
+                                    </span>
+                                  )}
                                 </div>
                               ))}
                             </td>

@@ -76,6 +76,12 @@ def _eastern(now: _dt.datetime | None) -> _dt.datetime:
     return (now or _dt.datetime.now(_dt.timezone.utc)).astimezone(_ET)
 
 
+def now_et(now: _dt.datetime | None = None) -> _dt.datetime:
+    """Exchange-local time — the only clock that decides whether today's session
+    has happened yet."""
+    return _eastern(now)
+
+
 def is_market_open(now: _dt.datetime | None = None) -> bool:
     et = _eastern(now)
     if et.weekday() >= 5 or et.date() in market_holidays(et.year):

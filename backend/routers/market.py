@@ -10,7 +10,8 @@ from validation import validate_ticker, validate_tickers, validate_date
 import serpapi_finance
 import alpaca
 import factor_models as fm
-from market_hours import is_market_open, session_status
+from market_hours import is_market_open, session_status, session_label, now_et
+import extended_quotes
 
 
 router = APIRouter()
@@ -234,16 +235,56 @@ def global_board(date: str | None = None, window: str = "1d"):
 
 
 def _try_history_quote(sym: str) -> dict | None:
+    """Last known price and the move that produced it.
+
+    Outside regular hours the daily bar has stopped moving, so the extended-hours
+    print is used instead — otherwise a portfolio reports yesterday's number all
+    evening. The baseline for the percentage depends on whether today's daily bar
+    exists yet: after the close it does, so the day's move is measured from the
+    prior close and the after-hours move is included on top; pre-market it does
+    not, so the last bar IS the prior close and the move is the pre-market move.
+    Getting that wrong reports a two-day move as a one-day move every morning.
+    """
     try:
         hist = _cached_history(sym, period="5d")
         closes = hist["Close"].dropna() if not hist.empty else None
-        if closes is not None and not closes.empty:
-            price = float(closes.iloc[-1])
-            pct_1d = float((closes.iloc[-1] / closes.iloc[-2] - 1) * 100) if len(closes) >= 2 else None
-            return {
-                "current_price": round(price, 2),
-                "pct_change_1d": round(pct_1d, 3) if pct_1d is not None else None,
-            }
+        if closes is None or closes.empty:
+            return None
+
+        regular_close = float(closes.iloc[-1])
+        label = session_label()
+
+        try:
+            has_today = closes.index[-1].date() == now_et().date()
+        except Exception:
+            has_today = False
+        # After the close today's bar exists, so the day's move runs from the
+        # prior close and any after-hours move stacks on top. Pre-market it does
+        # not, so the last bar IS the prior close.
+        baseline = float(closes.iloc[-2]) if (has_today and len(closes) >= 2) else regular_close
+
+        price = regular_close
+        extended = None
+        as_of = None
+        if not is_market_open():
+            quote = extended_quotes.extended_quote(sym)
+            if quote.get("price"):
+                extended = float(quote["price"])
+                as_of = quote.get("as_of")
+                price = extended
+
+        pct_1d = float((price / baseline - 1) * 100) if baseline else None
+
+        out = {
+            "current_price": round(price, 2),
+            "pct_change_1d": round(pct_1d, 3) if pct_1d is not None else None,
+            "session": label,
+        }
+        if extended is not None:
+            out["regular_close"] = round(regular_close, 2)
+            out["extended_pct"] = round((extended / regular_close - 1) * 100, 3) if regular_close else None
+            out["as_of"] = as_of
+        return out
     except Exception:
         pass
     return None
