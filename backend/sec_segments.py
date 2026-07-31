@@ -108,9 +108,10 @@ def _geo_member(members: dict) -> tuple[str, str] | None:
     return None
 
 
-def _segments_from_instance(html: str, member_fn=_segment_member,
-                            priority: tuple = ("product", "segment")) -> dict:
-    # 1) contexts -> {id: {members: {axis_lower: member}, end: date, duration: bool}}
+def _revenue_facts(html: str) -> list[tuple[str, dict, float]]:
+    """(period_end, context members, value) for every positive duration revenue
+    fact, in document order. Order matters: each disaggregation table emits its
+    rows consecutively, which is what lets us tell one cut from another."""
     ctx: dict[str, dict] = {}
     for cid, body in _CTX_RE.findall(html):
         members = {dim.split(":")[-1].lower(): mem.split(":")[-1] for dim, mem in _MEMBER_RE.findall(body)}
@@ -118,62 +119,106 @@ def _segments_from_instance(html: str, member_fn=_segment_member,
         start = _START_RE.search(body)
         ctx[cid] = {"members": members, "end": end.group(1) if end else None, "duration": bool(start)}
 
-    # 2) revenue facts, kept separate per disclosure group so different cuts of the
-    #    same revenue (product detail vs geographic segments) are never summed.
-    groups: dict[str, dict[str, dict[str, float]]] = {}   # group -> end -> {member: val}
+    facts: list[tuple[str, dict, float]] = []
     for attrstr, inner in _TAG_RE.findall(html):
         attrs = dict(_ATTR_RE.findall(attrstr))
-        name = attrs.get("name", "").split(":")[-1].lower()
-        if name not in _REVENUE_CONCEPTS:
+        if attrs.get("name", "").split(":")[-1].lower() not in _REVENUE_CONCEPTS:
             continue
         c = ctx.get(attrs.get("contextRef", ""))
         if not c or not c["duration"] or not c["end"]:
             continue
-        cls = member_fn(c["members"])
-        if cls is None:
-            continue
-        grp, member = cls
         val = _parse_number(inner, attrs)
         if val is None or val <= 0:
             continue
-        groups.setdefault(grp, {}).setdefault(c["end"], {}).setdefault(member, val)
-
-    # Return the first priority group that yields a real breakdown (≥2 members
-    # after rollups), at its latest period.
-    for grp in priority:
-        d = groups.get(grp)
-        if not d:
-            continue
-        latest_end = max(d.keys())
-        segs = _drop_rollups(d[latest_end])
-        if len(segs) >= 2:
-            return {"end": latest_end, "segments": segs}
-    return {}
+        facts.append((c["end"], c["members"], val))
+    return facts
 
 
-def _is_rollup(target: float, others: list[float], tol: float) -> bool:
-    """True if some subset of >=2 of `others` sums to ~target (a parent member
-    that double-counts its children, e.g. Apple's 'Products' = iPhone+Mac+...)."""
-    n = len(others)
-    for mask in range(1, 1 << n):
-        if bin(mask).count("1") < 2:
-            continue
-        s = sum(others[i] for i in range(n) if mask & (1 << i))
-        if abs(s - target) <= tol:
-            return True
-    return False
+def _split_runs(facts: list[tuple[dict, float]], member_fn) -> list[tuple[str, list]]:
+    """Group same-period facts into contiguous disclosure runs.
+
+    A filer can disclose several different cuts of the same revenue on the *same*
+    axis — Microsoft tags both product-vs-service ($64.7B / $267.1B) and its ten
+    named product lines against ProductOrServiceAxis. Merging them into one bag
+    double-counts total revenue and makes every member look like a rollup of the
+    others. Each table's rows are consecutive and closed off by a total row, so a
+    break in classification is a break between cuts.
+    """
+    runs: list[tuple[str, list]] = []
+    cur: list[tuple[str, float]] = []
+    grp: str | None = None
+    for members, val in facts:
+        cls = member_fn(members)
+        if cls is None or (cur and cls[0] != grp):
+            if cur:
+                runs.append((grp, cur))
+            cur, grp = [], None
+            if cls is None:
+                continue
+        grp = cls[0]
+        if not any(m == cls[1] for m, _ in cur):
+            cur.append((cls[1], val))
+    if cur:
+        runs.append((grp, cur))
+    return runs
 
 
-def _drop_rollups(segs: dict) -> dict:
-    items = list(segs.items())
+def _drop_rollups(items: list[tuple[str, float]]) -> list[tuple[str, float]]:
+    """Drop parent/subtotal rows from one document-ordered run.
+
+    A parent is printed immediately before its children (Nvidia: Data Center =
+    Compute + Networking) or a subtotal immediately after them (JPMorgan: Total
+    International = EMEA + Asia Pacific + Latin America), so only contiguous
+    neighbours are candidates. Searching arbitrary subsets instead matches by
+    coincidence once a table has more than a handful of rows.
+    """
     vals = [v for _, v in items]
-    keep: dict[str, float] = {}
-    for i, (name, v) in enumerate(items):
-        others = [vals[j] for j in range(len(vals)) if j != i]
-        if _is_rollup(v, others, tol=max(1.0, 0.01 * v)):
-            continue   # parent/roll-up — its children are already counted
-        keep[name] = v
-    return keep
+    n = len(vals)
+    drop: set[int] = set()
+    for i, v in enumerate(vals):
+        tol = max(1.0, 0.005 * v)
+        for direction in (1, -1):
+            s = 0.0
+            for step in range(1, n):
+                j = i + direction * step
+                if not 0 <= j < n:
+                    break
+                s += vals[j]
+                if step >= 2 and abs(s - v) <= tol:
+                    drop.add(i)
+                    break
+                if s > v + tol:
+                    break
+            if i in drop:
+                break
+    return [it for k, it in enumerate(items) if k not in drop]
+
+
+def _segments_from_instance(html: str, member_fn=_segment_member,
+                            priority: tuple = ("product", "segment")) -> dict:
+    facts = _revenue_facts(html)
+    if not facts:
+        return {}
+    latest_end = max(e for e, _, _ in facts)
+    period = [(m, v) for e, m, v in facts if e == latest_end]
+    # Undimensioned revenue for the period — the anchor every real cut must sum to.
+    total = next((v for m, v in period if not m), None)
+
+    def reconciles(s: float) -> bool:
+        return total is not None and abs(s - total) <= 0.01 * total
+
+    runs = _split_runs(period, member_fn)
+    for grp in priority:
+        cands = [_drop_rollups(items) for g, items in runs if g == grp]
+        cands = [c for c in cands if len(c) >= 2]
+        if not cands:
+            continue
+        # A cut that ties out to reported revenue wins; among those, the most
+        # granular one.
+        best = max(cands, key=lambda c: (reconciles(sum(v for _, v in c)), len(c)))
+        return {"end": latest_end, "segments": best,
+                "total": total if reconciles(sum(v for _, v in best)) else None}
+    return {}
 
 
 _COUNTRY = {
@@ -187,6 +232,31 @@ _COUNTRY = {
 }
 
 
+_DIGIT_WORD = {"Zero": "0", "One": "1", "Two": "2", "Three": "3", "Four": "4",
+               "Five": "5", "Six": "6", "Seven": "7", "Eight": "8", "Nine": "9"}
+
+# Brand names that camel-case splitting pulls apart or leaves shouting.
+_BRAND = {"Linked In": "LinkedIn", "XBOX": "Xbox", "You Tube": "YouTube",
+          "I Phone": "iPhone", "I Pad": "iPad", "I Cloud": "iCloud"}
+
+
+def _spell_numbers(words: list[str]) -> list[str]:
+    """MicrosoftThreeSixFive -> Microsoft 365. XBRL member names cannot start a
+    token with a digit, so filers spell numeric brands out digit by digit."""
+    out: list[str] = []
+    i = 0
+    while i < len(words):
+        j = i
+        while j < len(words) and words[j] in _DIGIT_WORD:
+            j += 1
+        if j - i >= 2:
+            out.append("".join(_DIGIT_WORD[w] for w in words[i:j]))
+        else:
+            out.extend(words[i:j] or [words[i]])
+        i = max(j, i + 1)
+    return out
+
+
 def _humanize(member: str) -> str:
     s = re.sub(r"Member$", "", member)
     # Geographic facts use ISO country codes (US, CN, TW…) — map to readable names.
@@ -196,9 +266,10 @@ def _humanize(member: str) -> str:
     s = re.sub(r"([a-z])and([A-Z])", r"\1 and \2", s)   # WearablesHomeandAccessories -> ...Home and Acc...
     s = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", s)
     s = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", " ", s)
+    s = " ".join(_spell_numbers(s.split()))
+    for pat, brand in _BRAND.items():
+        s = re.sub(rf"\b{pat}\b", brand, s)
     s = s.replace(" And ", " and ").strip()
-    # Common Apple-style leading-I products read better lowercased (iPhone, iPad, iMac).
-    s = re.sub(r"^I (Phone|Pad|Mac|Pod|Tunes|Cloud)", r"i\1", s)
     return s
 
 
@@ -226,13 +297,15 @@ def _extract_from_10k(sym: str, member_fn, cache_key: str, priority: tuple) -> d
         return {"latest": []}
 
     parsed = _segments_from_instance(html, member_fn, priority)
-    segs = parsed.get("segments") or {}
+    segs = parsed.get("segments") or []
     if not segs:
         return {"latest": []}
 
-    total = sum(segs.values()) or 1.0
+    # Percentages are of reported revenue, not of the members we happened to keep,
+    # so a partial breakdown reads as partial instead of as the whole pie.
+    total = parsed.get("total") or sum(v for _, v in segs) or 1.0
     latest = [{"name": _humanize(m), "value": v, "pct": round(v / total * 100, 1)}
-              for m, v in sorted(segs.items(), key=lambda x: -x[1])]
+              for m, v in sorted(segs, key=lambda x: -x[1])]
     result = {"fiscalYear": (parsed.get("end") or "")[:4], "currency": "USD", "latest": latest, "source": "sec"}
     try:
         disk_set(cache_key, result, ttl=30 * 86400)
@@ -244,10 +317,10 @@ def _extract_from_10k(sym: str, member_fn, cache_key: str, priority: tuple) -> d
 def get_segment_revenue(ticker: str) -> dict:
     """Latest-year product-segment revenue from the most recent 10-K (fmp shape)."""
     sym = ticker.strip().upper()
-    return _extract_from_10k(sym, _segment_member, f"sec_seg:v2:{sym}", ("product", "segment"))
+    return _extract_from_10k(sym, _segment_member, f"sec_seg:v3:{sym}", ("product", "segment"))
 
 
 def get_geo_revenue(ticker: str) -> dict:
     """Latest-year geographic revenue from the most recent 10-K (fmp shape)."""
     sym = ticker.strip().upper()
-    return _extract_from_10k(sym, _geo_member, f"sec_geo:v2:{sym}", ("geo",))
+    return _extract_from_10k(sym, _geo_member, f"sec_geo:v3:{sym}", ("geo",))
