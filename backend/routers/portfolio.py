@@ -636,7 +636,14 @@ def factor_decomposition(req: FactorRequest):
         if not rfit.get("available"):
             continue
         for ok in out_keys:
-            rolling[ok].append({"date": fdates[e - 1], "beta": rfit["betas"][ok]})
+            beta = rfit["betas"][ok]
+            standard_error = rfit.get("standard_errors", {}).get(ok)
+            rolling[ok].append({
+                "date": fdates[e - 1],
+                "beta": beta,
+                "lower95": round(beta - 1.96 * standard_error, 4) if standard_error is not None else None,
+                "upper95": round(beta + 1.96 * standard_error, 4) if standard_error is not None else None,
+            })
     rstep = max(1, (n - roll_win) // 180)
     rolling = {k: v[::rstep] for k, v in rolling.items()}
 

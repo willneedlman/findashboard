@@ -757,7 +757,10 @@ export function assignReportBodyVisuals(
     })
   }
 
-  const portfolioReport = projectClips.some(clip => /\bportfolio\b.*\bcurrent allocation\b/i.test(clip.payload.title || ''))
+  const portfolioReport = projectClips.some(clip => (
+    /\bcurrent allocation\b/i.test(clip.payload.title || '')
+    && /portfolio manager|active book/i.test(clip.sourceTab)
+  ))
     && projectClips.some(clip => /\brisk metrics\b/i.test(clip.payload.title || ''))
   if (portfolioReport) {
     const findVisual = (pattern: RegExp, kind?: ClipPayload['kind']) => projectClips.find(clip => (
@@ -769,13 +772,22 @@ export function assignReportBodyVisuals(
       let visual: ReportClip | undefined
       let showKeyFigures = false
       if (heading.includes('what happened')) {
-        visual = projectClips.find(clip => clip.payload.kind === 'chart'
+        visual = projectClips.find(clip => (
+          clip.payload.kind === 'chart'
+          && clip.researchSourceId === 'portfolio-risk'
+          && /:performance$/i.test(clip.researchKey || '')
+        )) ?? projectClips.find(clip => clip.payload.kind === 'chart'
           && /\bvs SPY\b/i.test(clip.payload.title || '')
           && !/\b(active return|drawdown)\b/i.test(clip.payload.title || ''))
         showKeyFigures = true
       } else if (heading.includes('why it happened')) {
-        visual = findVisual(/rolling multifactor market coefficient/i, 'chart')
+        visual = projectClips.find(clip => (
+          clip.payload.kind === 'chart'
+          && clip.researchSourceId === 'factor-decomposition'
+          && /:rolling-market$/i.test(clip.researchKey || '')
+        )) ?? findVisual(/rolling .*market coefficient/i, 'chart')
           ?? findVisual(/holding-level beta and portfolio risk contribution/i, 'table')
+        showKeyFigures = true
       } else if (heading.includes('what could happen next')) {
         visual = findVisual(/upcoming portfolio earnings schedule/i, 'table')
           ?? findVisual(/market-shock scenario losses/i, 'table')

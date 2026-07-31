@@ -14,6 +14,20 @@ export function normalizeTicker(raw: string): string {
 
 export interface PMHolding { ticker: string; shares: number; avgCost: number }
 export interface PMCash { id: string; label: string; amount: number; rate: number; since: string }
+export interface PMOptionLeg {
+  type: 'call' | 'put'
+  strike: number
+  expiry: string
+  side: 'long' | 'short'
+  contracts: number
+  avgPremium: number
+}
+export interface PMOptionPosition {
+  id: string
+  underlying: string
+  name: string
+  legs: PMOptionLeg[]
+}
 export interface PMPortfolio {
   id: string
   name: string
@@ -21,6 +35,7 @@ export interface PMPortfolio {
   cash: PMCash[]
   optionsCount: number
   futuresCount: number
+  optionPositions?: PMOptionPosition[]
 }
 
 export const PORTFOLIOS_KEY = 'pm-portfolios-v2'
@@ -35,6 +50,7 @@ export interface ActivePortfolioContext {
   cashValue: number
   optionsCount: number
   futuresCount: number
+  optionPositions?: PMOptionPosition[]
   positionCount: number
   hasData: boolean
 }
@@ -64,6 +80,7 @@ export function readPMPortfolios(): PMPortfolio[] {
       cash: Array.isArray(p.cash) ? p.cash : [],
       optionsCount: Array.isArray(p.options) ? p.options.length : 0,
       futuresCount: Array.isArray(p.futures) ? p.futures.length : 0,
+      optionPositions: Array.isArray(p.options) ? p.options : [],
     }))
   } catch {
     return []
@@ -110,6 +127,7 @@ export function readActivePortfolioContext(): ActivePortfolioContext {
     const totalCash = selected.flatMap(p => p.cash ?? []).reduce((sum, c) => sum + cashValue(c), 0)
     const optionsCount = selected.reduce((sum, p) => sum + p.optionsCount, 0)
     const futuresCount = selected.reduce((sum, p) => sum + p.futuresCount, 0)
+    const optionPositions = selected.flatMap(p => p.optionPositions ?? [])
     return {
       id: isCombined ? COMBINED_BOOK_ID : selected[0].id,
       name: isCombined ? `Combined · ${selected.length} portfolios` : selected[0].name,
@@ -119,6 +137,7 @@ export function readActivePortfolioContext(): ActivePortfolioContext {
       cashValue: totalCash,
       optionsCount,
       futuresCount,
+      optionPositions,
       positionCount: holdings.length + optionsCount + futuresCount,
       hasData: holdings.length > 0 || totalCash > 0 || optionsCount > 0 || futuresCount > 0,
     }
@@ -151,6 +170,7 @@ export function combinedOverviewBook(): PMPortfolio | null {
       cash: ps.flatMap(p => p.cash ?? []),
       optionsCount: ps.reduce((s, p) => s + p.optionsCount, 0),
       futuresCount: ps.reduce((s, p) => s + p.futuresCount, 0),
+      optionPositions: ps.flatMap(p => p.optionPositions ?? []),
     }
   } catch { return null }
 }

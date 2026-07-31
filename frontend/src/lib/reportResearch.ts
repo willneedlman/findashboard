@@ -251,9 +251,17 @@ function detectIntent(objective: string, symbolCount = 0): ReportResearchIntent 
 
 function portfolioSymbols(portfolio: ActivePortfolioContext): string[] {
   return [...portfolio.holdings]
+    .filter(holding => holding.shares > 0)
     .sort((a, b) => (b.shares * b.avgCost) - (a.shares * a.avgCost))
     .map(holding => normalizeTicker(holding.ticker))
     .filter(Boolean)
+    .slice(0, 8)
+}
+
+function portfolioOptionSymbols(portfolio: ActivePortfolioContext): string[] {
+  return unique((portfolio.optionPositions ?? [])
+    .map(position => normalizeTicker(position.underlying))
+    .filter(Boolean))
     .slice(0, 8)
 }
 
@@ -269,7 +277,9 @@ export function planReportResearch(
   const explicit = parseResearchSymbols(scope.researchSymbols)
   const inferred = inferResearchSymbols(objective)
   const hasActivePortfolio = usesActivePortfolio(scope, portfolio)
-  const bookSymbols = hasActivePortfolio ? portfolioSymbols(portfolio) : []
+  const equitySymbols = hasActivePortfolio ? portfolioSymbols(portfolio) : []
+  const optionSymbols = hasActivePortfolio ? portfolioOptionSymbols(portfolio) : []
+  const bookSymbols = unique([...equitySymbols, ...optionSymbols]).slice(0, 8)
   const requestedSymbols = unique(explicit.length ? explicit : inferred.length ? inferred : bookSymbols)
   const intent = detectIntent(objective, requestedSymbols.length)
   const symbols = intent === 'portfolio' && bookSymbols.length ? bookSymbols : requestedSymbols
@@ -285,7 +295,7 @@ export function planReportResearch(
     if (sources.some(source => source.id === id) || !sourceMatchesHorizon(id, scope)) return
     // A relationship tool gets the whole symbol set, not the single-name slice.
     const resolved = MULTI_ASSET_SOURCES.has(id) && targets.length
-      ? targetsForSource(id, symbols)
+      ? targetsForSource(id, targets)
       : targets
     sources.push({ ...SOURCE_META[id], reason, targets: resolved, selectionOrigin: 'baseline' })
   }
@@ -294,29 +304,35 @@ export function planReportResearch(
     return { objective, intent, symbols, sources, blockedReason: 'Add an objective so AlphaTape can choose relevant tools.' }
   }
 
-  if (hasActivePortfolio && (portfolio.optionsCount > 0 || portfolio.futuresCount > 0)) {
-    const unsupported = [
-      portfolio.optionsCount ? `${portfolio.optionsCount} option position${portfolio.optionsCount === 1 ? '' : 's'}` : '',
-      portfolio.futuresCount ? `${portfolio.futuresCount} futures position${portfolio.futuresCount === 1 ? '' : 's'}` : '',
-    ].filter(Boolean).join(' and ')
+  if (hasActivePortfolio && portfolio.futuresCount > 0) {
     return {
       objective,
       intent,
       symbols,
       sources,
-      blockedReason: `The active portfolio includes ${unsupported}. Automated book research currently supports equities and cash only. Turn off portfolio context or use a supported book.`,
+      blockedReason: `The active portfolio includes ${portfolio.futuresCount} futures position${portfolio.futuresCount === 1 ? '' : 's'}. Automated book research does not yet model futures contract exposure. Turn off portfolio context or use a supported book.`,
     }
   }
 
   if (intent === 'portfolio') {
     if (hasActivePortfolio) {
       add('portfolio', 'Establish holdings, cash, and concentration from the active book.')
-      add('portfolio-risk', 'Measure return, volatility, beta, drawdown, and benchmark-relative performance.')
-      add('factor-decomposition', 'Separate systematic exposure from name-specific risk and quantify concentration.', bookSymbols)
-      if (bookSymbols.length >= 2) add('correlation', 'Test whether the holdings provide real diversification under a common window.', bookSymbols)
+      if (equitySymbols.length) {
+        add('portfolio-risk', 'Measure return, volatility, beta, drawdown, and benchmark-relative performance for the equity and cash sleeve.')
+        add('factor-decomposition', 'Separate systematic exposure from name-specific risk for the equity and cash sleeve.', equitySymbols)
+      }
+      if (equitySymbols.length >= 2) add('correlation', 'Test whether the equity holdings provide real diversification under a common window.', equitySymbols)
       add('company', 'Review fundamentals, growth, valuation, analyst expectations, and company-specific risks for the largest actual holdings.', bookSymbols)
       add('price-history', 'Measure return paths and drawdowns across the largest actual holdings.', bookSymbols)
       add('news', 'Capture current catalysts and changes in the information set for the largest actual holdings.', bookSymbols)
+      if (optionSymbols.length) {
+        add('options', 'Measure implied volatility, realized volatility, expected move, and positioning for each option underlying.', optionSymbols)
+        add('volatility-skew', 'Measure downside skew and the volatility term structure for each option underlying.', optionSymbols)
+        add('implied-probability', 'Estimate option-implied outcome ranges for each option underlying.', optionSymbols)
+        if (fullPortfolioRequested || gammaRequested) {
+          add('dealer-gex', 'Assess strike-level dealer gamma around each option underlying.', optionSymbols)
+        }
+      }
       add('global-markets', 'Frame the book against the current cross-asset regime.')
       add('sector-rotation', 'Test the portfolio tilt against current sector leadership and momentum.')
     }
@@ -782,6 +798,9 @@ export async function enhanceReportResearchPlan(
   const additions = array(response.additions)
   const catalog = new Map(toolCatalog.map(item => [item.id, item]))
   const sources = [...baseline.sources]
+  const portfolioRelationshipTargets = usesActivePortfolio(scope, portfolio)
+    ? portfolioSymbols(portfolio)
+    : baseline.symbols
   let added = 0
   for (const raw of additions) {
     if (added >= 8) break
@@ -793,7 +812,7 @@ export async function enhanceReportResearchPlan(
     if (item.targetMode === 'symbols' && baseline.symbols.length === 0) continue
     if (item.targetMode === 'portfolio' && !hasPortfolio) continue
     if (item.targetMode === 'portfolio-or-symbols' && !hasPortfolio && baseline.symbols.length === 0) continue
-    if ((id === 'correlation' || id === 'regression') && baseline.symbols.length < 2) continue
+    if ((id === 'correlation' || id === 'regression') && portfolioRelationshipTargets.length < 2) continue
     const reason = String(addition.reason ?? '').replace(/\s+/g, ' ').trim().slice(0, 220)
     if (!reason) continue
     sources.push({
@@ -801,8 +820,10 @@ export async function enhanceReportResearchPlan(
       reason,
       targets: item.targetMode === 'market' || item.targetMode === 'portfolio'
         ? []
-        : targetsForSource(id, MULTI_ASSET_SOURCES.has(id) || baseline.intent === 'comparison' || baseline.intent === 'portfolio'
-          ? baseline.symbols
+        : targetsForSource(id, MULTI_ASSET_SOURCES.has(id)
+          ? portfolioRelationshipTargets
+          : baseline.intent === 'comparison' || baseline.intent === 'portfolio'
+            ? baseline.symbols
           : baseline.symbols.slice(0, 1)),
       selectionOrigin: 'ai',
     })
@@ -1182,6 +1203,13 @@ async function runSource(
             { label: 'Terminal value', value: moneyMillions(data.terminal_value) },
           ]), source, ticker, ticker),
         ]
+        if (marketPrice != null && marketPrice > 0 && (intrinsic / marketPrice < 0.2 || intrinsic / marketPrice > 5)) {
+          clips.push(tagClip(textClip(
+            'DCF Valuation',
+            `DCF scale reconciliation required · ${ticker}`,
+            `The DCF output of ${money(intrinsic)} per share differs from the current market value of ${money(marketPrice)} by more than 5×. Treat the DCF as unreconciled until units, diluted share count, corporate actions, net debt, and quote alignment are verified. Do not use it to justify an allocation change.`,
+          ), source, `${ticker}:scale-warning`, ticker))
+        }
         if (fcfs.length) {
           const firstRevenue = finite(fcfs[0].revenue)
           const lastRevenue = finite(fcfs[fcfs.length - 1].revenue)
@@ -1265,6 +1293,13 @@ async function runSource(
               finite(row.hi),
             ]),
           ), source, `${ticker}:sensitivity-assumptions`, ticker))
+          if (sensitivity.some(row => (finite(row.lo) ?? 0) < 0 || (finite(row.hi) ?? 0) < 0)) {
+            clips.push(tagClip(textClip(
+              'DCF Valuation',
+              `Negative equity-value sensitivity · ${ticker}`,
+              'A negative per-share sensitivity result means enterprise value falls below net debt and other claims under that tested assumption. It is a model stress outcome, not a negative stock price forecast.',
+            ), source, `${ticker}:negative-equity-value`, ticker))
+          }
         }
         clips.push(tagClip(kpiClip('DCF Valuation', `Model assumptions · ${ticker}`, [
           { label: 'Revenue input', value: moneyMillions(revenue), sub: 'USD millions' },
@@ -2051,12 +2086,13 @@ async function runSource(
           clips.push(tagClip(tableClip(
             'Factor Decomposition',
             `${response.mode === 'macro' ? 'Macro' : 'Style'} factor model coefficients`,
-            ['Factor', 'Proxy', 'Beta', 't-statistic', 'Share of portfolio return variance %'],
+            ['Factor', 'Proxy', 'Beta', 't-statistic', 'Significant at 5%', 'Signed factor contribution %'],
             factors.map(factor => [
               plain(factor.factor),
               plain(factor.proxy),
               finite(factor.beta),
               finite(factor.t_stat),
+              Math.abs(finite(factor.t_stat) ?? 0) >= 1.96 ? 'Yes' : 'No',
               finite(factor.risk_pct),
             ]),
           ), source, `${response.mode}:factor-table`))
@@ -2083,6 +2119,9 @@ async function runSource(
           const rollingPoints = array(points).map(point => ({
             date: plain(record(point).date),
             beta: finite(record(point).beta),
+            lower95: finite(record(point).lower95),
+            upper95: finite(record(point).upper95),
+            fullSample: finite(bookBetas[factor]),
           })).filter(point => point.beta != null) as { date: string; beta: number }[]
           if (rollingPoints.length) {
             const betas = rollingPoints.map(point => point.beta)
@@ -2097,11 +2136,16 @@ async function runSource(
           }
           clips.push(tagClip(chartClip(
             'Factor Decomposition',
-            `Rolling multifactor ${factor} coefficient`,
+            `Rolling ${plain(data.roll_window)}-day ${factor} coefficient with 95% confidence range`,
             'line',
             'date',
             thin(rollingPoints, 100),
-            [{ key: 'beta', label: 'Beta' }],
+            [
+              { key: 'beta', label: 'Rolling beta' },
+              { key: 'fullSample', label: 'Full-sample beta' },
+              { key: 'lower95', label: '95% lower' },
+              { key: 'upper95', label: '95% upper' },
+            ],
           ), source, `${response.mode}:rolling-${factor}`))
         }
       }
@@ -2241,8 +2285,50 @@ async function runSource(
         }
       }))
       const sectorByTicker = new Map(sectorPairs)
+      const optionPositions = portfolio.optionPositions ?? []
+      const optionLegs = optionPositions.flatMap(position => position.legs.map(leg => ({
+        position,
+        leg,
+        request: {
+          underlying: normalizeTicker(position.underlying),
+          expiry: leg.expiry,
+          strike: leg.strike,
+          option_type: leg.type,
+        },
+      })))
+      let optionMarks: Record<string, any>[] = []
+      if (optionLegs.length) {
+        try {
+          optionMarks = array(record(await client.post('/api/options/marks', {
+            legs: optionLegs.map(item => item.request),
+          })).marks).map(record)
+        } catch {
+          optionMarks = []
+        }
+      }
+      let markedOptionValue = 0
+      let optionMarkIndex = 0
+      const optionRows = optionLegs.map(({ position, leg }) => {
+        const mark = record(optionMarks[optionMarkIndex++])
+        const currentMark = finite(mark.mark)
+        const delta = finite(mark.delta)
+        const sign = leg.side === 'long' ? 1 : -1
+        const multiplier = Math.max(0, leg.contracts) * 100
+        const value = currentMark == null ? null : sign * currentMark * multiplier
+        const deltaEquivalent = delta == null ? null : sign * delta * multiplier
+        if (value != null) markedOptionValue += value
+        return [
+          normalizeTicker(position.underlying), position.name || 'Custom', leg.side, leg.type,
+          leg.contracts, money(leg.strike), leg.expiry, money(leg.avgPremium),
+          currentMark == null ? 'Unpriced' : money(currentMark),
+          value == null ? 'Unpriced' : money(value),
+          deltaEquivalent == null ? '—' : deltaEquivalent.toFixed(1),
+          plain(mark.source),
+        ]
+      })
+      const markedOptionLegs = optionRows.filter(row => row[8] !== 'Unpriced').length
       const pricedTotal = valued.reduce((sum, holding) => sum + (holding.value ?? 0), 0)
-      const total = pricedTotal + portfolio.cashValue
+      const total = pricedTotal + portfolio.cashValue + markedOptionValue
       const rows = [...portfolio.holdings]
         .map(original => valued.find(holding => holding.ticker === normalizeTicker(original.ticker)))
         .filter((holding): holding is NonNullable<typeof holding> => holding != null)
@@ -2257,6 +2343,12 @@ async function runSource(
         ])
         .sort((a, b) => Number(b[4] ?? 0) - Number(a[4] ?? 0))
       if (portfolio.cashValue > 0) rows.push(['CASH', null, null, money(portfolio.cashValue), total > 0 ? +((portfolio.cashValue / total) * 100).toFixed(2) : null, 'Cash', 'saved cash'])
+      if (optionLegs.length) rows.push([
+        'OPTIONS', null, null,
+        markedOptionLegs ? money(markedOptionValue) : 'Unpriced',
+        markedOptionLegs && total > 0 ? +((markedOptionValue / total) * 100).toFixed(2) : null,
+        'Derivative contracts', `${markedOptionLegs}/${optionLegs.length} legs marked`,
+      ])
       const unpriced = valued.filter(holding => holding.mark == null)
       const fallbacks = valued.filter(holding => holding.markSource === 'saved cost fallback')
       const clips = [tagClip(tableClip(
@@ -2265,6 +2357,19 @@ async function runSource(
         ['Ticker', 'Shares', 'Mark', 'Market value', 'Weight %', 'Sector classification', 'Valuation source'],
         rows,
       ), source, portfolio.id)]
+      if (optionPositions.length) {
+        clips.push(tagClip(tableClip(
+          'Portfolio Manager',
+          `${portfolioName} · current option positions`,
+          ['Underlying', 'Strategy', 'Side', 'Type', 'Contracts', 'Strike', 'Expiry', 'Saved premium', 'Mark', 'Market value', 'Δ-equivalent shares', 'Mark source'],
+          optionRows,
+        ), source, `${portfolio.id}:option-positions`))
+        clips.push(tagClip(textClip(
+          'Portfolio Manager',
+          `${portfolioName} · option analytics coverage`,
+          `Option contracts are included in the allocation inventory with ${markedOptionLegs}/${optionLegs.length} live or model-derived marks and delta-equivalent exposure. Their underlyings receive volatility, skew, implied-probability, company, price, news, and catalyst research. Historical return, beta, volatility, drawdown, and factor statistics remain equity-and-cash sleeve metrics because contract-level history and nonlinear Greek aggregation are not available.`,
+        ), source, `${portfolio.id}:option-coverage`))
+      }
       const sectorWeights = new Map<string, number>()
       let fundLookThroughWeight = 0
       for (const holding of valued) {
@@ -2429,6 +2534,13 @@ async function runSource(
           ],
         ), source, `${portfolio.id}:methodology`),
       ]
+      if ((portfolio.optionPositions ?? []).length) {
+        clips.push(tagClip(textClip(
+          'Portfolio Compare',
+          `${analysisName} · derivative coverage limitation`,
+          'The displayed return, volatility, Sharpe ratio, drawdown, beta, and stress statistics cover equities and cash only. Open option positions can create nonlinear delta, gamma, vega, theta, assignment, and expiry risk and are analyzed separately by underlying; these sleeve statistics are not whole-account statistics.',
+        ), source, `${portfolio.id}:derivative-coverage`))
+      }
       const portfolioBeta = finite(metric.beta)
       if (portfolioBeta != null) {
         clips.push(tagClip(tableClip(

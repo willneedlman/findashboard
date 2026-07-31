@@ -271,8 +271,11 @@ function GeneratedEditor({ project }: { project: ReportProject }) {
   )
 }
 
-function Section({ label, meta, children, collapsible, defaultOpen = true }: { label: string; meta?: React.ReactNode; children: React.ReactNode; collapsible?: boolean; defaultOpen?: boolean }) {
+function Section({ label, meta, children, collapsible, defaultOpen = true, collapseSignal = 0 }: { label: string; meta?: React.ReactNode; children: React.ReactNode; collapsible?: boolean; defaultOpen?: boolean; collapseSignal?: number }) {
   const [open, setOpen] = useState(defaultOpen)
+  useEffect(() => {
+    if (collapsible && collapseSignal > 0) setOpen(false)
+  }, [collapseSignal, collapsible])
   const showBody = !collapsible || open
   return (
     <section style={{ border: `1px solid ${T.border}`, background: T.surface }}>
@@ -906,7 +909,9 @@ export default function ReportCreator() {
   const [planningResearch, setPlanningResearch] = useState(false)
   const [planningError, setPlanningError] = useState<string | null>(null)
   const [aiResearchPlan, setAiResearchPlan] = useState<ReportResearchPlan | null>(null)
+  const [selectionCollapseSignal, setSelectionCollapseSignal] = useState(0)
   const researchOperationRef = useRef(0)
+  const activeProjectRef = useRef<HTMLDivElement>(null)
 
   const active = projects.find(p => p.id === activeId) ?? projects[0]
   const baselineResearchPlan = useMemo(
@@ -964,8 +969,17 @@ export default function ReportCreator() {
     return () => window.clearInterval(timer)
   }, [generating])
 
+  useEffect(() => {
+    if (!selectionCollapseSignal) return
+    const frame = window.requestAnimationFrame(() => {
+      activeProjectRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [selectionCollapseSignal])
+
   const generate = async () => {
     if (!active || active.clips.length === 0 || researching || planningResearch) return
+    setSelectionCollapseSignal(signal => signal + 1)
     setGenerating(true); setGenError(null); setJustDone(false)
     try {
       const payload = {
@@ -1160,7 +1174,7 @@ export default function ReportCreator() {
             </div>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+          <div ref={activeProjectRef} style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
               <input key={active.id} defaultValue={active.name}
                 onBlur={e => renameProject(active.id, e.target.value)}
@@ -1230,7 +1244,7 @@ export default function ReportCreator() {
             )}
 
             {!inSetup && (
-            <Section label="Report scope" meta={timeframeLabel(active.scope)} collapsible defaultOpen={!active.generated}>
+            <Section label="Report scope" meta={timeframeLabel(active.scope)} collapsible defaultOpen={!active.generated} collapseSignal={selectionCollapseSignal}>
               <ReportWizardForm
                 scope={active.scope}
                 onChange={patch => updateScope(active.id, patch)}
@@ -1240,7 +1254,7 @@ export default function ReportCreator() {
             )}
 
             {!inSetup && researchPlan && (
-              <Section label="Evidence sourcing" meta={active.scope.evidenceMode === 'alphatape' ? 'AlphaTape research' : 'Manual clips'} collapsible defaultOpen={!active.generated}>
+              <Section label="Evidence sourcing" meta={active.scope.evidenceMode === 'alphatape' ? 'AlphaTape research' : 'Manual clips'} collapsible defaultOpen={!active.generated} collapseSignal={selectionCollapseSignal}>
                 <ResearchPanel
                   project={active}
                   portfolio={activePortfolio}
@@ -1264,6 +1278,7 @@ export default function ReportCreator() {
               meta={researchedClipCount ? `${researchedClipCount} researched · ${manualClipCount} manual` : `${clips.length} in order`}
               collapsible
               defaultOpen={!active.generated}
+              collapseSignal={selectionCollapseSignal}
             >
               {clips.length === 0 ? (
                 <div style={{ padding: '20px 8px', textAlign: 'center', fontFamily: T.mono, fontSize: 10.5, color: T.muted, lineHeight: 1.6 }}>

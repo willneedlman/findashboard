@@ -1450,6 +1450,95 @@ def test_portfolio_action_filter_removes_gerund_reallocation_language():
     assert fixed == "Current risk remains measurable."
 
 
+def test_portfolio_action_filter_removes_noun_form_reduction():
+    fixed = ai._remove_unsupported_portfolio_actions(
+        "Peer multiples show a premium. The magnitude of the DCF downside justifies a reduction in weight."
+    )
+
+    assert fixed == "Peer multiples show a premium."
+
+
+def test_dcf_discount_reversal_is_repaired_from_clip_values():
+    clips = [_clip(
+        "dcf", "DCF Valuation", "DCF Verdict · SNDK",
+        "Intrinsic / Share: $13.81; Market Price: $1,214.83; Upside to intrinsic: -98.9%",
+    )]
+
+    fixed = ai._fix_dcf_direction(
+        "Sandisk trades at a 99% discount to its DCF-derived intrinsic value.", clips,
+    )
+
+    assert "98.9% downside to DCF-derived intrinsic value" in fixed
+    assert "discount" not in fixed.lower()
+
+
+def test_extreme_dcf_is_quarantined_as_a_scale_conflict():
+    clips = [_clip(
+        "dcf", "DCF Valuation", "DCF Verdict · SNDK",
+        "Intrinsic / Share: $13.81; Market Price: $1,214.83; Upside to intrinsic: -98.9%",
+    )]
+
+    warning = ai._extreme_dcf_warning(clips)
+
+    assert warning is not None
+    assert "not decision-grade" in warning
+    assert "share count, units, corporate actions, and price alignment" in warning
+
+
+def test_beta_cannot_explain_idiosyncratic_risk_for_any_ticker():
+    fixed = ai._separate_systematic_and_residual_risk(
+        "Idiosyncratic risk is driven largely by Sandisk's 3.328 market beta."
+    )
+
+    assert fixed == (
+        "Market beta measures systematic sensitivity. Residual variance measures name-specific risk, "
+        "and position weight determines how each affects the account."
+    )
+
+
+def test_stress_scenario_is_not_called_historical_drawdown():
+    fixed = ai._separate_drawdown_and_stress(
+        "The steep drawdown is implied by the beta-only stress scenario."
+    )
+
+    assert "observed peak-to-trough loss" in fixed
+    assert "separate hypothetical" in fixed
+
+
+def test_single_position_correlation_language_names_unrealized_diversification():
+    allocation = ReportClipIn(
+        id="allocation", sourceTab="Portfolio Manager", dataType="table",
+        title="Current allocation",
+        dataSummary="Columns: Ticker | Weight %\nSNDK | 100\nNVDA | 0",
+    )
+
+    fixed = ai._repair_portfolio_diversification_claims(
+        "SNDK has low correlation with technology holdings, so diversification benefits are negligible.",
+        [allocation],
+    )
+
+    assert "potential diversification" in fixed
+    assert "one security holds the entire positive-weight allocation" in fixed
+
+
+def test_option_inventory_prevents_single_stock_book_classification():
+    clips = [
+        ReportClipIn(
+            id="allocation", sourceTab="Portfolio Manager", dataType="table",
+            title="Current allocation",
+            dataSummary="Columns: Ticker | Weight %\nSNDK | 100",
+        ),
+        ReportClipIn(
+            id="options", sourceTab="Portfolio Manager", dataType="table",
+            title="Current option positions",
+            dataSummary="Columns: Underlying | Strategy\nNVDA | Long Call",
+        ),
+    ]
+
+    assert ai._material_portfolio_positions(clips) == [("SNDK", 100.0)]
+    assert ai._has_option_positions(clips) is True
+
+
 def test_beta_due_to_language_is_not_treated_as_active_return_attribution():
     clips = [_clip(
         "risk", "Portfolio Compare", "Portfolio risk metrics",

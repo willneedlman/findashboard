@@ -83,6 +83,21 @@ describe('combined overview book', () => {
     expect(active.isCombined).toBe(false)
   })
 
+  it('publishes complete option positions for automated report research', () => {
+    seed([{
+      ...port('a', 'Options', [{ ticker: 'AAPL', shares: 10, avgCost: 100 }]),
+      options: [{
+        id: 'opt-1', underlying: 'NVDA', name: 'Long Call',
+        legs: [{ type: 'call', side: 'long', strike: 200, expiry: '2026-09-18', contracts: 2, avgPremium: 12 }],
+      }],
+    }])
+
+    const active = readActivePortfolioContext()
+
+    expect(active.optionsCount).toBe(1)
+    expect(active.optionPositions?.[0]).toMatchObject({ underlying: 'NVDA', name: 'Long Call' })
+  })
+
   it('merges the terminal-wide context when several books are selected', () => {
     seed([
       port('a', 'A', [{ ticker: 'AAPL', shares: 10, avgCost: 100 }]),

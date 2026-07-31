@@ -33,8 +33,8 @@ export function formatHorizontalCategoryLabel(
 }
 
 export function horizontalCategoryAxisWidth(values: unknown[], print: boolean): number {
-  const maxPrimaryLength = print ? 16 : 18
-  const primaryGlyphWidth = print ? 4.4 : 5
+  const maxPrimaryLength = print ? 26 : 22
+  const primaryGlyphWidth = print ? 4.1 : 5
   const secondaryGlyphWidth = print ? 4 : 4.6
   const contentWidth = Math.max(
     0,
@@ -48,7 +48,7 @@ export function horizontalCategoryAxisWidth(values: unknown[], print: boolean): 
     }),
   )
   return Math.min(
-    print ? 136 : 154,
+    print ? 168 : 164,
     Math.max(print ? 112 : 120, contentWidth + (print ? 14 : 18)),
   )
 }

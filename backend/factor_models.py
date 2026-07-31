@@ -194,17 +194,19 @@ def ols_fit(y: np.ndarray, X: np.ndarray, factor_names: list[str]) -> dict:
     except np.linalg.LinAlgError:
         se = np.full(k + 1, np.nan)
 
-    betas, t_stats = {}, {}
+    betas, t_stats, standard_errors = {}, {}, {}
     for i, name in enumerate(factor_names):
         b = float(coef[i + 1])
         betas[name] = round(b, 4)
         se_i = se[i + 1]
+        standard_errors[name] = round(float(se_i), 6) if se_i and not np.isnan(se_i) else None
         t_stats[name] = round(b / se_i, 2) if se_i and not np.isnan(se_i) else None
 
     return {
         "available": True,
         "betas": betas,
         "t_stats": t_stats,
+        "standard_errors": standard_errors,
         "alpha": round(float(coef[0]), 5),
         "r_squared": round(r2, 3),
         "residual_std": float(np.std(resid, ddof=1)),

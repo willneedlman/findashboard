@@ -266,6 +266,56 @@ describe('Report Creator AlphaTape research', () => {
     if (warning?.payload.kind === 'text') expect(warning.payload.body).toContain('NVDA')
   })
 
+  it('captures option contracts and states the sleeve-level analytics boundary', async () => {
+    const book: ActivePortfolioContext = {
+      ...portfolio,
+      optionsCount: 1,
+      positionCount: 3,
+      optionPositions: [{
+        id: 'opt-1', underlying: 'NVDA', name: 'Long Call',
+        legs: [{ type: 'call', side: 'long', strike: 200, expiry: '2026-09-18', contracts: 2, avgPremium: 12 }],
+      }],
+    }
+    const source = {
+      id: 'portfolio' as const,
+      label: 'Active book',
+      tool: 'Portfolio Manager',
+      route: '/portfolio-manager',
+      reason: 'Capture the complete position inventory',
+      targets: [],
+    }
+    const result = await collectReportResearch(
+      { ...planReportResearch({ ...defaultScope(), goal: 'Assess my entire portfolio' }, book), sources: [source] },
+      { ...defaultScope(), goal: 'Assess my entire portfolio' },
+      book,
+      undefined,
+      {
+        get: async url => url.includes('/api/alerts/quotes')
+          ? { AAPL: { current_price: 180 }, MSFT: { current_price: 420 } }
+          : { sector: 'Technology' },
+        post: async url => url.includes('/api/options/marks')
+          ? { marks: [{ mark: 10.5, delta: 0.45, source: 'chain' }] }
+          : {},
+      },
+    )
+
+    const optionInventory = result.clips.find(clip => /current option positions/i.test(clip.payload.title ?? ''))
+    expect(optionInventory?.payload).toMatchObject({
+      kind: 'table',
+      rows: [['NVDA', 'Long Call', 'long', 'call', 2, '$200', '2026-09-18', '$12', '$10.5', '$2,100', '90.0', 'chain']],
+    })
+    const allocation = result.clips.find(clip => /current allocation/i.test(clip.payload.title ?? ''))
+    if (allocation?.payload.kind === 'table') {
+      expect(allocation.payload.rows).toContainEqual(expect.arrayContaining(['OPTIONS', null, null, '$2,100']))
+    }
+    const coverage = result.clips.find(clip => /option analytics coverage/i.test(clip.payload.title ?? ''))
+    expect(coverage?.payload).toMatchObject({ kind: 'text' })
+    if (coverage?.payload.kind === 'text') {
+      expect(coverage.payload.body).toMatch(/equity-and-cash sleeve metrics/i)
+      expect(coverage.payload.body).toMatch(/historical return.*sleeve metrics/i)
+    }
+  })
+
   it('selects options and catalyst tools from the objective', () => {
     const scope = {
       ...defaultScope(),
@@ -343,14 +393,56 @@ describe('Report Creator AlphaTape research', () => {
     ]))
   })
 
-  it('blocks incomplete automated research for books with derivatives', () => {
+  it('excludes zero-share comparison names from portfolio research', () => {
+    const singlePosition = {
+      ...portfolio,
+      holdings: [
+        { ticker: 'SNDK', shares: 100, avgCost: 50 },
+        { ticker: 'NVDA', shares: 0, avgCost: 150 },
+        { ticker: 'ORCL', shares: 0, avgCost: 200 },
+      ],
+    }
+    const plan = planReportResearch({
+      ...defaultScope(),
+      reportType: 'portfolio-review',
+      goal: 'Produce a full analysis of my entire portfolio',
+    }, singlePosition)
+
+    expect(plan.symbols).toEqual(['SNDK'])
+    expect(plan.sources.some(source => source.id === 'correlation')).toBe(false)
+    expect(plan.sources.find(source => source.id === 'company')?.targets).toEqual(['SNDK'])
+  })
+
+  it('researches option underlyings without treating sleeve metrics as whole-book analytics', () => {
+    const plan = planReportResearch({
+      ...defaultScope(),
+      evidenceMode: 'alphatape',
+      goal: 'Produce a comprehensive analysis of my entire portfolio',
+    }, {
+      ...portfolio,
+      optionsCount: 1,
+      positionCount: 3,
+      optionPositions: [{
+        id: 'opt-1', underlying: 'NVDA', name: 'Long Call',
+        legs: [{ type: 'call', side: 'long', strike: 200, expiry: '2026-09-18', contracts: 2, avgPremium: 12 }],
+      }],
+    })
+
+    expect(plan.blockedReason).toBeUndefined()
+    expect(plan.symbols).toContain('NVDA')
+    for (const sourceId of ['options', 'volatility-skew', 'implied-probability', 'dealer-gex']) {
+      expect(plan.sources.find(source => source.id === sourceId)?.targets).toEqual(['NVDA'])
+    }
+    expect(plan.sources.find(source => source.id === 'correlation')?.targets).toEqual(['AAPL', 'MSFT'])
+  })
+
+  it('still blocks futures until contract exposure is modeled', () => {
     const plan = planReportResearch({
       ...defaultScope(),
       evidenceMode: 'alphatape',
       goal: 'Assess risk and concentration in my portfolio',
-    }, { ...portfolio, optionsCount: 2, positionCount: 4 })
-    expect(plan.blockedReason).toMatch(/options|option positions/i)
-    expect(plan.blockedReason).toMatch(/equities and cash/i)
+    }, { ...portfolio, futuresCount: 1, positionCount: 3 })
+    expect(plan.blockedReason).toMatch(/futures position/i)
   })
 
   it('recognizes comparison language used by the report objective field', () => {

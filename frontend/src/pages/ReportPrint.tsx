@@ -38,11 +38,22 @@ function allocationTickers(clips: ReportClip[], max = 4): string[] {
   const allocation = clips.find(clip => clip.payload.kind === 'table' && /\bcurrent allocation\b/i.test(clip.payload.title || ''))
   if (!allocation || allocation.payload.kind !== 'table') return []
   const tickerIndex = allocation.payload.columns.findIndex(column => /^ticker$/i.test(column))
+  const weightIndex = allocation.payload.columns.findIndex(column => /weight/i.test(column))
   if (tickerIndex < 0) return []
   return allocation.payload.rows
+    .filter(row => {
+      if (weightIndex < 0) return true
+      const weight = Number(String(row[weightIndex] ?? '').replace(/[%+,]/g, '').trim())
+      return Number.isFinite(weight) && weight > 0
+    })
     .map(row => String(row[tickerIndex] ?? '').trim().toUpperCase())
     .filter(ticker => ticker && ticker !== 'CASH')
     .slice(0, max)
+}
+
+function kpiCell(clip: ReportClip | undefined, pattern: RegExp) {
+  if (!clip || clip.payload.kind !== 'kpi') return undefined
+  return clip.payload.cells.find(cell => pattern.test(cell.label))
 }
 
 // keyResult.value ranges from a short "$280–$310" to a longer open-mode
@@ -271,20 +282,49 @@ export default function ReportPrint() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoDownload, gen])
 
-  // No per-cell sub-caption here: keyResult.context duplicates the Investment
-  // Summary paragraph directly below and was the only cell tall enough to
-  // stretch the row, leaving blank space under every sibling metric.
-  const keyData: { label: string; value: string; sub?: string }[] = []
-  const seen = new Set(keyData.map(k => k.label.toLowerCase()))
-  for (const s of gen?.sections ?? []) {
-    for (const f of s.keyFigures ?? []) {
-      const k = f.label.toLowerCase()
-      if (!seen.has(k) && keyData.length < 4) {
-        seen.add(k)
-        keyData.push({ label: f.label, value: f.value })
+  const portfolioRiskClip = allClips.find(clip => clip.payload.kind === 'kpi' && /\brisk metrics\b/i.test(clip.payload.title || ''))
+  const factorSummaryClip = allClips.find(clip => clip.payload.kind === 'kpi' && /\bfactor decomposition\b/i.test(clip.payload.title || ''))
+  const rollingSummaryClip = allClips.find(clip => clip.payload.kind === 'kpi' && /\brolling multifactor market coefficient summary\b/i.test(clip.payload.title || ''))
+  const allocationClip = allClips.find(clip => clip.payload.kind === 'table' && /\bcurrent allocation\b/i.test(clip.payload.title || ''))
+
+  const keyData = useMemo(() => {
+    const result: { label: string; value: string; sub?: string }[] = []
+    if (portfolioRiskClip && allocationClip?.payload.kind === 'table') {
+      const weightIndex = allocationClip.payload.columns.findIndex(column => /weight/i.test(column))
+      const tickerIndex = allocationClip.payload.columns.findIndex(column => /^ticker$/i.test(column))
+      const largest = weightIndex >= 0
+        ? [...allocationClip.payload.rows]
+          .filter(row => String(row[tickerIndex] ?? '').toUpperCase() !== 'CASH')
+          .sort((a, b) => (
+            Number(String(b[weightIndex] ?? 0).replace(/[%+,]/g, ''))
+            - Number(String(a[weightIndex] ?? 0).replace(/[%+,]/g, ''))
+          ))[0]
+        : undefined
+      if (largest) result.push({
+        label: 'Largest position',
+        value: `${largest[tickerIndex]} · ${largest[weightIndex]}%`,
+      })
+      for (const [label, pattern] of [
+        ['Active return vs SPY', /^Active return vs SPY$/i],
+        ['Maximum drawdown', /^Portfolio max drawdown$/i],
+        ['Static beta vs SPY', /^Portfolio single-factor beta vs SPY$/i],
+      ] as const) {
+        const cell = kpiCell(portfolioRiskClip, pattern)
+        if (cell) result.push({ label, value: cell.value })
       }
     }
-  }
+    const seen = new Set(result.map(item => item.label.toLowerCase()))
+    for (const section of gen?.sections ?? []) {
+      for (const figure of section.keyFigures ?? []) {
+        const label = figure.label.toLowerCase()
+        if (!seen.has(label) && result.length < 4) {
+          seen.add(label)
+          result.push({ label: figure.label, value: figure.value })
+        }
+      }
+    }
+    return result.slice(0, 4)
+  }, [allocationClip, gen?.sections, portfolioRiskClip])
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--theme-bg, #101c2e)', padding: '20px 16px 60px' }}>
@@ -523,33 +563,58 @@ export default function ReportPrint() {
                     const sectionKey = reportSectionAssignmentKey(gen.sections, i)
                     const assigned = bodyVisuals.get(sectionKey)
                     const whatHappened = /\bwhat happened\b/i.test(s.heading)
-                    const performanceClip = whatHappened
-                      ? allClips.find(candidate => candidate.payload.kind === 'kpi' && /\brisk metrics\b/i.test(candidate.payload.title || ''))
-                      : undefined
-                    const performanceFigures = performanceClip?.payload.kind === 'kpi'
+                    const whyHappened = /\bwhy it happened\b/i.test(s.heading)
+                    const performanceFigures = whatHappened && portfolioRiskClip?.payload.kind === 'kpi'
                       ? (() => {
-                          const cells = performanceClip.payload.cells
+                          const cells = portfolioRiskClip.payload.cells
                           const find = (pattern: RegExp) => cells.find(cell => pattern.test(cell.label))
                           const portfolioReturn = find(/^Period return$|^CAGR$/i)
                           const spyReturn = find(/^SPY (?:period return|cagr)$/i)
                           const activeReturn = find(/^Active return vs SPY$/i)
                           const portfolioVol = find(/^Portfolio volatility$/i)
                           const spyVol = find(/^SPY volatility$/i)
+                          const portfolioSharpe = find(/^Portfolio Sharpe$/i)
+                          const spySharpe = find(/^SPY Sharpe$/i)
                           const portfolioDrawdown = find(/^Portfolio max drawdown$/i)
                           const spyDrawdown = find(/^SPY max drawdown$/i)
-                          return [portfolioReturn, spyReturn, activeReturn, portfolioVol, spyVol]
-                            .filter((cell): cell is NonNullable<typeof cell> => !!cell)
-                            .map(cell => ({ label: cell.label, value: cell.value }))
-                            .concat(portfolioDrawdown && spyDrawdown ? [{
+                          return [
+                            portfolioReturn && spyReturn ? {
+                              label: 'Matched-period return',
+                              value: `${portfolioReturn.value} portfolio · ${spyReturn.value} SPY${activeReturn ? ` · ${activeReturn.value} active` : ''}`,
+                            } : undefined,
+                            portfolioVol && spyVol ? {
+                              label: 'Annual volatility',
+                              value: `${portfolioVol.value} portfolio · ${spyVol.value} SPY`,
+                            } : undefined,
+                            portfolioSharpe && spySharpe ? {
+                              label: 'Sharpe ratio',
+                              value: `${portfolioSharpe.value} portfolio · ${spySharpe.value} SPY`,
+                            } : undefined,
+                            portfolioDrawdown && spyDrawdown ? {
                               label: 'Maximum drawdown',
                               value: `${portfolioDrawdown.value} portfolio · ${spyDrawdown.value} SPY`,
-                            }] : [])
+                            } : undefined,
+                          ].filter((figure): figure is NonNullable<typeof figure> => !!figure)
                         })()
-                      : s.keyFigures
+                      : whyHappened
+                        ? (() => {
+                            const latest = kpiCell(rollingSummaryClip, /^Latest beta$/i)
+                            const minimum = kpiCell(rollingSummaryClip, /^Minimum beta$/i)
+                            const maximum = kpiCell(rollingSummaryClip, /^Maximum beta$/i)
+                            const window = kpiCell(rollingSummaryClip, /^Rolling window$/i)
+                            const fullSample = kpiCell(factorSummaryClip, /^Multifactor market coefficient$/i)
+                            return [
+                              fullSample ? { label: 'Full-sample coefficient', value: fullSample.value } : undefined,
+                              latest ? { label: 'Latest rolling coefficient', value: latest.value } : undefined,
+                              minimum && maximum ? { label: 'Rolling range', value: `${minimum.value} to ${maximum.value}` } : undefined,
+                              window ? { label: 'Rolling window', value: window.value } : undefined,
+                            ].filter((figure): figure is NonNullable<typeof figure> => !!figure)
+                          })()
+                        : s.keyFigures
                     return (
                       <section
                         key={sectionKey}
-                        className="rc-section rc-keep rc-atomic"
+                        className="rc-section"
                         data-placement="full"
                         style={{
                           minWidth: 0,
@@ -574,7 +639,7 @@ export default function ReportPrint() {
                           layout="full-width"
                           projectClips={allClips}
                           visual={assigned?.visual}
-                          showKeyFigures={whatHappened}
+                          showKeyFigures={whatHappened || whyHappened ? true : assigned?.showKeyFigures}
                           column={false}
                           figureNumber={figureNumbers.get(sectionKey)}
                           palette={palette}

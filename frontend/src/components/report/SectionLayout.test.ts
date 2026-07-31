@@ -528,7 +528,7 @@ describe('assignBodyVisuals', () => {
   it('gives portfolio stages one decision-specific visual each', () => {
     const allocation: ReportClip = {
       id: 'allocation', sourceTab: 'Portfolio Manager', dataType: 'table', capturedAt: '', projectId: 'p1',
-      payload: { kind: 'table', title: 'Portfolio · current allocation', columns: ['Ticker', 'Weight %'], rows: [['NVDA', 5.6]] },
+      payload: { kind: 'table', title: 'Core account · current allocation', columns: ['Ticker', 'Weight %'], rows: [['NVDA', 5.6]] },
     }
     const metrics = { ...kpi('metrics', 'Portfolio Compare'), payload: {
       kind: 'kpi' as const, title: 'Portfolio risk metrics · 2026-07-01 to 2026-07-31', cells: [{ label: 'Period return', value: '4.2%' }],
@@ -556,6 +556,7 @@ describe('assignBodyVisuals', () => {
 
     expect(assigned.get(reportSectionAssignmentKey(sections, 0))?.visual?.payload.title).toContain('Portfolio vs SPY')
     expect(assigned.get(reportSectionAssignmentKey(sections, 1))?.visual?.payload.title).toContain('Rolling multifactor')
+    expect(assigned.get(reportSectionAssignmentKey(sections, 1))?.showKeyFigures).toBe(true)
     expect(assigned.get(reportSectionAssignmentKey(sections, 2))?.visual?.payload.title).toContain('Upcoming portfolio earnings')
     expect(assigned.get(reportSectionAssignmentKey(sections, 3))?.visual).toBeUndefined()
   })

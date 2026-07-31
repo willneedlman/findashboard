@@ -36,9 +36,14 @@ describe('horizontal chart category labels', () => {
       'Health Care · XLV',
     ], true)
     expect(denseWidth).toBeGreaterThanOrEqual(112)
-    expect(denseWidth).toBeLessThanOrEqual(136)
+    expect(denseWidth).toBeLessThanOrEqual(168)
     expect(horizontalCategoryAxisWidth([
       'Communication Services and Media · XLC',
-    ], false)).toBeLessThanOrEqual(154)
+    ], false)).toBeLessThanOrEqual(164)
+  })
+
+  it('keeps common report metric labels complete in print', () => {
+    expect(formatHorizontalCategoryLabel('Annual Volatility', 26).primary).toBe('Annual Volatility')
+    expect(formatHorizontalCategoryLabel('Systematic Variance Share', 26).primary).toBe('Systematic Variance Share')
   })
 })

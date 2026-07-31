@@ -355,7 +355,7 @@ export function HorizontalCategoryTick({
   pal: Palette
   print: boolean
 }) {
-  const label = formatHorizontalCategoryLabel(payload?.value, print ? 16 : 18)
+  const label = formatHorizontalCategoryLabel(payload?.value, print ? 26 : 22)
   const fontSize = print ? 7.5 : 8.5
   const labelX = x - (print ? 5 : 7)
   if (!label.secondary) {
