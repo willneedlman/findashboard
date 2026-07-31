@@ -6,6 +6,7 @@ import {
   inferResearchSymbols,
   parseResearchSymbols,
   planReportResearch,
+  screenReportSymbols,
 } from './reportResearch'
 import type { ActivePortfolioContext } from './pmImport'
 
@@ -40,6 +41,144 @@ describe('Report Creator AlphaTape research', () => {
   it('parses explicit symbols and ignores common uppercase prose', () => {
     expect(parseResearchSymbols('aapl, msft BRK.B')).toEqual(['AAPL', 'MSFT', 'BRK-B'])
     expect(inferResearchSymbols('Compare NVDA vs AAPL and include EPS')).toEqual(['NVDA', 'AAPL'])
+  })
+
+  it('uses the AI interpretation as an exact Stock Screener request', async () => {
+    const requests: Array<{ url: string; body: any }> = []
+    const selection = await screenReportSymbols(
+      'Profitable technology companies growing revenue above 15%, sorted by the cheapest P/E',
+      {
+        get: async () => ({}),
+        post: async (url, body) => {
+          requests.push({ url, body })
+          if (url === '/api/ai/screener-parse') {
+            return {
+              filters: [
+                { field: 'revenueGrowth', operator: 'gt', value: 15, value2: null, param: null },
+                { field: 'operatingMargin', operator: 'gt', value: 0, value2: null, param: null },
+              ],
+              sector: 'Technology',
+              universe: 'sp500',
+              exchange: null,
+              region: 'North America',
+              sort_by: 'peRatio',
+              sort_dir: 'asc',
+              sort_param: null,
+              limit: 12,
+              explanation: 'Find profitable, growing S&P 500 technology companies with the lowest P/E.',
+            }
+          }
+          return {
+            total: 14,
+            results: [
+              { ticker: 'ORCL' },
+              { ticker: 'IBM' },
+              { ticker: 'MSFT' },
+              { ticker: 'AAPL' },
+              { ticker: 'NVDA' },
+              { ticker: 'AMD' },
+              { ticker: 'ADBE' },
+              { ticker: 'CRM' },
+              { ticker: 'NOW' },
+            ],
+          }
+        },
+      },
+    )
+    expect(requests[0]).toEqual({
+      url: '/api/ai/screener-parse',
+      body: { query: 'Profitable technology companies growing revenue above 15%, sorted by the cheapest P/E' },
+    })
+    expect(requests[1].url).toBe('/api/screener/run')
+    expect(requests[1].body).toMatchObject({
+      sector: 'Technology',
+      universe: 'sp500',
+      region: 'North America',
+      sort_by: 'peRatio',
+      sort_dir: 'asc',
+      limit: 8,
+      filters: [
+        { field: 'revenueGrowth', operator: 'gt', value: 15 },
+        { field: 'operatingMargin', operator: 'gt', value: 0 },
+      ],
+    })
+    expect(selection.symbols).toEqual(['ORCL', 'IBM', 'MSFT', 'AAPL', 'NVDA', 'AMD', 'ADBE', 'CRM'])
+    expect(selection.total).toBe(14)
+  })
+
+  it('does not run a broad screen when the AI could not map the requested criteria', async () => {
+    const urls: string[] = []
+    await expect(screenReportSymbols('Companies with a high magic score', {
+      get: async () => ({}),
+      post: async url => {
+        urls.push(url)
+        return {
+          valid: false,
+          warning: '1 criterion could not be mapped to a supported screener field.',
+          filters: [],
+          sort_by: 'marketCap',
+          sort_dir: 'desc',
+          limit: 8,
+        }
+      },
+    })).rejects.toThrow(/could not be mapped/i)
+    expect(urls).toEqual(['/api/ai/screener-parse'])
+  })
+
+  it('keeps an explicitly named company ahead of its screened peers', async () => {
+    const requests: Array<{ url: string; body: any }> = []
+    const selection = await screenReportSymbols(
+      'JPMorgan and other financial services companies and banks',
+      {
+        get: async () => ({}),
+        post: async (url, body) => {
+          requests.push({ url, body })
+          if (url === '/api/ai/screener-parse') {
+            return {
+              valid: true,
+              warning: null,
+              filters: [],
+              include_symbols: ['JPM'],
+              sector: 'Financial Services',
+              universe: null,
+              exchange: null,
+              region: null,
+              sort_by: 'marketCap',
+              sort_dir: 'desc',
+              sort_param: null,
+              limit: 4,
+              explanation: 'JPMorgan and the largest Financial Services peers.',
+            }
+          }
+          return {
+            total: 20,
+            results: [
+              { ticker: 'BRK-B' },
+              { ticker: 'V' },
+              { ticker: 'MA' },
+              { ticker: 'BAC' },
+            ],
+          }
+        },
+      },
+    )
+
+    expect(requests[1]).toEqual({
+      url: '/api/screener/run',
+      body: {
+        filters: [],
+        sector: 'Financial Services',
+        universe: null,
+        exchange: null,
+        region: null,
+        sort_by: 'marketCap',
+        sort_dir: 'desc',
+        sort_param: null,
+        limit: 4,
+      },
+    })
+    expect(selection.symbols).toEqual(['JPM', 'BRK-B', 'V', 'MA'])
+    expect(selection.total).toBe(20)
   })
 
   it('builds a portfolio-risk plan around the active book', () => {
@@ -139,6 +278,27 @@ describe('Report Creator AlphaTape research', () => {
       'peer-valuation',
       'dcf-valuation',
     ])
+  })
+
+  it('keeps a screened peer set as context around one primary company subject', () => {
+    const plan = planReportResearch({
+      ...defaultScope(),
+      evidenceMode: 'alphatape',
+      researchSymbols: 'JPM, HBAN, KEY, RF',
+      goal: 'Create a JPMorgan equity research report',
+    }, emptyPortfolio)
+
+    expect(plan.intent).toBe('company')
+    expect(plan.symbols).toEqual(['JPM', 'HBAN', 'KEY', 'RF'])
+    expect(plan.sources.map(source => source.id)).toEqual([
+      'company',
+      'price-history',
+      'peer-valuation',
+      'news',
+      'earnings',
+    ])
+    expect(plan.sources.every(source => source.targets.length === 0 || source.targets[0] === 'JPM')).toBe(true)
+    expect(plan.sources.every(source => source.targets.length <= 1)).toBe(true)
   })
 
   it('lets AI add supported, non-duplicative visual tools to the baseline', async () => {
@@ -347,6 +507,108 @@ describe('Report Creator AlphaTape research', () => {
     expect(result.clips.map(clip => clip.researchSourceId)).toEqual(['company', 'options', 'options', 'news'])
     expect(result.clips.filter(clip => clip.dataType === 'chart')).toHaveLength(1)
     expect(result.clips.every(clip => clip.origin === 'alphatape')).toBe(true)
+  })
+
+  it('collects decision-grade company, bank, analyst, segment, and estimate evidence', async () => {
+    const scope = {
+      ...defaultScope(),
+      evidenceMode: 'alphatape' as const,
+      researchSymbols: 'JPM',
+      goal: 'Create a JPMorgan equity research report',
+    }
+    const baseline = planReportResearch(scope, emptyPortfolio)
+    const plan = {
+      ...baseline,
+      sources: baseline.sources.filter(source => source.id === 'company'),
+    }
+    const result = await collectReportResearch(plan, scope, emptyPortfolio, undefined, {
+      get: async url => {
+        if (url.startsWith('/api/corporate/hub?')) {
+          return { current_price: 350, forward_pe: 14.1, consensus: 'Moderate Buy' }
+        }
+        if (url.startsWith('/api/corporate/supply-chain')) {
+          return {
+            ticker: 'JPM',
+            sector: 'Financial Services',
+            industry: 'Banks - Diversified',
+            roe: 17.8,
+            rev_growth: 0.08,
+            product_segments: { latest: [] },
+            revenue_activity: {
+              latest: [
+                { name: 'Net Interest Income', value: 95_443_000_000, pct: 52.3, yoy_pct: 3.1 },
+                { name: 'Trading', value: 27_212_000_000, pct: 14.9, yoy_pct: 9.8 },
+              ],
+              history: [
+                { year: 2024, segments: [{ name: 'Net Interest Income', value: 92_583_000_000 }, { name: 'Trading', value: 24_787_000_000 }] },
+                { year: 2025, segments: [{ name: 'Net Interest Income', value: 95_443_000_000 }, { name: 'Trading', value: 27_212_000_000 }] },
+              ],
+            },
+            geo_segments: {
+              latest: [
+                { name: 'North America', value: 140_000_000_000, pct: 76.6 },
+                { name: 'EMEA', value: 24_000_000_000, pct: 13.4 },
+              ],
+            },
+          }
+        }
+        if (url.startsWith('/api/corporate/hub/analyst')) {
+          return {
+            target_mean: 372,
+            target_low: 305,
+            target_high: 420,
+            implied_upside: 6.3,
+            total_analysts: 20,
+            distribution: { strongBuy: 3, buy: 9, hold: 8, sell: 0, strongSell: 0 },
+          }
+        }
+        if (url.startsWith('/api/factset/financials')) {
+          return {
+            available: true,
+            periods: [
+              { label: 'FY2025', is_estimate: false },
+              { label: 'FY2026', is_estimate: true },
+            ],
+            groups: [{
+              rows: [
+                { label: 'Revenue', unit: '$M', values: [182_447, 190_000] },
+                { label: 'Net Income', unit: '$M', values: [58_000, 60_000] },
+                { label: 'EPS (Diluted)', unit: '$', values: [23.2, 24.1] },
+                { label: 'Return on Equity', unit: '%', values: [17.8, 18.1] },
+              ],
+            }],
+          }
+        }
+        if (url === '/api/official/fdic') {
+          return {
+            banks: [{
+              name: 'JPMorgan Chase Bank',
+              assets: 4_000_000,
+              deposits: 2_500_000,
+              roa: 1.4,
+              roe: 17.8,
+              nim: 2.6,
+              net_chargeoffs: 0.7,
+            }],
+          }
+        }
+        return {}
+      },
+      post: async () => ({}),
+    })
+
+    const titles = result.clips.map(clip => clip.payload.title)
+    expect(titles).toEqual(expect.arrayContaining([
+      'JPM company snapshot',
+      'Product Segments · JPM',
+      'JPM revenue activity history',
+      'Geographic Segments · JPM',
+      'Bank profitability and credit context · JPM',
+      'Analyst view · JPM',
+      'JPM financial trajectory · actual and consensus',
+      'Financials and estimates · JPM',
+    ]))
+    expect(result.clips.filter(clip => clip.payload.kind === 'chart')).toHaveLength(2)
   })
 
   it('normalizes nested yfinance news and reports partial ticker failures', async () => {

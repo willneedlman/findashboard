@@ -16,7 +16,15 @@ from cachetools import TTLCache
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from ai_client import groq_complete, groq_chat, parse_json, MODEL_FAST, MODEL_SMART
-from routers.screener import ScreenRequest, run_screen
+from routers.screener import (
+    PRICE_CHANGE_PERIODS,
+    SCREENER_FIELDS,
+    SECTORS,
+    UNIVERSE_OPTIONS,
+    ScreenRequest,
+    resolve_company_mentions,
+    run_screen,
+)
 from disk_cache import disk_get, disk_set
 
 logger = logging.getLogger(__name__)
@@ -69,36 +77,356 @@ def dcf_assumptions(req: DCFAssumptionsRequest):
 # ── 2. Screener natural-language parser ───────────────────────────────────────
 
 class ScreenerParseRequest(BaseModel):
-    query: str
+    query: str = Field(min_length=2, max_length=1200)
 
-_SCREENER_SYSTEM = """Convert the stock screener query into structured filter rules.
+_SCREENER_FIELD_IDS = {item["id"] for item in SCREENER_FIELDS}
+_SCREENER_OPERATORS = {"gt", "gte", "lt", "lte", "between"}
+_SCREENER_UNIVERSES = {item["value"] for item in UNIVERSE_OPTIONS if item["value"]}
+_SCREENER_EXCHANGES = {"NASDAQ", "NYSE", "AMEX", "LSE", "XETRA", "TSE"}
+_SCREENER_REGIONS = {"North America", "Europe", "Asia-Pacific"}
+_SCREENER_SECTOR_ALIASES = {
+    "financials": "Financial Services",
+    "health care": "Healthcare",
+    "consumer staples": "Consumer Defensive",
+    "consumer discretionary": "Consumer Cyclical",
+    "materials": "Basic Materials",
+}
+_SCREENER_SECTOR_QUERY_PATTERNS = [
+    (r"\b(banks?|banking|financial services?|financials?|brokerage|insurance|fintech)\b", "Financial Services"),
+    (r"\b(technology|software|semiconductor|cybersecurity|cloud)\b", "Technology"),
+    (r"\b(healthcare|health care|biotech|pharma|pharmaceutical)\b", "Healthcare"),
+    (r"\b(consumer discretionary|consumer cyclical|retail|automotive)\b", "Consumer Cyclical"),
+    (r"\b(communication services?|media|telecom)\b", "Communication Services"),
+    (r"\b(industrial|industrials|aerospace|machinery)\b", "Industrials"),
+    (r"\b(consumer staples?|consumer defensive|food products?)\b", "Consumer Defensive"),
+    (r"\b(energy|oil|gas|exploration and production)\b", "Energy"),
+    (r"\b(utilit(?:y|ies)|electric power)\b", "Utilities"),
+    (r"\b(real estate|reit)\b", "Real Estate"),
+    (r"\b(basic materials?|materials|mining|chemicals)\b", "Basic Materials"),
+]
+
+
+def _screener_key(value) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
+
+
+_SCREENER_FIELD_ALIASES = {
+    _screener_key(alias): item["id"]
+    for item in SCREENER_FIELDS
+    for alias in (item["id"], item["label"])
+}
+_SCREENER_FIELD_ALIASES.update({
+    "pe": "peRatio",
+    "pb": "pbRatio",
+    "ps": "psRatio",
+    "evebitda": "evEbitda",
+})
+_SCREENER_OPERATOR_ALIASES = {
+    ">": "gt",
+    ">=": "gte",
+    "≥": "gte",
+    "<": "lt",
+    "<=": "lte",
+    "≤": "lte",
+    "range": "between",
+}
+_SCREENER_UNIVERSE_ALIASES = {
+    _screener_key(alias): item["value"]
+    for item in UNIVERSE_OPTIONS
+    if item["value"]
+    for alias in (item["value"], item["label"])
+}
+
+
+def _infer_screener_sector(value: str) -> str | None:
+    text = str(value or "").lower()
+    return next((sector for pattern, sector in _SCREENER_SECTOR_QUERY_PATTERNS if re.search(pattern, text)), None)
+
+
+def _infer_screener_region(value: str) -> str | None:
+    text = str(value or "").lower()
+    if re.search(r"\b(?:american|u\.?s\.?|united states|north american)\b", text):
+        return "North America"
+    if re.search(r"\b(?:european|europe)\b", text):
+        return "Europe"
+    if re.search(r"\b(?:asian|asia|asia[- ]pacific|apac)\b", text):
+        return "Asia-Pacific"
+    return None
+
+
+def _strip_schema_union(value) -> str:
+    """Free models sometimes copy schema prose such as "sp500 or null"."""
+    text = str(value or "").strip()
+    return re.sub(r"\s+or\s+null\s*$", "", text, flags=re.I).strip()
+
+
+def _infer_screener_symbol_group(value: str) -> list[str]:
+    text = str(value or "").lower()
+    if (
+        re.search(r"\b(?:major|large|largest|big|biggest)\b", text)
+        and re.search(r"\bbanks?\b", text)
+        and re.search(r"\b(?:american|u\.?s\.?|united states)\b", text)
+    ):
+        return ["JPM", "BAC", "WFC", "C", "USB", "PNC", "TFC", "BK"]
+    return []
+
+
+def _deterministic_screener_parse(query: str) -> dict | None:
+    symbols = _infer_screener_symbol_group(query)
+    if not symbols:
+        return None
+    return {
+        "valid": True,
+        "warning": None,
+        "accepted_filter_count": 0,
+        "dropped_filter_count": 0,
+        "include_symbols": symbols,
+        "filters": [],
+        "sector": "Financial Services",
+        "universe": "sp500",
+        "exchange": None,
+        "region": "North America",
+        "sort_by": "marketCap",
+        "sort_dir": "desc",
+        "sort_param": None,
+        "limit": len(symbols),
+        "explanation": "Major American banks ranked by market capitalization.",
+    }
+
+
+_SCREENER_SYSTEM = """Convert the user's stock-selection brief into the exact
+parameters supported by AlphaTape Stock Screener. Use only the fields and values
+listed below. Do not invent proxy criteria for a concept the screener cannot measure.
 
 Available field IDs and their units:
-marketCap (billions), peRatio (ratio), forwardPE (ratio), pbRatio (ratio),
-psRatio (ratio), evEbitda (ratio), grossMargin (%), operatingMargin (%),
-netMargin (%), roe (%), revenueGrowth (%), epsGrowth (%),
-debtEquity (ratio), currentRatio (ratio), dividendYield (%), beta (ratio),
-change52wHiPct (%, negative means below 52w high)
+price (USD), marketCap (USD billions), volume (shares), avgVolume (shares),
+beta (ratio), priceChange (%, requires param 1D|1W|1M|3M|6M|YTD|1Y),
+change52wHiPct (%, negative means below the 52-week high),
+peRatio, pbRatio, psRatio, evEbitda, pegRatio,
+revenueGrowth (%), epsGrowth (%), grossMargin (%), operatingMargin (%),
+netMargin (%), roe (%), roa (%), debtEquity, currentRatio, quickRatio,
+cashRatio, interestCoverage, roic (%), inventoryTurnover,
+receivablesTurnover, payablesTurnover, cashConversionCycle (days),
+dividendYield (%), payoutRatio (%), rsi14, smaDist50 (%), smaDist200 (%),
+vol30 (%).
 
 Operators: gt (>), gte (>=), lt (<), lte (<=), between (range, needs value2)
 
-Sectors: Technology, Healthcare, Financials, Consumer Cyclical, Communication Services,
-Industrials, Consumer Defensive, Energy, Utilities, Real Estate, Basic Materials
+Sectors: Technology, Healthcare, Financial Services, Consumer Cyclical,
+Communication Services, Industrials, Consumer Defensive, Energy, Utilities,
+Real Estate, Basic Materials.
+
+Universes: sp500, sp400, nasdaq100, xlk, xlf, xlv, xly, xlc, xli, xlp,
+xle, xlu, xlre, xlb, ftse100, dax40, nikkei225, or null for all bundled universes.
+Exchanges: NASDAQ, NYSE, AMEX, LSE, XETRA, TSE, or null.
+Regions: North America, Europe, Asia-Pacific, or null.
+
+Choose a useful sort from the available field IDs. "Best", "highest", "fastest",
+and "largest" normally sort descending. "Cheapest", "lowest", and "least volatile"
+normally sort ascending. Keep limit between 1 and 50. If the user does not specify
+a count, use 8.
 
 Respond ONLY with valid JSON (no markdown):
 {
   "filters": [
-    {"field": "fieldId", "operator": "gt", "value": 0.0, "value2": null}
+    {"field": "fieldId", "operator": "gt", "value": 0.0, "value2": null, "param": null}
   ],
-  "sector": "SectorName or null",
+  "sector": null,
+  "universe": null,
+  "exchange": null,
+  "region": null,
+  "sort_by": "fieldId",
+  "sort_dir": "asc or desc",
+  "sort_param": null,
+  "limit": 8,
+  "include_symbols": [],
   "explanation": "one sentence describing what this screen finds"
-}"""
+}
+Replace null only when the user supplies a compatible constraint. Never return
+the literal words "or null". Qualitative size words such as major, large, and
+largest should sort by marketCap descending, not create a nonnumeric filter."""
+
+
+def _screener_number(value, field: str):
+    raw = str(value).strip().replace(",", "").replace("$", "").replace("%", "")
+    match = re.fullmatch(r"([-+]?\d+(?:\.\d+)?)\s*([KMBT]?)", raw, re.I)
+    if not match:
+        return None
+    try:
+        number = float(match.group(1))
+    except (TypeError, ValueError):
+        return None
+    suffix = match.group(2).upper()
+    if suffix:
+        if field == "marketCap":
+            number *= {"K": 0.000001, "M": 0.001, "B": 1, "T": 1000}[suffix]
+        elif field in {"volume", "avgVolume"}:
+            number *= {"K": 1_000, "M": 1_000_000, "B": 1_000_000_000, "T": 1_000_000_000_000}[suffix]
+        else:
+            return None
+    return number if number == number and abs(number) != float("inf") else None
+
+
+def _normalize_screener_parse(value, query: str = "") -> dict:
+    data = value if isinstance(value, dict) else {}
+    issues = []
+    if not isinstance(value, dict):
+        issues.append("The AI did not return a structured screener plan.")
+    filters = []
+    raw_filters = data.get("filters", [])
+    if "filters" not in data:
+        issues.append("The AI did not return a filter list.")
+    if not isinstance(raw_filters, list):
+        raw_filters = []
+        issues.append("The AI returned an invalid filter list.")
+    include_raw = data.get("include_symbols", [])
+    include_text = " ".join(str(item) for item in include_raw) if isinstance(include_raw, list) else ""
+    include_symbols = resolve_company_mentions(f"{query} {include_text}")
+    inferred_group = _infer_screener_symbol_group(query)
+    include_symbols = list(dict.fromkeys([*include_symbols, *inferred_group]))[:8]
+    inferred_sector = _infer_screener_sector(query)
+    inferred_region = _infer_screener_region(query)
+    inferred_sort_by = "marketCap" if re.search(
+        r"\b(?:major|large|largest|big|biggest|mega[- ]?cap)\b",
+        query,
+        re.I,
+    ) else None
+    dropped_filters = 0
+    for raw_filter in raw_filters[:10]:
+        if not isinstance(raw_filter, dict):
+            dropped_filters += 1
+            continue
+        field = _SCREENER_FIELD_ALIASES.get(_screener_key(raw_filter.get("field")))
+        operator_raw = str(raw_filter.get("operator", "")).strip().lower()
+        operator = _SCREENER_OPERATOR_ALIASES.get(operator_raw, operator_raw)
+        number = _screener_number(raw_filter.get("value"), field or "")
+        if field not in _SCREENER_FIELD_IDS or operator not in _SCREENER_OPERATORS or number is None:
+            raw_field_key = _screener_key(raw_filter.get("field"))
+            raw_value = str(raw_filter.get("value") or "")
+            if raw_field_key in {"sector", "industry"}:
+                repaired_sector = _infer_screener_sector(f"{raw_value} {query}")
+                if repaired_sector:
+                    inferred_sector = repaired_sector
+                    continue
+            if raw_field_key in {"country", "geography", "region"}:
+                repaired_region = _infer_screener_region(f"{raw_value} {query}")
+                if repaired_region:
+                    inferred_region = repaired_region
+                    continue
+            if raw_field_key == "marketcap" and re.search(
+                r"\b(?:major|large|largest|big|biggest|mega[- ]?cap)\b",
+                f"{raw_value} {query}",
+                re.I,
+            ):
+                inferred_sort_by = "marketCap"
+                continue
+            if raw_field_key in {"company", "companyname", "name", "symbol", "ticker"} and include_symbols:
+                continue
+            dropped_filters += 1
+            continue
+        value2 = _screener_number(raw_filter.get("value2"), field) if operator == "between" else None
+        if operator == "between" and value2 is None:
+            dropped_filters += 1
+            continue
+        param = str(raw_filter.get("param", "")).upper()
+        filters.append({
+            "field": field,
+            "operator": operator,
+            "value": number,
+            "value2": value2,
+            "param": param if field == "priceChange" and param in PRICE_CHANGE_PERIODS else None,
+        })
+    if len(raw_filters) > 10:
+        dropped_filters += len(raw_filters) - 10
+    if dropped_filters:
+        issues.append(
+            f"{dropped_filters} criterion could not be mapped to a supported screener field."
+            if dropped_filters == 1
+            else f"{dropped_filters} criteria could not be mapped to supported screener fields."
+        )
+
+    sector_raw = _strip_schema_union(data.get("sector"))
+    sector = _SCREENER_SECTOR_ALIASES.get(sector_raw.lower(), sector_raw)
+    if sector not in SECTORS:
+        if sector_raw and sector_raw.lower() not in {"none", "null", "all"} and not inferred_sector:
+            issues.append(f'Sector "{sector_raw}" is not supported.')
+        sector = inferred_sector
+
+    universe_raw = _strip_schema_union(data.get("universe"))
+    universe = _SCREENER_UNIVERSE_ALIASES.get(_screener_key(universe_raw))
+    if universe not in _SCREENER_UNIVERSES:
+        if universe_raw and universe_raw.lower() not in {"none", "null", "all", "all bundled universes"}:
+            issues.append(f'Universe "{universe_raw}" is not supported.')
+        universe = None
+
+    exchange_raw = _strip_schema_union(data.get("exchange"))
+    exchange = exchange_raw.upper()
+    if exchange not in _SCREENER_EXCHANGES:
+        mentioned_exchanges = {
+            item
+            for item in _SCREENER_EXCHANGES
+            if re.search(rf"\b{re.escape(item)}\b", exchange, re.I)
+        }
+        if exchange_raw and exchange_raw.lower() not in {"none", "null", "all"} and len(mentioned_exchanges) < 2:
+            issues.append(f'Exchange "{exchange_raw}" is not supported.')
+        exchange = None
+
+    region_raw = _strip_schema_union(data.get("region"))
+    region = next((item for item in _SCREENER_REGIONS if item.lower() == region_raw.lower()), None)
+    if region is None and region_raw and region_raw.lower() not in {"none", "null", "all"}:
+        issues.append(f'Region "{region_raw}" is not supported.')
+    if region is None:
+        region = inferred_region
+
+    sort_raw = str(data.get("sort_by") or inferred_sort_by or "marketCap").strip()
+    if not data.get("sort_by"):
+        issues.append("The AI did not choose a supported sort field.")
+    sort_by = _SCREENER_FIELD_ALIASES.get(_screener_key(sort_raw))
+    if sort_by not in _SCREENER_FIELD_IDS:
+        issues.append(f'Sort field "{sort_raw}" is not supported.')
+        sort_by = "marketCap"
+    sort_dir = str(data.get("sort_dir") or "desc").strip().lower()
+    if sort_dir not in {"asc", "desc"}:
+        sort_dir = "desc"
+    sort_param_raw = str(data.get("sort_param") or "").upper()
+    sort_param = sort_param_raw if sort_by == "priceChange" and sort_param_raw in PRICE_CHANGE_PERIODS else None
+
+    try:
+        limit = int(data.get("limit", 8))
+    except (TypeError, ValueError):
+        limit = 8
+
+    explanation = re.sub(r"\s+", " ", str(data.get("explanation") or "")).strip()
+    if not explanation:
+        issues.append("The AI did not explain the interpreted screen.")
+    warning = " ".join(issues)
+    return {
+        "valid": not issues,
+        "warning": warning or None,
+        "accepted_filter_count": len(filters),
+        "dropped_filter_count": dropped_filters,
+        "include_symbols": include_symbols,
+        "filters": filters,
+        "sector": sector,
+        "universe": universe,
+        "exchange": exchange,
+        "region": region,
+        "sort_by": sort_by,
+        "sort_dir": sort_dir,
+        "sort_param": sort_param,
+        "limit": max(1, min(50, limit)),
+        "explanation": explanation or "Screen the selected universe using the interpreted criteria.",
+    }
+
 
 @router.post("/screener-parse")
 def screener_parse(req: ScreenerParseRequest):
+    deterministic = _deterministic_screener_parse(req.query)
+    if deterministic:
+        return deterministic
     raw = groq_complete(f'Query: "{req.query}"', max_tokens=400,
                         model=MODEL_FAST, system=_SCREENER_SYSTEM)
-    return parse_json(raw)
+    return _normalize_screener_parse(parse_json(raw), req.query)
 
 
 # ── 4. Corporate hub brief ────────────────────────────────────────────────────
@@ -1614,7 +1942,8 @@ class ReportGenRequest(BaseModel):
     timeframe: str = ""
     purpose: str = ""
     goal: str = ""
-    # Optional explicit subject from the client (wins over text heuristics).
+    # Optional subject hint for API clients. Clear company/ticker language in the
+    # objective remains authoritative so stale UI state cannot retarget a report.
     subjectTicker: str = ""
     # 'short' | 'medium' | 'long' — how much depth the note should have. Unknown/missing → 'medium'.
     length: str = "medium"
@@ -1687,6 +2016,7 @@ _REPORT_RANGE_GUIDANCE = """The Goal is a price call on ONE equity. Return a dol
 _REPORT_OPEN_GUIDANCE = """The Goal is a comparison, screen, ranking, thematic read, portfolio question, or other non-range task.
 - keyResult.value is a direct headline verdict under 40 characters, such as "Buy NVDA", "NVDA over AAPL", or "Reduce Tech Risk". Never return a bare ticker.
 - stance.baseCase is only the favored ticker/name or a 2–3 word tag. Put reasoning in stance.thesis.
+- For a single-company equity research note that did not explicitly request a price target, give a Buy, Hold, Avoid, Watch, or equivalent research verdict. Do not manufacture a fair-value range from volatility or an implied move.
 - For multiple subjects, build one side-by-side argument organized by comparative theme. Do not create mirrored sections for each subject.
 - Include every decision-relevant subject in the shared comparison and reach a verdict even when evidence conflicts.
 - executiveSummary and conclusion must state the verdict and the two or three decisive drivers."""
@@ -1708,6 +2038,21 @@ _REPORT_SCHEMA_BY_MODE = {
 
 _SECTION_DESIGN_INTENTS = {"visual", "narrative", "balanced", "compact"}
 
+_RESEARCH_NOTE_EDITORIAL_STANDARD = """
+════════════════════════════════════════
+EQUITY-RESEARCH EDITORIAL STANDARD
+════════════════════════════════════════
+Write for an investor deciding what to do, not for a reader learning the topic.
+1. The headline states the conclusion and the tension in plain English. Never use a generic title such as "Valuation Analysis" or "Company Overview".
+2. Open with the call, what changed, and the two facts that matter most. Put background later.
+3. Section headings are conclusions, not topics. Use "Margins Hold Despite Slower Growth", not "Margins".
+4. Start every section with its takeaway. Then explain the mechanism, the evidence, and the caveat. Use short paragraphs and remove scene-setting filler.
+5. Label figures with their period and unit. Distinguish actual results, estimates, consensus, targets, and spot price. State the valuation method, forecast year, and multiple whenever the clips provide them.
+6. Use keyFigures as the compact evidence rail. Do not repeat every keyFigure in the adjacent prose. Prose explains why the numbers matter.
+7. Put valuation, catalysts, and risks into separate decision blocks when the evidence supports them. For a price call, make the base case and material upside/downside paths explicit without inventing scenarios.
+8. End with an action and the evidence that would make the call stronger or weaker.
+"""
+
 _REPORT_SYSTEM = """You are a senior investment analyst writing a formal research note for a professional desk. Write directly, support claims with supplied evidence, and answer the Goal.
 
 You receive: Purpose, Goal, Timeframe (lookback and/or lookforward), DATA CLIPS (each with id, source tool, title, optional user note, data summary), valuationContext (live spot, optional day change, optional DCF, signalDigest of directional cues extracted from clips, reportMode, and reportLength), and optionally an `outline`.
@@ -1724,6 +2069,8 @@ Cut anything that does not advance the thesis, regardless of the length target.
 MODE
 ════════════════════════════════════════
 {{MODE_GUIDANCE}}
+
+{{EDITORIAL_STANDARD}}
 
 ════════════════════════════════════════
 INTEGRATE EVERY SUPPLIED CLIP FAMILY (both modes)
@@ -1817,6 +2164,7 @@ def _report_system_prompt(mode: str, length_key: str, must_include: str) -> str:
         .replace("{{MODE_GUIDANCE}}", mode_guidance)
         .replace("{{LENGTH_GUIDANCE}}", _LENGTH_SPEC[length_key]["guidance"])
         .replace("{{MUST_INCLUDE_SECTION}}", must_include)
+        .replace("{{EDITORIAL_STANDARD}}", _RESEARCH_NOTE_EDITORIAL_STANDARD)
         .replace("{{BASE_CASE_SCHEMA}}", schema["baseCase"])
         .replace("{{KEY_RESULT_LABEL_SCHEMA}}", schema["label"])
         .replace("{{KEY_RESULT_VALUE_SCHEMA}}", schema["value"])
@@ -1856,7 +2204,7 @@ _TITLE_ACRONYMS = {
     "dcf", "wacc", "fcf", "peg", "roe", "roa", "roi", "ev", "eps", "cagr", "yoy", "ytd",
     "qtd", "iv", "gex", "kpi", "ai", "us", "uk", "eu", "fx", "pe", "p/e", "p/s", "p/b",
     "p/fcf", "ev/ebitda", "ebitda", "ebit", "nopat", "capex", "d&a", "wc", "ipo", "etf",
-    "gdp", "cpi", "fed", "sec", "api", "pdf", "usd",
+    "gdp", "cpi", "fed", "sec", "api", "pdf", "usd", "m&a",
 }
 
 def _title_case(s: str | None, max_len: int = 80) -> str:
@@ -2320,6 +2668,11 @@ def _score_subjects(req: ReportGenRequest) -> dict[str, int]:
     for sym in dcf:
         bump(sym, 60, clip_blob)
 
+    # Subject-owned research clips are a stronger fallback than guessing a company
+    # from generic prose, but explicit objective language still wins.
+    for sym, count in _subject_evidence_tickers(req.clips).items():
+        bump(sym, min(70, 45 + (count - 1) * 5), clip_blob)
+
     if not scores or max(scores.values()) < 40:
         for source, w in ((goal, 55), (purpose, 35), (name, 20)):
             if not source:
@@ -2338,14 +2691,23 @@ def _score_subjects(req: ReportGenRequest) -> dict[str, int]:
 
     return scores
 
-def _subject_ticker(req: ReportGenRequest) -> str | None:
-    """Resolve subject equity — scored so 'from NOW' loses to NVDA."""
-    # Explicit client override wins.
+def _subject_scores(req: ReportGenRequest) -> dict[str, int]:
+    """Combine evidence/text scores with an optional client hint.
+
+    A hint is only used when the request has no high-confidence subject already.
+    This prevents a stale screener symbol from overriding "JPMorgan" in the goal.
+    """
+    scores = _score_subjects(req)
     explicit = (getattr(req, "subjectTicker", None) or "").strip().upper()
     if explicit and _is_plausible_ticker(explicit):
-        return explicit
+        best_score = max(scores.values()) if scores else 0
+        if not scores or best_score < 80 or scores.get(explicit, -1) >= best_score:
+            scores[explicit] = scores.get(explicit, 0) + 90
+    return scores
 
-    scores = _score_subjects(req)
+def _subject_ticker(req: ReportGenRequest) -> str | None:
+    """Resolve subject equity — scored so 'from NOW' loses to NVDA."""
+    scores = _subject_scores(req)
     if not scores:
         return None
 
@@ -2363,12 +2725,9 @@ def _ranked_subjects(req: ReportGenRequest, limit: int = 4) -> list[str]:
     """All plausible subjects above the confidence floor, ranked — used to
     detect comparison-style reports (2+ named tickers) so the report doesn't
     collapse onto whichever one ticker _subject_ticker would have picked."""
-    explicit = (getattr(req, "subjectTicker", None) or "").strip().upper()
-    scores = _score_subjects(req)
+    scores = _subject_scores(req)
     ranked = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))
     out: list[str] = []
-    if explicit and _is_plausible_ticker(explicit):
-        out.append(explicit)
     for sym, sc in ranked:
         if len(out) >= limit:
             break
@@ -2387,19 +2746,22 @@ _COMPARISON_RE = re.compile(
     r"\bpair(?:s)?\s*trade\b|\bside[- ]by[- ]side\b|\bhead[- ]to[- ]head\b",
     re.I,
 )
+_PRICE_RANGE_GOAL_RE = re.compile(
+    r"\b(?:fair|intrinsic)\s+value\b|\bprice\s+(?:target|range|forecast)\b|"
+    r"\btarget\s+price\b|\bvaluation\s+range\b|\bupside\s+(?:case|potential)\b|"
+    r"\bdownside\s+(?:case|risk)\b|\bwhere\s+(?:can|could|will)\s+(?:the\s+)?(?:stock|shares?|price)\b",
+    re.I,
+)
 
 def _report_mode(req: ReportGenRequest, subjects: list[str]) -> str:
-    """'range': legacy single-ticker dollar-range verdict (price target, fair
-    value, near-term range, outlook). 'open': keyResult takes whatever form
-    directly answers the Goal — used for comparisons (2+ named subjects) and
-    any other goal that explicit comparison language signals is not a single-
-    ticker price call."""
+    """Use a range only when a one-company goal explicitly asks for valuation or
+    a price target. Generic equity research receives an actionable open verdict."""
     if len(subjects) != 1:
         return "open"
     text = f"{req.goal}\n{req.purpose}".strip()
     if text and _COMPARISON_RE.search(text):
         return "open"
-    return "range"
+    return "range" if text and _PRICE_RANGE_GOAL_RE.search(text) else "open"
 
 def _subject_dcf_present(clips: list[ReportClipIn], subject: str | None) -> bool:
     if not subject:
@@ -2818,14 +3180,46 @@ def _chart_signature(chart: dict) -> tuple:
 
 _TICKER_SUFFIX_RE = re.compile(r"[·•]\s*([A-Za-z]{1,6})\s*$")
 _TICKER_PREFIX_RE = re.compile(r"^([A-Za-z]{1,6})\s*[·•]")
+_TICKER_SUBJECT_TITLE_RE = re.compile(
+    r"^([A-Za-z]{1,6})\s+(?:company\s+snapshot|financial\s+trajectory|"
+    r"revenue\s+activity\s+history|price\s+(?:history|and\s+drawdown))\b",
+    re.I,
+)
+_SUBJECT_EVIDENCE_TITLE_RE = re.compile(
+    r"\b(?:company\s+snapshot|financial\s+trajectory|financials\s+and\s+estimates|"
+    r"revenue\s+activity\s+history|analyst\s+view|earnings\s+setup|"
+    r"peer\s+valuation|dcf\s+verdict|model\s+assumptions|"
+    r"price\s+(?:history|and\s+drawdown))\b",
+    re.I,
+)
 _NUM_RE = re.compile(r"([-−]?)\s*\$?\s*([\d,]+(?:\.\d+)?)")
 
 def _clip_ticker(clip: "ReportClipIn") -> str | None:
     """Extract the subject ticker from a clip title in either position the app
     uses: "DCF Verdict · NVDA" (suffix) or "NVDA · Profitability" (prefix)."""
     title = clip.title or ""
-    m = _TICKER_SUFFIX_RE.search(title) or _TICKER_PREFIX_RE.match(title)
+    m = (
+        _TICKER_SUFFIX_RE.search(title)
+        or _TICKER_PREFIX_RE.match(title)
+        or _TICKER_SUBJECT_TITLE_RE.match(title)
+    )
     return m.group(1).upper() if m else None
+
+def _subject_evidence_tickers(clips: list[ReportClipIn]) -> dict[str, int]:
+    """Count high-confidence, subject-owned evidence clips by ticker.
+
+    Broad market, news, and peer rows are deliberately excluded: a peer appearing
+    inside a comparison table must never become the report subject.
+    """
+    counts: dict[str, int] = {}
+    for clip in clips:
+        if not _SUBJECT_EVIDENCE_TITLE_RE.search(clip.title or ""):
+            continue
+        ticker = _clip_ticker(clip)
+        if not ticker or not _is_plausible_ticker(ticker):
+            continue
+        counts[ticker] = counts.get(ticker, 0) + 1
+    return counts
 
 def _first_number(s: str) -> float | None:
     """First signed number in a KPI value string, tolerating $, %, unicode minus
@@ -3386,6 +3780,31 @@ def _auto_must_include(clips: list[ReportClipIn]) -> list[str]:
             "mix (where its revenue comes from and how concentrated it is). You write the "
             "analysis; a chart is added automatically, so do not build one yourself."
         )
+    clip_titles = " | ".join(c.title or "" for c in clips)
+    if re.search(r"\bfinancial trajectory\b|\bfinancials and estimates\b", clip_titles, re.I):
+        out.append(
+            "Write a dedicated financial-trajectory section that separates reported actuals from "
+            "forward consensus estimates, identifies the earnings or revenue inflection, and explains "
+            "what must happen operationally for the thesis to hold."
+        )
+    if re.search(r"\brevenue activity history\b|\bbank profitability and credit context\b", clip_titles, re.I):
+        out.append(
+            "This is bank research. Write a dedicated earnings-quality section covering the supplied "
+            "net-interest-income and fee/trading mix, profitability, net interest margin, and credit "
+            "context. Distinguish issuer evidence from FDIC industry context. If CET1 or consolidated "
+            "charge-off data is absent, identify that gap instead of implying it was reviewed."
+        )
+    if re.search(r"\bpeer valuation\b|\banalyst view\b|\bconsensus upside\b", clip_titles, re.I):
+        out.append(
+            "Write a dedicated valuation section. State the subject's relevant multiple or analyst "
+            "target range, compare it with the peer evidence, and explain whether the premium or "
+            "discount is justified. Do not describe an options-implied move as fair value."
+        )
+    if any(re.search(r"\b(news|catalyst|earnings)\b", f"{c.sourceTab} {c.title}", re.I) for c in clips):
+        out.append(
+            "Separate catalysts from risks. Name the dated or observable catalyst evidence available "
+            "in the clips and state which monitoring signal would weaken the thesis."
+        )
     return out
 
 def _inject_mechanical_charts(sections: list[dict], clips: list[ReportClipIn]) -> None:
@@ -3506,18 +3925,51 @@ def _default_section_design(profile: dict) -> str:
     return "compact"
 
 
+def _section_editorial_role(section: dict) -> str:
+    text = " ".join([
+        str(section.get("heading", "")),
+        str(section.get("analysis", ""))[:320],
+    ]).lower()
+    if re.search(r"\b(risk|downside|bear case|what could go wrong|uncertaint)", text):
+        return "risk"
+    if re.search(r"\b(valuation|fair value|price target|multiple|upside|discount|premium|risk.?reward)", text):
+        return "valuation"
+    if re.search(r"\b(catalyst|milestone|event|calendar|trigger|watch item)", text):
+        return "catalyst"
+    if re.search(r"\b(earnings|revenue|margin|cash flow|financial|forecast|estimate|growth)", text):
+        return "financials"
+    if re.search(r"\b(thesis|our call|investment view|bottom line|outlook)", text):
+        return "thesis"
+    return "context"
+
+
+def _can_share_editorial_row(profile: dict, layout: str, role: str, index: int) -> bool:
+    if index == 0 or profile["dense"] or profile["wordCount"] > 105 or profile["figureCount"] > 3:
+        return False
+    if layout == "full-width" and profile["hasVisual"]:
+        return False
+    if layout in {"evidence-band", "analysis-first"} and profile["wordCount"] > 68:
+        return False
+    return role in {"risk", "valuation", "catalyst", "context", "financials"}
+
+
 def _apply_section_layout_architecture(
     sections: list[dict],
     clips: list[ReportClipIn],
 ) -> None:
-    """Convert simple editorial intent into renderer-safe report compositions."""
+    """Convert simple editorial intent into renderer-safe research-note compositions."""
     clips_by_id = {clip.id: clip for clip in clips}
     side_index = 0
     rail_index = 0
     last_layout = ""
+    profiles: list[dict] = []
+    roles: list[str] = []
 
     for section in sections:
         profile = _section_evidence_profile(section, clips_by_id.get(section.get("clipId", "")))
+        role = _section_editorial_role(section)
+        profiles.append(profile)
+        roles.append(role)
         intent = section.pop("design", None) or _default_section_design(profile)
         figures = profile["figureCount"]
 
@@ -3525,25 +3977,23 @@ def _apply_section_layout_architecture(
             layout = "full-width"
         elif not profile["hasVisual"]:
             layout = "metric-rail" if figures >= 2 else "full-width"
+        elif role == "valuation" and figures >= 2:
+            layout = "evidence-band"
+        elif role in {"risk", "catalyst"}:
+            layout = "wrap-right" if side_index % 2 == 0 else "wrap-left"
+            side_index += 1
+        elif role == "financials" and figures >= 3:
+            layout = "metric-rail-left" if rail_index % 2 == 0 else "metric-rail"
+            rail_index += 1
         elif intent == "visual":
-            if figures >= 2:
-                layout = "evidence-band"
-            else:
-                layout = "visual-left" if side_index % 2 == 0 else "visual-right"
-                side_index += 1
+            layout = "visual-left" if side_index % 2 == 0 else "visual-right"
+            side_index += 1
         elif intent == "narrative":
-            if figures >= 2:
-                layout = "analysis-first"
-            else:
-                layout = "wrap-right" if side_index % 2 == 0 else "wrap-left"
-                side_index += 1
+            layout = "wrap-right" if side_index % 2 == 0 else "wrap-left"
+            side_index += 1
         elif intent == "compact":
-            if figures >= 2:
-                layout = "metric-rail" if rail_index % 2 == 0 else "metric-rail-left"
-                rail_index += 1
-            else:
-                layout = "wrap-left" if side_index % 2 == 0 else "wrap-right"
-                side_index += 1
+            layout = "wrap-left" if side_index % 2 == 0 else "wrap-right"
+            side_index += 1
         elif figures >= 3:
             layout = "metric-rail-left" if rail_index % 2 == 0 else "metric-rail"
             rail_index += 1
@@ -3565,6 +4015,30 @@ def _apply_section_layout_architecture(
             layout = mirrors.get(layout, layout)
         section["layout"] = layout
         last_layout = layout
+
+    # Research notes use paired support blocks for valuation, catalysts, risks,
+    # and compact financial evidence. Mark only complete adjacent pairs so the
+    # renderer never leaves an unexplained empty half-row.
+    for section in sections:
+        section.pop("placement", None)
+    index = 1
+    while index < len(sections) - 1:
+        first = sections[index]
+        second = sections[index + 1]
+        if (
+            _can_share_editorial_row(profiles[index], str(first.get("layout", "")), roles[index], index)
+            and _can_share_editorial_row(
+                profiles[index + 1],
+                str(second.get("layout", "")),
+                roles[index + 1],
+                index + 1,
+            )
+        ):
+            first["placement"] = "half"
+            second["placement"] = "half"
+            index += 2
+        else:
+            index += 1
 
 
 def _select_report_appendix_clip_ids(raw_ids, clips: list[ReportClipIn], used: set[str]) -> list[str]:
@@ -3593,13 +4067,15 @@ _REPORT_OUTLINE_SYSTEM = """You are an equity-research editor planning a report 
 Rules:
 - State a single decisive thesis sentence that directly answers the goal.
 - Follow reportLength: short uses 1 to 2 sections; medium normally uses 3 to 6 and may expand to 8 when distinct decision-critical evidence requires it; long uses 6 to 12.
-- Page count is not a writing constraint. The renderer paginates automatically. Never cut material evidence merely to target three pages, and never pad a report to reach a section quota.
+- Target a compact two-to-three-page decision note for short and medium reports. Continue beyond three pages only when material evidence cannot be presented clearly within that target. Never pad a report or cut decision-critical evidence merely to hit a page count.
 - Each section must advance the thesis with distinct evidence, ordered so the argument builds top-down.
+- Use this order when supported: what changed and the call, operating or financial drivers, valuation, catalysts, then risks. Background belongs last and should be omitted when the reader can understand the call without it.
 - Require every section and chart to directly advance the central investment thesis. Omit secondary or low-relevance analyses (such as routine DCF sensitivity) unless they provide a critical decision-making insight for the central thesis.
-- Use Title Case (proper capitalization) for all section headers (e.g., "Valuation Gap & Multiple Compression", "Revenue Trajectory & Margins").
+- Every heading must state a finding or tension, not merely name a topic. Use "Margins Hold Despite Slower Growth", not "Revenue Trajectory & Margins".
 - ONE section per comparative theme. In a multi-subject comparison every section compares all subjects together (e.g. a single "Valuation Gap" section covering both names). NEVER split a theme into one section per subject.
 - Each section names the single most relevant chart family, or "none".
 - Use ONLY evidence present in the clips. Do not invent sections the data cannot support.
+- The input may contain coverageRequirements. Treat each as non-negotiable and create enough distinct sections to satisfy them without repeating a theme.
 
 Respond ONLY with JSON (no markdown, no code fences):
 {
@@ -3861,12 +4337,105 @@ def _build_report_slot_ctx(clips: list[ReportClipIn], subject: str | None, name:
     return SlotContext(fields=slot_fields)
 
 
+_NUMERIC_CLAIM_RE = re.compile(
+    r"(?<![A-Za-z])(?:[$+\-]\s*)?\d[\d,]*(?:\.\d+)?(?:\s*(?:%|x|×|bps?))?(?![A-Za-z])",
+    re.I,
+)
+
+
+def _numeric_value(token: str) -> float | None:
+    match = re.search(r"[-+]?\d[\d,]*(?:\.\d+)?", token.replace("$", "").replace(" ", ""))
+    if not match:
+        return None
+    try:
+        return float(match.group(0).replace(",", ""))
+    except ValueError:
+        return None
+
+
+def _supported_report_numbers(clips: list[ReportClipIn], slot_ctx) -> list[float]:
+    source = "\n".join(
+        " ".join([clip.title, clip.userDescription, clip.dataSummary])
+        for clip in clips
+    )
+    values = [
+        value
+        for token in _NUMERIC_CLAIM_RE.findall(source)
+        if (value := _numeric_value(token)) is not None
+    ]
+    for raw in getattr(slot_ctx, "fields", {}).values():
+        if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+            values.append(float(raw))
+    return values
+
+
+def _unsupported_numeric_claims(text: str, supported: list[float]) -> list[str]:
+    unsupported: list[str] = []
+    for match in _NUMERIC_CLAIM_RE.finditer(text):
+        token = match.group(0)
+        value = _numeric_value(token)
+        if value is None:
+            continue
+        following = text[match.end(): match.end() + 16]
+        if 1900 <= abs(value) <= 2100 or re.match(r"\s*(?:days?|weeks?|months?|years?|quarters?)\b", following, re.I):
+            continue
+        has_financial_unit = bool(re.search(r"[$%×]|\bx\b|\bbps?\b", token, re.I))
+        if not has_financial_unit and abs(value) < 13:
+            continue
+        tolerance = max(0.11, abs(value) * 0.015)
+        if any(abs(value - candidate) <= max(tolerance, abs(candidate) * 0.015) for candidate in supported):
+            continue
+        unsupported.append(token.strip())
+    return unsupported
+
+
+def _remove_unverified_numeric_sentences(text: str, clips: list[ReportClipIn], slot_ctx) -> str:
+    if not text:
+        return text
+    supported = _supported_report_numbers(clips, slot_ctx)
+    blocks = re.split(r"(\n+)", text)
+    cleaned: list[str] = []
+    removed = False
+    for block in blocks:
+        if not block or block.startswith("\n"):
+            cleaned.append(block)
+            continue
+        sentences = re.split(r"(?<=[.!?])\s+", block)
+        kept = []
+        for sentence in sentences:
+            if _unsupported_numeric_claims(sentence, supported):
+                removed = True
+                continue
+            kept.append(sentence)
+        cleaned.append(" ".join(kept))
+    result = re.sub(r"\n{3,}", "\n\n", "".join(cleaned)).strip()
+    if result:
+        return result
+    if removed:
+        return "The supplied clips do not verify the numerical comparison generated for this section."
+    return text
+
+
+def _filter_unverified_key_figures(sections: list[dict], clips: list[ReportClipIn], slot_ctx) -> None:
+    supported = _supported_report_numbers(clips, slot_ctx)
+    for section in sections:
+        section["keyFigures"] = [
+            figure
+            for figure in section.get("keyFigures", [])
+            if not _unsupported_numeric_claims(str(figure.get("value", "")), supported)
+        ]
+
+
 def _apply_report_linters(text: str, clips: list[ReportClipIn], slot_ctx) -> str:
     """The full deterministic prose pass: comparative-direction fixes, upside
-    vocabulary fixes, then slot resolution. Applied to every AI-written block in
-    both the initial draft and any later revision."""
+    vocabulary fixes, slot resolution, then numeric provenance enforcement.
+    Applied to every AI-written block in both the initial draft and later revision."""
     from routers.slot_engine import resolve_slots
-    return resolve_slots(_fix_upside_vocabulary_reversals(_fix_comparative_reversals(text, clips)), slot_ctx)
+    resolved = resolve_slots(
+        _fix_upside_vocabulary_reversals(_fix_comparative_reversals(text, clips)),
+        slot_ctx,
+    )
+    return _remove_unverified_numeric_sentences(resolved, clips, slot_ctx)
 
 
 @router.post("/report")
@@ -3877,6 +4446,17 @@ def generate_report(req: ReportGenRequest):
 
     subject = _subject_ticker(req)
     subjects_ranked = _ranked_subjects(req)
+    evidence_subjects = _subject_evidence_tickers(req.clips)
+    if subject and evidence_subjects and subject not in evidence_subjects:
+        evidence_subject = sorted(
+            evidence_subjects.items(),
+            key=lambda item: (-item[1], item[0]),
+        )[0][0]
+        raise HTTPException(
+            409,
+            f"Report objective resolves to {subject}, but the collected company evidence is for "
+            f"{evidence_subject}. Re-run AlphaTape research for {subject} before generating.",
+        )
     mode = _report_mode(req, subjects_ranked)
     length_key = _length_key(req.length)
     dcf_names = sorted(_dcf_tickers_from_clips(req.clips))
@@ -3958,12 +4538,15 @@ def generate_report(req: ReportGenRequest):
     ]
     goal_text = req.goal or "(not specified)"
     purpose_text = req.purpose or "(not specified)"
+    coverage_requirements = _auto_must_include(req.clips)
 
     # STEP 1 — Analytical structure: draft a thesis-first outline before writing.
     outline = _generate_outline({
         "goal": goal_text, "purpose": purpose_text,
         "reportLength": length_key,
-        "valuationContext": valuation_context, "clips": clip_payload,
+        "valuationContext": valuation_context,
+        "coverageRequirements": coverage_requirements,
+        "clips": clip_payload,
     })
 
     # STEP 2 — Draft: write the full report, following the outline when present.
@@ -3979,7 +4562,7 @@ def generate_report(req: ReportGenRequest):
     sys_prompt = _report_system_prompt(
         mode,
         length_key,
-        _must_include_section(req.mustInclude, _auto_must_include(req.clips)),
+        _must_include_section(req.mustInclude, coverage_requirements),
     )
     messages = [
         {"role": "system", "content": sys_prompt},
@@ -4047,9 +4630,14 @@ def generate_report(req: ReportGenRequest):
 
     executive_summary = _apply_report_linters(executive_summary, req.clips, slot_ctx)
     conclusion = _apply_report_linters(conclusion, req.clips, slot_ctx)
+    if stance and stance.get("thesis"):
+        stance["thesis"] = _apply_report_linters(str(stance["thesis"]), req.clips, slot_ctx)
+    if key_result.get("context"):
+        key_result["context"] = _apply_report_linters(str(key_result["context"]), req.clips, slot_ctx)
     for s in sections:
         if s.get("analysis"):
             s["analysis"] = _apply_report_linters(s["analysis"], req.clips, slot_ctx)
+    _filter_unverified_key_figures(sections, req.clips, slot_ctx)
 
     _ensure_risks_section(sections, subject, valuation_context)
     _apply_section_layout_architecture(sections, req.clips)

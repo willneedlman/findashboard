@@ -32,4 +32,26 @@ describe('selectReportAppendixData', () => {
     expect(selectReportAppendixData(['table', 'text', 'kpi', 'table'], clips).map(item => item.id))
       .toEqual(['kpi', 'table', 'text'])
   })
+
+  it('omits structurally empty tables that only contain orphaned numeric values', () => {
+    const emptyActivity = clip('empty', 'table')
+    emptyActivity.payload = {
+      kind: 'table',
+      columns: ['Date', 'Type', 'Counterparty', 'Value'],
+      rows: [
+        ['—', '—', '—', 3000],
+        ['—', '—', '—', 1600],
+        ['—', '—', '—', 625],
+      ],
+    }
+    const holders = clip('holders', 'table')
+    holders.payload = {
+      kind: 'table',
+      columns: ['Holder', 'Shares', '% Out'],
+      rows: [['BlackRock', 4_065_810, 9.46]],
+    }
+
+    expect(selectReportAppendixData(['empty', 'holders'], [emptyActivity, holders]).map(item => item.id))
+      .toEqual(['holders'])
+  })
 })

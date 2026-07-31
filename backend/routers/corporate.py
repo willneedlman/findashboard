@@ -176,14 +176,23 @@ PEER_GROUPS = {
     "TECH": ["AAPL", "MSFT", "NVDA", "AVGO", "AMD", "INTC", "QCOM"],
     "COMM": ["GOOGL", "META", "NFLX", "TMUS", "DIS", "CHTR"],
     "CONS": ["AMZN", "TSLA", "WMT", "HD", "COST", "TGT"],
-    "FIN":  ["JPM", "BAC", "MS", "GS", "WFC", "C"],
+    "MONEY_CENTER_BANKS": ["JPM", "BAC", "WFC", "C", "USB", "PNC"],
+    "REGIONAL_BANKS": ["HBAN", "KEY", "RF", "FITB", "CFG", "MTB", "PNC", "USB"],
+    "FIN": ["JPM", "BAC", "MS", "GS", "WFC", "C"],
 }
 
 def _get_peers_for_ticker(ticker: str, sector: str) -> list:
-    """Comparable companies for relative comps. Prefers FMP's curated, size-ranked
-    peer list (real business comps, not just same-sector); falls back to broad
-    hardcoded groups only when FMP is unavailable or returns nothing."""
+    """Comparable companies for relative comps.
+
+    Curated cohorts win for businesses where broad vendor classifications are
+    predictably noisy (especially banks). Other names use FMP/Finnhub peers and
+    the broad sector groups remain the final fallback.
+    """
     sym = ticker.strip().upper()
+
+    for cohort in ("MONEY_CENTER_BANKS", "REGIONAL_BANKS"):
+        if sym in PEER_GROUPS[cohort]:
+            return [peer for peer in PEER_GROUPS[cohort] if peer != sym]
 
     try:
         import fmp as _fmp
@@ -200,7 +209,7 @@ def _get_peers_for_ticker(ticker: str, sector: str) -> list:
         return [p for p in PEER_GROUPS["COMM"] if p != sym]
     if sym in ["AMZN", "TSLA", "WMT", "HD"]:
         return [p for p in PEER_GROUPS["CONS"] if p != sym]
-    if sym in ["JPM", "BAC", "MS", "GS"]:
+    if sym in ["MS", "GS"]:
         return [p for p in PEER_GROUPS["FIN"] if p != sym]
     
     # Generic sector fallback map if explicit ticker match isn't found

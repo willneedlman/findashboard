@@ -141,11 +141,16 @@ export default function ReportPrint() {
   )
   const allClips = renderClips
   const reportTickers = useMemo(
-    () => reportTickerSymbols(
-      renderScope?.researchSymbols ?? '',
-      allClips.map(clip => clip.researchKey),
-    ),
-    [allClips, renderScope?.researchSymbols],
+    () => {
+      const multiSubject = /\b(compare|comparison|versus|vs\.?|screen|ranking|rank|portfolio|holdings|book)\b/i
+        .test(`${renderScope?.goal ?? ''} ${renderScope?.purpose ?? ''}`)
+      return reportTickerSymbols(
+        renderScope?.researchSymbols ?? '',
+        allClips.map(clip => clip.researchKey),
+        multiSubject ? 4 : 1,
+      )
+    },
+    [allClips, renderScope?.goal, renderScope?.purpose, renderScope?.researchSymbols],
   )
 
   const bodyVisuals = useMemo(() => {
@@ -155,6 +160,20 @@ export default function ReportPrint() {
       generatedAt: gen.generatedAt,
     })
   }, [allClips, clipById, gen, project?.id])
+  const figureNumbers = useMemo(() => {
+    const numbers = new Map<string, number>()
+    if (!gen) return numbers
+    let next = 1
+    for (const [index] of gen.sections.entries()) {
+      const key = reportSectionAssignmentKey(gen.sections, index)
+      const visual = bodyVisuals.get(key)?.visual
+      if (visual && visual.payload.kind !== 'text') {
+        numbers.set(key, next)
+        next += 1
+      }
+    }
+    return numbers
+  }, [bodyVisuals, gen])
 
   const appendixData = useMemo(
     () => gen ? selectReportAppendixData(gen.appendixClipIds, allClips) : [],
@@ -229,12 +248,6 @@ export default function ReportPrint() {
   // Summary paragraph directly below and was the only cell tall enough to
   // stretch the row, leaving blank space under every sibling metric.
   const keyData: { label: string; value: string; sub?: string }[] = []
-  if (gen?.keyResult) {
-    keyData.push({
-      label: gen.keyResult.label,
-      value: gen.keyResult.value,
-    })
-  }
   const seen = new Set(keyData.map(k => k.label.toLowerCase()))
   for (const s of gen?.sections ?? []) {
     for (const f of s.keyFigures ?? []) {
@@ -281,6 +294,12 @@ export default function ReportPrint() {
             fontFamily: palette.sans,
           }}
         >
+          <style>{`
+            @media (max-width: 640px) {
+              .rc-report-sections { display: block !important; }
+              .rc-report-section-half { margin-bottom: 12px; }
+            }
+          `}</style>
           <header className="rc-keep" style={{ background: palette.masthead, color: palette.onMasthead }}>
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -420,28 +439,26 @@ export default function ReportPrint() {
               <>
                 {keyData.length > 0 && (
                   <section className="rc-keep" style={{ marginBottom: 12 }}>
-                    <h2 style={bandHead}>Key Data</h2>
+                    <h2 style={bandHead}>Key Evidence</h2>
                     <FillGrid
                       items={keyData.map((k, i) => ({ key: i, ...k }))}
                       preferCols={Math.min(keyData.length, 5)}
                       palette={palette}
                       render={(item) => {
                         const k = item as { key: number; label: string; value: string; sub?: string }
-                        const hero = k.key === 0 && !!gen.keyResult
                         return (
                           <div style={{
-                            background: hero ? palette.heroTint : palette.cellBg,
+                            background: palette.cellBg,
                             margin: '-6px -10px', padding: '7px 10px',
                           }}>
                             <div style={{ ...eyebrow, lineHeight: 1.25 }}>{k.label}</div>
                             <div style={{
                               fontFamily: palette.mono, fontWeight: 700,
-                              color: hero ? palette.accent : palette.ink,
+                              color: palette.ink,
                               marginTop: 3, lineHeight: 1.35, minHeight: 20,
-                              fontSize: hero ? heroFontSize(k.value, 14, 10) : 14,
-                              whiteSpace: hero ? 'normal' : 'nowrap',
+                              fontSize: 14,
+                              whiteSpace: 'nowrap',
                               overflow: 'visible',
-                              wordBreak: hero ? 'break-word' : undefined,
                             } as React.CSSProperties}>{k.value}</div>
                             {k.sub && (
                               <div style={{ fontFamily: palette.sans, fontSize: 9, color: palette.muted, marginTop: 2, lineHeight: 1.25 }}>
@@ -456,17 +473,36 @@ export default function ReportPrint() {
                 )}
 
                 <section className="rc-keep" style={{ marginBottom: 14 }}>
-                  <h2 style={bandHead}>Investment Summary</h2>
+                  <h2 style={bandHead}>Investment View</h2>
                   <p style={prose}>{gen.executiveSummary || '—'}</p>
                 </section>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+                <div
+                  className="rc-report-sections"
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                    gap: '13px 14px',
+                    alignItems: 'start',
+                  }}
+                >
                   {gen.sections.map((s, i) => {
                     const clip = clipById.get(s.clipId)
                     const sectionKey = reportSectionAssignmentKey(gen.sections, i)
                     const assigned = bodyVisuals.get(sectionKey)
+                    const half = s.placement === 'half'
                     return (
-                      <section key={sectionKey} className="rc-section">
+                      <section
+                        key={sectionKey}
+                        className={`rc-section${half ? ' rc-report-section-half' : ''}`}
+                        data-placement={half ? 'half' : 'full'}
+                        style={{
+                          minWidth: 0,
+                          gridColumn: half ? 'span 1' : '1 / -1',
+                          borderTop: `1px solid ${palette.border}`,
+                          paddingTop: 7,
+                        }}
+                      >
                         <div className="rc-section-heading" style={{
                           display: 'flex',
                           alignItems: 'baseline',
@@ -475,7 +511,12 @@ export default function ReportPrint() {
                           marginBottom: 5,
                           paddingTop: 2,
                         }}>
-                          <h3 style={secTitle}>{s.heading}</h3>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, minWidth: 0 }}>
+                            <span style={{ ...eyebrow, color: palette.accent, flexShrink: 0 }}>
+                              {String(i + 1).padStart(2, '0')}
+                            </span>
+                            <h3 style={secTitle}>{s.heading}</h3>
+                          </div>
                           {clip && (
                             <span style={{ ...secMeta, margin: 0, whiteSpace: 'nowrap', flexShrink: 0 }}>
                               {clip.sourceTab}
@@ -491,6 +532,8 @@ export default function ReportPrint() {
                           projectClips={allClips}
                           visual={assigned?.visual}
                           showKeyFigures={assigned?.showKeyFigures}
+                          column={half}
+                          figureNumber={figureNumbers.get(sectionKey)}
                           palette={palette}
                         />
                       </section>
@@ -507,7 +550,7 @@ export default function ReportPrint() {
                   <h2 style={{
                     ...bandHead, border: 'none', margin: '0 0 6px', paddingBottom: 0,
                   }}>
-                    Conclusion and Recommendation
+                    Conclusion &amp; Action
                   </h2>
                   <p style={prose}>{gen.conclusion || '—'}</p>
                 </section>

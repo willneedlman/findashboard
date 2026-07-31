@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import concurrent.futures
+import re
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from cachetools import TTLCache
@@ -69,6 +70,39 @@ def _load_us_fundamentals() -> dict:
         return {}
 
 _US_FUND = _load_us_fundamentals()
+
+_COMPANY_NAME_STOP = {
+    "american", "bank", "capital", "central", "financial", "first", "general",
+    "global", "group", "holdings", "international", "national", "northern",
+    "united", "western",
+}
+
+
+def resolve_company_mentions(value: str, limit: int = 8) -> list[str]:
+    text = re.sub(r"[^a-z0-9$.-]+", " ", str(value or "").lower()).strip()
+    if not text:
+        return []
+    matches: list[tuple[int, float, str]] = []
+    for ticker, row in _US_FUND.items():
+        raw_name = str(row.get("companyName") or "").lower()
+        name = re.sub(r"[^a-z0-9]+", " ", raw_name).strip()
+        tokens = name.split()
+        aliases = [name]
+        if len(tokens) >= 2:
+            aliases.append(" ".join(tokens[:2]))
+        if tokens and len(tokens[0]) >= 5 and tokens[0] not in _COMPANY_NAME_STOP:
+            aliases.append(tokens[0])
+        ticker_key = ticker.lower().replace("-", ".")
+        if re.search(rf"(?<![a-z0-9])\$?{re.escape(ticker_key)}(?![a-z0-9])", text):
+            aliases.append(ticker_key)
+        matched = max((len(alias) for alias in aliases if alias and re.search(
+            rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", text
+        )), default=0)
+        if matched:
+            matches.append((matched, float(row.get("marketCap") or 0), ticker))
+    matches.sort(reverse=True)
+    return [ticker for _, _, ticker in matches[:max(1, min(8, limit))]]
+
 # Fundamental + descriptive fields the bundled seed can backfill on a row.
 # cashRatio/payablesTurnover/cashConversionCycle/roic are NOT here — Finnhub's
 # free metric bundle (the seed's only source) doesn't carry payables data or a

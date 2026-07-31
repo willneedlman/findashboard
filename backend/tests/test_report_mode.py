@@ -10,6 +10,8 @@ import os
 import sys
 from types import SimpleNamespace
 
+import pytest
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import routers.ai as ai  # noqa: E402
@@ -21,7 +23,8 @@ from routers.ai import (  # noqa: E402
     _must_include_section, _normalize_key_result, _parse_kpi_summary, _parse_table_summary,
     _ranked_subjects, _report_mode, _report_system_prompt, _subject_ticker, _valuation_gap_chart,
     _annotate_sensitivity_swing, _revise_block_before, _sensitivity_swing_summary, _ALLOWED_REVISE_FIELDS,
-    _select_report_appendix_clip_ids,
+    _select_report_appendix_clip_ids, _remove_unverified_numeric_sentences,
+    _filter_unverified_key_figures, _build_report_slot_ctx,
 )
 
 
@@ -114,6 +117,60 @@ def test_single_subject_price_target_goal_stays_range_mode():
     assert _subject_ticker(req) == "NVDA"
 
 
+def test_generic_single_company_research_uses_an_actionable_open_verdict():
+    req = ReportGenRequest(
+        projectName="JPMorgan Equity Research",
+        purpose="Investment research",
+        goal="Create an equity research report on JPMorgan",
+        subjectTicker="JPM",
+        clips=[_clip("1", "Corporate Hub", "JPM company snapshot", "Price: $349.50, ROE: 12%")],
+    )
+
+    subjects = _ranked_subjects(req)
+
+    assert subjects[0] == "JPM"
+    assert _subject_ticker(req) == "JPM"
+    assert _report_mode(req, subjects) == "open"
+
+
+def test_stale_explicit_subject_cannot_override_named_company():
+    req = ReportGenRequest(
+        projectName="JPMorgan Chase Equity Research Report",
+        purpose="Investment research",
+        goal="Create an equity research report on JPMorgan",
+        subjectTicker="HBAN",
+        clips=[_clip("1", "Corporate Hub", "HBAN company snapshot", "Price: $16.50, ROE: 10%")],
+    )
+
+    assert _subject_ticker(req) == "JPM"
+    assert _ranked_subjects(req) == ["JPM", "HBAN"]
+
+
+def test_generation_refuses_company_evidence_for_the_wrong_subject(monkeypatch):
+    req = ReportGenRequest(
+        projectName="JPMorgan Chase Equity Research Report",
+        purpose="Investment research",
+        goal="Create an equity research report on JPMorgan",
+        subjectTicker="HBAN",
+        clips=[
+            _clip("1", "Corporate Hub", "HBAN company snapshot", "Price: $16.50, ROE: 10%"),
+            _clip("2", "Peer Comparison", "Peer valuation · HBAN", "P/E: 12x"),
+        ],
+    )
+    monkeypatch.setattr(
+        ai,
+        "_fetch_market_quote",
+        lambda *_args, **_kwargs: pytest.fail("identity mismatch must fail before market lookup"),
+    )
+
+    with pytest.raises(ai.HTTPException) as exc:
+        ai.generate_report(req)
+
+    assert exc.value.status_code == 409
+    assert "resolves to JPM" in exc.value.detail
+    assert "evidence is for HBAN" in exc.value.detail
+
+
 def test_comparison_language_forces_open_mode_even_with_one_scored_subject():
     clips = [_clip("1", "Company Profile", "AAPL · Snapshot", "Price $333.02, P/E 40.3")]
     req = ReportGenRequest(
@@ -196,7 +253,7 @@ def test_length_key_defaults_to_medium_for_unknown_values():
     assert _length_key("gigantic") == "medium"
 
 
-def test_outline_length_is_not_capped_at_three_pages(monkeypatch):
+def test_outline_targets_three_pages_but_keeps_material_evidence(monkeypatch):
     sections = [
         {"heading": f"Section {index}", "argues": f"Evidence {index}", "chartHint": "none"}
         for index in range(12)
@@ -222,7 +279,8 @@ def test_outline_length_is_not_capped_at_three_pages(monkeypatch):
     assert short_outline is not None
     assert len(long_outline["sections"]) == 12
     assert len(short_outline["sections"]) == 2
-    assert "Page count is not a writing constraint" in captured["system"]
+    assert "Target a compact two-to-three-page decision note" in captured["system"]
+    assert "Continue beyond three pages only when material evidence" in captured["system"]
 
 
 def test_clean_chart_accepts_valid_comparison_bar_chart():
@@ -440,11 +498,14 @@ def test_layout_architecture_uses_real_evidence_then_removes_ai_intent():
     _apply_section_layout_architecture(sections, clips)
 
     assert [section["layout"] for section in sections] == [
-        "evidence-band",
-        "analysis-first",
-        "metric-rail",
-        "metric-rail-left",
+        "visual-left",
+        "wrap-left",
+        "wrap-right",
+        "wrap-left",
         "full-width",
+    ]
+    assert [section.get("placement") for section in sections] == [
+        None, "half", "half", None, None,
     ]
     assert all("design" not in section for section in sections)
 
@@ -465,7 +526,7 @@ def test_layout_architecture_varies_repeated_ai_intents():
 
     _apply_section_layout_architecture(sections, clips)
 
-    assert [section["layout"] for section in sections] == ["evidence-band", "metric-rail-left"]
+    assert [section["layout"] for section in sections] == ["visual-left", "visual-right"]
 
 
 def test_layout_architecture_infers_a_safe_design_when_llama_omits_it():
@@ -496,8 +557,46 @@ def test_report_prompt_hides_renderer_presets_and_includes_only_the_active_mode(
     assert "price call on ONE equity" not in open_prompt
     assert "favored ticker/name" in open_prompt
     assert "the midpoint as '$X'" not in open_prompt
+    assert "The headline states the conclusion and the tension" in range_prompt
+    assert "Section headings are conclusions, not topics" in range_prompt
     assert "{{" not in range_prompt
     assert "{{" not in open_prompt
+
+
+def test_numeric_provenance_removes_an_unsupported_peer_multiple_sentence():
+    clips = [
+        _clip(
+            "profile",
+            "Company Profile",
+            "ULTA Snapshot",
+            "P/E: 19.0x, Revenue Growth (TTM): 11.1%, Current Price: $507.23",
+        ),
+    ]
+    slot_ctx = _build_report_slot_ctx(clips, "ULTA", "Ulta Beauty", 507.23, None)
+    text = (
+        "ULTA trades at 19.0x P/E, below a sector average of roughly 25x. "
+        "Revenue growth of 11.1% supports the thesis."
+    )
+
+    assert _remove_unverified_numeric_sentences(text, clips, slot_ctx) == (
+        "Revenue growth of 11.1% supports the thesis."
+    )
+
+
+def test_numeric_provenance_keeps_horizons_rounding_and_filters_key_figures():
+    clips = [_clip("profile", "Company Profile", "ULTA Snapshot", "Price: $507.23, ROE: 47.4%")]
+    slot_ctx = _build_report_slot_ctx(clips, "ULTA", "Ulta Beauty", 507.23, None)
+    text = "Over the next 90 days, spot near $507 and ROE near 47% support the call."
+    sections = [{
+        "keyFigures": [
+            {"label": "Spot", "value": "$507.23"},
+            {"label": "Peer median", "value": "25x"},
+        ],
+    }]
+
+    assert _remove_unverified_numeric_sentences(text, clips, slot_ctx) == text
+    _filter_unverified_key_figures(sections, clips, slot_ctx)
+    assert sections[0]["keyFigures"] == [{"label": "Spot", "value": "$507.23"}]
 
 
 def _sensitivity_clip(id_, ticker, rows):
@@ -586,6 +685,25 @@ def test_auto_must_include_empty_when_no_sensitivity_clips():
     unrelated = ReportClipIn(id="x", sourceTab="Company Profile", dataType="kpi",
                               title="Snapshot", dataSummary="Price: $100", userDescription="")
     assert _auto_must_include([unrelated]) == []
+
+
+def test_auto_must_include_enforces_company_and_bank_research_coverage():
+    clips = [
+        _clip("1", "Corporate Hub", "JPM Financials and Estimates", "Revenue: $182B"),
+        _clip("2", "Corporate Hub", "JPM Revenue Activity History", "Net Interest Income: $95B"),
+        _clip("3", "FDIC", "Bank Profitability and Credit Context · JPM", "NIM: 2.6%"),
+        _clip("4", "Peer Comparison", "Peer Valuation · JPM", "P/E: 15.0x"),
+        _clip("5", "Corporate Hub", "Analyst View · JPM", "Mean target: $372"),
+        _clip("6", "Mover Radar", "Recent News · JPM", "Headline: Big Banks Deliver Strong Q2"),
+    ]
+
+    directives = " ".join(_auto_must_include(clips))
+
+    assert "financial-trajectory section" in directives
+    assert "This is bank research" in directives
+    assert "dedicated valuation section" in directives
+    assert "Separate catalysts from risks" in directives
+    assert "options-implied move" in directives
 
 
 def test_inject_mechanical_charts_overrides_a_bar_chart_on_the_sensitivity_section():

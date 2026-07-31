@@ -86,6 +86,27 @@ export interface ReportResearchProgress {
   message?: string
 }
 
+export interface ReportScreenerFilter {
+  field: string
+  operator: 'gt' | 'gte' | 'lt' | 'lte' | 'between'
+  value: number
+  value2: number | null
+  param: string | null
+}
+
+export interface ReportScreenerSelection {
+  symbols: string[]
+  total: number
+  explanation: string
+  filters: ReportScreenerFilter[]
+  sector: string | null
+  universe: string | null
+  exchange: string | null
+  region: string | null
+  sortBy: string
+  sortDir: 'asc' | 'desc'
+}
+
 interface ResearchClient {
   get: (url: string) => Promise<unknown>
   post: (url: string, body: unknown) => Promise<unknown>
@@ -239,6 +260,7 @@ export function planReportResearch(
   const bookSymbols = scope.includePortfolio && portfolio.hasData ? portfolioSymbols(portfolio) : []
   const symbols = unique(explicit.length ? explicit : inferred.length ? inferred : bookSymbols)
   const intent = detectIntent(objective, symbols.length)
+  const researchTargets = intent === 'comparison' ? symbols : symbols.slice(0, 1)
   const catalystRequested = /\b(catalyst|moving|mover|selloff|rally|surge|drop|news|event)\b/i.test(objective)
   const valuationRequested = /\b(valuation|value|fair value|multiple|p\/e|peg|cheap|expensive|peer|intrinsic)\b/i.test(objective)
   const gammaRequested = /\b(gamma|gex|dealer positioning|call wall|put wall)\b/i.test(objective)
@@ -293,31 +315,34 @@ export function planReportResearch(
         blockedReason: 'Add at least one ticker symbol for this research question.',
       }
     }
-    add('company', 'Anchor the report in current fundamentals and market data.', symbols.slice(0, 5))
+    add('company', 'Anchor the report in the subject company’s business mix, financial trajectory, analyst view, and market data.', researchTargets)
     if (intent === 'comparison' && symbols.length > 1) {
       add('market-compare', 'Compare the subjects on one normalized return path.', symbols)
       add('regression', 'Quantify how tightly the subjects move together and where their return paths diverge.', symbols)
       if (valuationRequested) add('peer-valuation', 'Compare valuation and operating quality against each subject’s peer group.', symbols.slice(0, 4))
     } else {
-      add('price-history', 'Measure return, volatility, and drawdown over the report horizon.', symbols.slice(0, 5))
+      add('price-history', 'Measure the subject’s return, volatility, and drawdown over the report horizon.', researchTargets)
     }
     if (intent === 'options') {
-      add('options', 'Measure implied volatility, expected move, and options positioning.', symbols.slice(0, 4))
-      add('volatility-skew', 'Show how downside protection and volatility change across strikes and expiries.', symbols.slice(0, 3))
-      add('implied-probability', 'Translate the options surface into a price cone and terminal probability distribution.', symbols.slice(0, 3))
-      if (gammaRequested) add('dealer-gex', 'Locate gamma concentration, the flip level, and potential pin or acceleration zones.', symbols.slice(0, 3))
-      if (catalystRequested) add('mover', 'Test the move against price, volume, market context, filings, and news.', symbols.slice(0, 4))
-      add('news', 'Check whether current volatility is tied to a visible catalyst.', symbols.slice(0, 4))
+      add('options', 'Measure implied volatility, expected move, and options positioning.', researchTargets)
+      add('volatility-skew', 'Show how downside protection and volatility change across strikes and expiries.', researchTargets)
+      add('implied-probability', 'Translate the options surface into a price cone and terminal probability distribution.', researchTargets)
+      if (gammaRequested) add('dealer-gex', 'Locate gamma concentration, the flip level, and potential pin or acceleration zones.', researchTargets)
+      if (catalystRequested) add('mover', 'Test the move against price, volume, market context, filings, and news.', researchTargets)
+      add('news', 'Check whether current volatility is tied to a visible catalyst.', researchTargets)
     } else if (intent === 'catalyst') {
-      add('mover', 'Test the move against price, volume, market context, filings, and news.', symbols.slice(0, 4))
-      add('news', 'Retain the underlying headlines as reviewable evidence.', symbols.slice(0, 4))
-      add('options', 'Check whether implied volatility confirms the event risk.', symbols.slice(0, 3))
+      add('mover', 'Test the move against price, volume, market context, filings, and news.', researchTargets)
+      add('news', 'Retain the underlying headlines as reviewable evidence.', researchTargets)
+      add('options', 'Check whether implied volatility confirms the event risk.', researchTargets)
     } else {
-      add('news', 'Capture current catalysts and changes in the information set.', symbols.slice(0, 4))
-      add('earnings', 'Check the next scheduled earnings event.', symbols.slice(0, 8))
+      if (intent === 'company') {
+        add('peer-valuation', 'Test the subject’s valuation and returns against a relevant peer set.', researchTargets)
+      }
+      add('news', 'Capture current catalysts and changes in the information set.', researchTargets)
+      add('earnings', 'Check the next scheduled earnings event.', researchTargets)
       if (intent === 'valuation') {
-        add('peer-valuation', 'Benchmark multiples, operating quality, and consensus targets against peers.', symbols.slice(0, 4))
-        add('dcf-valuation', 'Build an intrinsic-value anchor with explicit assumptions and sensitivity.', symbols.slice(0, 3))
+        add('peer-valuation', 'Benchmark multiples, operating quality, and consensus targets against peers.', researchTargets)
+        add('dcf-valuation', 'Build an intrinsic-value anchor with explicit assumptions and sensitivity.', researchTargets)
       }
     }
   }
@@ -365,6 +390,75 @@ const median = (values: number[]): number | null => {
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value))
 const routeFor = (route: string, ticker?: string) =>
   ticker ? `${route}?ticker=${encodeURIComponent(ticker)}` : route
+
+export async function screenReportSymbols(
+  query: string,
+  client: ResearchClient = DEFAULT_CLIENT,
+): Promise<ReportScreenerSelection> {
+  const parsed = record(await client.post('/api/ai/screener-parse', { query: query.trim() }))
+  if (parsed.valid === false) {
+    const warning = plain(parsed.warning)
+    throw new Error(warning === '—'
+      ? 'The AI could not map this brief to supported Stock Screener criteria.'
+      : warning)
+  }
+  const filters = array(parsed.filters).flatMap(raw => {
+    const item = record(raw)
+    const value = finite(item.value)
+    const operator = plain(item.operator)
+    if (!plain(item.field).trim() || value == null || !['gt', 'gte', 'lt', 'lte', 'between'].includes(operator)) return []
+    const value2 = operator === 'between' ? finite(item.value2) : null
+    if (operator === 'between' && value2 == null) return []
+    return [{
+      field: plain(item.field),
+      operator: operator as ReportScreenerFilter['operator'],
+      value,
+      value2,
+      param: item.param ? plain(item.param) : null,
+    }]
+  })
+  const requestedLimit = Math.trunc(finite(parsed.limit) ?? 8)
+  const limit = clamp(requestedLimit, 1, 8)
+  const sortDir = plain(parsed.sort_dir).toLowerCase() === 'asc' ? 'asc' : 'desc'
+  const includedSymbols = unique(
+    array(parsed.include_symbols)
+      .map(symbol => normalizeTicker(plain(symbol)))
+      .filter(symbol => /^[A-Z0-9^][A-Z0-9^=-]{0,11}$/.test(symbol)),
+  )
+  const screen = record(await client.post('/api/screener/run', {
+    filters,
+    sector: parsed.sector || null,
+    universe: parsed.universe || null,
+    exchange: parsed.exchange || null,
+    region: parsed.region || null,
+    sort_by: plain(parsed.sort_by) === '—' ? 'marketCap' : plain(parsed.sort_by),
+    sort_dir: sortDir,
+    sort_param: parsed.sort_param || null,
+    limit,
+  }))
+  const symbols = unique(
+    [
+      ...includedSymbols,
+      ...array(screen.results)
+        .map(row => normalizeTicker(plain(record(row).ticker)))
+        .filter(symbol => /^[A-Z0-9^][A-Z0-9^=-]{0,11}$/.test(symbol)),
+    ],
+  ).slice(0, limit)
+  return {
+    symbols,
+    total: Math.max(symbols.length, Math.trunc(finite(screen.total) ?? symbols.length)),
+    explanation: plain(parsed.explanation) === '—'
+      ? 'Applied the interpreted Stock Screener criteria.'
+      : plain(parsed.explanation),
+    filters,
+    sector: parsed.sector ? plain(parsed.sector) : null,
+    universe: parsed.universe ? plain(parsed.universe) : null,
+    exchange: parsed.exchange ? plain(parsed.exchange) : null,
+    region: parsed.region ? plain(parsed.region) : null,
+    sortBy: plain(parsed.sort_by) === '—' ? 'marketCap' : plain(parsed.sort_by),
+    sortDir,
+  }
+}
 
 function tagClip(
   draft: ClipDraft,
@@ -534,7 +628,7 @@ export async function enhanceReportResearchPlan(
       reason,
       targets: item.targetMode === 'market' || item.targetMode === 'portfolio'
         ? []
-        : targetsForSource(id, baseline.symbols),
+        : targetsForSource(id, baseline.intent === 'comparison' ? baseline.symbols : baseline.symbols.slice(0, 1)),
       selectionOrigin: 'ai',
     })
     added += 1
@@ -567,16 +661,186 @@ async function runSource(
   switch (source.id) {
     case 'company':
       return perTicker(source, async ticker => {
-        const data = record(await client.get(`/api/corporate/hub?ticker=${encodeURIComponent(ticker)}`))
-        const clip = kpiClip('Corporate Hub', `${ticker} company snapshot`, [
-          { label: 'Price', value: money(data.current_price), sub: percent(data.pct_change_1d) },
-          { label: 'Market cap', value: money(data.market_cap) },
-          { label: 'Forward P/E', value: finite(data.forward_pe) == null ? '—' : finite(data.forward_pe)!.toFixed(1) },
-          { label: 'EV / EBITDA', value: finite(data.ev_ebitda) == null ? '—' : finite(data.ev_ebitda)!.toFixed(1) },
-          { label: 'Beta', value: finite(data.beta) == null ? '—' : finite(data.beta)!.toFixed(2) },
-          { label: 'Consensus', value: plain(data.consensus), sub: [data.sector, data.industry].filter(Boolean).join(' · ') || undefined },
+        const safeGet = async (url: string) => {
+          try {
+            return record(await client.get(url))
+          } catch {
+            return {}
+          }
+        }
+        const [data, profile, analyst, earningsDetail, financials] = await Promise.all([
+          safeGet(`/api/corporate/hub?ticker=${encodeURIComponent(ticker)}`),
+          safeGet(`/api/corporate/supply-chain?ticker=${encodeURIComponent(ticker)}`),
+          safeGet(`/api/corporate/hub/analyst?ticker=${encodeURIComponent(ticker)}`),
+          safeGet(`/api/corporate/hub/earnings-detail?ticker=${encodeURIComponent(ticker)}`),
+          safeGet(`/api/factset/financials?ticker=${encodeURIComponent(ticker)}&actual=4&estimate=2`),
         ])
-        return tagClip(clip, source, ticker, ticker)
+        if (!Object.keys(data).length && !Object.keys(profile).length) return null
+        const clips: ClipDraft[] = [tagClip(kpiClip('Corporate Hub', `${ticker} company snapshot`, [
+          { label: 'Price', value: money(data.current_price), sub: percent(data.pct_change_1d) },
+          { label: 'Market cap', value: money(data.market_cap ?? profile.market_cap) },
+          { label: 'Forward P/E', value: finite(data.forward_pe) == null ? (finite(profile.pe_ratio) == null ? '—' : `${finite(profile.pe_ratio)!.toFixed(1)}x TTM`) : `${finite(data.forward_pe)!.toFixed(1)}x` },
+          { label: 'EV / EBITDA', value: finite(data.ev_ebitda) == null ? '—' : finite(data.ev_ebitda)!.toFixed(1) },
+          { label: 'ROE', value: finite(profile.roe) == null ? '—' : `${finite(profile.roe)!.toFixed(1)}%` },
+          { label: 'Revenue growth', value: finite(profile.rev_growth) == null ? '—' : `${(finite(profile.rev_growth)! * 100).toFixed(1)}%` },
+          { label: 'Consensus', value: plain(data.consensus ?? analyst.recommendation_key), sub: [profile.sector ?? data.sector, profile.industry ?? data.industry].filter(Boolean).join(' · ') || undefined },
+        ]), source, ticker, ticker)]
+
+        const segmentBlock = array(record(profile.product_segments).latest).length
+          ? record(profile.product_segments)
+          : record(profile.revenue_activity)
+        const segmentRows = array(segmentBlock.latest).map(record)
+          .filter(row => plain(row.name) !== '—' && finite(row.pct) != null)
+        if (segmentRows.length >= 2) {
+          clips.push(tagClip(tableClip(
+            'Corporate Hub',
+            `Product Segments · ${ticker}`,
+            ['Segment', 'Value', 'Share %', 'YoY %'],
+            segmentRows.slice(0, 8).map(row => [
+              plain(row.name),
+              finite(row.value),
+              finite(row.pct),
+              finite(row.yoy_pct),
+            ]),
+          ), source, `${ticker}:segments`, ticker))
+        }
+
+        const activityHistory = array(record(profile.revenue_activity).history).map(record)
+        if (activityHistory.length >= 2) {
+          const activityNames = unique(
+            activityHistory.flatMap(row => array(row.segments).map(segment => plain(record(segment).name)))
+              .filter(name => name !== '—'),
+          ).slice(0, 5)
+          const activityRows = activityHistory.map(row => {
+            const values = new Map(array(row.segments).map(segment => {
+              const item = record(segment)
+              return [plain(item.name), finite(item.value)]
+            }))
+            return {
+              year: plain(row.year),
+              ...Object.fromEntries(activityNames.map(name => [
+                name,
+                values.get(name) == null ? null : +(values.get(name)! / 1e9).toFixed(2),
+              ])),
+            }
+          })
+          clips.push(tagClip(chartClip(
+            'Corporate Hub',
+            `${ticker} revenue activity history`,
+            'line',
+            'year',
+            activityRows,
+            activityNames.map(name => ({ key: name, label: `${name} ($B)` })),
+          ), source, `${ticker}:activity-history`, ticker))
+        }
+
+        const geographicRows = array(record(profile.geo_segments).latest).map(record)
+          .filter(row => plain(row.name) !== '—' && finite(row.pct) != null)
+        if (geographicRows.length >= 2) {
+          clips.push(tagClip(tableClip(
+            'Corporate Hub',
+            `Geographic Segments · ${ticker}`,
+            ['Region', 'Value', 'Share %'],
+            geographicRows.slice(0, 8).map(row => [
+              plain(row.name),
+              finite(row.value),
+              finite(row.pct),
+            ]),
+          ), source, `${ticker}:geography`, ticker))
+        }
+
+        if (/\bbanks?\b/i.test(plain(profile.industry))) {
+          const fdic = await safeGet('/api/official/fdic')
+          const bankRows = array(fdic.banks).map(record)
+            .filter(row => finite(row.assets) != null)
+            .slice(0, 10)
+          if (bankRows.length) {
+            clips.push(tagClip(tableClip(
+              'FDIC BankFind',
+              `Bank profitability and credit context · ${ticker}`,
+              ['Bank', 'Assets $M', 'Deposits $M', 'ROA %', 'ROE %', 'NIM %', 'Net charge-offs %'],
+              bankRows.map(row => [
+                plain(row.name),
+                finite(row.assets),
+                finite(row.deposits),
+                finite(row.roa),
+                finite(row.roe),
+                finite(row.nim),
+                finite(row.net_chargeoffs),
+              ]),
+            ), source, `${ticker}:bank-context`, ticker))
+          }
+        }
+
+        if (finite(analyst.target_mean) != null || finite(analyst.implied_upside) != null) {
+          const distribution = record(analyst.distribution)
+          clips.push(tagClip(kpiClip('Corporate Hub', `Analyst view · ${ticker}`, [
+            { label: 'Mean target', value: money(analyst.target_mean), sub: finite(analyst.implied_upside) == null ? undefined : `${percent(analyst.implied_upside)} vs spot` },
+            { label: 'Target low', value: money(analyst.target_low) },
+            { label: 'Target high', value: money(analyst.target_high) },
+            { label: 'Analysts', value: plain(analyst.total_analysts) },
+            { label: 'Buy ratings', value: String((finite(distribution.strongBuy) ?? 0) + (finite(distribution.buy) ?? 0)) },
+            { label: 'Hold / sell', value: `${finite(distribution.hold) ?? 0} / ${(finite(distribution.sell) ?? 0) + (finite(distribution.strongSell) ?? 0)}` },
+          ]), source, `${ticker}:analyst`, ticker))
+        }
+
+        if (
+          data.date
+          || finite(earningsDetail.epsEst) != null
+          || finite(earningsDetail.revEst) != null
+          || finite(earningsDetail.beatRatePct) != null
+        ) {
+          clips.push(tagClip(kpiClip('Corporate Hub', `Earnings setup · ${ticker}`, [
+            { label: 'Report date', value: plain(data.date), sub: plain(earningsDetail.reportTiming) === '—' ? undefined : plain(earningsDetail.reportTiming) },
+            { label: 'EPS estimate', value: finite(earningsDetail.epsEst) == null ? '—' : money(earningsDetail.epsEst), sub: finite(earningsDetail.epsPriorYear) == null ? undefined : `prior year ${money(earningsDetail.epsPriorYear)}` },
+            { label: 'Revenue estimate', value: money(earningsDetail.revEst) },
+            { label: 'Historical beat rate', value: finite(earningsDetail.beatRatePct) == null ? '—' : `${finite(earningsDetail.beatRatePct)!.toFixed(0)}%` },
+            { label: 'Average reaction', value: finite(earningsDetail.histAvgMovePct) == null ? '—' : `${finite(earningsDetail.histAvgMovePct)!.toFixed(1)}% absolute` },
+            { label: 'Horizon', value: plain(data.horizon) },
+          ]), source, `${ticker}:earnings-setup`, ticker))
+        }
+
+        const periods = array(financials.periods).map(record)
+        const financialRows = array(financials.groups)
+          .flatMap(group => array(record(group).rows).map(record))
+        const rowFor = (label: string) => financialRows.find(row => plain(row.label).toLowerCase() === label.toLowerCase())
+        const revenue = rowFor('Revenue')
+        const netIncome = rowFor('Net Income')
+        if (financials.available === true && periods.length >= 2 && (revenue || netIncome)) {
+          const trendRows = periods.map((period, index) => ({
+            period: `${plain(period.label)}${period.is_estimate ? 'E' : 'A'}`,
+            revenue: finite(array(revenue?.values)[index]),
+            netIncome: finite(array(netIncome?.values)[index]),
+          }))
+          clips.push(tagClip(chartClip(
+            'Corporate Hub',
+            `${ticker} financial trajectory · actual and consensus`,
+            'bar',
+            'period',
+            trendRows,
+            [
+              ...(revenue ? [{ key: 'revenue', label: 'Revenue ($M)' }] : []),
+              ...(netIncome ? [{ key: 'netIncome', label: 'Net income ($M)' }] : []),
+            ],
+          ), source, `${ticker}:financial-trend`, ticker))
+
+          const selected = ['Revenue', 'Net Income', 'EPS (Diluted)', 'Return on Equity']
+            .map(label => rowFor(label))
+            .filter((row): row is Record<string, any> => !!row)
+          if (selected.length) {
+            clips.push(tagClip(tableClip(
+              'Corporate Hub',
+              `Financials and estimates · ${ticker}`,
+              ['Metric', 'Unit', ...periods.map(period => `${plain(period.label)}${period.is_estimate ? 'E' : 'A'}`)],
+              selected.map(row => [
+                plain(row.label),
+                plain(row.unit),
+                ...array(row.values).slice(0, periods.length).map(value => finite(value)),
+              ]),
+            ), source, `${ticker}:financial-table`, ticker))
+          }
+        }
+        return clips
       })
 
     case 'peer-valuation':

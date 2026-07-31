@@ -104,6 +104,12 @@ export interface ReportScope {
   mustInclude: string
   evidenceMode: EvidenceMode
   researchSymbols: string
+  /** Plain-English stock selection brief. Applied results are written into
+   * researchSymbols so the downstream research planner stays deterministic. */
+  screenerQuery: string
+  /** Exact trimmed query that produced researchSymbols. A mismatch blocks
+   * automated research until the edited screen is applied again. */
+  screenerAppliedQuery: string
   includePortfolio: boolean
 }
 
@@ -132,6 +138,9 @@ export interface GeneratedSection {
   /** AI-only composition direction. The renderer may repair incompatible
    * choices after it sees the actual visual assigned to this section. */
   layout?: ReportSectionLayout
+  /** Deterministic page composition chosen after generation. Paired half-width
+   * sections are emitted only in complete pairs, so no blank grid cell remains. */
+  placement?: 'half'
   keyFigures?: KeyFigure[]       // AI-extracted evidence actually used, not the raw dataset
   chart?: ChartPayload           // AI-synthesized chart built from this section's own figures — not sourced from a clip
 }
@@ -208,6 +217,8 @@ export const defaultScope = (): ReportScope => ({
   mustInclude: '',
   evidenceMode: 'manual',
   researchSymbols: '',
+  screenerQuery: '',
+  screenerAppliedQuery: '',
   includePortfolio: true,
 })
 
@@ -252,6 +263,8 @@ export function normalizeScope(raw: Partial<ReportScope> | null | undefined): Re
     mustInclude: typeof raw.mustInclude === 'string' ? raw.mustInclude : '',
     evidenceMode: raw.evidenceMode === 'alphatape' ? 'alphatape' : 'manual',
     researchSymbols: typeof raw.researchSymbols === 'string' ? raw.researchSymbols : '',
+    screenerQuery: typeof raw.screenerQuery === 'string' ? raw.screenerQuery : '',
+    screenerAppliedQuery: typeof raw.screenerAppliedQuery === 'string' ? raw.screenerAppliedQuery : '',
     includePortfolio: raw.includePortfolio !== false,
   }
 }
@@ -723,7 +736,7 @@ export function toTitleCase(s: string | undefined | null): string {
   if (!s) return ''
   const str = s.trim()
   if (!str) return ''
-  const ACRONYMS = new Set(['DCF', 'WACC', 'PE', 'P/E', 'PEG', 'ROE', 'ROA', 'FCF', 'IV', 'GEX', 'EV/EBITDA', 'EBITDA', 'CAGR', 'GAAP', 'EPS', 'P/S', 'P/B', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA'])
+  const ACRONYMS = new Set(['DCF', 'WACC', 'PE', 'P/E', 'PEG', 'ROE', 'ROA', 'FCF', 'IV', 'GEX', 'EV/EBITDA', 'EBITDA', 'CAGR', 'GAAP', 'EPS', 'P/S', 'P/B', 'M&A', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA'])
   const SMALL_WORDS = new Set(['a', 'an', 'and', 'as', 'at', 'but', 'by', 'en', 'for', 'if', 'in', 'of', 'on', 'or', 'the', 'to', 'vs', 'vs.', 'via', 'with', 'per'])
 
   const parts = str.split(/(\s+)/)

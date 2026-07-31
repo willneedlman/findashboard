@@ -242,11 +242,13 @@ function KeyFiguresRail({
 
 function FigureFrame({
   title,
+  source,
   children,
   palette,
   style,
 }: {
   title?: string
+  source?: string
   children: React.ReactNode
   palette: ReportPalette
   style?: React.CSSProperties
@@ -276,6 +278,17 @@ function FigureFrame({
       <div style={{ padding: '6px 8px 8px', background: palette.cellBg }}>
         {children}
       </div>
+      {source && (
+        <div style={{
+          padding: '0 8px 6px',
+          fontFamily: palette.sans,
+          fontSize: 7,
+          lineHeight: 1.35,
+          color: palette.muted,
+        }}>
+          Source: {source}
+        </div>
+      )}
     </figure>
   )
 }
@@ -823,6 +836,8 @@ export default function SectionLayout({
   projectClips = [],
   visual: visualOverride,
   showKeyFigures: showKeyFiguresOverride,
+  column = false,
+  figureNumber,
   palette,
 }: {
   analysis?: string
@@ -833,6 +848,8 @@ export default function SectionLayout({
   projectClips?: ReportClip[]
   visual?: ReportClip
   showKeyFigures?: boolean
+  column?: boolean
+  figureNumber?: number
   palette: ReportPalette
 }) {
   const assigned = visualOverride !== undefined || showKeyFiguresOverride !== undefined
@@ -858,6 +875,14 @@ export default function SectionLayout({
   }
   const textNode = textBody ? <div className="rc-section-prose" style={prose}>{textBody}</div> : null
   const figTitle = visual ? (visual.payload.title || visual.sourceTab) : undefined
+  const numberedFigTitle = figTitle
+    ? `${figureNumber ? `Figure ${figureNumber} · ` : ''}${figTitle}`
+    : undefined
+  const figureSource = visual
+    ? (visual.sourceTab === 'AlphaTape' && clip?.sourceTab
+        ? `${clip.sourceTab} · AlphaTape analysis`
+        : visual.sourceTab)
+    : undefined
 
   const stack: React.CSSProperties = {
     marginTop: 0,
@@ -867,6 +892,19 @@ export default function SectionLayout({
   }
 
   if (!hasVisual) {
+    if (column) {
+      return (
+        <div style={stack}>
+          {textNode}
+          {figures.length > 0 && <KeyFiguresStrip figures={figures} palette={palette} />}
+          {clip?.payload.kind === 'text' && !textBody && (
+            <FigureFrame title={clip.payload.title || 'Note'} source={clip.sourceTab} palette={palette}>
+              <ClipRenderer payload={clip.payload} mode="print" palette={clipPal} />
+            </FigureFrame>
+          )}
+        </div>
+      )
+    }
     return (
       <div style={stack}>
         {(resolvedLayout === 'metric-rail' || resolvedLayout === 'metric-rail-left') && textNode && figures.length > 0 ? (
@@ -888,8 +926,8 @@ export default function SectionLayout({
             {figures.length > 0 && <KeyFiguresStrip figures={figures} palette={palette} />}
           </>
         )}
-        {clip?.payload.kind === 'text' && (
-          <FigureFrame title={clip.payload.title || 'Note'} palette={palette}>
+        {clip?.payload.kind === 'text' && !textBody && (
+          <FigureFrame title={clip.payload.title || 'Note'} source={clip.sourceTab} palette={palette}>
             <ClipRenderer payload={clip.payload} mode="print" palette={clipPal} />
           </FigureFrame>
         )}
@@ -899,11 +937,40 @@ export default function SectionLayout({
 
   if (!visual) return null
 
+  if (column) {
+    const visualFirst = resolvedLayout === 'visual-left'
+      || resolvedLayout === 'wrap-left'
+      || resolvedLayout === 'evidence-band'
+    const visualNode = (
+      <FigureFrame title={numberedFigTitle} source={figureSource} palette={palette}>
+        <Visual
+          clip={visual}
+          compact
+          maxTableRows={visual.payload.kind === 'table' ? 5 : undefined}
+          clipPal={clipPal}
+          mono={palette.mono}
+          muted={palette.muted}
+        />
+      </FigureFrame>
+    )
+    const figuresNode = showKeyFigures && figures.length > 0
+      ? <KeyFiguresStrip figures={figures} palette={palette} />
+      : null
+    return (
+      <div style={stack}>
+        {visualFirst && visualNode}
+        {textNode}
+        {!visualFirst && visualNode}
+        {figuresNode}
+      </div>
+    )
+  }
+
   if (resolvedLayout === 'full-width') {
     return (
       <div style={stack}>
         {textNode}
-        <FigureFrame title={figTitle} palette={palette}>
+        <FigureFrame title={numberedFigTitle} source={figureSource} palette={palette}>
           <Visual
             clip={visual}
             maxTableRows={visual.payload.kind === 'table' ? 6 : undefined}
@@ -923,7 +990,8 @@ export default function SectionLayout({
       <div style={stack}>
         <div style={{ display: 'flow-root' }}>
           <FigureFrame
-            title={figTitle}
+            title={numberedFigTitle}
+            source={figureSource}
             palette={palette}
             style={{
               float: floatSide,
@@ -945,7 +1013,7 @@ export default function SectionLayout({
     const main = (
       <div style={stack}>
         {textNode}
-        <FigureFrame title={figTitle} palette={palette}>
+        <FigureFrame title={numberedFigTitle} source={figureSource} palette={palette}>
           <Visual clip={visual} compact clipPal={clipPal} mono={palette.mono} muted={palette.muted} />
         </FigureFrame>
       </div>
@@ -976,7 +1044,7 @@ export default function SectionLayout({
         gap: 10,
         alignItems: 'stretch',
       }}>
-        <FigureFrame title={figTitle} palette={palette}>
+        <FigureFrame title={numberedFigTitle} source={figureSource} palette={palette}>
           <Visual clip={visual} compact clipPal={clipPal} mono={palette.mono} muted={palette.muted} />
         </FigureFrame>
         <KeyFiguresRail figures={figures} palette={palette} />
@@ -993,7 +1061,7 @@ export default function SectionLayout({
 
   const visualFirst = resolvedLayout === 'visual-left'
   const visualNode = (
-    <FigureFrame title={figTitle} palette={palette}>
+    <FigureFrame title={numberedFigTitle} source={figureSource} palette={palette}>
       <Visual clip={visual} compact={isChart} clipPal={clipPal} mono={palette.mono} muted={palette.muted} />
     </FigureFrame>
   )

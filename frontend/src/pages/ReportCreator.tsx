@@ -4,7 +4,7 @@ import axios from 'axios'
 import {
   Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Eye, EyeOff, FileText,
   FileDown, Sparkles, RefreshCw, Loader2, AlertTriangle, Check, Clock, Download,
-  Circle, Database, ExternalLink, XCircle,
+  Circle, Database, ExternalLink, XCircle, ListFilter,
 } from 'lucide-react'
 import { T } from '../lib/theme'
 import PageWrapper from '../components/PageWrapper'
@@ -23,9 +23,9 @@ import {
   type ReportProject, type ReportClip, type ReportSnapshot,
 } from '../lib/reportCreator'
 import {
-  collectReportResearch, enhanceReportResearchPlan, planReportResearch, researchSourceProducesVisuals,
+  collectReportResearch, enhanceReportResearchPlan, planReportResearch, researchSourceProducesVisuals, screenReportSymbols,
   type ReportResearchPlan, type ReportResearchProgress, type ReportResearchResult,
-  type ReportResearchSourceId,
+  type ReportResearchSourceId, type ReportScreenerSelection,
 } from '../lib/reportResearch'
 import type { ActivePortfolioContext } from '../lib/pmImport'
 import { selectReportAppendixData } from '../lib/reportPresentation'
@@ -122,11 +122,16 @@ function GeneratedEditor({ project }: { project: ReportProject }) {
     [gen.appendixClipIds, project.clips],
   )
   const reportTickers = useMemo(
-    () => reportTickerSymbols(
-      project.scope.researchSymbols,
-      project.clips.map(clip => clip.researchKey),
-    ),
-    [project.clips, project.scope.researchSymbols],
+    () => {
+      const multiSubject = /\b(compare|comparison|versus|vs\.?|screen|ranking|rank|portfolio|holdings|book)\b/i
+        .test(`${project.scope.goal} ${project.scope.purpose}`)
+      return reportTickerSymbols(
+        project.scope.researchSymbols,
+        project.clips.map(clip => clip.researchKey),
+        multiSubject ? 4 : 1,
+      )
+    },
+    [project.clips, project.scope.goal, project.scope.purpose, project.scope.researchSymbols],
   )
   const bodyVisuals = useMemo(
     () => assignReportBodyVisuals(gen.sections, clipById, project.clips, {
@@ -328,6 +333,62 @@ function ClipCard({ project, clip, index, count }: { project: ReportProject; cli
 
 type ResearchSourceState = ReportResearchProgress['status'] | 'queued'
 
+const screenOperatorLabel: Record<string, string> = {
+  gt: '>',
+  gte: '≥',
+  lt: '<',
+  lte: '≤',
+  between: 'between',
+}
+
+const screenPercentFields = new Set([
+  'priceChange', 'change52wHiPct', 'revenueGrowth', 'epsGrowth', 'grossMargin',
+  'operatingMargin', 'netMargin', 'roe', 'roa', 'roic', 'dividendYield',
+  'payoutRatio', 'smaDist50', 'smaDist200', 'vol30',
+])
+const screenMultipleFields = new Set(['peRatio', 'pbRatio', 'psRatio', 'evEbitda', 'pegRatio'])
+
+function screenFieldLabel(value: string): string {
+  const label = value
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/^./, first => first.toUpperCase())
+  return label
+    .replace(/\bPe\b/, 'P/E')
+    .replace(/\bPb\b/, 'P/B')
+    .replace(/\bPs\b/, 'P/S')
+    .replace(/\bRoe\b/, 'ROE')
+    .replace(/\bRoa\b/, 'ROA')
+    .replace(/\bRoic\b/, 'ROIC')
+    .replace(/\bRsi14\b/, 'RSI 14')
+    .replace(/\bEv Ebitda\b/, 'EV/EBITDA')
+    .replace(/\bSma\b/g, 'SMA')
+}
+
+function screenValue(field: string, value: number): string {
+  if (field === 'marketCap') return `$${value}B`
+  if (field === 'price') return `$${value}`
+  if (field === 'volume' || field === 'avgVolume') return `${value.toLocaleString()} shares`
+  if (field === 'cashConversionCycle') return `${value} days`
+  if (screenPercentFields.has(field)) return `${value}%`
+  if (screenMultipleFields.has(field)) return `${value}×`
+  return String(value)
+}
+
+function screenCriteria(selection: ReportScreenerSelection): string[] {
+  const scope = [
+    selection.sector,
+    selection.universe?.toUpperCase(),
+    selection.exchange,
+    selection.region,
+  ].filter((value): value is string => !!value)
+  const filters = selection.filters.map(filter => {
+    const first = `${screenFieldLabel(filter.field)} ${screenOperatorLabel[filter.operator] ?? filter.operator} ${screenValue(filter.field, filter.value)}`
+    const range = filter.operator === 'between' && filter.value2 != null ? `${first} and ${screenValue(filter.field, filter.value2)}` : first
+    return filter.param ? `${range} (${filter.param})` : range
+  })
+  return [...scope, ...filters, `Sort ${screenFieldLabel(selection.sortBy)} ${selection.sortDir === 'asc' ? 'low to high' : 'high to low'}`]
+}
+
 function ResearchPanel({
   project,
   portfolio,
@@ -356,9 +417,16 @@ function ResearchPanel({
   isMobile: boolean
 }) {
   const navigate = useNavigate()
+  const [screening, setScreening] = useState(false)
+  const [screenSelection, setScreenSelection] = useState<ReportScreenerSelection | null>(null)
+  const [screenError, setScreenError] = useState<string | null>(null)
+  const screenOperationRef = useRef(0)
   const automaticCount = project.clips.filter(clip => clip.origin === 'alphatape').length
   const failedSourceCount = new Set(result?.failed.map(failure => failure.sourceId) ?? []).size
   const mode = project.scope.evidenceMode
+  const screenQuery = project.scope.screenerQuery.trim()
+  const screenNeedsApply = !!screenQuery && screenQuery !== project.scope.screenerAppliedQuery.trim()
+  const researchActionsLocked = planning || researching || !!plan.blockedReason || screenNeedsApply
   const modeButton = (active: boolean): React.CSSProperties => ({
     flex: '1 1 180px',
     display: 'flex', alignItems: 'flex-start', gap: 9, textAlign: 'left',
@@ -367,6 +435,42 @@ function ResearchPanel({
     color: active ? T.text : T.muted,
     padding: '10px 11px', cursor: 'pointer',
   })
+
+  useEffect(() => {
+    screenOperationRef.current += 1
+    setScreening(false)
+    setScreenSelection(null)
+    setScreenError(null)
+  }, [project.id])
+
+  const applyScreen = async () => {
+    const query = project.scope.screenerQuery.trim()
+    if (!query || screening || researching || planning) return
+    const operation = ++screenOperationRef.current
+    setScreening(true)
+    setScreenSelection(null)
+    setScreenError(null)
+    try {
+      const selection = await screenReportSymbols(query)
+      if (screenOperationRef.current !== operation) return
+      if (!selection.symbols.length) {
+        setScreenError('The screen returned no matches. Broaden the criteria and try again.')
+        return
+      }
+      updateScope(project.id, {
+        researchSymbols: selection.symbols.join(', '),
+        screenerAppliedQuery: query,
+      })
+      setScreenSelection(selection)
+    } catch (cause) {
+      if (screenOperationRef.current !== operation) return
+      const detail = (cause as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      const message = cause instanceof Error ? cause.message : ''
+      setScreenError(detail || message || 'The AI could not translate or run this screen. Adjust the wording and retry.')
+    } finally {
+      if (screenOperationRef.current === operation) setScreening(false)
+    }
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
@@ -403,7 +507,14 @@ function ResearchPanel({
               <span style={subLabel}>Research symbols</span>
               <input
                 value={project.scope.researchSymbols}
-                onChange={event => updateScope(project.id, { researchSymbols: event.target.value })}
+                onChange={event => {
+                  setScreenSelection(null)
+                  updateScope(project.id, {
+                    researchSymbols: event.target.value,
+                    screenerQuery: '',
+                    screenerAppliedQuery: '',
+                  })
+                }}
                 placeholder="AAPL, MSFT"
                 aria-label="Research symbols"
                 style={{
@@ -443,6 +554,107 @@ function ResearchPanel({
                   </span>
                 </span>
               </button>
+            </div>
+          </div>
+
+          <div style={{ border: `1px solid ${screenSelection ? T.gold : T.border}`, background: T.bg }}>
+            <div style={{
+              minHeight: 34, padding: '0 10px', display: 'flex', alignItems: 'center',
+              justifyContent: 'space-between', gap: 10, borderBottom: `1px solid ${T.border}`,
+            }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: T.label, fontSize: 9, fontWeight: 700, color: T.text }}>
+                <ListFilter size={12} color={T.gold} /> Describe the screen
+              </span>
+              <span style={{ fontFamily: T.mono, fontSize: 8, color: T.muted }}>AI → Stock Screener → research symbols</span>
+            </div>
+            <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: 'stretch', gap: 7 }}>
+                <textarea
+                  value={project.scope.screenerQuery}
+                  onChange={event => {
+                    const nextQuery = event.target.value
+                    setScreenSelection(null)
+                    setScreenError(null)
+                    updateScope(project.id, {
+                      screenerQuery: nextQuery,
+                      screenerAppliedQuery: nextQuery.trim() ? project.scope.screenerAppliedQuery : '',
+                    })
+                  }}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                      event.preventDefault()
+                      void applyScreen()
+                    }
+                  }}
+                  rows={2}
+                  disabled={screening || researching || planning}
+                  aria-label="Plain-English stock screen"
+                  aria-describedby="report-screener-help"
+                  placeholder="Example: profitable US software companies with revenue growth above 15%, P/E below 30, and beta under 1.2. Show the eight largest."
+                  style={{
+                    flex: 1, minWidth: 0, boxSizing: 'border-box', resize: 'vertical',
+                    background: T.surface, border: `1px solid ${T.border}`, color: T.text,
+                    fontFamily: T.label, fontSize: 10.5, lineHeight: 1.5, padding: '8px 9px',
+                    outline: 'none', opacity: screening || researching || planning ? 0.7 : 1,
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => void applyScreen()}
+                  disabled={!project.scope.screenerQuery.trim() || screening || researching || planning}
+                  style={{
+                    ...primaryAction,
+                    minWidth: isMobile ? undefined : 126,
+                    justifyContent: 'center',
+                    background: project.scope.screenerQuery.trim() && !screening && !researching && !planning ? T.goldTint(12) : 'transparent',
+                    borderColor: project.scope.screenerQuery.trim() && !screening && !researching && !planning ? T.gold : T.border,
+                    color: project.scope.screenerQuery.trim() && !screening && !researching && !planning ? T.gold : T.muted,
+                    cursor: project.scope.screenerQuery.trim() && !screening && !researching && !planning ? 'pointer' : 'default',
+                  }}
+                >
+                  {screening ? <Loader2 size={13} className="rc-spin" /> : <ListFilter size={13} />}
+                  {screening ? 'Screening…' : 'Apply screen'}
+                </button>
+              </div>
+              <span id="report-screener-help" style={{ fontFamily: T.mono, fontSize: 8.5, color: T.muted, lineHeight: 1.45 }}>
+                Describe fundamentals, valuation, growth, sector, geography, technicals, ranking, and count. AlphaTape applies supported filters and selects up to eight names.
+              </span>
+              {screenNeedsApply && !screening && !screenError && (
+                <span role="status" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: T.warn, fontFamily: T.label, fontSize: 9.5, lineHeight: 1.4 }}>
+                  <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                  Apply this screen before running research, or clear the brief to keep the symbols above.
+                </span>
+              )}
+              {!screenSelection && !screenNeedsApply && screenQuery && (
+                <span role="status" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: T.pos, fontFamily: T.label, fontSize: 9.5, lineHeight: 1.4 }}>
+                  <Check size={12} style={{ flexShrink: 0 }} />
+                  This screen produced the current research symbols. Apply again to refresh the matches.
+                </span>
+              )}
+              {screenError && (
+                <span role="alert" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: T.neg, fontFamily: T.label, fontSize: 9.5, lineHeight: 1.4 }}>
+                  <AlertTriangle size={12} style={{ flexShrink: 0 }} /> {screenError}
+                </span>
+              )}
+              {screenSelection && (
+                <div aria-live="polite" style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 2 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontFamily: T.label, fontSize: 9.5, color: T.text, lineHeight: 1.4 }}>
+                    <Check size={12} color={T.pos} style={{ flexShrink: 0 }} />
+                    <span>
+                      Selected {screenSelection.symbols.length} symbols from {screenSelection.total} screen matches: <span style={{ color: T.gold, fontFamily: T.mono }}>{screenSelection.symbols.join(', ')}</span>
+                    </span>
+                  </div>
+                  <span style={{ fontFamily: T.label, fontSize: 9, color: T.muted, lineHeight: 1.45 }}>{screenSelection.explanation}</span>
+                  <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                    {screenCriteria(screenSelection).map(item => (
+                      <span key={item} style={{
+                        border: `1px solid ${T.border}`, background: T.surface, color: T.muted,
+                        fontFamily: T.mono, fontSize: 7.5, padding: '3px 5px',
+                      }}>{item}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -536,8 +748,8 @@ function ResearchPanel({
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                 <AlertTriangle size={13} style={{ flexShrink: 0 }} /> {planningError}
               </span>
-              <button type="button" onClick={() => onRun(true)} disabled={planning || researching || !!plan.blockedReason}
-                style={{ background: 'transparent', border: `1px solid ${T.warn}`, color: T.warn, fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 8px', cursor: planning || researching || plan.blockedReason ? 'default' : 'pointer' }}>
+              <button type="button" onClick={() => onRun(true)} disabled={researchActionsLocked}
+                style={{ background: 'transparent', border: `1px solid ${T.warn}`, color: T.warn, fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 8px', cursor: researchActionsLocked ? 'default' : 'pointer' }}>
                 Run baseline only
               </button>
             </div>
@@ -573,14 +785,14 @@ function ResearchPanel({
               <button
                 type="button"
                 onClick={onEnhance}
-                disabled={planning || researching || !!plan.blockedReason}
+                disabled={researchActionsLocked}
                 style={{
                   ...primaryAction,
                   background: 'transparent',
                   borderColor: plan.aiEnhanced ? T.gold : T.border,
                   color: plan.aiEnhanced ? T.gold : T.muted,
-                  cursor: planning || researching || plan.blockedReason ? 'default' : 'pointer',
-                  opacity: planning || researching || plan.blockedReason ? 0.62 : 1,
+                  cursor: researchActionsLocked ? 'default' : 'pointer',
+                  opacity: researchActionsLocked ? 0.62 : 1,
                 }}
               >
                 {planning ? <Loader2 size={13} className="rc-spin" /> : <Sparkles size={13} />}
@@ -589,14 +801,14 @@ function ResearchPanel({
               <button
                 type="button"
                 onClick={() => onRun()}
-                disabled={researching || planning || !!plan.blockedReason}
+                disabled={researchActionsLocked}
                 style={{
                   ...primaryAction,
-                  background: researching || planning || plan.blockedReason ? 'transparent' : T.gold,
-                  borderColor: researching || planning || plan.blockedReason ? T.border : T.gold,
-                  color: researching || planning || plan.blockedReason ? T.muted : 'var(--theme-bg)',
-                  cursor: researching || planning || plan.blockedReason ? 'default' : 'pointer',
-                  opacity: researching || planning || plan.blockedReason ? 0.62 : 1,
+                  background: researchActionsLocked ? 'transparent' : T.gold,
+                  borderColor: researchActionsLocked ? T.border : T.gold,
+                  color: researchActionsLocked ? T.muted : 'var(--theme-bg)',
+                  cursor: researchActionsLocked ? 'default' : 'pointer',
+                  opacity: researchActionsLocked ? 0.62 : 1,
                 }}
               >
                 {researching || planning ? <Loader2 size={13} className="rc-spin" /> : plan.aiEnhanced ? <Database size={13} /> : <Sparkles size={13} />}

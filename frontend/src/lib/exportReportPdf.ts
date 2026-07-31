@@ -147,9 +147,15 @@ export async function exportReportPdf(
     .map(element => spanFor(element, element.classList.contains('rc-keep-tight')))
     .filter(span => span.bottom > span.top)
   for (const section of pageEl.querySelectorAll<HTMLElement>('.rc-section')) {
-    // A section is an editorial unit; keeping it intact avoids orphaned prose
-    // without forcing isolated paragraphs onto mostly empty pages.
-    keepSpans.push(spanFor(section))
+    const heading = section.querySelector<HTMLElement>('.rc-section-heading')
+    if (!heading) continue
+    const sectionSpan = spanFor(section)
+    const headingSpan = spanFor(heading)
+    keepSpans.push({
+      top: headingSpan.top,
+      bottom: Math.min(sectionSpan.bottom, headingSpan.bottom + 120 * domToCanvas),
+      preferEarlierBreak: true,
+    })
   }
   const plan = choosePdfSlicePlan(canvas.height, basePageHeightPx, keepSpans)
   const imgWmm = contentW / plan.scaleFactor
