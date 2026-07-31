@@ -8,7 +8,13 @@ import type {
   LayoutPreset, LookbackPreset, LookforwardPreset, ReportLength, ReportScope, ReportType,
 } from '../../lib/reportCreator'
 import { readPMBooks, CASH_SYMBOL } from '../../lib/pmImport'
-import { readSavedScreens, runSavedScreen, screenReportSymbols, type SavedScreen } from '../../lib/reportResearch'
+import {
+  readSavedScreens, runSavedScreen, screenReportSymbols,
+  type SavedScreen, type ReportResearchPlan, type ReportResearchSourceId,
+  type ReportResearchProgress,
+} from '../../lib/reportResearch'
+
+type ResearchSourceState = ReportResearchProgress['status'] | 'queued'
 
 // Setup runs before anything is generated: the report's kind, its question, its
 // evidence and its composition are decisions the model cannot make for you, and
@@ -103,7 +109,7 @@ const LOOKFORWARD: { k: LookforwardPreset; label: string }[] = [
   { k: 'next90', label: '90D' }, { k: 'next180', label: '180D' }, { k: 'custom', label: 'Custom' },
 ]
 
-const STEPS = ['Type', 'Question', 'Data', 'Layout', 'Review'] as const
+const STEPS = ['Type', 'Question', 'Data', 'Layout', 'Evidence'] as const
 
 const label: React.CSSProperties = {
   display: 'block', fontFamily: T.label, fontSize: 8.5, fontWeight: 700,
@@ -373,6 +379,92 @@ function SubjectPicker({ scope, onChange, isMobile }: {
   )
 }
 
+const STATUS_INK: Record<ResearchSourceState, string> = {
+  complete: 'var(--theme-positive, #22c55e)',
+  partial: 'var(--theme-primary, #c9a84c)',
+  running: 'var(--theme-primary, #c9a84c)',
+  failed: 'var(--theme-negative, #ef4444)',
+  queued: T.muted,
+}
+const STATUS_WORD: Record<ResearchSourceState, string> = {
+  complete: 'collected', partial: 'partial', running: 'running', failed: 'failed', queued: 'queued',
+}
+
+// The research pass runs inside the flow rather than after it. Leaving it to a
+// panel further down the page meant the last step's only real option was to skip.
+function EvidenceStep({ evidence, clipCount, isMobile }: {
+  evidence: WizardEvidence; clipCount: number; isMobile: boolean
+}) {
+  const { plan, planning, running, statuses, error, planningError } = evidence
+  const blocked = plan?.blockedReason
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+      {planning && (
+        <div style={{ fontFamily: T.mono, fontSize: 10.5, color: T.gold }}>
+          Choosing the tools your objective needs...
+        </div>
+      )}
+
+      {blocked && (
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontFamily: T.mono, fontSize: 10, color: T.warn, lineHeight: 1.55 }}>
+          <AlertTriangle size={11} style={{ flexShrink: 0, marginTop: 2 }} /> <span>{blocked}</span>
+        </div>
+      )}
+
+      {plan && !blocked && plan.sources.length > 0 && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
+            <span style={{ ...label, marginBottom: 0 }}>Research plan</span>
+            <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.muted }}>
+              {plan.sources.length} tool{plan.sources.length === 1 ? '' : 's'}
+              {plan.aiEnhanced ? ' · AI selected' : ' · baseline'}
+              {plan.symbols.length ? ` · ${plan.symbols.join(', ')}` : ' · market scope'}
+            </span>
+          </div>
+          <div style={{ display: 'grid', gap: 5, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
+            {plan.sources.map(s => {
+              const state = statuses[s.id] ?? (running ? 'queued' : undefined)
+              return (
+                <div key={s.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 8, minWidth: 0,
+                  border: `1px solid ${T.border}`, background: T.bg, padding: '6px 9px',
+                }}>
+                  <span style={{
+                    width: 5, height: 5, flexShrink: 0, borderRadius: '50%',
+                    background: state ? STATUS_INK[state] ?? T.muted : T.border,
+                  }} />
+                  <span style={{ fontFamily: T.label, fontSize: 10.5, color: T.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {s.label}
+                  </span>
+                  <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, marginLeft: 'auto', flexShrink: 0 }}>
+                    {state ? STATUS_WORD[state] : s.tool}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+          {plan.aiSummary && (
+            <div style={{ fontFamily: T.mono, fontSize: 9.5, color: T.muted, lineHeight: 1.55, marginTop: 8 }}>{plan.aiSummary}</div>
+          )}
+        </div>
+      )}
+
+      {(error || planningError) && (
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontFamily: T.mono, fontSize: 10, color: T.neg, lineHeight: 1.55 }}>
+          <AlertTriangle size={11} style={{ flexShrink: 0, marginTop: 2 }} /> <span>{error || planningError}</span>
+        </div>
+      )}
+
+      {clipCount > 0 && !running && (
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: T.mono, fontSize: 10, color: T.pos }}>
+          <Check size={12} /> {clipCount} clip{clipCount === 1 ? '' : 's'} collected. Run again to refresh, or generate.
+        </div>
+      )}
+    </div>
+  )
+}
+
 function Summary({ rows }: { rows: [string, string][] }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', border: `1px solid ${T.border}` }}>
@@ -389,8 +481,18 @@ function Summary({ rows }: { rows: [string, string][] }) {
   )
 }
 
+export interface WizardEvidence {
+  plan: ReportResearchPlan | null
+  planning: boolean
+  running: boolean
+  statuses: Partial<Record<ReportResearchSourceId, ResearchSourceState>>
+  error: string | null
+  planningError: string | null
+  onRun: () => void
+}
+
 export default function ReportSetupWizard({
-  scope, clipCount, generating, onChange, onFinish, onGenerate, isMobile,
+  scope, clipCount, generating, onChange, onFinish, onGenerate, isMobile, evidence,
 }: {
   scope: ReportScope
   clipCount: number
@@ -399,6 +501,7 @@ export default function ReportSetupWizard({
   onFinish: () => void
   onGenerate: () => void
   isMobile: boolean
+  evidence: WizardEvidence
 }) {
   const [step, setStep] = useState(0)
   // Re-entering setup on a configured project (the Change button) should not make
@@ -426,6 +529,9 @@ export default function ReportSetupWizard({
     if (t.k === scope.reportType) return
     onChange({ reportType: t.k, ...t.defaults })
   }
+
+  const researchBusy = evidence.planning || evidence.running
+  const researchIsNext = scope.evidenceMode === 'alphatape' && (clipCount === 0 || researchBusy)
 
   const subjectsText = () => {
     const list = scope.researchSymbols.split(',').map(s => s.trim()).filter(Boolean)
@@ -602,10 +708,15 @@ export default function ReportSetupWizard({
 
       {step === 4 && (
         <div>
-          <h2 style={{ fontFamily: T.label, fontSize: 14, fontWeight: 700, color: T.text, margin: '0 0 5px' }}>Ready to build</h2>
+          <h2 style={{ fontFamily: T.label, fontSize: 14, fontWeight: 700, color: T.text, margin: '0 0 5px' }}>Gather the evidence</h2>
           <p style={{ fontFamily: T.mono, fontSize: 10.5, color: T.muted, lineHeight: 1.6, margin: '0 0 16px' }}>
-            Check the setup, then generate. Everything here stays editable afterwards.
+            {scope.evidenceMode === 'alphatape'
+              ? 'AlphaTape picks the tools your objective needs and collects them as clips. Nothing is written until you review what came back.'
+              : 'Your report will use the clips you send with Send to Report. Collect them, then generate.'}
           </p>
+
+          {scope.evidenceMode === 'alphatape' && <EvidenceStep evidence={evidence} clipCount={clipCount} isMobile={isMobile} />}
+
           <Summary rows={[
             ['Type', `${type.label} — ${type.blurb}`],
             ['Question', goal || 'Not set'],
@@ -616,11 +727,9 @@ export default function ReportSetupWizard({
             ['Horizon', horizonText()],
             ['Layout', `${LAYOUTS.find(l => l.k === scope.layoutPreset)?.label} · ${LENGTH.find(l => l.k === scope.length)?.label}`],
           ]} />
-          {clipCount === 0 && (
+          {clipCount === 0 && scope.evidenceMode === 'manual' && (
             <div style={{ fontFamily: T.mono, fontSize: 10, color: T.warn, lineHeight: 1.6, marginTop: 12 }}>
-              {scope.evidenceMode === 'alphatape'
-                ? 'No evidence yet. Finish setup, then run the AlphaTape research pass to collect it.'
-                : 'No clips yet. Finish setup, then use Send to Report on any tool to collect evidence.'}
+              No clips yet. Open any tool and use Send to Report, then come back and generate.
             </div>
           )}
         </div>
@@ -663,21 +772,39 @@ export default function ReportSetupWizard({
                 fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
                 textTransform: 'uppercase', padding: '8px 12px', cursor: 'pointer',
               }}>
-              Skip to evidence
+              Do it manually
             </button>
-            <button type="button" onClick={() => { onFinish(); onGenerate() }} disabled={generating || clipCount === 0}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                background: clipCount === 0 ? 'transparent' : T.gold,
-                border: `1px solid ${clipCount === 0 ? T.border : T.gold}`,
-                color: clipCount === 0 ? T.muted : 'var(--theme-bg)',
-                fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
-                textTransform: 'uppercase', padding: '8px 14px',
-                cursor: (generating || clipCount === 0) ? 'default' : 'pointer',
-                opacity: (generating || clipCount === 0) ? 0.55 : 1,
-              }}>
-              <Sparkles size={12} /> {generating ? 'Generating…' : 'Generate report'}
-            </button>
+            {/* AlphaTape mode with nothing collected yet: running the research IS
+                the next step, so it takes the primary action rather than sitting
+                in a panel the user had to skip ahead to. */}
+            {researchIsNext ? (
+              <button type="button" onClick={evidence.onRun} disabled={researchBusy || !!evidence.plan?.blockedReason}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  background: researchBusy || evidence.plan?.blockedReason ? 'transparent' : T.gold,
+                  border: `1px solid ${researchBusy || evidence.plan?.blockedReason ? T.border : T.gold}`,
+                  color: researchBusy || evidence.plan?.blockedReason ? T.muted : 'var(--theme-bg)',
+                  fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
+                  textTransform: 'uppercase', padding: '8px 14px',
+                  cursor: researchBusy ? 'default' : 'pointer', opacity: researchBusy ? 0.6 : 1,
+                }}>
+                <Wand2 size={12} /> {evidence.planning ? 'Planning...' : evidence.running ? 'Researching...' : 'Run AlphaTape research'}
+              </button>
+            ) : (
+              <button type="button" onClick={() => { onFinish(); onGenerate() }} disabled={generating || clipCount === 0}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  background: clipCount === 0 ? 'transparent' : T.gold,
+                  border: `1px solid ${clipCount === 0 ? T.border : T.gold}`,
+                  color: clipCount === 0 ? T.muted : 'var(--theme-bg)',
+                  fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
+                  textTransform: 'uppercase', padding: '8px 14px',
+                  cursor: (generating || clipCount === 0) ? 'default' : 'pointer',
+                  opacity: (generating || clipCount === 0) ? 0.55 : 1,
+                }}>
+                <Sparkles size={12} /> {generating ? 'Generating...' : 'Generate report'}
+              </button>
+            )}
           </span>
         )}
       </div>

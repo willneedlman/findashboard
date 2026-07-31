@@ -1217,6 +1217,15 @@ export default function ReportCreator() {
                 onChange={patch => updateScope(active.id, patch)}
                 onFinish={() => updateScope(active.id, { setupComplete: true })}
                 onGenerate={generate}
+                evidence={{
+                  plan: researchPlan,
+                  planning: planningResearch,
+                  running: researching,
+                  statuses: researchStatuses,
+                  error: researchError,
+                  planningError,
+                  onRun: () => void runResearch(),
+                }}
               />
             )}
 

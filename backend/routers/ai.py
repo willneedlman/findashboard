@@ -1846,6 +1846,11 @@ class ReportResearchToolIn(BaseModel):
     producesVisuals: bool = False
 
 
+# Headroom over the current catalogue so new tools reach the planner as they are
+# added. Bounded only to keep one prompt from growing without limit.
+_RESEARCH_CATALOG_CAP = 64
+
+
 class ReportResearchPlanRequest(BaseModel):
     objective: str = ""
     mustInclude: str = ""
@@ -1898,7 +1903,10 @@ def plan_report_research(req: ReportResearchPlanRequest):
     objective = req.objective.strip()
     if not objective:
         raise HTTPException(400, "Report objective is required")
-    tools = req.tools[:24]
+    # The catalogue is the planner's whole world: anything trimmed here is a tool
+    # it can never choose. This was pinned at 24 while exactly 23 tools existed,
+    # so the next tool added would have been silently invisible to it.
+    tools = req.tools[:_RESEARCH_CATALOG_CAP]
     allowed = {tool.id for tool in tools if tool.id}
     baseline = {source_id for source_id in req.baselineSourceIds if source_id in allowed}
     if not allowed:
