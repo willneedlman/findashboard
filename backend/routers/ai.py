@@ -3104,6 +3104,80 @@ def _clip_signal_digest(clips: list[ReportClipIn]) -> dict:
     )
     return dig
 
+
+def _report_prompt_clips(
+    clips: list[ReportClipIn],
+    length: str,
+    book_level: bool,
+) -> list[dict]:
+    """Select a compact, diverse evidence set for the LLM writer.
+
+    Large AlphaTape runs can collect hundreds of supporting clips. The full set
+    remains available for charts, appendix selection, and export; the writer
+    receives a decision-grade subset so outline and drafting stay within the
+    edge proxy's response window.
+    """
+    cap = {"short": 16, "medium": 24, "long": 32}.get(_length_key(length), 24)
+    data_cap = {"short": 650, "medium": 850, "long": 1_050}.get(_length_key(length), 850)
+    priority_rules = [
+        (r"current allocation|current option positions", 1_000),
+        (r"risk metrics|performance methodology|vs spy|active return|drawdown", 960),
+        (r"factor model coefficients|rolling .*coefficient|holding-level beta|scenario losses", 930),
+        (r"option analytics coverage|derivative coverage|options snapshot|skew pulse|dealer gamma|implied", 900),
+        (r"earnings schedule|macro event|catalyst", 860),
+        (r"dcf verdict|model assumptions|value drivers|peer valuation", 840),
+        (r"company snapshot|financials and estimates|recent news", 780),
+        (r"sector allocation|correlation matrix|global market|credit|yield curve", 740),
+    ]
+
+    def score(clip: ReportClipIn) -> int:
+        text = f"{clip.sourceTab} {clip.title}"
+        best = 500
+        for pattern, value in priority_rules:
+            if re.search(pattern, text, re.I):
+                best = max(best, value)
+        if clip.userDescription.strip():
+            best += 240
+        if clip.dataType.lower() in {"chart", "kpi"}:
+            best += 20
+        return best
+
+    selected: list[ReportClipIn] = []
+    source_counts: dict[str, int] = {}
+    ticker_counts: dict[str, int] = {}
+    for clip in sorted(clips, key=lambda item: (-score(item), item.title.lower(), item.id)):
+        source = clip.sourceTab.strip().lower() or "unknown"
+        ticker = (_clip_ticker(clip) or "").upper()
+        high_priority = score(clip) >= 900
+        if not high_priority and source_counts.get(source, 0) >= 3:
+            continue
+        if not high_priority and ticker and ticker_counts.get(ticker, 0) >= 2:
+            continue
+        selected.append(clip)
+        source_counts[source] = source_counts.get(source, 0) + 1
+        if ticker:
+            ticker_counts[ticker] = ticker_counts.get(ticker, 0) + 1
+        if len(selected) >= cap:
+            break
+
+    if not book_level:
+        selected.sort(key=lambda item: (-score(item), item.title.lower(), item.id))
+
+    def compact(clip: ReportClipIn) -> dict:
+        data = clip.dataSummary.strip()
+        if len(data) > data_cap:
+            data = f"{data[:data_cap].rstrip()} … [supporting detail retained in appendix]"
+        return {
+            "id": clip.id,
+            "sourceTool": clip.sourceTab,
+            "type": clip.dataType,
+            "title": clip.title,
+            "userInstruction": clip.userDescription,
+            "data": data,
+        }
+
+    return [compact(clip) for clip in selected]
+
 def _truncate_clean(s: str, n: int) -> str:
     """Trim to n chars on a word boundary with an ellipsis, not a mid-word cut."""
     s = (s or "").strip()
@@ -4341,6 +4415,21 @@ Respond ONLY with JSON (no markdown, no code fences):
 def _generate_outline(payload: dict) -> dict | None:
     """Step 1 — draft a thesis-first section outline. Returns None on any failure
     so the pipeline falls back to a single unplanned draft."""
+    if payload.get("reportType") == "portfolio-review":
+        forward_heading = (
+            "What Could Happen Next: Stress, Valuation, and Dated Catalysts"
+            if payload.get("hasPortfolioValuation")
+            else "What Could Happen Next: Stress and Dated Catalysts"
+        )
+        return {
+            "thesis": "Assess the book through measured performance, concentration, and decision-relevant risk.",
+            "sections": [
+                {"heading": "What Happened: Return and Risk Versus SPY", "argues": "Compare portfolio and SPY period return, active return, volatility, and maximum drawdown using matching dates and methods.", "chartHint": "performance"},
+                {"heading": "Why It Happened: Market Sensitivity and Name-Specific Risk", "argues": "Separate measured market sensitivity, factor coefficients, and holding concentration from unsupported active-return attribution.", "chartHint": "risk"},
+                {"heading": forward_heading, "argues": "Show beta-only market stress, any supplied compact valuation evidence, and only catalysts with actual supplied dates.", "chartHint": "scenario"},
+                {"heading": "What Action Follows: Evidence Before Reallocation", "argues": "Recommend no allocation change unless a proposed portfolio and quantified before-and-after risk and return evidence are supplied.", "chartHint": "none"},
+            ],
+        }
     try:
         messages = [
             {"role": "system", "content": _REPORT_OUTLINE_SYSTEM},
@@ -4358,22 +4447,6 @@ def _generate_outline(payload: dict) -> dict | None:
         ]
         if not secs:
             return None
-        if payload.get("reportType") == "portfolio-review":
-            forward_heading = (
-                "What Could Happen Next: Stress, Valuation, and Dated Catalysts"
-                if payload.get("hasPortfolioValuation")
-                else "What Could Happen Next: Stress and Dated Catalysts"
-            )
-            fixed = [
-                ("What Happened: Return and Risk Versus SPY", "Compare portfolio and SPY period return, active return, volatility, and maximum drawdown using matching dates and methods.", "performance"),
-                ("Why It Happened: Market Sensitivity and Name-Specific Risk", "Separate measured market sensitivity, factor coefficients, and NVDA-specific risk concentration from any unsupported active-return attribution.", "risk"),
-                (forward_heading, "Show beta-only market stress, any supplied compact valuation evidence, and only catalysts with actual supplied dates.", "scenario"),
-                ("What Action Follows: Evidence Before Reallocation", "Recommend no allocation change unless a proposed portfolio and quantified before-and-after risk and return evidence are supplied.", "none"),
-            ]
-            secs = [
-                {"heading": heading, "argues": argues, "chartHint": chart_hint}
-                for heading, argues, chart_hint in fixed
-            ]
         section_cap = 4 if payload.get("reportType") == "portfolio-review" else {"short": 2, "medium": 5, "long": 8}[_length_key(payload.get("reportLength"))]
         return {"thesis": str(out.get("thesis", "")).strip(), "sections": secs[:section_cap]}
     except Exception as e:  # noqa: BLE001 — outline is best-effort
@@ -5197,11 +5270,7 @@ def generate_report(req: ReportGenRequest):
             "are not comparable across differently-priced names."
         )
 
-    clip_payload = [
-        {"id": c.id, "sourceTool": c.sourceTab, "type": c.dataType,
-         "title": c.title, "userInstruction": c.userDescription, "data": c.dataSummary}
-        for c in req.clips
-    ]
+    clip_payload = _report_prompt_clips(req.clips, length_key, book_level)
     goal_text = req.goal or "(not specified)"
     purpose_text = req.purpose or "(not specified)"
     coverage_requirements = _auto_must_include(req.clips)

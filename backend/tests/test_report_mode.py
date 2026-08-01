@@ -1607,3 +1607,20 @@ def test_portfolio_prompt_makes_computed_evidence_authoritative():
     assert "Never describe a negative active return as outperformance" in prompt
     assert "period return, not CAGR" in prompt
     assert "holding-level or factor attribution" in prompt
+
+
+def test_large_research_run_is_compacted_for_the_report_writer():
+    clips = [
+        _clip("allocation", "Portfolio Manager", "Core · current allocation", "Ticker | Weight %\nAAPL | 50"),
+        _clip("risk", "Portfolio Compare", "Core risk metrics", "Period return: 8%; Active return vs SPY: 2%"),
+        _clip("options", "Options Desk", "AAPL options snapshot", "ATM IV: 32%; Implied move: 4%"),
+    ] + [
+        _clip(f"company-{index}", "Corporate Hub", f"AAPL company snapshot {index}", "x" * 3_000)
+        for index in range(80)
+    ]
+
+    payload = ai._report_prompt_clips(clips, "long", True)
+
+    assert len(payload) <= 32
+    assert {"allocation", "risk", "options"}.issubset({clip["id"] for clip in payload})
+    assert all(len(clip["data"]) <= 1_100 for clip in payload)
