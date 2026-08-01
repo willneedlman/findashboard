@@ -211,7 +211,7 @@ function KpiClip({ p, pal }: { p: KpiPayload; pal: Palette }) {
               }}>{k.label}</div>
               <div style={{
                 fontFamily: MONO, fontSize: longValue ? 10.5 : 15, fontWeight: 700, lineHeight: 1.35, minHeight: 22, color: pal.ink, marginTop: 3,
-                whiteSpace: longValue ? 'normal' : 'nowrap', overflow: 'visible', overflowWrap: longValue ? 'anywhere' : undefined,
+                whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word',
               }}>{k.value}</div>
               {k.sub && (
                 <div style={{

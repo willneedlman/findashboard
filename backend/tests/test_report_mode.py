@@ -1539,6 +1539,29 @@ def test_option_inventory_prevents_single_stock_book_classification():
     assert ai._has_option_positions(clips) is True
 
 
+def test_portfolio_position_decisions_cover_every_holding_and_option_contract():
+    clips = [
+        ReportClipIn(
+            id="allocation", sourceTab="Portfolio Manager", dataType="table",
+            title="Current allocation",
+            dataSummary="Columns: Ticker | Weight %\nNVDA | 14.2\nMSFT | 7.1\nCASH | 4.0\nOPTIONS | 3.0",
+        ),
+        ReportClipIn(
+            id="options", sourceTab="Portfolio Manager", dataType="table",
+            title="Current option positions",
+            dataSummary="Columns: Underlying | Strategy | Expiry\nNVDA | Long Call | 2026-08-07",
+        ),
+    ]
+
+    decisions = ai._portfolio_position_decisions(clips)
+
+    assert [(item["position"], item["decision"]) for item in decisions] == [
+        ("NVDA", "Review sizing"),
+        ("MSFT", "No resize supported"),
+        ("NVDA Long Call", "No contract change supported"),
+    ]
+
+
 def test_beta_due_to_language_is_not_treated_as_active_return_attribution():
     clips = [_clip(
         "risk", "Portfolio Compare", "Portfolio risk metrics",

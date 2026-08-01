@@ -4147,6 +4147,47 @@ def _material_portfolio_positions(clips: list[ReportClipIn]) -> list[tuple[str, 
     return []
 
 
+def _portfolio_position_decisions(clips: list[ReportClipIn]) -> list[dict]:
+    """Make the required position-by-position decision explicit without
+    fabricating a security-level trade from portfolio-only evidence."""
+    decisions: list[dict] = []
+    for ticker, weight in _material_portfolio_positions(clips):
+        decision = "Review sizing" if weight >= 10 else "No resize supported"
+        basis = (
+            f"{weight:.2f}% of the positive-weight book. Review its sizing against the account risk budget before changing it."
+            if weight >= 10
+            else f"{weight:.2f}% of the positive-weight book. The supplied evidence does not quantify a better replacement or resize."
+        )
+        decisions.append({"position": ticker, "weight": f"{weight:.2f}%", "decision": decision, "basis": basis})
+
+    for clip in clips:
+        if not re.search(r"\bcurrent option positions\b", clip.title, re.I):
+            continue
+        parsed = _parse_table_summary(clip.dataSummary)
+        if not parsed:
+            continue
+        columns, rows = parsed
+        underlying_i = next((i for i, column in enumerate(columns) if re.search(r"underlying", column, re.I)), -1)
+        strategy_i = next((i for i, column in enumerate(columns) if re.search(r"strategy", column, re.I)), -1)
+        expiry_i = next((i for i, column in enumerate(columns) if re.search(r"expiry", column, re.I)), -1)
+        for row in rows:
+            if underlying_i < 0 or len(row) <= underlying_i:
+                continue
+            underlying = row[underlying_i].strip().upper()
+            if not underlying:
+                continue
+            strategy = row[strategy_i].strip() if strategy_i >= 0 and len(row) > strategy_i else "Option position"
+            expiry = row[expiry_i].strip() if expiry_i >= 0 and len(row) > expiry_i else ""
+            suffix = f", expiry {expiry}" if expiry else ""
+            decisions.append({
+                "position": f"{underlying} {strategy}".strip(),
+                "weight": "Option sleeve",
+                "decision": "No contract change supported",
+                "basis": f"{strategy}{suffix}. Contract-level Greeks and a proposed adjustment were not supplied.",
+            })
+    return decisions
+
+
 def _has_option_positions(clips: list[ReportClipIn]) -> bool:
     return any(re.search(r"\bcurrent option positions\b", clip.title, re.I) for clip in clips)
 
@@ -5320,6 +5361,7 @@ def generate_report(req: ReportGenRequest):
 
     sections = _build_sections(result.get("sections"), valid_ids)
     material_positions = _material_portfolio_positions(req.clips) if book_level else []
+    position_decisions = _portfolio_position_decisions(req.clips) if book_level else []
     if (req.reportType or "").strip() == "portfolio-review":
         sections = _normalize_portfolio_sections(sections)
     # STEP 3 — Intentional chart mapping: the site builds and assigns every chart.
@@ -5490,6 +5532,7 @@ def generate_report(req: ReportGenRequest):
         "sections": sections,
         "conclusion": conclusion,
         "appendixClipIds": appendix,
+        "positionDecisions": position_decisions,
         "model": MODEL_SMART,
         "valuationContext": valuation_context,
     }

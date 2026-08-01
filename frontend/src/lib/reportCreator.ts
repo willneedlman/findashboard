@@ -173,6 +173,12 @@ export interface GeneratedSection {
   keyFigures?: KeyFigure[]       // AI-extracted evidence actually used, not the raw dataset
   chart?: ChartPayload           // AI-synthesized chart built from this section's own figures — not sourced from a clip
 }
+export interface PositionDecision {
+  position: string
+  weight: string
+  decision: string
+  basis: string
+}
 export interface GeneratedReport {
   headline?: string              // research-note title for the masthead
   stance?: ReportStance          // directional lean + conviction (not a vol envelope)
@@ -181,6 +187,7 @@ export interface GeneratedReport {
   sections: GeneratedSection[]   // curated, in argument order
   conclusion: string
   appendixClipIds: string[]      // down-ranked clips, shown as supporting data
+  positionDecisions?: PositionDecision[] // deterministic decision for every current holding
   generatedAt: string            // ISO; compare with project.updatedAt for staleness
   model?: string
 }

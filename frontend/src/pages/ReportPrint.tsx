@@ -11,7 +11,7 @@ import SectionLayout, {
 } from '../components/report/SectionLayout'
 import {
   useReportCreator, timeframeLabel, clipTitle,
-  type ReportClip, type ClipPayload,
+  type ReportClip, type ClipPayload, type PositionDecision,
 } from '../lib/reportCreator'
 import { exportReportPdf, reportPdfBaseName } from '../lib/exportReportPdf'
 import { selectReportAppendixData } from '../lib/reportPresentation'
@@ -54,6 +54,52 @@ function allocationTickers(clips: ReportClip[], max = 4): string[] {
 function kpiCell(clip: ReportClip | undefined, pattern: RegExp) {
   if (!clip || clip.payload.kind !== 'kpi') return undefined
   return clip.payload.cells.find(cell => pattern.test(cell.label))
+}
+
+function fallbackPositionDecisions(clips: ReportClip[]): PositionDecision[] {
+  const allocation = clips.find(clip => clip.payload.kind === 'table' && /\bcurrent allocation\b/i.test(clip.payload.title || ''))
+  const decisions: PositionDecision[] = []
+  if (allocation?.payload.kind === 'table') {
+    const tickerIndex = allocation.payload.columns.findIndex(column => /^ticker$/i.test(column))
+    const weightIndex = allocation.payload.columns.findIndex(column => /weight/i.test(column))
+    if (tickerIndex >= 0 && weightIndex >= 0) {
+      decisions.push(...allocation.payload.rows.map(row => {
+      const position = String(row[tickerIndex] ?? '').trim().toUpperCase()
+      const rawWeight = String(row[weightIndex] ?? '').trim()
+      const weight = Number(rawWeight.replace(/[%+,]/g, ''))
+      if (!position || position === 'CASH' || position === 'OPTIONS' || !Number.isFinite(weight) || weight <= 0.05) return undefined
+      const decision = weight >= 10 ? 'Review sizing' : 'No resize supported'
+      return {
+        position,
+        weight: `${weight.toFixed(2)}%`,
+        decision,
+        basis: weight >= 10
+          ? `${weight.toFixed(2)}% of the positive-weight book. Review its sizing against the account risk budget before changing it.`
+          : `${weight.toFixed(2)}% of the positive-weight book. The supplied evidence does not quantify a better replacement or resize.`,
+      }
+      }).filter((decision): decision is PositionDecision => !!decision))
+    }
+  }
+  for (const clip of clips) {
+    if (clip.payload.kind !== 'table' || !/\bcurrent option positions\b/i.test(clip.payload.title || '')) continue
+    const underlyingIndex = clip.payload.columns.findIndex(column => /underlying/i.test(column))
+    const strategyIndex = clip.payload.columns.findIndex(column => /strategy/i.test(column))
+    const expiryIndex = clip.payload.columns.findIndex(column => /expiry/i.test(column))
+    if (underlyingIndex < 0) continue
+    for (const row of clip.payload.rows) {
+      const underlying = String(row[underlyingIndex] ?? '').trim().toUpperCase()
+      if (!underlying) continue
+      const strategy = String(strategyIndex >= 0 ? row[strategyIndex] ?? 'Option position' : 'Option position').trim()
+      const expiry = String(expiryIndex >= 0 ? row[expiryIndex] ?? '' : '').trim()
+      decisions.push({
+        position: `${underlying} ${strategy}`.trim(),
+        weight: 'Option sleeve',
+        decision: 'No contract change supported',
+        basis: `${strategy}${expiry ? `, expiry ${expiry}` : ''}. Contract-level Greeks and a proposed adjustment were not supplied.`,
+      })
+    }
+  }
+  return decisions
 }
 
 // keyResult.value ranges from a short "$280–$310" to a longer open-mode
@@ -325,6 +371,10 @@ export default function ReportPrint() {
     }
     return result.slice(0, 4)
   }, [allocationClip, gen?.sections, portfolioRiskClip])
+  const positionDecisions = useMemo(
+    () => gen?.positionDecisions?.length ? gen.positionDecisions : fallbackPositionDecisions(allClips),
+    [allClips, gen?.positionDecisions],
+  )
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--theme-bg, #101c2e)', padding: '20px 16px 60px' }}>
@@ -525,9 +575,10 @@ export default function ReportPrint() {
                               fontFamily: palette.mono, fontWeight: 700,
                               color: palette.ink,
                               marginTop: 3, lineHeight: 1.35, minHeight: 20,
-                              fontSize: 14,
-                              whiteSpace: 'nowrap',
-                              overflow: 'visible',
+                              fontSize: k.value.length > 20 ? 11.5 : 14,
+                              whiteSpace: 'normal',
+                              overflowWrap: 'anywhere',
+                              wordBreak: 'break-word',
                             } as React.CSSProperties}>{k.value}</div>
                             {k.sub && (
                               <div style={{ fontFamily: palette.sans, fontSize: 9, color: palette.muted, marginTop: 2, lineHeight: 1.25 }}>
@@ -662,6 +713,39 @@ export default function ReportPrint() {
                   </h2>
                   <p style={prose}>{gen.conclusion || '—'}</p>
                 </section>
+
+                {positionDecisions.length > 0 && (
+                  <section style={{ marginTop: 20 }}>
+                    <h2 className="rc-keep rc-keep-tight" style={bandHead}>Position Decisions</h2>
+                    <div style={{ border: `1px solid ${palette.border}`, background: palette.cellBg }}>
+                      <div style={{
+                        display: 'grid', gridTemplateColumns: 'minmax(72px, 0.8fr) minmax(80px, 0.9fr) minmax(112px, 1fr) minmax(0, 2.7fr)',
+                        gap: 0, background: palette.panel, borderBottom: `1px solid ${palette.border}`,
+                      }}>
+                        {['Position', 'Weight', 'Decision', 'Basis'].map(label => (
+                          <div key={label} style={{ ...eyebrow, padding: '7px 9px', minWidth: 0, overflowWrap: 'anywhere' }}>{label}</div>
+                        ))}
+                      </div>
+                      {positionDecisions.map((item, index) => (
+                        <div key={`${item.position}-${index}`} className="rc-atomic" style={{
+                          display: 'grid', gridTemplateColumns: 'minmax(72px, 0.8fr) minmax(80px, 0.9fr) minmax(112px, 1fr) minmax(0, 2.7fr)',
+                          gap: 0, borderTop: index === 0 ? 'none' : `1px solid ${palette.border}`,
+                        }}>
+                          {[item.position, item.weight, item.decision, item.basis].map((value, cell) => (
+                            <div key={cell} style={{
+                              fontFamily: cell === 3 ? palette.sans : palette.mono,
+                              fontSize: cell === 3 ? 9.5 : 10,
+                              fontWeight: cell === 2 ? 700 : 500,
+                              color: cell === 2 ? palette.accent : palette.ink,
+                              lineHeight: 1.35, padding: '7px 9px', minWidth: 0,
+                              overflowWrap: 'anywhere', wordBreak: 'break-word',
+                            }}>{value}</div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
 
                 {appendixData.length > 0 && (
                   <section style={{ marginTop: 20 }}>

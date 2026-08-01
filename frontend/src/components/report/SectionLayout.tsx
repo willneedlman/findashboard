@@ -181,7 +181,7 @@ function KeyFiguresStrip({
             }}>{toTitleCase(f.label)}</div>
             <div style={{
               fontFamily: palette.mono, fontSize: 12.5, fontWeight: 700, color: palette.ink, marginTop: 1,
-              whiteSpace: 'nowrap', overflow: 'visible', lineHeight: '20px', minHeight: 20, paddingBottom: 6,
+              whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', lineHeight: '20px', minHeight: 20, paddingBottom: 6,
             }}>{f.value}</div>
           </>
         )
