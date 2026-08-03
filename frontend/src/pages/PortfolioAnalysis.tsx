@@ -5,7 +5,7 @@ import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart,
   ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
-import { AlertTriangle, ArrowRight, CheckCircle2, RefreshCw } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CheckCircle2, RefreshCw, X } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import EmptyState from '../components/EmptyState'
 import ErrorState from '../components/ErrorState'
@@ -19,8 +19,6 @@ import {
 import { useReportCapture } from '../hooks/useReportCapture'
 import { chartClip, kpiClip, tableClip } from '../lib/reportCaptureRegistry'
 import type { ClipDraft } from '../lib/reportCreator'
-
-type Tab = 'overview' | 'performance' | 'risk' | 'scenarios' | 'positions'
 
 interface WeightedHolding {
   ticker: string
@@ -66,6 +64,7 @@ interface OptimizerData {
 
 interface OptionExposure { underlying: string; label: string; marketValue: number | null; deltaShares: number | null; source: string }
 interface SectorExposure { sector: string; weight: number; holdings: number }
+interface CompanyProfile { symbol: string; companyName: string | null; sector: string | null }
 interface PositionDecision extends WeightedHolding {
   sector: string; riskContribution: number | null; beta: number | null; periodReturn: number | null
   idiosyncratic: number | null; decision: string; rationale: string; tone: string
@@ -78,15 +77,44 @@ interface AnalysisResult {
   warnings: string[]; failures: string[]
 }
 
+type DetailSelection =
+  | { kind: 'sector'; sector: string }
+  | { kind: 'return'; point: BacktestData['cumulative'][number] }
+  | { kind: 'drawdown'; point: { date: string; drawdown: number } }
+  | { kind: 'monte'; point: { day: number; p5: number; p25: number; p50: number; p75: number; p95: number } }
+  | { kind: 'position'; ticker: string }
+
 const BENCHMARK = 'SPY'
 const LOOKBACK_YEARS = 5
 const HORIZON_DAYS = 756
 const MONTE_CARLO_RUNS = 500
+const SECTOR_FALLBACKS: Record<string, string> = {
+  BND: 'Fixed Income',
+  QQQ: 'Diversified Equity',
+  RVI: 'Financial Services',
+  SPY: 'Diversified Equity',
+  SPYI: 'Diversified Equity',
+  TSLL: 'Consumer Cyclical',
+  VOO: 'Diversified Equity',
+  VXUS: 'Diversified Equity',
+}
+const INVALID_SECTORS = new Set(['', 'na', 'none', 'null', 'unknown', 'unclassified', 'notavailable'])
 const fmtPct = (v: number | null | undefined, d = 1) => v == null || !Number.isFinite(v) ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(d)}%`
 const fmtMoney = (v: number) => v >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${(v / 1e3).toFixed(1)}K` : `$${v.toFixed(0)}`
 const asDate = (years: number) => { const d = new Date(); d.setFullYear(d.getFullYear() - years); return d.toISOString().slice(0, 10) }
 const endDate = () => new Date().toISOString().slice(0, 10)
 const quotePrice = (q: any) => Number(q?.current_price ?? q?.price ?? q?.regular_market_price ?? 0)
+
+function resolvedSector(ticker: string, profile?: CompanyProfile) {
+  const reported = profile?.sector?.trim() ?? ''
+  const sectorKey = reported.toLowerCase().replace(/[^a-z]/g, '')
+  if (!INVALID_SECTORS.has(sectorKey)) return reported
+  if (SECTOR_FALLBACKS[ticker]) return SECTOR_FALLBACKS[ticker]
+  const name = profile?.companyName?.toLowerCase() ?? ''
+  if (/bond|treasury|fixed income/.test(name)) return 'Fixed Income'
+  if (/fund|etf|portfolio|index|trust/.test(name)) return 'Diversified Fund'
+  return 'Other'
+}
 
 function optionLegs(options: PMOptionPosition[]) {
   return options.flatMap(p => p.legs.map(l => ({
@@ -152,17 +180,18 @@ async function runAnalysis(book: PMPortfolio, benchmark: string, lookbackYears: 
     request<FactorData>(axios.post('/api/portfolio/factor-decomposition', { holdings: factorHoldings, lookback_days: lookbackYears * 365, benchmark, mode: 'macro' }, { timeout: 120_000 })),
     request<FactorData>(axios.post('/api/portfolio/factor-decomposition', { holdings: factorHoldings, lookback_days: lookbackYears * 365, benchmark, mode: 'style' }, { timeout: 120_000 })),
     core20.length >= 2 ? request<OptimizerData>(axios.post('/api/portfolio-opt/optimize', { tickers: core20.map(h => h.ticker), start, end, return_model: 'historical', constraint_mode: 'long_only', weights: Object.fromEntries(core20.map((h, i) => [h.ticker, normCoreWeights[i]])) }, { timeout: 120_000 })) : Promise.resolve(null),
-    request<{ rows: { symbol: string; sector: string | null }[] }>(axios.get(`/api/earnings/profile?symbols=${encodeURIComponent(tickers.join(','))}&seed_only=false`, { timeout: 45_000 })),
+    request<{ rows: CompanyProfile[] }>(axios.get(`/api/earnings/profile?symbols=${encodeURIComponent(tickers.join(','))}&seed_only=false`, { timeout: 45_000 })),
   ])
   const value = <T,>(i: number): T | null => tasks[i].status === 'fulfilled' ? tasks[i].value as T : null
   const backtest = value<BacktestData>(0)
   if (!backtest) throw new Error('Historical performance could not be calculated. Try a shorter lookback or check for an unpriceable holding.')
   const monteCarlo = value<MonteCarloData>(1)
   const macro = value<FactorData>(2), style = value<FactorData>(3), optimizer = value<OptimizerData>(4)
-  const profiles = value<{ rows: { symbol: string; sector: string | null }[] }>(5)?.rows ?? []
-  const sectorByTicker = Object.fromEntries(profiles.map(r => [r.symbol, r.sector || 'Unclassified']))
+  const profiles = value<{ rows: CompanyProfile[] }>(5)?.rows ?? []
+  const profileByTicker = Object.fromEntries(profiles.map(r => [r.symbol, r]))
+  const sectorByTicker = Object.fromEntries(tickers.map(ticker => [ticker, resolvedSector(ticker, profileByTicker[ticker])]))
   const sectorMap = new Map<string, { weight: number; holdings: number }>()
-  holdings.forEach(h => { const sector = sectorByTicker[h.ticker] || 'Unclassified'; const s = sectorMap.get(sector) ?? { weight: 0, holdings: 0 }; s.weight += h.weight; s.holdings += 1; sectorMap.set(sector, s) })
+  holdings.forEach(h => { const sector = sectorByTicker[h.ticker]; const s = sectorMap.get(sector) ?? { weight: 0, holdings: 0 }; s.weight += h.weight; s.holdings += 1; sectorMap.set(sector, s) })
   const sectors = [...sectorMap].map(([sector, d]) => ({ sector, ...d })).sort((a, b) => b.weight - a.weight)
 
   const currentWeights = optimizer?.portfolios.current?.weights ?? []
@@ -172,7 +201,7 @@ async function runAnalysis(book: PMPortfolio, benchmark: string, lookbackYears: 
     const risk = currentWeights.find(w => w.ticker === h.ticker)?.risk_contribution ?? factorByTicker[h.ticker]?.book_var_share_pct ?? null
     const beta = assetByTicker[h.ticker]?.beta ?? factorByTicker[h.ticker]?.betas?.market ?? null
     const periodReturn = assetByTicker[h.ticker]?.total_return ?? null
-    return { ...h, sector: sectorByTicker[h.ticker] || 'Unclassified', riskContribution: risk, beta, periodReturn, idiosyncratic: factorByTicker[h.ticker]?.idiosyncratic_pct ?? null, ...decisionFor(h.weight, risk, beta, periodReturn) }
+    return { ...h, sector: sectorByTicker[h.ticker], riskContribution: risk, beta, periodReturn, idiosyncratic: factorByTicker[h.ticker]?.idiosyncratic_pct ?? null, ...decisionFor(h.weight, risk, beta, periodReturn) }
   })
 
   const flattened = optionLegs(book.optionPositions ?? [])
@@ -306,45 +335,119 @@ function Results({ data }: { data: AnalysisResult }) {
 const sectorColors = [T.gold, T.blue, T.pos, T.warn, '#a78bfa', '#22d3ee', '#f97316', T.muted]
 
 function ConciseAnalysis({ data }: { data: AnalysisResult }) {
+  const [selection, setSelection] = useState<DetailSelection | null>(null)
   const drawdowns = drawdownSeries(data.backtest.cumulative)
   const bands = monteBands(data.monteCarlo)
-  const sectorData = [...data.sectors.slice(0, 7)]
+  const sectorData = data.sectors.length > 7
+    ? [...data.sectors.slice(0, 6), data.sectors.slice(6).reduce((rest, sector) => ({ sector: 'Other sectors', weight: rest.weight + sector.weight, holdings: rest.holdings + sector.holdings }), { sector: 'Other sectors', weight: 0, holdings: 0 })]
+    : [...data.sectors]
   if (data.cashWeight > 0) sectorData.push({ sector: 'Cash', weight: data.cashWeight, holdings: 1 })
   const downtrends = data.positions.filter(p => p.periodReturn != null && p.periodReturn < 0).sort((a, b) => (a.periodReturn ?? 0) - (b.periodReturn ?? 0)).slice(0, 5)
   const terminal = data.monteCarlo?.percentiles
 
-  return <div className="portfolio-analysis-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, .75fr) minmax(0, 1.35fr)', gap: 10 }}>
-    <Panel label="Sector allocation" meta="Current market value" style={{ height: 330 }}>
-      <div style={{ height: '100%', display: 'grid', gridTemplateColumns: 'minmax(150px, 1fr) minmax(120px, .9fr)', alignItems: 'center', paddingTop: 28 }}>
-        <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={sectorData} dataKey="weight" nameKey="sector" innerRadius="50%" outerRadius="78%" paddingAngle={1} stroke={T.surface}>{sectorData.map((s, i) => <Cell key={s.sector} fill={sectorColors[i % sectorColors.length]} />)}</Pie><Tooltip contentStyle={tipStyle} formatter={(value: number) => `${Number(value).toFixed(1)}%`} /></PieChart></ResponsiveContainer>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>{sectorData.map((s, i) => <div key={s.sector} style={{ display: 'grid', gridTemplateColumns: '8px minmax(0, 1fr) auto', gap: 7, alignItems: 'center', fontFamily: MONO, fontSize: 9.5 }}><span style={{ width: 7, height: 7, background: sectorColors[i % sectorColors.length] }} /><span style={{ color: T.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.sector}</span><span style={{ color: T.text }}>{s.weight.toFixed(1)}%</span></div>)}</div>
+  const chartPoint = (state: any) => state?.activePayload?.[0]?.payload
+
+  return <div className="portfolio-analysis-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+    <Panel label="Sector allocation" meta="Current value · select a sector" style={{ minHeight: 360, overflow: 'hidden' }}>
+      <div className="portfolio-sector-layout" style={{ minHeight: 330, display: 'grid', gridTemplateColumns: 'minmax(190px, .9fr) minmax(250px, 1.1fr)', alignItems: 'center', paddingTop: 28, overflow: 'hidden' }}>
+        <div className="portfolio-sector-chart" style={{ minWidth: 0, height: 300, cursor: 'pointer' }}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={sectorData} dataKey="weight" nameKey="sector" innerRadius="50%" outerRadius="76%" paddingAngle={1} stroke={T.surface} onClick={(entry: any) => setSelection({ kind: 'sector', sector: entry?.sector ?? entry?.payload?.sector })}>{sectorData.map((s, i) => <Cell key={s.sector} fill={sectorColors[i % sectorColors.length]} cursor="pointer" />)}</Pie><Tooltip contentStyle={tipStyle} formatter={(value: number) => `${Number(value).toFixed(1)}%`} /></PieChart></ResponsiveContainer></div>
+        <div className="portfolio-sector-legend" style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0, width: '100%', maxWidth: '100%', padding: '0 18px 0 8px', overflow: 'hidden' }}>{sectorData.map((s, i) => <button type="button" aria-label={`Inspect ${s.sector}, ${s.weight.toFixed(1)} percent`} className="portfolio-inspectable" onClick={() => setSelection({ kind: 'sector', sector: s.sector })} key={s.sector} style={{ appearance: 'none', border: `1px solid ${selection?.kind === 'sector' && selection.sector === s.sector ? T.gold : 'transparent'}`, background: selection?.kind === 'sector' && selection.sector === s.sector ? T.hover : 'transparent', color: 'inherit', display: 'grid', gridTemplateColumns: '8px minmax(0, 1fr) 48px', gap: 8, alignItems: 'center', minWidth: 0, width: '100%', maxWidth: '100%', padding: '6px 7px', fontFamily: MONO, fontSize: 9.5, textAlign: 'left', cursor: 'pointer' }}><span style={{ width: 7, height: 7, background: sectorColors[i % sectorColors.length] }} /><span style={{ color: T.muted, minWidth: 0, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{s.sector}</span><span style={{ color: T.text, textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{s.weight.toFixed(1)}%</span></button>)}</div>
       </div>
     </Panel>
 
-    <Panel label="Return path" meta={`Growth of $100 vs ${BENCHMARK}`} style={{ height: 330 }}>
-      <ResponsiveContainer width="100%" height="100%"><ComposedChart data={data.backtest.cumulative} margin={{ top: 40, right: 14, bottom: 5, left: 0 }}><CartesianGrid stroke={T.borderFaint} vertical={false} /><XAxis dataKey="date" tick={{ fill: T.muted, fontSize: 9 }} minTickGap={70} /><YAxis tick={{ fill: T.muted, fontSize: 9 }} width={42} /><Tooltip contentStyle={tipStyle} /><ReferenceLine y={100} stroke={T.border} /><Line dataKey="portfolio" name={data.bookName} stroke={T.gold} strokeWidth={2} dot={false} /><Line dataKey="benchmark" name={BENCHMARK} stroke={T.blue} strokeWidth={1.2} dot={false} /></ComposedChart></ResponsiveContainer>
+    <Panel label="Return path" meta={`Growth of $100 vs ${BENCHMARK} · select a date`} style={{ height: 360 }}>
+      <div className="portfolio-chart-hit" style={{ height: '100%' }}><ResponsiveContainer width="100%" height="100%"><ComposedChart data={data.backtest.cumulative} margin={{ top: 40, right: 14, bottom: 5, left: 0 }} onClick={(state: any) => { const point = chartPoint(state); if (point) setSelection({ kind: 'return', point }) }}><CartesianGrid stroke={T.borderFaint} vertical={false} /><XAxis dataKey="date" tick={{ fill: T.muted, fontSize: 9 }} minTickGap={70} /><YAxis tick={{ fill: T.muted, fontSize: 9 }} width={42} /><Tooltip contentStyle={tipStyle} /><ReferenceLine y={100} stroke={T.border} /><Line dataKey="portfolio" name={data.bookName} stroke={T.gold} strokeWidth={2} dot={false} activeDot={{ r: 4 }} /><Line dataKey="benchmark" name={BENCHMARK} stroke={T.blue} strokeWidth={1.2} dot={false} activeDot={{ r: 3 }} /></ComposedChart></ResponsiveContainer></div>
     </Panel>
 
-    <Panel label="Downside path" meta="Peak-to-trough drawdown" style={{ height: 300 }}>
-      <ResponsiveContainer width="100%" height="100%"><AreaChart data={drawdowns} margin={{ top: 40, right: 14, bottom: 5, left: 0 }}><CartesianGrid stroke={T.borderFaint} vertical={false} /><XAxis dataKey="date" tick={{ fill: T.muted, fontSize: 9 }} minTickGap={70} /><YAxis tick={{ fill: T.muted, fontSize: 9 }} width={42} /><Tooltip contentStyle={tipStyle} formatter={(value: number) => `${Number(value).toFixed(1)}%`} /><ReferenceLine y={0} stroke={T.border} /><Area dataKey="drawdown" stroke={T.neg} fill={mix(T.neg, 18)} /></AreaChart></ResponsiveContainer>
+    <Panel label="Downside path" meta="Peak-to-trough · select a date" style={{ height: 300 }}>
+      <div className="portfolio-chart-hit" style={{ height: '100%' }}><ResponsiveContainer width="100%" height="100%"><AreaChart data={drawdowns} margin={{ top: 40, right: 14, bottom: 5, left: 0 }} onClick={(state: any) => { const point = chartPoint(state); if (point) setSelection({ kind: 'drawdown', point }) }}><CartesianGrid stroke={T.borderFaint} vertical={false} /><XAxis dataKey="date" tick={{ fill: T.muted, fontSize: 9 }} minTickGap={70} /><YAxis tick={{ fill: T.muted, fontSize: 9 }} width={42} /><Tooltip contentStyle={tipStyle} formatter={(value: number) => `${Number(value).toFixed(1)}%`} /><ReferenceLine y={0} stroke={T.border} /><Area dataKey="drawdown" stroke={T.neg} fill={mix(T.neg, 18)} activeDot={{ r: 4 }} /></AreaChart></ResponsiveContainer></div>
     </Panel>
 
-    <Panel label="Monte Carlo range" meta="500 correlated paths · 3-year horizon" style={{ height: 300 }}>
+    <Panel label="Monte Carlo range" meta="500 paths · select a horizon" style={{ height: 300 }}>
       {data.monteCarlo && bands.length ? <div style={{ height: '100%', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 126px', gap: 8 }}>
-        <ResponsiveContainer width="100%" height="100%"><ComposedChart data={bands} margin={{ top: 40, right: 5, bottom: 5, left: 0 }}><CartesianGrid stroke={T.borderFaint} vertical={false} /><XAxis dataKey="day" tick={{ fill: T.muted, fontSize: 9 }} /><YAxis tick={{ fill: T.muted, fontSize: 9 }} width={44} /><Tooltip contentStyle={tipStyle} /><ReferenceLine y={100} stroke={T.border} /><Area dataKey="p95" stroke="none" fill={mix(T.blue, 8)} /><Area dataKey="p75" stroke="none" fill={mix(T.blue, 14)} /><Area dataKey="p25" stroke="none" fill={T.surface} /><Area dataKey="p5" stroke="none" fill={mix(T.neg, 12)} /><Line dataKey="p50" name="Median" stroke={T.gold} strokeWidth={2} dot={false} /></ComposedChart></ResponsiveContainer>
-        <div style={{ paddingTop: 46, display: 'flex', flexDirection: 'column', gap: 15 }}><Outcome label="Upside (95th)" value={terminal ? fmtPct((terminal.p95 - 1) * 100, 0) : '—'} color={T.pos} /><Outcome label="Median" value={terminal ? fmtPct((terminal.p50 - 1) * 100, 0) : '—'} color={T.gold} /><Outcome label="Downside (5th)" value={terminal ? fmtPct((terminal.p5 - 1) * 100, 0) : '—'} color={T.neg} /><Outcome label="Tail loss" value={`-${data.monteCarlo.cvar_95.toFixed(1)}%`} color={T.neg} /></div>
+        <div className="portfolio-chart-hit" style={{ minWidth: 0, height: '100%' }}><ResponsiveContainer width="100%" height="100%"><ComposedChart data={bands} margin={{ top: 40, right: 5, bottom: 5, left: 0 }} onClick={(state: any) => { const point = chartPoint(state); if (point) setSelection({ kind: 'monte', point }) }}><CartesianGrid stroke={T.borderFaint} vertical={false} /><XAxis dataKey="day" tick={{ fill: T.muted, fontSize: 9 }} /><YAxis tick={{ fill: T.muted, fontSize: 9 }} width={44} /><Tooltip contentStyle={tipStyle} /><ReferenceLine y={100} stroke={T.border} /><Area dataKey="p95" stroke="none" fill={mix(T.blue, 8)} /><Area dataKey="p75" stroke="none" fill={mix(T.blue, 14)} /><Area dataKey="p25" stroke="none" fill={T.surface} /><Area dataKey="p5" stroke="none" fill={mix(T.neg, 12)} /><Line dataKey="p50" name="Median" stroke={T.gold} strokeWidth={2} dot={false} activeDot={{ r: 4 }} /></ComposedChart></ResponsiveContainer></div>
+        <div style={{ paddingTop: 46, display: 'flex', flexDirection: 'column', gap: 15 }}><Outcome label="Upside (95th)" value={terminal ? fmtPct((terminal.p95 - 1) * 100, 0) : '—'} color={T.pos} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /><Outcome label="Median" value={terminal ? fmtPct((terminal.p50 - 1) * 100, 0) : '—'} color={T.gold} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /><Outcome label="Downside (5th)" value={terminal ? fmtPct((terminal.p5 - 1) * 100, 0) : '—'} color={T.neg} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /><Outcome label="Tail loss" value={`-${data.monteCarlo.cvar_95.toFixed(1)}%`} color={T.neg} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /></div>
       </div> : <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: T.muted, fontFamily: SANS, fontSize: 11 }}>Monte Carlo unavailable</div>}
     </Panel>
 
-    <Panel label="Downtrend watch" meta="Weakest holdings over the analysis window" style={{ gridColumn: '1 / -1', minHeight: 170, padding: '44px 14px 12px' }}>
-      {downtrends.length ? <div className="portfolio-downtrend-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${downtrends.length}, minmax(130px, 1fr))`, gap: 1, background: T.borderFaint }}>{downtrends.map(p => <div key={p.ticker} style={{ background: T.surface, padding: '12px 14px' }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontFamily: MONO }}><span style={{ color: T.gold, fontWeight: 800, fontSize: 12 }}>{p.ticker}</span><span style={{ color: T.neg, fontSize: 12 }}>{fmtPct(p.periodReturn)}</span></div><div style={{ color: T.muted, fontFamily: SANS, fontSize: 10, marginTop: 8, lineHeight: 1.4 }}>{p.decision}</div><div style={{ color: T.muted, fontFamily: MONO, fontSize: 9, marginTop: 5 }}>Weight {p.weight.toFixed(1)}% · Beta {p.beta?.toFixed(2) ?? '—'}</div></div>)}</div>
+    <Panel label="Downtrend watch" meta="Select a holding for detail" style={{ gridColumn: '1 / -1', minHeight: 170, padding: '44px 14px 12px' }}>
+      {downtrends.length ? <div className="portfolio-downtrend-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${downtrends.length}, minmax(130px, 1fr))`, gap: 1, background: T.borderFaint }}>{downtrends.map(p => <button type="button" aria-label={`Inspect ${p.ticker}`} className="portfolio-inspectable" onClick={() => setSelection({ kind: 'position', ticker: p.ticker })} key={p.ticker} style={{ appearance: 'none', border: selection?.kind === 'position' && selection.ticker === p.ticker ? `1px solid ${T.gold}` : 0, background: T.surface, color: 'inherit', padding: '12px 14px', textAlign: 'left', cursor: 'pointer' }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontFamily: MONO }}><span style={{ color: T.gold, fontWeight: 800, fontSize: 12 }}>{p.ticker}</span><span style={{ color: T.neg, fontSize: 12 }}>{fmtPct(p.periodReturn)}</span></div><div style={{ color: T.muted, fontFamily: SANS, fontSize: 10, marginTop: 8, lineHeight: 1.4 }}>{p.decision}</div><div style={{ color: T.muted, fontFamily: MONO, fontSize: 9, marginTop: 5 }}>Weight {p.weight.toFixed(1)}% · Beta {p.beta?.toFixed(2) ?? '—'}</div></button>)}</div>
         : <div style={{ color: T.muted, fontFamily: SANS, fontSize: 11 }}>No modeled holding has a negative return over the five-year analysis window.</div>}
     </Panel>
+    {selection && <DetailInspector selection={selection} data={data} onClose={() => setSelection(null)} />}
   </div>
 }
 
-function Outcome({ label, value, color }: { label: string; value: string; color: string }) {
-  return <div><div style={{ color: T.muted, fontFamily: SANS, fontSize: 8.5, letterSpacing: '.08em', textTransform: 'uppercase' }}>{label}</div><div style={{ color, fontFamily: MONO, fontSize: 16, fontWeight: 800, marginTop: 3 }}>{value}</div></div>
+function Outcome({ label, value, color, onClick }: { label: string; value: string; color: string; onClick?: () => void }) {
+  return <button type="button" className="portfolio-inspectable" onClick={onClick} style={{ appearance: 'none', border: 0, background: 'transparent', padding: '3px 5px', textAlign: 'left', cursor: onClick ? 'pointer' : 'default' }}><div style={{ color: T.muted, fontFamily: SANS, fontSize: 8.5, letterSpacing: '.08em', textTransform: 'uppercase' }}>{label}</div><div style={{ color, fontFamily: MONO, fontSize: 16, fontWeight: 800, marginTop: 3 }}>{value}</div></button>
+}
+
+function DetailInspector({ selection, data, onClose }: { selection: DetailSelection; data: AnalysisResult; onClose: () => void }) {
+  let title = 'Selected detail'
+  let context = ''
+  let metrics: { label: string; value: string; color?: string }[] = []
+  let note = ''
+
+  if (selection.kind === 'sector') {
+    const holdings = data.positions.filter(position => position.sector === selection.sector)
+    const weight = selection.sector === 'Cash' ? data.cashWeight : holdings.reduce((sum, position) => sum + position.weight, 0)
+    title = selection.sector
+    context = 'Sector allocation'
+    metrics = [
+      { label: 'Portfolio weight', value: `${weight.toFixed(1)}%`, color: T.gold },
+      { label: 'Positions', value: String(holdings.length) },
+      { label: 'Largest position', value: holdings[0]?.ticker ?? (selection.sector === 'Cash' ? 'Cash' : 'None') },
+      { label: 'Largest weight', value: holdings[0] ? `${holdings[0].weight.toFixed(1)}%` : `${weight.toFixed(1)}%` },
+    ]
+    note = holdings.length ? holdings.map(position => `${position.ticker} ${position.weight.toFixed(1)}%`).join(' · ') : 'Cash is included in total allocation but excluded from equity factor estimates.'
+  } else if (selection.kind === 'return') {
+    const active = selection.point.portfolio - selection.point.benchmark
+    title = selection.point.date
+    context = 'Return path'
+    metrics = [
+      { label: data.bookName, value: selection.point.portfolio.toFixed(1), color: T.gold },
+      { label: BENCHMARK, value: selection.point.benchmark.toFixed(1), color: T.blue },
+      { label: 'Active wealth', value: `${active > 0 ? '+' : ''}${active.toFixed(1)}`, color: chg(active) },
+      { label: 'Relative position', value: active >= 0 ? 'Ahead' : 'Behind', color: chg(active) },
+    ]
+    note = `Both series start at 100. Active wealth is the portfolio index minus the ${BENCHMARK} index on this date.`
+  } else if (selection.kind === 'drawdown') {
+    title = selection.point.date
+    context = 'Downside path'
+    metrics = [
+      { label: 'Drawdown', value: `${selection.point.drawdown.toFixed(1)}%`, color: selection.point.drawdown < 0 ? T.neg : T.text },
+      { label: 'Capital retained', value: `${(100 + selection.point.drawdown).toFixed(1)}%` },
+      { label: 'Severity', value: selection.point.drawdown <= -20 ? 'Bear market' : selection.point.drawdown <= -10 ? 'Correction' : selection.point.drawdown < 0 ? 'Pullback' : 'At peak' },
+    ]
+    note = 'Drawdown measures the decline from the portfolio’s prior high-water mark, not the return from the analysis start.'
+  } else if (selection.kind === 'monte') {
+    title = `Day ${selection.point.day}`
+    context = 'Monte Carlo distribution'
+    metrics = [
+      { label: '5th percentile', value: `${selection.point.p5.toFixed(0)} (${fmtPct(selection.point.p5 - 100, 0)})`, color: T.neg },
+      { label: '25th percentile', value: `${selection.point.p25.toFixed(0)} (${fmtPct(selection.point.p25 - 100, 0)})`, color: T.warn },
+      { label: 'Median', value: `${selection.point.p50.toFixed(0)} (${fmtPct(selection.point.p50 - 100, 0)})`, color: T.gold },
+      { label: '95th percentile', value: `${selection.point.p95.toFixed(0)} (${fmtPct(selection.point.p95 - 100, 0)})`, color: T.pos },
+    ]
+    note = `Values show modeled wealth from a starting index of 100 across ${MONTE_CARLO_RUNS} correlated paths.`
+  } else {
+    const position = data.positions.find(item => item.ticker === selection.ticker)
+    title = selection.ticker
+    context = position?.sector ?? 'Position detail'
+    metrics = position ? [
+      { label: 'Weight', value: `${position.weight.toFixed(1)}%`, color: T.gold },
+      { label: 'Period return', value: fmtPct(position.periodReturn), color: chg(position.periodReturn) },
+      { label: 'Beta', value: position.beta?.toFixed(2) ?? 'Unavailable' },
+      { label: 'Risk share', value: position.riskContribution == null ? 'Unavailable' : `${position.riskContribution.toFixed(1)}%` },
+    ] : []
+    note = position ? `${position.decision}. ${position.rationale}.` : 'Position detail is unavailable.'
+  }
+
+  return <Panel label={title} meta={context} style={{ gridColumn: '1 / -1', minHeight: 150, padding: '46px 16px 14px' }}>
+    <button type="button" onClick={onClose} aria-label="Close selected detail" style={{ position: 'absolute', top: 39, right: 12, display: 'flex', alignItems: 'center', gap: 5, border: `1px solid ${T.border}`, background: 'transparent', color: T.muted, padding: '5px 7px', fontFamily: SANS, fontSize: 9, cursor: 'pointer' }}><X size={11} /> Close</button>
+    <div className="portfolio-detail-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 1, background: T.borderFaint }}>{metrics.map(metric => <div key={metric.label} style={{ background: T.surface, padding: '10px 12px', minWidth: 0 }}><div style={{ color: T.muted, fontFamily: SANS, fontSize: 8.5, letterSpacing: '.08em', textTransform: 'uppercase' }}>{metric.label}</div><div style={{ color: metric.color ?? T.text, fontFamily: MONO, fontSize: 15, fontWeight: 800, marginTop: 4, overflowWrap: 'anywhere' }}>{metric.value}</div></div>)}</div>
+    <div style={{ color: T.muted, fontFamily: SANS, fontSize: 10, lineHeight: 1.5, marginTop: 10, paddingRight: 70 }}>{note}</div>
+  </Panel>
 }
 
 function verdict(d: AnalysisResult, active: number) {
