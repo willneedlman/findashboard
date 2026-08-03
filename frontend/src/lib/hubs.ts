@@ -122,6 +122,7 @@ export const HUBS: Hub[] = [
       { title: 'Pairs Trader',             chip: 'Pairs',         desc: 'Cointegration, mean-reversion half-life, and a z-score spread backtest', route: '/pairs-trader',        icon: Shuffle },
       { title: 'Market Maker Simulator',   chip: 'Market Maker',  desc: 'Quote two-sided markets and hedge — options and Treasury desks', route: '/market-maker', icon: Gauge },
       { title: 'Portfolio Manager',        chip: 'Manager',       desc: 'Holdings, P&L, and portfolio-level greeks',     route: '/portfolio-manager', icon: Briefcase },
+      { title: 'Portfolio Analysis',       chip: 'Analysis',      desc: 'One coordinated audit of returns, factors, sectors, tail risk, and every position', route: '/portfolio-analysis', icon: ClipboardList },
       { title: 'Trade Journal',            chip: 'Trade Journal', desc: 'Entry/exit, P&L, and win-rate analytics',       route: '/trade-journal',     icon: BookOpen },
       { title: 'Price Alerts',             chip: 'Price Alerts',  desc: 'Price and percent-change notifications',        route: '/alerts',            icon: Bell },
     ],

@@ -343,6 +343,20 @@
 .bento-full { grid-area: span 1 / span 4; }
 
 @media (max-width: 767px) {
+  .portfolio-analysis-controls,
+  .portfolio-verdict-grid,
+  .portfolio-analysis-grid,
+  .scenario-cards {
+    grid-template-columns: 1fr !important;
+  }
+
+  .portfolio-verdict-grid > :last-child {
+    border-left: 0 !important;
+    border-top: 1px solid var(--theme-border-faint, rgba(255, 255, 255, 0.06));
+    padding-left: 0 !important;
+    padding-top: 12px;
+  }
+
   .ft-kpi-strip {
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -394,6 +408,17 @@
     gap: 6px !important;
   }
   .bento-wide, .bento-full { grid-area: auto !important; }
+}
+
+@media (min-width: 768px) and (max-width: 1180px) {
+  .portfolio-analysis-controls {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .portfolio-verdict-grid,
+  .portfolio-analysis-grid {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 /* ── Responsive layout utilities ────────────────────────────────────────── */

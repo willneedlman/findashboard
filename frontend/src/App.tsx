@@ -90,6 +90,7 @@ const SettingsPage       = lazyWithReload(() => import('./pages/Settings'))
 const StockScreener      = lazyWithReload(() => import('./pages/StockScreener'))
 const EarningsSummarizer = lazyWithReload(() => import('./pages/EarningsSummarizer'))
 const PortfolioManager   = lazyWithReload(() => import('./pages/PortfolioManager'))
+const PortfolioAnalysis  = lazyWithReload(() => import('./pages/PortfolioAnalysis'))
 const AdminTester        = lazyWithReload(() => import('./pages/AdminTester'))
 const CreditSpreads      = lazyWithReload(() => import('./pages/CreditSpreads'))
 const CreditDelinquencies = lazyWithReload(() => import('./pages/CreditDelinquencies'))
@@ -263,6 +264,7 @@ export default function App() {
               <Route path="/cusip"      element={<CusipLookup />} />
               <Route path="/nav"        element={<NAVTracker />} />
               <Route path="/portfolio-manager" element={<PortfolioManager />} />
+              <Route path="/portfolio-analysis" element={<PortfolioAnalysis />} />
               {/* Portfolio tools — now standalone (legacy /portfolio-skills hub dismantled) */}
               <Route path="/backtest"         element={<PortfolioBacktester />} />
               <Route path="/montecarlo"       element={<MonteCarlo />} />
