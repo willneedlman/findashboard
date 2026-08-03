@@ -279,6 +279,76 @@ def get_income(ticker: str, limit: int = 2) -> list:
     return (b["income"][:limit] if b else [])
 
 
+def _quarterly_map(us: dict, concepts: list[str], unit: str = "USD") -> dict[tuple[int, str], tuple[str, float]]:
+    """Reported three-month values keyed by fiscal year and quarter.
+    A 10-Q often carries both quarter-only and year-to-date facts under the same
+    fiscal-period code. Choosing the duration nearest to 90 days avoids treating
+    a nine-month cumulative result as Q3 revenue."""
+    picked: dict[tuple[int, str], tuple[int, str, float]] = {}
+    for concept in concepts:
+        node = us.get(concept) or {}
+        for fact in node.get("units", {}).get(unit, []):
+            fp = str(fact.get("fp") or "").upper()
+            fy, val, start, end = fact.get("fy"), fact.get("val"), fact.get("start"), fact.get("end")
+            if fp not in {"Q1", "Q2", "Q3"} or fy is None or val is None or not start or not end:
+                continue
+            if not str(fact.get("form") or "").startswith("10-Q"):
+                continue
+            try:
+                span = (date.fromisoformat(end) - date.fromisoformat(start)).days
+            except ValueError:
+                continue
+            if span < 60 or span > 115:
+                continue
+            key = (int(fy), fp)
+            candidate = (abs(span - 91), str(fact.get("filed") or ""), float(val))
+            existing = picked.get(key)
+            if existing is None or candidate[:2] < existing[:2]:
+                picked[key] = candidate
+
+    dates: dict[tuple[int, str], str] = {}
+    for concept in concepts:
+        node = us.get(concept) or {}
+        for fact in node.get("units", {}).get(unit, []):
+            fp, fy, end = str(fact.get("fp") or "").upper(), fact.get("fy"), fact.get("end")
+            if fp in {"Q1", "Q2", "Q3"} and fy is not None and end and (int(fy), fp) in picked:
+                dates.setdefault((int(fy), fp), str(end))
+    return {key: (dates.get(key, ""), item[2]) for key, item in picked.items()}
+
+
+def get_quarterly_income(ticker: str, limit: int = 4) -> list:
+    """Free reported quarterly income metrics from SEC companyfacts."""
+    sym = ticker.strip().upper()
+    cache_key = f"sec:qinc:v1:{sym}"
+    cached = disk_get(cache_key)
+    if cached is not None:
+        return cached[:limit]
+    us = _fetch_facts(sym)
+    if not us:
+        disk_set(cache_key, [], ttl=86400)
+        return []
+    maps = {
+        "revenue": _quarterly_map(us, _INCOME["revenue"]),
+        "grossProfit": _quarterly_map(us, _INCOME["grossProfit"]),
+        "operatingIncome": _quarterly_map(us, _INCOME["operatingIncome"]),
+        "netIncome": _quarterly_map(us, _INCOME["netIncome"]),
+        "epsdiluted": _quarterly_map(us, _INCOME["epsdiluted"], unit="USD/shares"),
+    }
+    keys = sorted({key for values in maps.values() for key in values}, reverse=True)
+    rows = []
+    for fy, fp in keys:
+        row = {"fiscalYear": fy, "period": fp}
+        row["date"] = next((values[(fy, fp)][0] for values in maps.values() if (fy, fp) in values), "")
+        row["calendarYear"] = row["date"][:4] if row["date"] else fy
+        for field, values in maps.items():
+            if (fy, fp) in values:
+                row[field] = values[(fy, fp)][1]
+        if row.get("revenue") is not None:
+            rows.append(row)
+    disk_set(cache_key, rows, ttl=_CACHE_TTL)
+    return rows[:limit]
+
+
 def get_balance(ticker: str) -> dict:
     b = _bundle(ticker)
     return (b["balance"] if b else {})

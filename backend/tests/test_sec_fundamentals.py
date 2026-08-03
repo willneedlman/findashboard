@@ -108,6 +108,30 @@ def test_build_includes_reported_income_and_diluted_eps(monkeypatch):
     assert income["fiscalYear"] == 2024
 
 
+def test_quarterly_income_uses_three_month_facts(monkeypatch):
+    def qtr(fp, value, start, end):
+        return {"fy": 2026, "fp": fp, "form": "10-Q", "start": start, "end": end, "filed": end, "val": value}
+
+    facts = {
+        "Revenues": _usd(
+            qtr("Q2", 900.0, "2025-10-01", "2025-12-31"),
+            qtr("Q2", 1800.0, "2025-07-01", "2025-12-31"),
+        ),
+        "NetIncomeLoss": _usd(qtr("Q2", 300.0, "2025-10-01", "2025-12-31")),
+        "EarningsPerShareDiluted": {"units": {"USD/shares": [
+            qtr("Q2", 1.25, "2025-10-01", "2025-12-31")
+        ]}},
+    }
+    monkeypatch.setattr(m, "_fetch_facts", lambda sym: facts)
+    monkeypatch.setattr(m, "disk_get", lambda key: None)
+    monkeypatch.setattr(m, "disk_set", lambda key, value, ttl=0: None)
+    rows = m.get_quarterly_income("MSFT")
+    assert rows[0]["revenue"] == 900.0
+    assert rows[0]["netIncome"] == 300.0
+    assert rows[0]["epsdiluted"] == 1.25
+    assert rows[0]["period"] == "Q2"
+
+
 def _sane_bundle(**income_over):
     inc = {"revenue": 100.0, "weightedAverageShsOutDil": 10.0, "operatingIncome": 20.0}
     inc.update(income_over)

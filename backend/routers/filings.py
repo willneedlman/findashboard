@@ -147,6 +147,14 @@ def _get_quarterly_financials(ticker: str) -> dict:
         }
     except Exception as e:
         logger.warning("quarterly fin %s: %s", ticker, e)
+    if not result.get("income"):
+        try:
+            import sec_fundamentals
+            income = sec_fundamentals.get_quarterly_income(ticker, 8)
+            if income:
+                result = {"income": income, "balance": [], "cashflow": []}
+        except Exception as e:
+            logger.warning("SEC quarterly fundamentals %s: %s", ticker, e)
     with _lock:
         _filing_cache[cache_key] = result
     return result
