@@ -10,6 +10,7 @@ import type { WidgetType, WidgetConfig } from '../hooks/useDashboard'
 const RegressionAnalysis = lazy(() => import('./RegressionAnalysis'))
 const StressTester       = lazy(() => import('./StressTester'))
 const AlgoRunner         = lazy(() => import('./AlgoRunner'))
+const PortfolioAnalysis  = lazy(() => import('./PortfolioAnalysis'))
 
 // New dashboard widgets surfaced here as a live preview gallery so they can be
 // inspected in isolation without building a dashboard. Configs mirror the
@@ -222,7 +223,7 @@ interface UserStats {
   users: { id: string; username: string; display_name: string; email: string | null; created_at: string; last_login_at: string | null; login_count: number }[]
 }
 
-type Tab = 'traffic' | 'files' | 'health' | 'users' | 'cache' | 'endpoints' | 'lob' | 'widgets' | 'regression' | 'stress' | 'algo' | 'reports' | 'market' | 'audit'
+type Tab = 'traffic' | 'files' | 'health' | 'users' | 'cache' | 'endpoints' | 'lob' | 'widgets' | 'portfolio' | 'regression' | 'stress' | 'algo' | 'reports' | 'market' | 'audit'
 
 interface LOBSnapshot {
   msg: number
@@ -529,7 +530,7 @@ export default function AdminTester() {
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${RED_BORDER}`, marginBottom: 20, overflowX: 'auto' }}>
-          {(['traffic', 'files', 'health', 'users', 'cache', 'endpoints', 'lob', 'widgets', 'regression', 'stress', 'algo', 'reports', 'market', 'audit'] as Tab[]).map(t => (
+          {(['traffic', 'files', 'health', 'users', 'cache', 'endpoints', 'lob', 'widgets', 'portfolio', 'regression', 'stress', 'algo', 'reports', 'market', 'audit'] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               background: 'none', border: 'none', borderBottom: tab === t ? `2px solid ${RED}` : '2px solid transparent',
               color: tab === t ? RED : 'var(--theme-text-dim)', fontFamily: 'var(--theme-mono)', fontSize: 10,
@@ -1091,6 +1092,11 @@ export default function AdminTester() {
         {tab === 'regression' && (
           <Suspense fallback={<div style={{ color: 'var(--theme-text-dim)', padding: 32 }}>Loading…</div>}>
             <RegressionAnalysis />
+          </Suspense>
+        )}
+        {tab === 'portfolio' && (
+          <Suspense fallback={<div style={{ color: 'var(--theme-text-dim)', padding: 32 }}>Loading…</div>}>
+            <PortfolioAnalysis />
           </Suspense>
         )}
         {tab === 'stress' && (
