@@ -31,7 +31,7 @@ _filing_cache:     TTLCache = TTLCache(maxsize=200, ttl=3600)
 _lock = threading.Lock()
 # Bump to invalidate cached EDGAR context + summaries after a fetch-logic change
 # (e.g. the annual-10-K/annual-financials fix).
-_CACHE_VER = "v9"
+_CACHE_VER = "v10"
 
 
 # ── SEC EDGAR helpers ─────────────────────────────────────────────────────────
