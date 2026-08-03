@@ -184,7 +184,7 @@ export default function Layout({ children }: LayoutProps) {
             onClick={() => setCollapsed(c => !c)}
             aria-label={collapsed ? 'Open sidebar' : 'Close sidebar'}
             title={collapsed ? 'Open sidebar' : 'Close sidebar'}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: collapsed ? 0 : 4, marginLeft: 'auto', display: 'flex', alignItems: 'center', color: 'var(--theme-secondary, #5e768f)' }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: collapsed ? 0 : 4, marginLeft: 'auto', marginRight: collapsed ? 7 : 0, display: 'flex', alignItems: 'center', color: 'var(--theme-secondary, #5e768f)' }}
           >
             {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={16} />}
           </button>
