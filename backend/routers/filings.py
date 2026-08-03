@@ -31,7 +31,7 @@ _filing_cache:     TTLCache = TTLCache(maxsize=200, ttl=3600)
 _lock = threading.Lock()
 # Bump to invalidate cached EDGAR context + summaries after a fetch-logic change
 # (e.g. the annual-10-K/annual-financials fix).
-_CACHE_VER = "v5"
+_CACHE_VER = "v6"
 
 
 # ── SEC EDGAR helpers ─────────────────────────────────────────────────────────
@@ -402,19 +402,24 @@ def _summarise_with_claude(ticker: str, context: str, annual: bool = False, fina
 Respond ONLY with valid JSON matching this exact schema (no markdown, no extra text):
 {{
   "quarter": "Extract the fiscal period label from the materials — look for 'quarter ended', 'period ended', or explicit quarter labels in the financial statements. Use the MOST RECENT completed period found in the materials. If the company has a non-calendar fiscal year, use 'Q{{N}} FY{{YEAR}}' format (e.g. Q1 FY2027). If calendar year, use 'Q{{N}} {{YEAR}}' (e.g. Q3 2025). The period-end date MUST be on or before today ({_today}) — NEVER produce a future quarter.",
-  "verdict": "one-sentence overall assessment",
+  "verdict": "one sentence that names the two or three most decision-relevant reported statistics and says whether the result beat, met, or missed the disclosed forecast where available",
   "bull_points": ["point 1", "point 2", "point 3"],
   "bear_points": ["point 1", "point 2", "point 3"],
   "key_metrics": [
-    {{"name": "Revenue", "value": "$X.XB", "vs_est": "+2.3%", "yoy": "+18%"}},
-    {{"name": "EPS", "value": "$X.XX", "vs_est": "+$0.12", "yoy": "+22%"}}
+    {{"name": "Revenue", "value": "$X.XB", "vs_est": "+2.3% or N/A", "yoy": "+18%"}},
+    {{"name": "Diluted EPS", "value": "$X.XX", "vs_est": "+$0.12 or N/A", "yoy": "+22%"}},
+    {{"name": "Net income", "value": "$X.XB", "vs_est": "N/A unless stated", "yoy": "+22%"}},
+    {{"name": "Operating income or margin", "value": "$X.XB or XX.X%", "vs_est": "N/A unless stated", "yoy": "+XX% or +XXbps"}},
+    {{"name": "Free cash flow or a company KPI", "value": "$X.XB or X", "vs_est": "N/A unless stated", "yoy": "+XX%"}}
   ],
   "guidance": "management guidance summary or N/A",
   "management_tone": "bullish | neutral | cautious | mixed",
   "key_themes": ["AI adoption", "margin expansion"],
   "risks": ["macro headwinds", "competition"],
   "analyst_questions_focus": "main topics analysts pressed on"
-}}"""
+}}
+
+Use only figures and forecast comparisons explicitly supported by the materials. Include Revenue, Diluted EPS, Net income, Operating income or margin, and Free cash flow when reported; then include up to two company-specific KPIs that management reports. For every metric with a disclosed analyst or management forecast, state the actual, forecast, and variance in `vs_est`. Write "N/A" when no comparable forecast exists—never invent consensus. Keep every bull and bear point numeric where the materials support it."""
 
     msg = groq_chat(
         [{"role": "user", "content": prompt}],
@@ -704,7 +709,19 @@ def _eps_of(row: dict | None) -> float | None:
     return _num(row, "epsdiluted", "epsDiluted", "eps")
 
 
-def _compute_metrics_block(hist: list, i: int, annual: bool) -> dict | None:
+def _metric_delta(actual: float | None, estimate: float | None, is_money: bool = False) -> tuple[str | None, str | None]:
+    if actual is None or estimate is None:
+        return None, None
+    delta = actual - estimate
+    if estimate:
+        pct = f"{delta / abs(estimate) * 100:+.1f}%"
+    else:
+        pct = None
+    return (_fmt_money(delta) if is_money else f"${delta:+.2f}"), pct
+
+
+def _compute_metrics_block(hist: list, i: int, annual: bool, cashflow: dict | None = None,
+                           surprise: dict | None = None) -> dict | None:
     """Headline metrics computed straight from the income statements (real
     numbers, never an LLM guess): EPS, Revenue, revenue YoY (vs the same period a
     year earlier) with the prior period's YoY for context, and gross margin with
@@ -719,6 +736,11 @@ def _compute_metrics_block(hist: list, i: int, annual: bool) -> dict | None:
     pyb   = hist[i + 1 + step] if i + 1 + step < len(hist) else None   # prior period's year-ago
 
     rev, eps, gm = _num(cur, "revenue"), _eps_of(cur), _gross_margin(cur)
+    net_income = _num(cur, "netIncome")
+    operating_income = _num(cur, "operatingIncome")
+    free_cash_flow = _num(cashflow, "freeCashFlow")
+    eps_est = _num(surprise, "estimatedEarning", "estimatedEPS", "epsEstimate")
+    revenue_est = _num(surprise, "estimatedRevenue", "revenueEstimate")
     block: dict = {}
     if eps is not None:
         block["eps"] = {"value": f"${eps:.2f}", "yoy": _yoy(eps, _eps_of(yb))}
@@ -735,7 +757,65 @@ def _compute_metrics_block(hist: list, i: int, annual: bool) -> dict | None:
             "delta_bps": round((gm - gm_prior) * 100) if gm_prior is not None else None,
             "basis": "YoY" if annual else "QoQ",
         }
+    rows = []
+    if eps is not None:
+        variance, variance_pct = _metric_delta(eps, eps_est)
+        rows.append({"name": "Diluted EPS", "actual": f"${eps:.2f}", "estimate": f"${eps_est:.2f}" if eps_est is not None else None,
+                     "variance": variance, "variance_pct": variance_pct, "yoy": _yoy(eps, _eps_of(yb))})
+    if rev is not None:
+        variance, variance_pct = _metric_delta(rev, revenue_est, is_money=True)
+        rows.append({"name": "Revenue", "actual": _fmt_money(rev), "estimate": _fmt_money(revenue_est) if revenue_est is not None else None,
+                     "variance": variance, "variance_pct": variance_pct, "yoy": _yoy(rev, _num(yb, "revenue"))})
+    if net_income is not None:
+        rows.append({"name": "Net income", "actual": _fmt_money(net_income), "yoy": _yoy(net_income, _num(yb, "netIncome"))})
+    if operating_income is not None:
+        rows.append({"name": "Operating income", "actual": _fmt_money(operating_income), "yoy": _yoy(operating_income, _num(yb, "operatingIncome"))})
+    if free_cash_flow is not None:
+        rows.append({"name": "Free cash flow", "actual": _fmt_money(free_cash_flow), "yoy": None})
+    if gm is not None:
+        rows.append({"name": "Gross margin", "actual": f"{gm:.1f}%", "yoy": _yoy(gm, _gross_margin(yb))})
+    if rows:
+        block["reported_vs_consensus"] = rows
     return block or None
+
+
+def _earnings_surprises(ticker: str) -> list[dict]:
+    """Historical EPS and revenue consensus from FMP when the plan exposes it.
+    The filing statements remain the source of actual results; this endpoint only
+    supplies the contemporaneous consensus values used for the variance column."""
+    cache_key = f"earnings-surprises:{ticker}"
+    cached = disk_get(cache_key)
+    if cached is not None:
+        return cached
+    rows: list[dict] = []
+    if fmp.available():
+        try:
+            data = fmp._get("/earnings-surprises", {"symbol": ticker, "limit": 12})
+            if isinstance(data, list):
+                rows = data
+        except Exception as e:
+            logger.warning("earnings surprises %s: %s", ticker, e)
+    disk_set(cache_key, rows, ttl=86400)
+    return rows
+
+
+def _match_earnings_surprise(rows: list[dict], filing_date: str) -> dict | None:
+    """Match the closest reported earnings release before its related filing."""
+    import datetime as _dt
+    try:
+        filed = _dt.date.fromisoformat(filing_date[:10])
+    except ValueError:
+        return None
+    matches = []
+    for row in rows:
+        try:
+            reported = _dt.date.fromisoformat(str(row.get("date") or row.get("fiscalDateEnding") or "")[:10])
+        except ValueError:
+            continue
+        lag = (filed - reported).days
+        if 0 <= lag <= 100:
+            matches.append((lag, row))
+    return min(matches, key=lambda item: item[0])[1] if matches else None
 
 
 def _company_name(ticker: str) -> str | None:
@@ -895,6 +975,7 @@ def _summarise_one_streaming(ticker: str, req: SummariseRequest, queue: list):
     bal, cf = fin.get("balance") or [], fin.get("cashflow") or []
     company = _company_name(ticker)
     reactions = _earnings_reactions(ticker)
+    surprises = _earnings_surprises(ticker)
     # Product-segment revenue (latest 10-K, free via SEC EDGAR) — attached to the
     # most recent card only since it reflects one annual breakdown.
     seg_latest = None
@@ -918,7 +999,10 @@ def _summarise_one_streaming(ticker: str, req: SummariseRequest, queue: list):
         try:
             entry = _summarise_one_filing(
                 ticker, filing, rows, annual,
-                metrics=_compute_metrics_block(hist, i, annual),
+                metrics=_compute_metrics_block(
+                    hist, i, annual, cashflow=rows["cashflow"],
+                    surprise=_match_earnings_surprise(surprises, filing["date"]),
+                ),
                 company=company,
                 segments=seg_latest if i == 0 else None,
                 reaction=_match_reaction(reactions, filing["date"]),

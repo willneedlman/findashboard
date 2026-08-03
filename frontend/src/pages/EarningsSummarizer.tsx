@@ -33,7 +33,8 @@ interface Summary {
   risks: string[]; analyst_questions_focus: string
 }
 interface MetricVal { value: string; yoy?: string | null; prior?: string | null; delta_bps?: number | null; basis?: string }
-interface Metrics { eps?: MetricVal; revenue?: MetricVal; rev_yoy?: MetricVal; gross_margin?: MetricVal }
+interface ReportedMetric { name: string; actual: string; estimate?: string | null; variance?: string | null; variance_pct?: string | null; yoy?: string | null }
+interface Metrics { eps?: MetricVal; revenue?: MetricVal; rev_yoy?: MetricVal; gross_margin?: MetricVal; reported_vs_consensus?: ReportedMetric[] }
 interface Segment { name: string; value: number }
 interface Filing { form: string; date: string; url: string }
 
@@ -81,6 +82,37 @@ function MetricStrip({ m }: { m: Metrics }) {
   }
   if (!tiles.length) return null
   return <div style={{ display: 'flex', borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, background: 'var(--theme-bg, #101c2e)' }}>{tiles}</div>
+}
+
+function ReportedVsConsensus({ metrics }: { metrics: ReportedMetric[] }) {
+  if (!metrics.length) return null
+  return (
+    <div style={{ border: `1px solid ${C.border}`, background: 'var(--theme-bg, #101c2e)' }}>
+      <div style={{ padding: '8px 12px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
+        <span style={{ fontFamily: C.sans, fontSize: 9, fontWeight: 700, color: C.gold, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Reported Results vs Consensus</span>
+        <span style={{ fontFamily: C.mono, fontSize: 9, color: C.dim }}>Consensus appears where a contemporaneous estimate is available</span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' }}>
+        {metrics.map(metric => {
+          const varianceText = metric.variance_pct ?? metric.variance
+          const varianceColor = signColor(varianceText)
+          return (
+            <div key={metric.name} style={{ minWidth: 0, padding: '10px 12px', borderRight: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}` }}>
+              <div style={{ fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.muted, marginBottom: 6 }}>{metric.name}</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                <span style={{ fontFamily: C.mono, fontSize: 17, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{metric.actual}</span>
+                {varianceText && <span style={{ fontFamily: C.mono, fontSize: 10, fontWeight: 700, color: varianceColor, whiteSpace: 'nowrap' }}>{varianceText} vs est.</span>}
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 5, fontFamily: C.mono, fontSize: 9, color: C.dim }}>
+                {metric.estimate && <span>Est. <strong style={{ color: C.muted, fontWeight: 700 }}>{metric.estimate}</strong></span>}
+                {metric.yoy && <span style={{ color: signColor(metric.yoy) }}>{metric.yoy} YoY</span>}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 function SegmentBars({ segments }: { segments: Segment[] }) {
@@ -178,6 +210,7 @@ function ResultCard({ result }: { result: Result }) {
       {result.metrics && <MetricStrip m={result.metrics} />}
 
       <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {result.metrics?.reported_vs_consensus && <ReportedVsConsensus metrics={result.metrics.reported_vs_consensus} />}
         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
           {/* Left: AI summary + bull/bear */}
           <div style={{ flex: '1.5 1 300px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
