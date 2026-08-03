@@ -31,7 +31,7 @@ def test_observed_new_year_can_fall_in_prior_calendar_year():
 
 def test_overnight_session_observes_245_window_and_holidays():
     assert is_overnight_session(eastern(2026, 8, 2, 20, 1))  # Sunday evening
-    assert session_label(eastern(2026, 8, 3, 1, 0)) == "closed"  # No Monday overnight
+    assert session_label(eastern(2026, 8, 3, 1, 0)) == "overnight"
     assert is_overnight_session(eastern(2026, 8, 4, 1, 0))  # Monday night into Tuesday
     assert not is_overnight_session(eastern(2026, 7, 2, 21, 0))  # Friday holiday follows
 

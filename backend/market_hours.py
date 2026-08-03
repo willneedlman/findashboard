@@ -108,8 +108,10 @@ def is_overnight_session(now: _dt.datetime | None = None) -> bool:
         # Sunday through Thursday nights lead into the next trading day.
         return et.weekday() in {6, 0, 1, 2, 3} and is_trading_day(today + _dt.timedelta(days=1))
     if t < _dt.time(4, 0):
-        # Monday overnight does not exist; all other early-morning sessions
-        # must have begun after a trading day and lead into one.
+        # Sunday night's session runs into Monday morning. Later sessions must
+        # have begun after a trading day and lead into another one.
+        if et.weekday() == 0:
+            return is_trading_day(today)
         return et.weekday() in {1, 2, 3, 4} and is_trading_day(today - _dt.timedelta(days=1)) and is_trading_day(today)
     return False
 
