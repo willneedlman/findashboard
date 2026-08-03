@@ -41,7 +41,7 @@ export const HUBS: Hub[] = [
     tools: [
       { title: 'Stock Screener',    chip: 'Screener',        desc: '25+ fundamental and technical filters across the universe', route: '/screener',           icon: Filter },
       { title: 'Company Profile',   chip: 'Company Profile', desc: 'Price history, revenue mix, ownership, and credit for one name', route: '/company-profile',  icon: Globe },
-      { title: 'Earnings AI',       chip: 'Earnings AI',     desc: 'Call transcripts and filing summaries on demand',          route: '/earnings',           icon: FileText },
+      { title: 'Earnings Summarizer', chip: 'Earnings Summarizer', desc: 'Call transcripts and filing summaries on demand',       route: '/earnings',           icon: FileText },
       { title: 'Peer Comparison',   chip: 'Peers',           desc: 'Trading multiples versus sector peers',                    route: '/relative-valuation', icon: Scale },
       { title: 'ETF Analyzer',      chip: 'ETF Analyzer',    desc: 'Look-through holdings, overlap, and concentration',        route: '/etf-analyzer',       icon: Boxes },
       { title: 'Sentiment Tracker', chip: 'Sentiment',       desc: 'AI-scored news sentiment across 7 sources',                route: '/sentiment',          icon: Brain },

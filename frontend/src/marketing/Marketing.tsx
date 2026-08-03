@@ -856,7 +856,7 @@ export function Landing() {
         </Reveal>
         <StaggerGroup className="hubband">
           {([
-            ['research', 'Research', 'Screener · Sentiment · Earnings AI'],
+            ['research', 'Research', 'Screener · Sentiment · Earnings Summarizer'],
             ['options', 'Options', 'Dealer GEX · Flow · Implied Vol'],
             ['macro', 'Macro', 'Rate Engine · Global Markets · Credit'],
             ['charting', 'Charting', 'Chart Studio · Asset Overlay · Compare'],
@@ -945,7 +945,7 @@ export function ResearchPage() {
             <div className="tags"><span className="tag">Price history</span><span className="tag">Revenue mix</span><span className="tag">Ownership</span><span className="tag">Credit</span></div>
           </div></div>
           <div className="frow"><div className="idx">02</div><div>
-            <h3>Earnings AI</h3>
+            <h3>Earnings Summarizer</h3>
             <p>Call transcripts and filing summaries on demand.</p>
             <div className="tags"><span className="tag">Transcripts</span><span className="tag">Filing summaries</span></div>
           </div></div>

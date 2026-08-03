@@ -3,13 +3,13 @@ import { wordMatch, tickerFromQuery } from './search'
 
 describe('wordMatch', () => {
   it('matches at the start of a word', () => {
-    expect(wordMatch('Earnings AI', 'earn')).toBe(true)
+    expect(wordMatch('Earnings Summarizer', 'earn')).toBe(true)
     expect(wordMatch('Portfolio Manager', 'port')).toBe(true)
     expect(wordMatch('DCF Valuation', 'dcf')).toBe(true)
   })
 
   it('does NOT match inside a word (the GS bug)', () => {
-    expect(wordMatch('Earnings AI', 'gs')).toBe(false)
+    expect(wordMatch('Earnings Summarizer', 'gs')).toBe(false)
     expect(wordMatch('Holdings, P&L', 'gs')).toBe(false)
     expect(wordMatch('Corporate Calendar earnings dates', 'gs')).toBe(false)
   })

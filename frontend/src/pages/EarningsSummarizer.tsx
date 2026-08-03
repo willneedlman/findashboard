@@ -331,9 +331,9 @@ export default function EarningsSummarizer() {
       if (result.metrics?.revenue) cells.push({ label: 'Revenue', value: result.metrics.revenue.value, sub: result.metrics.revenue.yoy ? `${result.metrics.revenue.yoy} YoY` : undefined })
       if (result.metrics?.gross_margin) cells.push({ label: 'Gross Margin', value: result.metrics.gross_margin.value })
       if (result.reaction) cells.push({ label: 'Reaction', value: `${result.reaction.pct >= 0 ? '+' : ''}${result.reaction.pct.toFixed(1)}%` })
-      pieces.push(kpiClip('Earnings AI', `Earnings Snapshot · ${tkr}`, cells))
+      pieces.push(kpiClip('Earnings Summarizer', `Earnings Snapshot · ${tkr}`, cells))
       if (s.verdict) {
-        pieces.push(textClip('Earnings AI', `AI Summary · ${tkr}`, s.verdict))
+        pieces.push(textClip('Earnings Summarizer', `AI Summary · ${tkr}`, s.verdict))
       }
       const bullets: string[] = []
       if (s.bull_points?.length) bullets.push('Bull case:\n' + s.bull_points.map(p => `• ${p}`).join('\n'))
@@ -343,11 +343,11 @@ export default function EarningsSummarizer() {
       if (s.risks?.length) bullets.push(`Risks: ${s.risks.join(', ')}`)
       if (s.analyst_questions_focus) bullets.push(`Analyst focus: ${s.analyst_questions_focus}`)
       if (bullets.length) {
-        pieces.push(textClip('Earnings AI', `Bull / Bear · ${tkr}`, bullets.join('\n\n')))
+        pieces.push(textClip('Earnings Summarizer', `Bull / Bear · ${tkr}`, bullets.join('\n\n')))
       }
       if (s.key_metrics?.length) {
         pieces.push(tableClip(
-          'Earnings AI',
+          'Earnings Summarizer',
           `Key Metrics · ${tkr}`,
           ['Metric', 'Value', 'vs Est', 'YoY'],
           s.key_metrics.map(m => [m.name, m.value, m.vs_est ?? null, m.yoy ?? null]),
@@ -355,7 +355,7 @@ export default function EarningsSummarizer() {
       }
       if (result.segments?.length) {
         pieces.push(tableClip(
-          'Earnings AI',
+          'Earnings Summarizer',
           `Segment Revenue · ${tkr}`,
           ['Segment', 'Revenue'],
           result.segments.map(seg => [seg.name, fmtB(seg.value)]),
@@ -363,7 +363,7 @@ export default function EarningsSummarizer() {
       }
     }
     return pieces
-  }, { disabled: !okResults.length, sourceTab: 'Earnings AI' })
+  }, { disabled: !okResults.length, sourceTab: 'Earnings Summarizer' })
 
   const startAnalysis = async () => {
     setError(null)
@@ -465,7 +465,7 @@ export default function EarningsSummarizer() {
   const canRun = !isPending && tickers.length > 0
 
   return (
-    <PageWrapper title="Earnings AI">
+    <PageWrapper title="Earnings Summarizer">
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexDirection: isMobile ? 'column' : 'row' }}>
 
         <aside style={{ width: isMobile ? '100%' : 272, flexShrink: 0, background: C.surface, border: `1px solid ${C.border}` }}>
