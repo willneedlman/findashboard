@@ -170,9 +170,9 @@ export default function Layout({ children }: LayoutProps) {
         style={{ minWidth: 0, background: 'var(--theme-bg, #060e1c)', borderRightWidth: 1, borderRightStyle: 'solid', borderRightColor: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 19%, transparent)' }}
       >
         {/* brand (→ home) + collapse chevron */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: collapsed ? 2 : 11, justifyContent: 'flex-start', padding: collapsed ? '0 4px 0 13px' : '0 14px', minHeight: 76, borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: collapsed ? 4 : 11, justifyContent: collapsed ? 'space-between' : 'flex-start', padding: collapsed ? '0 8px' : '0 14px', minHeight: 76, borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' }}>
           <button onClick={() => navigate('/app')} aria-label="Home" title="Home" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 2 }}>
-            <AlphaMark size={36} />
+            <AlphaMark size={collapsed ? 30 : 36} />
             {!collapsed && (
               <span style={{ display: 'block', paddingLeft: 6, borderLeft: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 42%, transparent)', textAlign: 'left' }}>
                 <span style={{ fontFamily: 'Cinzel, Georgia, serif', fontSize: 16, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--theme-primary, #c9a84c)', display: 'block', lineHeight: 1.05 }}>ALPHATAPE</span>
@@ -184,7 +184,7 @@ export default function Layout({ children }: LayoutProps) {
             onClick={() => setCollapsed(c => !c)}
             aria-label={collapsed ? 'Open sidebar' : 'Close sidebar'}
             title={collapsed ? 'Open sidebar' : 'Close sidebar'}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: collapsed ? 0 : 4, marginLeft: 'auto', marginRight: collapsed ? 7 : 0, display: 'flex', alignItems: 'center', color: 'var(--theme-secondary, #5e768f)' }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: collapsed ? 0 : 4, marginLeft: collapsed ? 0 : 'auto', display: 'flex', alignItems: 'center', color: 'var(--theme-secondary, #5e768f)' }}
           >
             {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={16} />}
           </button>
