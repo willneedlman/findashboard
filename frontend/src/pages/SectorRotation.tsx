@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Cell } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
-import { VerdictStrip, TICK, TOOLTIP_STYLE, TOOLTIP_CURSOR } from './valuationShared'
+import { TICK, TOOLTIP_STYLE, TOOLTIP_CURSOR } from './valuationShared'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip, chartClip } from '../lib/reportCaptureRegistry'
@@ -80,6 +80,21 @@ export function SectorRotationContent() {
     rel:      s.rel_strength[activePeriod],
   }))
 
+  const rotationSignal = data ? (() => {
+    const spyRet = data.spy_returns[activePeriod]
+    const valid = data.sectors.filter(s => s.returns[activePeriod] != null)
+    const beating = spyRet == null ? 0 : valid.filter(s => (s.returns[activePeriod] as number) > spyRet).length
+    const ranked = [...valid].sort((a, b) => (b.returns[activePeriod] as number) - (a.returns[activePeriod] as number))
+    return {
+      broad: valid.length > 0 && beating >= valid.length / 2,
+      beating,
+      total: valid.length,
+      spyRet,
+      leader: ranked[0],
+      laggard: ranked[ranked.length - 1],
+    }
+  })() : null
+
   useReportCapture(() => {
     if (!data?.sectors?.length) return null
     const pieces: ClipDraft[] = []
@@ -147,34 +162,18 @@ export function SectorRotationContent() {
 
         <PageHeader
           title="Sector Rotation"
-        />
-
-        {/* Verdict strip — breadth vs SPY */}
-        {data && (() => {
-          const per = activePeriod
-          const spyRet = data.spy_returns[per]
-          const valid = data.sectors.filter(s => s.returns[per] != null)
-          const beating = spyRet != null ? valid.filter(s => (s.returns[per] as number) > spyRet).length : 0
-          const total = valid.length
-          const byRet = [...valid].sort((a, b) => (b.returns[per] as number) - (a.returns[per] as number))
-          const top = byRet[0], bottom = byRet[byRet.length - 1]
-          const broad = total > 0 && beating >= total / 2
-          const fmtP = (v: number | null) => v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`
-          return (
-            <div style={{ marginBottom: 16 }}>
-              <VerdictStrip
-                primary={{ label: `Breadth · ${per}`, value: `${beating}/${total}`, tone: broad ? 'pos' : 'neg',
-                  context: broad ? 'sectors beating SPY · risk-on' : 'sectors beating SPY · defensive', contextTone: broad ? 'pos' : 'neg' }}
-                cells={[
-                  { label: `SPY ${per}`, value: fmtP(spyRet) },
-                  ...(top ? [{ label: 'Leader', value: `${top.ticker} ${fmtP(top.returns[per])}`, tone: 'pos' as const, labelTone: 'pos' as const }] : []),
-                  ...(bottom ? [{ label: 'Laggard', value: `${bottom.ticker} ${fmtP(bottom.returns[per])}`, tone: 'neg' as const, labelTone: 'neg' as const }] : []),
-                  ...(top && bottom ? [{ label: 'Dispersion', value: `${((top.returns[per] as number) - (bottom.returns[per] as number)).toFixed(1)}%`, sub: 'leader − laggard' }] : []),
-                ]}
-              />
+          actions={rotationSignal && (
+            <div aria-label="Sector rotation summary" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', fontFamily: T.mono, fontSize: 9, fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ padding: '4px 7px', border: `1px solid ${rotationSignal.broad ? 'color-mix(in srgb, var(--theme-positive, #22c55e) 52%, transparent)' : 'color-mix(in srgb, var(--theme-negative, #ef4444) 52%, transparent)'}`, color: rotationSignal.broad ? T.pos : T.neg, fontFamily: T.label, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                {rotationSignal.broad ? 'Broad leadership' : 'Defensive rotation'}
+              </span>
+              <span style={{ color: T.muted }}>{rotationSignal.beating}/{rotationSignal.total} beat SPY</span>
+              <span style={{ paddingLeft: 7, borderLeft: `1px solid ${T.border}`, color: T.muted }}>SPY <strong style={{ color: rotationSignal.spyRet == null ? T.muted : rotationSignal.spyRet >= 0 ? T.pos : T.neg, fontWeight: 700 }}>{pct(rotationSignal.spyRet)}</strong></span>
+              {rotationSignal.leader && <span style={{ padding: '4px 7px', border: `1px solid color-mix(in srgb, var(--theme-positive, #22c55e) 40%, transparent)`, color: T.pos }}>Leader <strong>{rotationSignal.leader.ticker} {pct(rotationSignal.leader.returns[activePeriod])}</strong></span>}
+              {rotationSignal.laggard && <span style={{ padding: '4px 7px', border: `1px solid color-mix(in srgb, var(--theme-negative, #ef4444) 40%, transparent)`, color: T.neg }}>Laggard <strong>{rotationSignal.laggard.ticker} {pct(rotationSignal.laggard.returns[activePeriod])}</strong></span>}
             </div>
-          )
-        })()}
+          )}
+        />
 
         {/* Controls */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
