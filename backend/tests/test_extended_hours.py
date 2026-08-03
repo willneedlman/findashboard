@@ -150,6 +150,22 @@ def test_portfolio_quotes_batch_prefers_live_equity_trade_when_closed(monkeypatc
     assert result["quotes"]["NVDA"]["source"] == "alpaca_extended"
 
 
+def test_portfolio_quotes_batch_does_not_label_weekend_close_as_extended(monkeypatch):
+    idx = pd.to_datetime(["2026-07-30", "2026-07-31"])
+    columns = pd.MultiIndex.from_product([["Close"], ["NVDA"]])
+    frame = pd.DataFrame([[200.0], [190.0]], index=idx, columns=columns)
+    monkeypatch.setattr(market_router, "get_download", lambda *args, **kwargs: frame)
+    monkeypatch.setattr(market_router, "is_market_open", lambda: False)
+    monkeypatch.setattr(market_router, "session_label", lambda: "weekend")
+    monkeypatch.setattr(market_router.alpaca, "get_latest_prices", lambda symbols: {"NVDA": 201.9})
+    market_router.get_quotes.cache_clear()
+
+    result = market_router.get_quotes("NVDA")
+
+    assert result["quotes"]["NVDA"]["current_price"] == 190.0
+    assert result["quotes"]["NVDA"]["source"] == "batch_history"
+
+
 # ── option marks ────────────────────────────────────────────────────────────
 
 def _mark_request(strike=100.0):

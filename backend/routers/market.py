@@ -370,7 +370,9 @@ def get_quotes(tickers: str):
     extended_by_symbol: dict[str, dict] = {}
     live_by_symbol: dict[str, float] = {}
     market_open = is_market_open()
-    if not market_open:
+    session = session_label()
+    use_extended_marks = not market_open and session in {"pre-market", "after-hours"}
+    if use_extended_marks:
         # Daily history stops at the regular close. Use the same extended-hours
         # source as individual quotes and option re-marks, without exceeding the
         # process-wide yfinance budget.
@@ -412,7 +414,7 @@ def get_quotes(tickers: str):
             "current_price": round(price, 2),
             "pct_change_1d": round((price / baseline - 1) * 100, 3) if baseline else None,
             "source": "alpaca_extended" if live_price else "extended_hours" if extended_price else "batch_history",
-            "session": session_label(),
+            "session": session,
         }
         if extended_price:
             quote.update({
@@ -421,7 +423,7 @@ def get_quotes(tickers: str):
                 "as_of": extended.get("as_of"),
             })
         quotes[symbol] = quote
-    return {"quotes": quotes, "source": "batch_history"}
+    return {"quotes": quotes, "source": "extended_hours" if any(q.get("source") in {"alpaca_extended", "extended_hours"} for q in quotes.values()) else "batch_history"}
 
 
 @router.get("/dividends")
