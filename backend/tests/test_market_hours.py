@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from main import app
-from market_hours import is_market_open, session_label, session_status
+from market_hours import is_market_open, is_overnight_session, session_label, session_status
 
 client = TestClient(app)
 
@@ -27,6 +27,13 @@ def test_regular_holiday_and_early_close_sessions():
 def test_observed_new_year_can_fall_in_prior_calendar_year():
     assert session_label(eastern(2021, 12, 31, 11)) == "holiday"
     assert not is_market_open(eastern(2021, 12, 31, 11))
+
+
+def test_overnight_session_observes_245_window_and_holidays():
+    assert is_overnight_session(eastern(2026, 8, 2, 20, 1))  # Sunday evening
+    assert session_label(eastern(2026, 8, 3, 1, 0)) == "closed"  # No Monday overnight
+    assert is_overnight_session(eastern(2026, 8, 4, 1, 0))  # Monday night into Tuesday
+    assert not is_overnight_session(eastern(2026, 7, 2, 21, 0))  # Friday holiday follows
 
 
 def test_session_status_exposes_holiday_metadata():

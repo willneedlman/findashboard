@@ -184,3 +184,44 @@ def get_latest_prices(symbols: tuple[str, ...]) -> dict[str, float]:
         if symbol and price > 0:
             out[symbol] = round(price, 4)
     return out
+
+
+@ttl_cache(maxsize=128, ttl=1)
+def get_latest_overnight_quotes(symbols: tuple[str, ...]) -> dict[str, dict]:
+    """Latest free Alpaca 24/5 indicative quote midpoint for a basket.
+
+    This is intentionally quote-derived: the free overnight feed provides
+    real-time indicative NBBO-style quotes, while real-time BOATS trades need
+    a paid feed.  Callers must display it as indicative, not as a trade.
+    """
+    if not available():
+        return {}
+    requested = tuple(dict.fromkeys(symbol.strip().upper() for symbol in symbols if is_equity(symbol)))
+    if not requested:
+        return {}
+    alpaca_to_symbol = {to_alpaca_symbol(symbol): symbol for symbol in requested}
+    try:
+        r = httpx.get(
+            f"{_DATA_BASE}/v2/stocks/quotes/latest",
+            headers=_HEADERS,
+            params={"symbols": ",".join(alpaca_to_symbol), "feed": "overnight"},
+            timeout=8,
+        )
+        r.raise_for_status()
+        quotes = (r.json() or {}).get("quotes") or {}
+    except Exception:
+        return {}
+    out: dict[str, dict] = {}
+    for alpaca_symbol, quote in quotes.items():
+        quote = quote or {}
+        bid, ask = float(quote.get("bp") or 0), float(quote.get("ap") or 0)
+        sides = [side for side in (bid, ask) if side > 0]
+        symbol = alpaca_to_symbol.get(alpaca_symbol)
+        if symbol and sides:
+            out[symbol] = {
+                "price": round(sum(sides) / len(sides), 4),
+                "bid": bid or None,
+                "ask": ask or None,
+                "as_of": quote.get("t"),
+            }
+    return out

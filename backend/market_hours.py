@@ -90,8 +90,34 @@ def is_market_open(now: _dt.datetime | None = None) -> bool:
     return _dt.time(9, 30) <= et.time() < close
 
 
+def is_overnight_session(now: _dt.datetime | None = None) -> bool:
+    """Whether Alpaca's 24/5 overnight indicative market is operating.
+
+    The session runs 20:00–04:00 ET from Sunday evening through Friday
+    morning, skipping a night when its following regular trading day is a
+    market holiday.  It is a separate venue from NYSE/Nasdaq regular hours.
+    """
+    et = _eastern(now)
+    today = et.date()
+    t = et.time()
+
+    def is_trading_day(day: _dt.date) -> bool:
+        return day.weekday() < 5 and day not in market_holidays(day.year)
+
+    if t >= _dt.time(20, 0):
+        # Sunday through Thursday nights lead into the next trading day.
+        return et.weekday() in {6, 0, 1, 2, 3} and is_trading_day(today + _dt.timedelta(days=1))
+    if t < _dt.time(4, 0):
+        # Monday overnight does not exist; all other early-morning sessions
+        # must have begun after a trading day and lead into one.
+        return et.weekday() in {1, 2, 3, 4} and is_trading_day(today - _dt.timedelta(days=1)) and is_trading_day(today)
+    return False
+
+
 def session_label(now: _dt.datetime | None = None) -> str:
     et = _eastern(now)
+    if is_overnight_session(et):
+        return "overnight"
     if et.weekday() >= 5:
         return "weekend"
     if et.date() in market_holidays(et.year):

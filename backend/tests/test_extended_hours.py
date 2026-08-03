@@ -25,6 +25,9 @@ def _closes(values, last_day, tz=ET):
 @pytest.fixture(autouse=True)
 def _no_network(monkeypatch):
     monkeypatch.setattr(extended_quotes, "extended_quote", lambda sym: {"price": None, "as_of": None})
+    monkeypatch.setattr(market_router, "is_overnight_session", lambda: False)
+    monkeypatch.setattr(options_router, "is_overnight_session", lambda: False)
+    monkeypatch.setattr(options_router, "session_label", lambda: "after-hours")
 
 
 def _stub_history(monkeypatch, frame):
@@ -166,6 +169,28 @@ def test_portfolio_quotes_batch_does_not_label_weekend_close_as_extended(monkeyp
     assert result["quotes"]["NVDA"]["source"] == "batch_history"
 
 
+def test_portfolio_quotes_use_overnight_indicative_quote(monkeypatch):
+    idx = pd.to_datetime(["2026-07-30", "2026-07-31"])
+    columns = pd.MultiIndex.from_product([["Close"], ["NVDA"]])
+    frame = pd.DataFrame([[200.0], [200.75]], index=idx, columns=columns)
+    monkeypatch.setattr(market_router, "get_download", lambda *args, **kwargs: frame)
+    monkeypatch.setattr(market_router, "is_market_open", lambda: False)
+    monkeypatch.setattr(market_router, "is_overnight_session", lambda: True)
+    monkeypatch.setattr(market_router, "session_label", lambda: "overnight")
+    monkeypatch.setattr(market_router.alpaca, "get_latest_overnight_quotes", lambda symbols: {
+        "NVDA": {"price": 202.06, "as_of": "2026-08-03T00:15:00-04:00"},
+    })
+    market_router.get_quotes.cache_clear()
+
+    result = market_router.get_quotes("NVDA")
+
+    quote = result["quotes"]["NVDA"]
+    assert quote["current_price"] == 202.06
+    assert quote["source"] == "alpaca_overnight_indicative"
+    assert quote["session"] == "overnight"
+    assert quote["as_of"] == "2026-08-03T00:15:00-04:00"
+
+
 # ── option marks ────────────────────────────────────────────────────────────
 
 def _mark_request(strike=100.0):
@@ -217,6 +242,18 @@ def test_closed_market_without_an_extended_print_keeps_the_closing_mid(monkeypat
     mark = options_router.option_marks(_mark_request())["marks"][0]
     assert mark["source"] == "chain"
     assert mark["mark"] == pytest.approx(5.2, abs=0.01)
+
+
+def test_overnight_mark_uses_indicative_spot(monkeypatch):
+    _stub_chain(monkeypatch, spot=100.0)
+    monkeypatch.setattr(options_router, "is_market_open", lambda: False)
+    monkeypatch.setattr(options_router, "is_overnight_session", lambda: True)
+    monkeypatch.setattr(options_router.alpaca, "get_latest_overnight_quotes", lambda symbols: {"AAPL": {"price": 108.0}})
+
+    mark = options_router.option_marks(_mark_request())["marks"][0]
+    assert mark["source"] == "bs-overnight"
+    assert mark["spot"] == 108.0
+    assert mark["mark"] > 5.2
 
 
 def test_unlisted_strike_still_falls_back_to_black_scholes(monkeypatch):

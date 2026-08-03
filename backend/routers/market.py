@@ -11,7 +11,7 @@ from validation import validate_ticker, validate_tickers, validate_date
 import serpapi_finance
 import alpaca
 import factor_models as fm
-from market_hours import is_market_open, session_status, session_label, now_et
+from market_hours import is_market_open, is_overnight_session, session_status, session_label, now_et
 import extended_quotes
 
 
@@ -368,11 +368,18 @@ def get_quotes(tickers: str):
     )
     closes = _close_frame(frame)
     extended_by_symbol: dict[str, dict] = {}
+    overnight_by_symbol: dict[str, dict] = {}
     live_by_symbol: dict[str, float] = {}
     market_open = is_market_open()
     session = session_label()
+    overnight_active = is_overnight_session()
     use_extended_marks = not market_open and session in {"pre-market", "after-hours"}
-    if use_extended_marks:
+    if overnight_active:
+        # Alpaca's free overnight feed is a real-time indicative quote, not a
+        # BOATS trade. Preserve that distinction in the returned source.
+        overnight_by_symbol = alpaca.get_latest_overnight_quotes(tuple(symbols))
+        live_by_symbol = {symbol: quote["price"] for symbol, quote in overnight_by_symbol.items() if quote.get("price")}
+    elif use_extended_marks:
         # Daily history stops at the regular close. Use the same extended-hours
         # source as individual quotes and option re-marks, without exceeding the
         # process-wide yfinance budget.
@@ -399,6 +406,7 @@ def get_quotes(tickers: str):
         except Exception:
             pass
         extended = extended_by_symbol.get(symbol, {})
+        overnight = overnight_by_symbol.get(symbol, {})
         live_price = live_by_symbol.get(symbol)
         extended_price = live_price or extended.get("price")
         price = float(extended_price) if extended_price else regular_close
@@ -413,17 +421,22 @@ def get_quotes(tickers: str):
         quote = {
             "current_price": round(price, 2),
             "pct_change_1d": round((price / baseline - 1) * 100, 3) if baseline else None,
-            "source": "alpaca_extended" if live_price else "extended_hours" if extended_price else "batch_history",
+            "source": "alpaca_overnight_indicative" if overnight else "alpaca_extended" if live_price else "extended_hours" if extended_price else "batch_history",
             "session": session,
         }
         if extended_price:
             quote.update({
                 "regular_close": round(regular_close, 2),
                 "extended_pct": round((price / regular_close - 1) * 100, 3) if regular_close else None,
-                "as_of": extended.get("as_of"),
+                "as_of": overnight.get("as_of") or extended.get("as_of"),
             })
         quotes[symbol] = quote
-    return {"quotes": quotes, "source": "extended_hours" if any(q.get("source") in {"alpaca_extended", "extended_hours"} for q in quotes.values()) else "batch_history"}
+    source = "batch_history"
+    if any(q.get("source") == "alpaca_overnight_indicative" for q in quotes.values()):
+        source = "alpaca_overnight_indicative"
+    elif any(q.get("source") in {"alpaca_extended", "extended_hours"} for q in quotes.values()):
+        source = "extended_hours"
+    return {"quotes": quotes, "source": source}
 
 
 @router.get("/dividends")

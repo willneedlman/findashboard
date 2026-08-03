@@ -13,7 +13,8 @@ from math_engine import bs_price, bs_greeks, bs_core
 from cache import get_history
 import fmp
 import tradier as _tradier
-from market_hours import is_market_open
+import alpaca
+from market_hours import is_market_open, is_overnight_session, session_label
 import extended_quotes
 from disk_cache import disk_get, disk_set
 from validation import validate_ticker
@@ -658,14 +659,21 @@ def option_marks(req: MarksRequest):
     _RF = 5.0  # risk-free %, matches the chain endpoint
     chain_cache: dict[tuple[str, str], dict] = {}
     market_open = is_market_open()
+    overnight_active = is_overnight_session()
+    use_extended_spot = not market_open and session_label() in {"pre-market", "after-hours"}
+    underlyings = tuple(dict.fromkeys(leg.underlying.strip().upper() for leg in req.legs))
+    overnight_quotes = alpaca.get_latest_overnight_quotes(underlyings) if overnight_active else {}
     ext_cache: dict[str, float | None] = {}
 
-    def get_extended_spot(sym: str) -> float | None:
-        if market_open:
-            return None
+    def get_extended_spot(sym: str) -> tuple[float | None, str | None]:
+        if overnight_active:
+            quote = overnight_quotes.get(sym) or {}
+            return quote.get("price"), "overnight" if quote.get("price") else None
+        if not use_extended_spot:
+            return None, None
         if sym not in ext_cache:
             ext_cache[sym] = extended_quotes.extended_spot(sym)
-        return ext_cache[sym]
+        return ext_cache[sym], "extended" if ext_cache[sym] else None
 
     def get_chain(sym: str, exp: str) -> dict:
         key = (sym, exp)
@@ -692,7 +700,7 @@ def option_marks(req: MarksRequest):
 
         # Overnight the underlying keeps moving while the chain does not, so a
         # price derived off the extended spot beats the frozen closing quote.
-        ext_spot = get_extended_spot(sym)
+        ext_spot, spot_source = get_extended_spot(sym)
         eff_spot = ext_spot if ext_spot and ext_spot > 0 else spot
 
         if match and ext_spot is None:
@@ -710,7 +718,7 @@ def option_marks(req: MarksRequest):
             iv_pct = iv * 100 if iv < 1.0 else iv
             try:
                 mark = round(float(bs_price(eff_spot, leg.strike, dte, _RF, iv_pct, flag)), 4)
-                source = "bs-extended" if ext_spot else "bs"
+                source = "bs-overnight" if spot_source == "overnight" else "bs-extended" if ext_spot else "bs"
             except Exception:
                 mark = None
 
