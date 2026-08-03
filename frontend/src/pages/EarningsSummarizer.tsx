@@ -468,35 +468,35 @@ export default function EarningsSummarizer() {
     <PageWrapper title="Earnings AI">
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexDirection: isMobile ? 'column' : 'row' }}>
 
-        <aside style={{ width: isMobile ? '100%' : 248, flexShrink: 0, background: C.surface, border: `1px solid ${C.border}` }}>
-          <div style={{ padding: '11px 16px', background: 'color-mix(in srgb, var(--theme-bg, #101c2e) 58%, var(--theme-surface, #0d1826))', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+        <aside style={{ width: isMobile ? '100%' : 272, flexShrink: 0, background: C.surface, border: `1px solid ${C.border}` }}>
+          <div style={{ padding: '13px 20px', background: 'color-mix(in srgb, var(--theme-bg, #101c2e) 58%, var(--theme-surface, #0d1826))', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
             <span style={{ fontFamily: C.sans, fontSize: 9, fontWeight: 700, color: C.gold, letterSpacing: '0.14em', textTransform: 'uppercase' }}>Analysis inputs</span>
             <span style={{ fontFamily: C.mono, fontSize: 9, color: C.dim }}>{tickers.length || 'No'} ticker{tickers.length === 1 ? '' : 's'}</span>
           </div>
 
-          <div style={{ padding: '16px', borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ padding: '20px', borderBottom: `1px solid ${C.border}` }}>
             <label style={railLabel}>Tickers</label>
             <TickerTagInput tickers={tickers} onChange={setTickers} />
           </div>
 
-          <div style={{ padding: '16px', borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ padding: '20px', borderBottom: `1px solid ${C.border}` }}>
             <label style={railLabel}>Source filings</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
               {[
                 { label: 'Quarterly reports (10-Q)', val: include10q, set: setInclude10q },
                 { label: 'Annual reports (10-K)',    val: include10k, set: setInclude10k },
               ].map(opt => (
-                <label key={opt.label} onClick={() => opt.set(v => !v)} style={{ minWidth: 0, padding: '9px 8px', border: `1px solid ${opt.val ? C.gold : C.border}`, background: opt.val ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)' : 'transparent', display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', userSelect: 'none' }}>
+                <label key={opt.label} onClick={() => opt.set(v => !v)} style={{ minWidth: 0, minHeight: 44, padding: '10px 12px', border: `1px solid ${opt.val ? C.gold : C.border}`, background: opt.val ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)' : 'transparent', display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer', userSelect: 'none' }}>
                   <div style={{ ...check, border: `1px solid ${opt.val ? C.gold : C.dim}`, background: opt.val ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {opt.val && <div style={{ width: 5, height: 5, background: C.gold }} />}
                   </div>
-                  <span style={{ fontFamily: C.sans, fontSize: 10, lineHeight: 1.25, color: opt.val ? C.text : C.dim }}>{opt.label}</span>
+                  <span style={{ fontFamily: C.sans, fontSize: 11, lineHeight: 1.25, color: opt.val ? C.text : C.dim }}>{opt.label}</span>
                 </label>
               ))}
             </div>
           </div>
 
-          <div style={{ padding: '16px', borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ padding: '20px', borderBottom: `1px solid ${C.border}` }}>
             <label style={railLabel}>Filings per ticker</label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 5 }}>
               {[1, 2, 4].map(n => (
@@ -508,7 +508,7 @@ export default function EarningsSummarizer() {
             </div>
           </div>
 
-          <div style={{ padding: '16px' }}>
+          <div style={{ padding: '20px' }}>
             <button onClick={startAnalysis} disabled={!canRun}
               style={{ width: '100%', background: canRun ? C.gold : 'transparent', border: `1px solid ${C.gold}`, color: canRun ? C.surface : C.gold, fontFamily: C.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', padding: '11px 0', cursor: canRun ? 'pointer' : 'default', opacity: canRun ? 1 : 0.5 }}>
               {isPending ? `Analyzing… (${overallProgress}%)` : 'Analyze'}
