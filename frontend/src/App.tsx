@@ -81,7 +81,8 @@ const StrategyBuilder    = lazyWithReload(() => import('./pages/StrategyBuilder'
 const AlgoStrategyBuilder = lazyWithReload(() => import('./pages/AlgoStrategyBuilder'))
 const EtfXray            = lazyWithReload(() => import('./pages/EtfXray'))
 const DealerGEX          = lazyWithReload(() => import('./pages/DealerGEX'))
-const CustomDashboard    = lazyWithReload(() => import('./pages/CustomDashboard'))
+const loadCustomDashboard = () => import('./pages/CustomDashboard')
+const CustomDashboard    = lazyWithReload(loadCustomDashboard)
 const PrivacyPolicy      = lazyWithReload(() => import('./pages/legal/PrivacyPolicy'))
 const TermsOfUse         = lazyWithReload(() => import('./pages/legal/TermsOfUse'))
 const RiskDisclosure     = lazyWithReload(() => import('./pages/legal/RiskDisclosure'))
@@ -154,6 +155,12 @@ function PageviewTracker() {
 function TerminalChrome() {
   const location = useLocation()
   const navigate = useNavigate()
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadCustomDashboard().catch(() => {})
+    }, 1500)
+    return () => window.clearTimeout(timer)
+  }, [])
   // Record tool visits for the Home "Jump Back In" row.
   useEffect(() => {
     const tool = findToolByLocation(location.pathname, location.search)
@@ -188,8 +195,8 @@ function TerminalChrome() {
       <TickerDrawerHost />
       <ReportCaptureHost />
       <AnimatePresence mode="wait">
-        <Suspense key={location.pathname} fallback={<LoadingState />}>
-          {holdForInject ? <LoadingState /> : <Outlet />}
+        <Suspense key={location.pathname} fallback={<LoadingState label={location.pathname === '/dashboard' ? 'Loading your dashboard' : 'Loading'} />}>
+          {holdForInject ? <LoadingState label="Loading linked ticker" /> : <Outlet />}
         </Suspense>
       </AnimatePresence>
     </Layout>

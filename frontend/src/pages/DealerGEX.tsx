@@ -177,26 +177,26 @@ export default function DealerGEX() {
           <RailSection title="GEX Parameters" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div>
-              <label style={LABEL}>Ticker</label>
-              <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} style={INPUT}
+              <label htmlFor="gex-ticker" style={LABEL}>Ticker</label>
+              <input id="gex-ticker" value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} style={INPUT}
                 onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')} onBlur={e => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')} />
             </div>
             <div>
-              <label style={LABEL}>Strikes Each Side</label>
-              <input type="number" value={nStrikes} step={5} min={5} max={100} onChange={e => setNStrikes(+e.target.value)} style={INPUT}
+              <label htmlFor="gex-strikes" style={LABEL}>Strikes Each Side</label>
+              <input id="gex-strikes" type="number" value={nStrikes} step={5} min={5} max={100} onChange={e => setNStrikes(+e.target.value)} style={INPUT}
                 onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')} onBlur={e => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')} />
             </div>
             <div>
-              <label style={LABEL}>Expiry</label>
+              <label htmlFor="gex-expiry" style={LABEL}>Expiry</label>
               {data?.expirations?.length ? (
-                <select value={expiry} onChange={e => setExpiry(e.target.value)} style={SELECT}>
+                <select id="gex-expiry" value={expiry} onChange={e => setExpiry(e.target.value)} style={SELECT}>
                   <option value="">All chains</option>
                   {(data.expirations as string[]).map((e: string) => (
                     <option key={e} value={e}>{e}</option>
                   ))}
                 </select>
               ) : (
-                <input value={expiry} onChange={e => setExpiry(e.target.value)} placeholder="e.g. 2026-06-20" style={INPUT}
+                <input id="gex-expiry" value={expiry} onChange={e => setExpiry(e.target.value)} placeholder="e.g. 2026-06-20" style={INPUT}
                   onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')} onBlur={e => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')} />
               )}
             </div>

@@ -327,7 +327,7 @@ const formatChartTime = (time: Time) => {
     : typeof time === 'string'
       ? new Date(`${time}T00:00:00`)
       : new Date(time.year, time.month - 1, time.day)
-  return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+  return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
 const baseOptions = (C: Colors, h: number) => ({
@@ -613,7 +613,7 @@ export function ChartStudioContent() {
         { label: 'Open', value: last.open.toFixed(2) },
         { label: 'High', value: last.high.toFixed(2) },
         { label: 'Low', value: last.low.toFixed(2) },
-        { label: 'Volume', value: Math.round(last.volume).toLocaleString() },
+        { label: 'Volume', value: Math.round(last.volume).toLocaleString('en-US') },
         { label: 'Window Chg', value: `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%`, sub: `${candles.length} bars` },
         { label: 'Range Hi/Lo', value: `${hi.toFixed(2)} / ${lo.toFixed(2)}` },
       ]),
@@ -1261,7 +1261,7 @@ export function ChartStudioContent() {
           { label: 'Low', value: inspectC.low.toFixed(2), color: 'var(--theme-text, #d7e3fc)' },
           { label: 'Close', value: inspectC.close.toFixed(2), color: 'var(--theme-text, #d7e3fc)' },
           { label: 'Change', value: `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`, color: pct >= 0 ? C.lanePos : C.laneNeg },
-          ...(lanes.volume ? [{ label: 'Volume', value: inspectC.volume.toLocaleString(), color: 'var(--theme-text, #d7e3fc)' }] : []),
+          ...(lanes.volume ? [{ label: 'Volume', value: inspectC.volume.toLocaleString('en-US'), color: 'var(--theme-text, #d7e3fc)' }] : []),
         ],
       })
     }

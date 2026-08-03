@@ -269,7 +269,7 @@ function PortfolioImportStrip() {
   const btn: React.CSSProperties = { background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)', color: F.gold, fontFamily: F.sans, fontSize: 9, fontWeight: 400, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '5px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }
   return (
     <div style={{ background: F.panel, border: `1px solid ${F.border}`, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-      <input ref={fileRef} type="file" accept=".json,.csv,.txt" style={{ display: 'none' }} onChange={handleFile} />
+      <input ref={fileRef} type="file" accept=".json,.csv,.txt" aria-label="Import context portfolio" style={{ display: 'none' }} onChange={handleFile} />
       <span style={{ ...cap, letterSpacing: '0.14em' }}>Context Portfolio</span>
       {tickers.length === 0 ? (
         <>

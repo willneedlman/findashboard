@@ -61,7 +61,7 @@ function exchangeFamily(ex: string): string {
 function today(): string { return new Date().toISOString().slice(0, 10) }
 
 function fmtMoney(v: number | null | undefined): string {
-  if (v == null) return '—'
+  if (v == null || v <= 0) return '—'
   const a = Math.abs(v)
   if (a >= 1e12) return `$${(v / 1e12).toFixed(1)}T`
   if (a >= 1e9) return `$${(v / 1e9).toFixed(1)}B`

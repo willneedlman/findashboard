@@ -166,11 +166,12 @@ export default function LogisticsMap() {
 
   const eyebrow: React.CSSProperties = { fontFamily: L.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: L.gold }
   const goldTint = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)'
-  const VIEW: ['vessels' | 'flights' | 'air' | 'choke' | 'port' | 'suppliers' | 'custLinks', string, string, number][] = [
+  const countState = (loading: boolean, error: boolean, count: number): number | string => loading ? 'Loading' : error ? 'Unavailable' : count || 'No data'
+  const VIEW: ['vessels' | 'flights' | 'air' | 'choke' | 'port' | 'suppliers' | 'custLinks', string, string, number | string][] = [
     ['suppliers', 'Suppliers', SUPPLIER, supFeatures.length],
     ['custLinks', 'Customer links', CUSTLINK, custEdges.length],
-    ['vessels', 'Cargo ships', VESSEL, vessels.length], ['flights', 'Cargo flights', FLIGHT, flights.length],
-    ['air', 'Air hubs', AIR, hubs.length], ['choke', 'Chokepoints', CHOKE, Object.keys(CHOKES).length], ['port', 'LSCI ports', PORT, econ.length],
+    ['vessels', 'Cargo ships', VESSEL, countState(vq.isLoading, vq.isError, vessels.length)], ['flights', 'Cargo flights', FLIGHT, countState(fq.isLoading, fq.isError, flights.length)],
+    ['air', 'Air hubs', AIR, countState(air.isLoading, air.isError, hubs.length)], ['choke', 'Chokepoints', CHOKE, Object.keys(CHOKES).length], ['port', 'LSCI ports', PORT, countState(mf.isLoading, mf.isError, econ.length)],
   ]
   const selStyle: React.CSSProperties = { flex: 1, minWidth: 0, background: 'var(--theme-bg, #0b1626)', color: L.text, border: `1px solid ${L.border}`, borderRadius: 3, fontFamily: L.mono, fontSize: 10, padding: '4px 6px' }
   const selLbl: React.CSSProperties = { display: 'block', fontFamily: L.sans, fontSize: 9, color: L.faint, marginBottom: 3 }
@@ -250,7 +251,7 @@ export default function LogisticsMap() {
         {/* Top-left: title + live count */}
         <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 520, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 13px', background: panel, border: `1px solid ${L.border}` }}>
           <span style={{ fontFamily: L.mono, fontSize: 13, fontWeight: 700, letterSpacing: '0.18em', color: L.gold }}>FREIGHT MAP</span>
-          <span style={{ fontFamily: L.mono, fontSize: 9, color: L.pos }}>● LIVE · {flights.length} flights · {vessels.length} ships</span>
+          <span style={{ fontFamily: L.mono, fontSize: 9, color: L.pos }}>● LIVE · {flights.length} flights · {vq.isLoading ? 'loading ships' : vq.isError || !vessels.length ? 'ship feed unavailable' : `${vessels.length} ships`}</span>
         </div>
 
         {/* Left column: VIEW + LEGEND (bottom) */}
@@ -329,7 +330,7 @@ export default function LogisticsMap() {
           <Section title="AIR CARGO">
             {colHead('HUB', '24H MOVES · TOP OP')}
             {hubs.map(h => { const top = Object.entries(h.by_operator).sort((a, b) => b[1] - a[1])[0]; return line(`${h.city} (${h.icao})`, `${h.movements}${top ? ` · ${top[0]}` : ''}`) })}
-            {!hubs.length && <div style={{ fontFamily: L.mono, fontSize: 10, color: L.faint }}>No freighter data.</div>}
+            {!hubs.length && <div style={{ fontFamily: L.mono, fontSize: 10, color: L.faint }}>{air.isLoading ? 'Loading freighter activity…' : air.isError ? 'Air cargo feed unavailable.' : 'No freighter activity reported in the last 24 hours.'}</div>}
             <div style={{ fontFamily: L.sans, fontSize: 8, color: L.faint, marginTop: 3 }}>Freighter arrivals + departures, last 24h (OpenSky, ~12h lag)</div>
           </Section>
 

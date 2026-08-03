@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { tickerLogoSources, tickerLogoVisualScale } from '../lib/tickerLogos'
 
 function tickerColor(ticker: string): string {
@@ -37,75 +37,53 @@ export default function TickerLogo({
   const [idx, setIdx] = useState(0)
   // Reset to the first provider when the symbol changes (component is reused) or
   // when a preferred logoUrl arrives after mount (async enrichment).
-  const [prevKey, setPrevKey] = useState(`${ticker}|${logoUrl ?? ''}`)
   const key = `${ticker}|${logoUrl ?? ''}`
-  if (key !== prevKey) {
-    setPrevKey(key)
-    setIdx(0)
-  }
-
-  if (idx < sources.length) {
-    const image = (
-      <img
-        key={`${ticker}-${idx}`}
-        src={sources[idx]}
-        alt={ticker}
-        crossOrigin={crossOrigin}
-        width={size}
-        height={size}
-        onError={() => setIdx(i => i + 1)}
-        style={{
-          width: fit === 'contain' ? `calc(100% - ${padding * 2}px)` : size,
-          height: fit === 'contain' ? `calc(100% - ${padding * 2}px)` : size,
-          borderRadius: fit === 'contain' ? Math.max(0, Number(cornerRadius) || 0) : cornerRadius,
-          objectFit: fit,
-          objectPosition: 'center',
-          boxSizing: 'border-box',
-          background: fit === 'contain' ? 'transparent' : logoBackground,
-          flexShrink: 0,
-          display: 'block',
-          transform: normalizeVisualWeight ? `scale(${tickerLogoVisualScale(ticker)})` : undefined,
-          transformOrigin: 'center',
-        }}
-      />
-    )
-    if (fit === 'contain') {
-      return (
-        <span style={{
-          width: size,
-          height: size,
-          borderRadius: cornerRadius,
-          background: logoBackground,
-          display: 'grid',
-          placeItems: 'center',
-          overflow: 'hidden',
-          flexShrink: 0,
-        }}>
-          {image}
-        </span>
-      )
-    }
-    return (
-      image
-    )
-  }
+  useEffect(() => setIdx(0), [key])
 
   return (
-    <div
+    <span
+      aria-label={`${ticker} logo`}
       style={{
         width: size,
         height: size,
         borderRadius: cornerRadius,
         background: tickerColor(ticker),
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        display: 'grid',
+        placeItems: 'center',
+        overflow: 'hidden',
         flexShrink: 0,
+        position: 'relative',
       }}
     >
-      <span style={{ color: 'var(--theme-text, #d7e3fc)', fontSize: size * 0.36, fontWeight: 700 }}>
+      <span aria-hidden="true" style={{ color: 'var(--theme-text, #d7e3fc)', fontSize: size * 0.36, fontWeight: 700 }}>
         {ticker.slice(0, 2).toUpperCase()}
       </span>
-    </div>
+      {idx < sources.length && (
+      <img
+        key={`${ticker}-${idx}`}
+        src={sources[idx]}
+        alt=""
+        aria-hidden="true"
+        crossOrigin={crossOrigin}
+        width={size}
+        height={size}
+        onError={() => setIdx(i => i + 1)}
+        style={{
+          width: fit === 'contain' ? `calc(100% - ${padding * 2}px)` : '100%',
+          height: fit === 'contain' ? `calc(100% - ${padding * 2}px)` : '100%',
+          borderRadius: fit === 'contain' ? Math.max(0, Number(cornerRadius) || 0) : cornerRadius,
+          objectFit: fit,
+          objectPosition: 'center',
+          boxSizing: 'border-box',
+          background: 'transparent',
+          flexShrink: 0,
+          display: 'block',
+          position: 'absolute',
+          inset: fit === 'contain' ? padding : 0,
+          transform: normalizeVisualWeight ? `scale(${tickerLogoVisualScale(ticker)})` : undefined,
+          transformOrigin: 'center',
+        }}
+      />)}
+    </span>
   )
 }
