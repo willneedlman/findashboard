@@ -877,7 +877,7 @@ export default function PortfolioManager() {
                               {r.loading ? '…' : r.avgCost > 0 ? `$${r.avgCost.toFixed(2)}${r.costIsAuto ? '*' : ''}` : '—'}
                             </td>
                           </>)}
-                          <td style={{ padding: '8px 12px', textAlign: 'right', color: T.text }}>{r.loading ? '…' : r.price > 0 ? <>{`$${r.price.toFixed(2)}`}{(r.quoteSource === 'extended_hours' || r.quoteSource === 'alpaca_extended' || r.quoteSource === 'alpaca_overnight_indicative') && <span title={`${r.quoteSource === 'alpaca_overnight_indicative' ? 'Alpaca free overnight indicative quote midpoint — not a BOATS trade' : r.quoteSource === 'alpaca_extended' ? 'Live Alpaca extended-hours trade' : 'Extended-hours print'}${r.quoteAsOf ? ` as of ${r.quoteAsOf}` : ''}`} style={{ color: 'var(--theme-tertiary, #60a5fa)', fontSize: 8, marginLeft: 5, border: '1px solid var(--theme-tertiary, #60a5fa)', padding: '0 3px', letterSpacing: '0.06em' }}>{r.quoteSource === 'alpaca_overnight_indicative' ? 'OVERNIGHT INDICATIVE' : r.quoteSession === 'pre-market' ? 'PRE' : 'AH'}</span>}</> : '—'}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', color: T.text }}>{r.loading ? '…' : r.price > 0 ? <>{`$${r.price.toFixed(2)}`}{(r.quoteSource === 'extended_hours' || r.quoteSource === 'alpaca_extended' || r.quoteSource === 'alpaca_overnight_indicative') && <span title={`${r.quoteSource === 'alpaca_overnight_indicative' ? 'Alpaca free overnight quote midpoint — not a BOATS trade' : r.quoteSource === 'alpaca_extended' ? 'Live Alpaca extended-hours trade' : 'Extended-hours print'}${r.quoteAsOf ? ` as of ${r.quoteAsOf}` : ''}`} style={{ color: 'var(--theme-tertiary, #60a5fa)', fontSize: 8, marginLeft: 5, border: '1px solid var(--theme-tertiary, #60a5fa)', padding: '0 3px', letterSpacing: '0.06em' }}>{r.quoteSource === 'alpaca_overnight_indicative' ? 'OVERNIGHT' : r.quoteSession === 'pre-market' ? 'PRE' : 'AH'}</span>}</> : '—'}</td>
                           <td style={{ padding: '8px 12px', textAlign: 'right', color: r.pct1d == null ? T.muted : r.pct1d >= 0 ? T.pos : T.neg }}>
                             {r.loading ? '…' : r.pct1d != null ? `${r.pct1d >= 0 ? '+' : ''}${r.pct1d.toFixed(2)}%` : '—'}
                           </td>
@@ -962,7 +962,7 @@ export default function PortfolioManager() {
                                   {/* A model price is not a traded price — say so. */}
                                   {l.mark != null && l.source?.startsWith('bs') && (
                                     <span title={l.source === 'bs-overnight'
-                                      ? "Market closed. Black-Scholes off Alpaca's free overnight indicative quote, at the chain's implied volatility."
+                                      ? "Market closed. Black-Scholes off Alpaca's free overnight quote midpoint, at the chain's implied volatility."
                                       : l.source === 'bs-extended'
                                       ? "Market closed. Black-Scholes off the extended-hours underlying, at the chain's implied volatility."
                                       : 'Contract not quoted. Black-Scholes off the chain spot and implied volatility.'}
