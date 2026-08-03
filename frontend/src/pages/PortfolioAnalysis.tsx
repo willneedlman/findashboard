@@ -118,7 +118,7 @@ function resolvedSector(ticker: string, profile?: CompanyProfile) {
   const name = profile?.companyName?.toLowerCase() ?? ''
   if (/bond|treasury|fixed income/.test(name)) return 'Fixed Income'
   if (/fund|etf|portfolio|index|trust/.test(name)) return 'Diversified Fund'
-  return 'Other'
+  return 'Public Equity'
 }
 
 function optionLegs(options: PMOptionPosition[]) {
@@ -338,16 +338,14 @@ function Results({ data }: { data: AnalysisResult }) {
   </div>
 }
 
-const sectorColors = [T.gold, T.blue, T.pos, T.warn, '#a78bfa', '#22d3ee', '#f97316', T.muted]
+const sectorColors = [T.gold, T.blue, T.pos, T.warn, '#a78bfa', '#22d3ee', '#f97316', '#e879f9', '#14b8a6', '#fb7185', '#84cc16', '#38bdf8', '#c084fc', '#f59e0b', '#2dd4bf', T.muted]
 
 function ConciseAnalysis({ data }: { data: AnalysisResult }) {
   const [selection, setSelection] = useState<DetailSelection | null>(null)
   const drawdowns = drawdownSeries(data.backtest.cumulative)
   const bands = monteBands(data.monteCarlo)
   const classifiedSlices: SectorChartSlice[] = data.sectors.map(sector => ({ ...sector, memberSectors: [sector.sector] }))
-  const sectorData: SectorChartSlice[] = classifiedSlices.length > 7
-    ? [...classifiedSlices.slice(0, 6), classifiedSlices.slice(6).reduce((rest, sector) => ({ sector: 'Other sectors', weight: rest.weight + sector.weight, holdings: rest.holdings + sector.holdings, memberSectors: [...rest.memberSectors, ...sector.memberSectors] }), { sector: 'Other sectors', weight: 0, holdings: 0, memberSectors: [] } as SectorChartSlice)]
-    : classifiedSlices
+  const sectorData: SectorChartSlice[] = [...classifiedSlices]
   if (data.cashWeight > 0) sectorData.push({ sector: 'Cash', weight: data.cashWeight, holdings: 1, memberSectors: ['Cash'] })
   const downtrends = data.positions.filter(p => p.periodReturn != null && p.periodReturn < 0).sort((a, b) => (a.periodReturn ?? 0) - (b.periodReturn ?? 0)).slice(0, 5)
   const terminal = data.monteCarlo?.percentiles
@@ -355,12 +353,13 @@ function ConciseAnalysis({ data }: { data: AnalysisResult }) {
   const chartPoint = (state: any) => state?.activePayload?.[0]?.payload
 
   return <div className="portfolio-analysis-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
-    <Panel label="Sector allocation" meta="Current value · select a sector" style={{ minHeight: 360, overflow: 'hidden' }}>
-      <div className="portfolio-sector-layout" style={{ minHeight: 330, display: 'grid', gridTemplateColumns: 'minmax(190px, .9fr) minmax(250px, 1.1fr)', alignItems: 'center', paddingTop: 28, overflow: 'hidden' }}>
+    <Panel label="Sector allocation" meta="Current value · select a sector" style={{ gridColumn: '1 / -1', minHeight: 360, overflow: 'hidden' }}>
+      <div className="portfolio-sector-layout" style={{ minHeight: 330, display: 'grid', gridTemplateColumns: 'minmax(280px, .72fr) minmax(440px, 1.28fr)', alignItems: 'center', paddingTop: 28, overflow: 'hidden' }}>
         <div className="portfolio-sector-chart" style={{ minWidth: 0, height: 300, cursor: 'pointer', outline: 'none' }}><ResponsiveContainer width="100%" height="100%"><PieChart style={{ outline: 'none' }}><Pie data={sectorData} dataKey="weight" nameKey="sector" innerRadius="50%" outerRadius="76%" paddingAngle={1} stroke={T.surface} style={{ outline: 'none' }} onClick={(entry: any) => { const slice = sectorData.find(item => item.sector === (entry?.sector ?? entry?.payload?.sector)); if (slice) setSelection({ kind: 'sector', sector: slice.sector, memberSectors: slice.memberSectors }) }}>{sectorData.map((s, i) => <Cell key={s.sector} fill={sectorColors[i % sectorColors.length]} cursor="pointer" style={{ outline: 'none' }} />)}</Pie><Tooltip contentStyle={tipStyle} formatter={(value: number) => `${Number(value).toFixed(1)}%`} /></PieChart></ResponsiveContainer></div>
-        <div className="portfolio-sector-legend" style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0, width: '100%', maxWidth: '100%', padding: '0 18px 0 8px', overflow: 'hidden' }}>{sectorData.map((s, i) => <button type="button" aria-label={`Inspect ${s.sector}, ${s.weight.toFixed(1)} percent`} aria-pressed={selection?.kind === 'sector' && selection.sector === s.sector} className="portfolio-inspectable portfolio-sector-row" onClick={() => setSelection({ kind: 'sector', sector: s.sector, memberSectors: s.memberSectors })} key={s.sector} style={{ appearance: 'none', border: '1px solid transparent', background: selection?.kind === 'sector' && selection.sector === s.sector ? T.hover : 'transparent', color: 'inherit', display: 'grid', gridTemplateColumns: '8px minmax(0, 1fr) 48px', gap: 8, alignItems: 'center', minWidth: 0, width: '100%', maxWidth: '100%', padding: '6px 7px', fontFamily: MONO, fontSize: 9.5, textAlign: 'left', cursor: 'pointer' }}><span style={{ width: 7, height: 7, background: sectorColors[i % sectorColors.length] }} /><span style={{ color: selection?.kind === 'sector' && selection.sector === s.sector ? T.text : T.muted, minWidth: 0, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{s.sector}</span><span style={{ color: T.text, textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{s.weight.toFixed(1)}%</span></button>)}</div>
+        <div className="portfolio-sector-legend" style={{ display: 'grid', gridTemplateColumns: sectorData.length > 8 ? 'repeat(2, minmax(0, 1fr))' : '1fr', alignContent: 'center', gap: 5, minWidth: 0, width: '100%', maxWidth: '100%', padding: '0 18px 0 8px', overflow: 'hidden' }}>{sectorData.map((s, i) => <button type="button" aria-label={`Inspect ${s.sector}, ${s.weight.toFixed(1)} percent`} aria-pressed={selection?.kind === 'sector' && selection.sector === s.sector} className="portfolio-inspectable portfolio-sector-row" onClick={() => setSelection({ kind: 'sector', sector: s.sector, memberSectors: s.memberSectors })} key={s.sector} style={{ appearance: 'none', border: '1px solid transparent', background: selection?.kind === 'sector' && selection.sector === s.sector ? T.hover : 'transparent', color: 'inherit', display: 'grid', gridTemplateColumns: '8px minmax(0, 1fr) 48px', gap: 8, alignItems: 'center', minWidth: 0, width: '100%', maxWidth: '100%', padding: '6px 7px', fontFamily: MONO, fontSize: 9.5, textAlign: 'left', cursor: 'pointer' }}><span style={{ width: 7, height: 7, background: sectorColors[i % sectorColors.length] }} /><span style={{ color: selection?.kind === 'sector' && selection.sector === s.sector ? T.text : T.muted, minWidth: 0, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{s.sector}</span><span style={{ color: T.text, textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{s.weight.toFixed(1)}%</span></button>)}</div>
       </div>
     </Panel>
+    {selection?.kind === 'sector' && <DetailInspector selection={selection} data={data} onSelect={setSelection} onClose={() => setSelection(null)} />}
 
     <Panel label="Return path" meta={`Growth of $100 vs ${BENCHMARK} · select a date`} style={{ height: 360 }}>
       <div className="portfolio-chart-hit" style={{ height: '100%' }}><ResponsiveContainer width="100%" height="100%"><ComposedChart data={data.backtest.cumulative} margin={{ top: 40, right: 14, bottom: 5, left: 0 }} onClick={(state: any) => { const point = chartPoint(state); if (point) setSelection({ kind: 'return', point }) }}><CartesianGrid stroke={T.borderFaint} vertical={false} /><XAxis dataKey="date" tick={{ fill: T.muted, fontSize: 9 }} minTickGap={70} /><YAxis tick={{ fill: T.muted, fontSize: 9 }} width={42} /><Tooltip contentStyle={tipStyle} /><ReferenceLine y={100} stroke={T.border} /><Line dataKey="portfolio" name={data.bookName} stroke={T.gold} strokeWidth={2} dot={false} activeDot={{ r: 4 }} /><Line dataKey="benchmark" name={BENCHMARK} stroke={T.blue} strokeWidth={1.2} dot={false} activeDot={{ r: 3 }} /></ComposedChart></ResponsiveContainer></div>
@@ -381,7 +380,7 @@ function ConciseAnalysis({ data }: { data: AnalysisResult }) {
       {downtrends.length ? <div className="portfolio-downtrend-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${downtrends.length}, minmax(130px, 1fr))`, gap: 1, background: T.borderFaint }}>{downtrends.map(p => <button type="button" aria-label={`Inspect ${p.ticker}`} className="portfolio-inspectable" onClick={() => setSelection({ kind: 'position', ticker: p.ticker })} key={p.ticker} style={{ appearance: 'none', border: selection?.kind === 'position' && selection.ticker === p.ticker ? `1px solid ${T.gold}` : 0, background: T.surface, color: 'inherit', padding: '12px 14px', textAlign: 'left', cursor: 'pointer' }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontFamily: MONO }}><span style={{ color: T.gold, fontWeight: 800, fontSize: 12 }}>{p.ticker}</span><span style={{ color: T.neg, fontSize: 12 }}>{fmtPct(p.periodReturn)}</span></div><div style={{ color: T.muted, fontFamily: SANS, fontSize: 10, marginTop: 8, lineHeight: 1.4 }}>{p.decision}</div><div style={{ color: T.muted, fontFamily: MONO, fontSize: 9, marginTop: 5 }}>Weight {p.weight.toFixed(1)}% · Beta {p.beta?.toFixed(2) ?? '—'}</div></button>)}</div>
         : <div style={{ color: T.muted, fontFamily: SANS, fontSize: 11 }}>No modeled holding has a negative return over the five-year analysis window.</div>}
     </Panel>
-    {selection && <DetailInspector selection={selection} data={data} onSelect={setSelection} onClose={() => setSelection(null)} />}
+    {selection && selection.kind !== 'sector' && <DetailInspector selection={selection} data={data} onSelect={setSelection} onClose={() => setSelection(null)} />}
   </div>
 }
 
@@ -399,15 +398,21 @@ function DetailInspector({ selection, data, onSelect, onClose }: { selection: De
   if (selection.kind === 'sector') {
     sectorHoldings = data.positions.filter(position => selection.memberSectors.includes(position.sector)).sort((a, b) => b.weight - a.weight)
     const weight = selection.sector === 'Cash' ? data.cashWeight : sectorHoldings.reduce((sum, position) => sum + position.weight, 0)
+    const marketValue = sectorHoldings.reduce((sum, position) => sum + position.value, 0)
+    const costBasis = sectorHoldings.reduce((sum, position) => sum + (position.shares * position.avgCost), 0)
+    const unrealizedGain = marketValue - costBasis
+    const unrealizedReturn = costBasis > 0 ? (unrealizedGain / costBasis) * 100 : null
     title = selection.sector
     context = 'Allocation and holdings'
     metrics = [
       { label: 'Portfolio weight', value: `${weight.toFixed(1)}%`, color: T.gold },
       { label: 'Positions', value: String(sectorHoldings.length) },
-      { label: 'Largest position', value: sectorHoldings[0]?.ticker ?? (selection.sector === 'Cash' ? 'Cash' : 'None') },
-      { label: 'Largest weight', value: sectorHoldings[0] ? `${sectorHoldings[0].weight.toFixed(1)}%` : `${weight.toFixed(1)}%` },
+      { label: 'Market value', value: fmtMoney(marketValue) },
+      { label: 'Cost basis', value: fmtMoney(costBasis) },
+      { label: 'Unrealized P&L', value: fmtMoney(unrealizedGain), color: chg(unrealizedGain) },
+      { label: 'Unrealized return', value: fmtPct(unrealizedReturn), color: chg(unrealizedReturn) },
     ]
-    note = sectorHoldings.length ? 'Weights use current market value. Return, beta, and risk share use the selected analysis window and available model coverage.' : 'Cash is included in total allocation but excluded from equity factor estimates.'
+    note = sectorHoldings.length ? 'Cost basis is quantity multiplied by average cost. Unrealized return compares the current sector market value with that aggregate cost basis.' : 'Cash is included in total allocation but excluded from equity factor estimates.'
   } else if (selection.kind === 'return') {
     const active = selection.point.portfolio - selection.point.benchmark
     title = selection.point.date
@@ -453,10 +458,10 @@ function DetailInspector({ selection, data, onSelect, onClose }: { selection: De
 
   return <Panel label={title} meta={context} style={{ gridColumn: '1 / -1', minHeight: 150, padding: '46px 16px 14px' }}>
     <button type="button" onClick={onClose} aria-label="Close selected detail" style={{ position: 'absolute', top: 39, right: 12, display: 'flex', alignItems: 'center', gap: 5, border: `1px solid ${T.border}`, background: 'transparent', color: T.muted, padding: '5px 7px', fontFamily: SANS, fontSize: 9, cursor: 'pointer' }}><X size={11} /> Close</button>
-    <div className="portfolio-detail-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 1, background: T.borderFaint }}>{metrics.map(metric => <div key={metric.label} style={{ background: T.surface, padding: '10px 12px', minWidth: 0 }}><div style={{ color: T.muted, fontFamily: SANS, fontSize: 8.5, letterSpacing: '.08em', textTransform: 'uppercase' }}>{metric.label}</div><div style={{ color: metric.color ?? T.text, fontFamily: MONO, fontSize: 15, fontWeight: 800, marginTop: 4, overflowWrap: 'anywhere' }}>{metric.value}</div></div>)}</div>
+    <div className="portfolio-detail-grid" style={{ display: 'grid', gridTemplateColumns: selection.kind === 'sector' ? 'repeat(3, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))', gap: 1, background: T.borderFaint }}>{metrics.map(metric => <div key={metric.label} style={{ background: T.surface, padding: '10px 12px', minWidth: 0 }}><div style={{ color: T.muted, fontFamily: SANS, fontSize: 8.5, letterSpacing: '.08em', textTransform: 'uppercase' }}>{metric.label}</div><div style={{ color: metric.color ?? T.text, fontFamily: MONO, fontSize: 15, fontWeight: 800, marginTop: 4, overflowWrap: 'anywhere' }}>{metric.value}</div></div>)}</div>
     {selection.kind === 'sector' && sectorHoldings.length > 0 && <div className="portfolio-sector-ledger" style={{ marginTop: 10, border: `1px solid ${T.borderFaint}`, overflowX: 'auto' }}>
-      <div className="portfolio-sector-ledger-row portfolio-sector-ledger-head" style={{ display: 'grid', gridTemplateColumns: '72px minmax(180px, 1fr) 84px 100px 84px 70px 100px', minWidth: 760, padding: '7px 10px', gap: 10, color: T.muted, fontFamily: SANS, fontSize: 8, letterSpacing: '.08em', textTransform: 'uppercase', borderBottom: `1px solid ${T.borderFaint}` }}><span>Holding</span><span>Classification</span><span style={{ textAlign: 'right' }}>Weight</span><span style={{ textAlign: 'right' }}>Market value</span><span style={{ textAlign: 'right' }}>Return</span><span style={{ textAlign: 'right' }}>Beta</span><span style={{ textAlign: 'right' }}>Risk share</span></div>
-      {sectorHoldings.map(position => <button type="button" key={position.ticker} className="portfolio-sector-ledger-row portfolio-inspectable" onClick={() => onSelect({ kind: 'position', ticker: position.ticker })} aria-label={`Inspect ${position.ticker} position`} style={{ appearance: 'none', display: 'grid', gridTemplateColumns: '72px minmax(180px, 1fr) 84px 100px 84px 70px 100px', minWidth: 760, width: '100%', padding: '8px 10px', gap: 10, border: 0, borderBottom: `1px solid ${T.borderFaint}`, background: T.surface, color: T.text, fontFamily: MONO, fontSize: 9.5, textAlign: 'left', cursor: 'pointer' }}><span style={{ color: T.gold, fontWeight: 800 }}>{position.ticker}</span><span style={{ color: T.muted, fontFamily: SANS, overflowWrap: 'anywhere' }}>{position.sector}</span><span style={{ textAlign: 'right' }}>{position.weight.toFixed(1)}%</span><span style={{ textAlign: 'right' }}>{fmtMoney(position.value)}</span><span style={{ textAlign: 'right', color: chg(position.periodReturn) }}>{fmtPct(position.periodReturn)}</span><span style={{ textAlign: 'right' }}>{position.beta?.toFixed(2) ?? '—'}</span><span style={{ textAlign: 'right' }}>{position.riskContribution == null ? '—' : `${position.riskContribution.toFixed(1)}%`}</span></button>)}
+      <div className="portfolio-sector-ledger-row portfolio-sector-ledger-head" style={{ display: 'grid', gridTemplateColumns: '72px minmax(170px, 1fr) 82px 90px 90px 80px 76px 100px', minWidth: 900, padding: '7px 10px', gap: 10, color: T.muted, fontFamily: SANS, fontSize: 8, letterSpacing: '.08em', textTransform: 'uppercase', borderBottom: `1px solid ${T.borderFaint}` }}><span>Holding</span><span>Classification</span><span style={{ textAlign: 'right' }}>Quantity</span><span style={{ textAlign: 'right' }}>Avg cost</span><span style={{ textAlign: 'right' }}>Price</span><span style={{ textAlign: 'right' }}>Gain</span><span style={{ textAlign: 'right' }}>Weight</span><span style={{ textAlign: 'right' }}>Market value</span></div>
+      {sectorHoldings.map(position => { const gain = position.avgCost > 0 ? ((position.price / position.avgCost) - 1) * 100 : null; return <button type="button" key={position.ticker} className="portfolio-sector-ledger-row portfolio-inspectable" onClick={() => onSelect({ kind: 'position', ticker: position.ticker })} aria-label={`Inspect ${position.ticker} position`} style={{ appearance: 'none', display: 'grid', gridTemplateColumns: '72px minmax(170px, 1fr) 82px 90px 90px 80px 76px 100px', minWidth: 900, width: '100%', padding: '8px 10px', gap: 10, border: 0, borderBottom: `1px solid ${T.borderFaint}`, background: T.surface, color: T.text, fontFamily: MONO, fontSize: 9.5, textAlign: 'left', cursor: 'pointer' }}><span style={{ color: T.gold, fontWeight: 800 }}>{position.ticker}</span><span style={{ color: T.muted, fontFamily: SANS, overflowWrap: 'anywhere' }}>{position.sector}</span><span style={{ textAlign: 'right' }}>{position.shares.toLocaleString(undefined, { maximumFractionDigits: 3 })}</span><span style={{ textAlign: 'right' }}>${position.avgCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><span style={{ textAlign: 'right' }}>${position.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><span style={{ textAlign: 'right', color: chg(gain) }}>{fmtPct(gain)}</span><span style={{ textAlign: 'right' }}>{position.weight.toFixed(1)}%</span><span style={{ textAlign: 'right' }}>{fmtMoney(position.value)}</span></button> })}
     </div>}
     <div style={{ color: T.muted, fontFamily: SANS, fontSize: 10, lineHeight: 1.5, marginTop: 10, paddingRight: 70 }}>{note}</div>
   </Panel>

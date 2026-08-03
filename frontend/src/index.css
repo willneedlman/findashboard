@@ -375,6 +375,7 @@
   }
 
   .portfolio-sector-legend {
+    grid-template-columns: 1fr !important;
     padding: 0 12px !important;
     overflow: visible !important;
   }
