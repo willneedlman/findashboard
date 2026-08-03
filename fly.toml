@@ -23,6 +23,8 @@ primary_region = "iad"
   # Resend; the RESEND_API_KEY secret must be set and alphatape.app verified in
   # Resend (SPF/DKIM) for delivery. Without the secret, mail falls back to console.
   EMAIL_FROM = "Alphatape Terminal <no-reply@alphatape.app>"
+  ENABLE_BACKGROUND_WARMERS = "0"
+  ENABLE_LIVE_MARITIME = "0"
 
 [http_service]
   internal_port = 8080
@@ -33,8 +35,15 @@ primary_region = "iad"
 
   [http_service.concurrency]
     type = "connections"
-    hard_limit = 25
-    soft_limit = 20
+    hard_limit = 12
+    soft_limit = 8
+
+  [[http_service.checks]]
+    grace_period = "20s"
+    interval = "15s"
+    method = "GET"
+    timeout = "5s"
+    path = "/api/health"
 
 [[vm]]
   # 512mb OOM-killed uvicorn at ~398MB RSS once the AIS replay buffer and

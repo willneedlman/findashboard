@@ -41,32 +41,47 @@ mimetypes.add_type("text/javascript", ".mjs")
 mimetypes.add_type("application/manifest+json", ".webmanifest")
 
 
+def _enabled_env(name: str, default: bool = False) -> bool:
+    return os.getenv(name, "1" if default else "0").strip().lower() in {"1", "true", "yes", "on"}
+
+
+# Cache warmers and live vessel streams are useful accelerators, but they cannot
+# compete with interactive analysis on the single production worker.
+_IS_FLY = bool(os.getenv("FLY_APP_NAME") or os.getenv("FLY_REGION"))
+_ENABLE_BACKGROUND_WARMERS = _enabled_env("ENABLE_BACKGROUND_WARMERS", default=not _IS_FLY)
+_ENABLE_LIVE_MARITIME = _enabled_env("ENABLE_LIVE_MARITIME", default=not _IS_FLY)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     paper_scheduler.start_scheduler()
-    alerts.start_evaluation_loop()   # price-alert monitor — previously never started
-    screener.start_backfill_loop()   # warm fundamentals cache within the free-tier daily cap
-    import bond_prices
-    bond_prices.warm_etf_map()       # SSGA holdings are minutes to fetch; build off the request path
-    maritime.start_ais_stream()      # live AIS worker (no-op without AISSTREAM_API_KEY)
-    maritime.start_rest_poll()       # REST vessel fallback (no-op without VESSELAPI_KEY)
-    maritime.start_history_sampler() # 24h AIS ring buffer for the replay scrubber
-    rates.start_curve_warmer()       # keep yield-curve + Fed-path caches warm (cold path is ~30s)
-    snapshots.start_snapshot_loop()  # daily GEX/IV30 points for the core watchlist (240s post-boot)
-    earnings.start_calendar_warm_loop()  # pre-enrich the upcoming week overnight so the Scanner opens warm
-    import maritime_kystverket        # Norway coastal AIS (open TCP feed)
-    maritime_kystverket.start_stream(maritime._upsert, maritime._classify, maritime._remember)
-    data_audit.start_audit_loop()    # cross-source data audit for the Admin Hub
+    alerts.start_evaluation_loop()
+    if _ENABLE_BACKGROUND_WARMERS:
+        screener.start_backfill_loop()
+        import bond_prices
+        bond_prices.warm_etf_map()
+        rates.start_curve_warmer()
+        snapshots.start_snapshot_loop()
+        earnings.start_calendar_warm_loop()
+        data_audit.start_audit_loop()
+    if _ENABLE_LIVE_MARITIME:
+        maritime.start_ais_stream()
+        maritime.start_rest_poll()
+        maritime.start_history_sampler()
+        import maritime_kystverket
+        maritime_kystverket.start_stream(maritime._upsert, maritime._classify, maritime._remember)
     admin_files.start_cleanup_loop()
     yield
     await admin_files.stop_cleanup_loop()
-    data_audit.stop_audit_loop()
-    earnings.stop_calendar_warm_loop()
-    snapshots.stop_snapshot_loop()
-    rates.stop_curve_warmer()
-    maritime_kystverket.stop_stream()
-    maritime.stop_ais_stream()
-    screener.stop_backfill_loop()
+    if _ENABLE_LIVE_MARITIME:
+        maritime_kystverket.stop_stream()
+        maritime.stop_ais_stream()
+    if _ENABLE_BACKGROUND_WARMERS:
+        data_audit.stop_audit_loop()
+        earnings.stop_calendar_warm_loop()
+        snapshots.stop_snapshot_loop()
+        rates.stop_curve_warmer()
+        screener.stop_backfill_loop()
     alerts.stop_evaluation_loop()
     paper_scheduler.stop_scheduler()
 

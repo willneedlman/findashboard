@@ -437,7 +437,7 @@ def profile_only(
                 "marketCap": prof.get("marketCap") or None, "sector": prof.get("sector")}
 
     # Finnhub isn't semaphore-gated like yfinance — this can run wide open.
-    with cf.ThreadPoolExecutor(max_workers=20) as ex:
+    with cf.ThreadPoolExecutor(max_workers=min(4, len(syms))) as ex:
         rows = list(ex.map(_one, syms))
     return {"rows": rows}
 
@@ -460,12 +460,7 @@ def enrich(symbols: str = Query(..., description="comma-separated tickers")):
     if not syms:
         return {"rows": []}
 
-    # 16 workers, not 8 — the yfinance-touching calls inside _enrich_one now
-    # correctly queue on cache._run_yf's app-wide 2-slot semaphore regardless
-    # of how many threads try to call them, so raising this only widens
-    # concurrency for the parts that can actually use it (the unguarded,
-    # separately-rate-limited Finnhub profile lookup, plus general I/O wait).
-    with cf.ThreadPoolExecutor(max_workers=16) as ex:
+    with cf.ThreadPoolExecutor(max_workers=min(4, len(syms))) as ex:
         base = list(ex.map(_enrich_one, syms))
     by_sym = {r["symbol"]: r for r in base}
 
@@ -497,6 +492,6 @@ def implied_move_route(symbols: str = Query(..., description="comma-separated ti
     syms = [s.strip().upper() for s in symbols.split(",") if s.strip()][:_MAX_ENRICH]
     if not syms:
         return {"rows": []}
-    with cf.ThreadPoolExecutor(max_workers=16) as ex:
+    with cf.ThreadPoolExecutor(max_workers=min(4, len(syms))) as ex:
         rows = list(ex.map(_implied_move_one, syms))
     return {"rows": rows}
