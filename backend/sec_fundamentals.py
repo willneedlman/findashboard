@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 _UA = {"User-Agent": "Alphatape Research admin@alphatape.app"}
 _TIMEOUT = 15
 _CACHE_TTL = 30 * 86400                                # statements change quarterly
+_MISS_TTL = 10 * 60
 
 # us-gaap concepts mapped to the FMP field names the DCF engine consumes. Ordered
 # synonyms: the first concept present in the filing wins (taxonomies vary by filer).
@@ -257,13 +258,13 @@ def _sane(bundle: dict | None) -> bool:
 
 def _bundle(sym: str) -> dict | None:
     sym = sym.strip().upper()
-    dk = f"sec:fund:v3:{sym}"
+    dk = f"sec:fund:v4:{sym}"
     cached = disk_get(dk)
     if cached is not None:
         return cached or None                         # cached {} sentinel = known-empty
     bundle = _build(sym)
     if not _sane(bundle):
-        disk_set(dk, {}, ttl=_CACHE_TTL)              # remember the miss, don't re-fetch for 30d
+        disk_set(dk, {}, ttl=_MISS_TTL)
         return None
     disk_set(dk, bundle, ttl=_CACHE_TTL)
     return bundle
