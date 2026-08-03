@@ -48,7 +48,9 @@ interface Result {
 // Green for a positive change, red for a negative one, muted otherwise.
 function signColor(s?: string | null): string {
   if (!s) return C.muted
-  if (/^\+/.test(s) && !/^\+0(\.0+)?%?$/.test(s)) return C.pos
+  const value = Number.parseFloat(s.replace(/[−+,%]/g, ''))
+  if (Number.isFinite(value) && Math.abs(value) < 0.5) return C.muted
+  if (/^\+/.test(s)) return C.pos
   if (/^[-−]/.test(s)) return C.neg
   return C.muted
 }
@@ -62,56 +64,73 @@ function fmtB(v: number): string {
 
 function MetricTile({ label, value, sub, subColor }: { label: string; value: string; sub?: string; subColor?: string }) {
   return (
-    <div style={{ flex: 1, minWidth: 0, padding: '12px 16px', borderLeft: `1px solid ${C.border}` }}>
-      <div style={{ fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.muted, marginBottom: 7 }}>{label}</div>
-      <div style={{ fontFamily: C.mono, fontSize: 24, fontWeight: 700, color: C.text, lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ fontFamily: C.mono, fontSize: 10, color: subColor ?? C.muted, marginTop: 6 }}>{sub}</div>}
+    <div style={{ minWidth: 0, padding: '12px 20px 16px', borderRight: `1px solid ${C.border}` }}>
+      <div style={{ fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.muted, marginBottom: 8 }}>{label}</div>
+      <div style={{ fontFamily: C.mono, fontSize: 24, fontWeight: 700, color: C.text, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+      {sub && <div style={{ fontFamily: C.mono, fontSize: 10, color: subColor ?? C.muted, marginTop: 8, fontVariantNumeric: 'tabular-nums' }}>{sub}</div>}
     </div>
   )
 }
 
 function MetricStrip({ m }: { m: Metrics }) {
   const tiles: React.ReactNode[] = []
-  if (m.eps) tiles.push(<MetricTile key="eps" label="EPS" value={m.eps.value} sub={m.eps.yoy ? `${m.eps.yoy} YoY` : undefined} subColor={signColor(m.eps.yoy)} />)
-  if (m.revenue) tiles.push(<MetricTile key="rev" label="Revenue" value={m.revenue.value} sub={m.revenue.yoy ? `${m.revenue.yoy} YoY` : undefined} subColor={signColor(m.revenue.yoy)} />)
-  if (m.rev_yoy) tiles.push(<MetricTile key="ry" label="Rev YoY" value={m.rev_yoy.value} sub={m.rev_yoy.prior ? `vs ${m.rev_yoy.prior} prior` : undefined} subColor={signColor(m.rev_yoy.value)} />)
+  if (m.eps) tiles.push(<MetricTile key="eps" label="EPS" value={m.eps.value} sub={m.eps.yoy ? `▲ ${m.eps.yoy} YoY` : undefined} subColor={signColor(m.eps.yoy)} />)
+  if (m.revenue) tiles.push(<MetricTile key="revenue" label="Revenue" value={m.revenue.value} sub={m.revenue.yoy ? `▲ ${m.revenue.yoy} YoY` : undefined} subColor={signColor(m.revenue.yoy)} />)
+  if (m.rev_yoy) {
+    const slowing = m.rev_yoy.prior && Number.parseFloat(m.rev_yoy.value) < Number.parseFloat(m.rev_yoy.prior)
+    tiles.push(<MetricTile key="growth" label="Revenue Growth" value={m.rev_yoy.value} sub={m.rev_yoy.prior ? `${slowing ? '▼ slowing from' : '▲ from'} ${m.rev_yoy.prior}` : undefined} subColor={slowing ? C.warn : signColor(m.rev_yoy.value)} />)
+  }
   if (m.gross_margin) {
-    const d = m.gross_margin.delta_bps
-    const sub = d != null ? `${d >= 0 ? '+' : ''}${d}bps ${m.gross_margin.basis ?? ''}`.trim() : undefined
-    tiles.push(<MetricTile key="gm" label="Gross Margin" value={m.gross_margin.value} sub={sub} subColor={d == null ? C.muted : d >= 0 ? C.pos : C.neg} />)
+    const delta = m.gross_margin.delta_bps
+    const flat = delta != null && Math.abs(delta) < 5
+    const sub = delta == null ? undefined : flat ? `≈ flat, ${delta >= 0 ? '+' : ''}${delta} bps ${m.gross_margin.basis ?? ''}` : `${delta >= 0 ? '▲' : '▼'} ${delta >= 0 ? '+' : ''}${delta} bps ${m.gross_margin.basis ?? ''}`
+    tiles.push(<MetricTile key="margin" label="Gross Margin" value={m.gross_margin.value} sub={sub?.trim()} subColor={flat ? C.muted : delta == null ? C.muted : delta > 0 ? C.pos : C.neg} />)
   }
   if (!tiles.length) return null
-  return <div style={{ display: 'flex', borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, background: 'var(--theme-bg, #101c2e)' }}>{tiles}</div>
+  return (
+    <div style={{ borderBottom: `1px solid ${C.border}` }}>
+      <div style={{ padding: '10px 20px 4px', fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: C.gold }}>Snapshot</div>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${tiles.length}, minmax(0, 1fr))` }}>{tiles}</div>
+    </div>
+  )
+}
+
+function surpriseLabel(value?: string | null): string {
+  if (!value) return '—'
+  const numeric = Number.parseFloat(value.replace(/[−+,%]/g, ''))
+  if (!Number.isFinite(numeric) || Math.abs(numeric) < 0.1) return 'In line'
+  return numeric > 0 ? `▲ beat ${value}` : `▼ miss ${value}`
 }
 
 function ReportedVsConsensus({ metrics }: { metrics: ReportedMetric[] }) {
   if (!metrics.length) return null
   return (
-    <div style={{ border: `1px solid ${C.border}`, background: 'var(--theme-bg, #101c2e)' }}>
-      <div style={{ padding: '8px 12px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
-        <span style={{ fontFamily: C.sans, fontSize: 9, fontWeight: 700, color: C.gold, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Reported Results vs Consensus</span>
-        <span style={{ fontFamily: C.mono, fontSize: 9, color: C.dim }}>Consensus appears where a contemporaneous estimate is available</span>
+    <section>
+      <div style={{ padding: '1px 0 9px', display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline', flexWrap: 'wrap' }}>
+        <span style={{ fontFamily: C.sans, fontSize: 9, fontWeight: 700, color: C.gold, textTransform: 'uppercase', letterSpacing: '0.14em' }}>Reported Results vs Consensus</span>
+        <span style={{ fontFamily: C.mono, fontSize: 9, color: C.dim }}>Consensus = Wall Street expectation ahead of the report. Surprise = actual vs expectation.</span>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' }}>
+      <div style={{ overflowX: 'auto', border: `1px solid ${C.border}` }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr 0.85fr', minWidth: 560, background: 'color-mix(in srgb, var(--theme-surface, #0d1826) 62%, transparent)' }}>
+        {['Metric', 'Consensus', 'Actual', 'Surprise', 'YoY'].map((column, index) => (
+          <div key={column} style={{ padding: '7px 12px', fontFamily: C.sans, fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: index === 2 ? C.gold : C.dim, textAlign: index === 0 ? 'left' : 'right' }}>{column}</div>
+        ))}
         {metrics.map(metric => {
           const varianceText = metric.variance_pct ?? metric.variance
           const varianceColor = signColor(varianceText)
           return (
-            <div key={metric.name} style={{ minWidth: 0, padding: '10px 12px', borderRight: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}` }}>
-              <div style={{ fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.muted, marginBottom: 6 }}>{metric.name}</div>
-              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-                <span style={{ fontFamily: C.mono, fontSize: 17, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{metric.actual}</span>
-                {varianceText && <span style={{ fontFamily: C.mono, fontSize: 10, fontWeight: 700, color: varianceColor, whiteSpace: 'nowrap' }}>{varianceText} vs est.</span>}
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 5, fontFamily: C.mono, fontSize: 9, color: C.dim }}>
-                {metric.estimate && <span>Est. <strong style={{ color: C.muted, fontWeight: 700 }}>{metric.estimate}</strong></span>}
-                {metric.yoy && <span style={{ color: signColor(metric.yoy) }}>{metric.yoy} YoY</span>}
-              </div>
+            <div key={metric.name} style={{ display: 'contents' }}>
+              <div style={{ padding: '10px 12px', borderTop: `1px solid ${C.border}`, fontFamily: C.sans, fontSize: 10, fontWeight: 700, color: C.muted }}>{metric.name}</div>
+              <div style={{ padding: '10px 12px', borderTop: `1px solid ${C.border}`, fontFamily: C.mono, fontSize: 10, color: C.muted, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{metric.estimate ?? '—'}</div>
+              <div style={{ padding: '10px 12px', borderTop: `1px solid ${C.border}`, fontFamily: C.mono, fontSize: 12, fontWeight: 700, color: C.text, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{metric.actual}</div>
+              <div style={{ padding: '10px 12px', borderTop: `1px solid ${C.border}`, fontFamily: C.mono, fontSize: 10, fontWeight: 700, color: varianceText ? varianceColor : C.dim, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{surpriseLabel(varianceText)}</div>
+              <div style={{ padding: '10px 12px', borderTop: `1px solid ${C.border}`, fontFamily: C.mono, fontSize: 11, color: metric.yoy ? signColor(metric.yoy) : C.dim, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{metric.yoy ?? '—'}</div>
             </div>
           )
         })}
+        </div>
       </div>
-    </div>
+    </section>
   )
 }
 
@@ -132,15 +151,6 @@ function SegmentBars({ segments }: { segments: Segment[] }) {
         ))}
       </div>
     </div>
-  )
-}
-
-function ToneChip({ tone }: { tone: string }) {
-  const color = TONE_COLOR[tone?.toLowerCase()] ?? C.muted
-  return (
-    <span style={{ fontFamily: C.mono, fontSize: 9, color, border: `1px solid ${color}40`, padding: '2px 8px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-      {tone}
-    </span>
   )
 }
 
@@ -193,11 +203,14 @@ function ResultCard({ result }: { result: Result }) {
           </div>
           <div style={{ fontFamily: C.mono, fontSize: 9.5, color: C.dim, marginTop: 3 }}>{subline}</div>
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
-          <ToneChip tone={s.management_tone} />
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'flex-start', gap: 20, flexShrink: 0 }}>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontFamily: C.sans, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.muted, marginBottom: 3 }}>Tone</div>
+            <div style={{ fontFamily: C.mono, fontSize: 12, fontWeight: 700, color: s.management_tone && s.management_tone !== 'N/A' ? TONE_COLOR[s.management_tone.toLowerCase()] ?? C.muted : C.dim, lineHeight: 1 }}>{s.management_tone && s.management_tone !== 'N/A' ? s.management_tone : 'Not rated'}</div>
+          </div>
           {result.reaction && (
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontFamily: C.sans, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.muted, marginBottom: 3 }}>Reaction</div>
+            <div style={{ textAlign: 'right', borderLeft: `1px solid ${C.border}`, paddingLeft: 20 }}>
+              <div style={{ fontFamily: C.sans, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.muted, marginBottom: 3 }}>1-Day Reaction</div>
               <div style={{ fontFamily: C.mono, fontSize: 16, fontWeight: 700, color: result.reaction.pct >= 0 ? C.pos : C.neg, lineHeight: 1 }}>
                 {result.reaction.pct >= 0 ? '+' : ''}{result.reaction.pct.toFixed(1)}%
               </div>
@@ -206,7 +219,6 @@ function ResultCard({ result }: { result: Result }) {
         </div>
       </div>
 
-      {/* Metric strip */}
       {result.metrics && <MetricStrip m={result.metrics} />}
 
       <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
