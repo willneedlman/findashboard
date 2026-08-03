@@ -24,6 +24,9 @@ interface QuoteData {
   current_price:    number | null
   pct_change_1d:    number | null
   market_cap?:      number | null
+  source?:          string
+  session?:         string
+  as_of?:           string | null
 }
 
 function loadHoldings(): Holding[] {
@@ -324,7 +327,9 @@ export default function PortfolioManager() {
     queryFn: () => axios.get(`/api/market/quotes?tickers=${encodeURIComponent(stockSymbols.join(','))}`)
       .then(r => r.data as { quotes: Record<string, QuoteData> }),
     enabled: stockSymbols.length > 0,
-    staleTime: 30_000,
+    staleTime: 5_000,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
     retry: 1,
   })
 
@@ -516,7 +521,7 @@ export default function PortfolioManager() {
     if (price > 0) totalValue += value
     if (cost > 0) totalCost += cost
     totalAnnualIncome += annualIncome
-    return { ...h, avgCost, costIsAuto, price, value, cost, pnl, pnlPct, divYield, annualIncome, loading: portfolioQuotes.isLoading, pct1d: q?.pct_change_1d }
+    return { ...h, avgCost, costIsAuto, price, value, cost, pnl, pnlPct, divYield, annualIncome, loading: portfolioQuotes.isLoading, pct1d: q?.pct_change_1d, quoteSource: q?.source, quoteSession: q?.session, quoteAsOf: q?.as_of }
   })
   const totalPnl    = totalValue - totalCost
   const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : null
@@ -872,7 +877,7 @@ export default function PortfolioManager() {
                               {r.loading ? '…' : r.avgCost > 0 ? `$${r.avgCost.toFixed(2)}${r.costIsAuto ? '*' : ''}` : '—'}
                             </td>
                           </>)}
-                          <td style={{ padding: '8px 12px', textAlign: 'right', color: T.text }}>{r.loading ? '…' : r.price > 0 ? `$${r.price.toFixed(2)}` : '—'}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', color: T.text }}>{r.loading ? '…' : r.price > 0 ? <>{`$${r.price.toFixed(2)}`}{(r.quoteSource === 'extended_hours' || r.quoteSource === 'alpaca_extended') && <span title={`${r.quoteSource === 'alpaca_extended' ? 'Live Alpaca extended-hours trade' : 'Extended-hours print'}${r.quoteAsOf ? ` as of ${r.quoteAsOf}` : ''}`} style={{ color: 'var(--theme-tertiary, #60a5fa)', fontSize: 8, marginLeft: 5, border: '1px solid var(--theme-tertiary, #60a5fa)', padding: '0 3px', letterSpacing: '0.06em' }}>{r.quoteSession === 'pre-market' ? 'PRE' : 'AH'}</span>}</> : '—'}</td>
                           <td style={{ padding: '8px 12px', textAlign: 'right', color: r.pct1d == null ? T.muted : r.pct1d >= 0 ? T.pos : T.neg }}>
                             {r.loading ? '…' : r.pct1d != null ? `${r.pct1d >= 0 ? '+' : ''}${r.pct1d.toFixed(2)}%` : '—'}
                           </td>
@@ -960,7 +965,7 @@ export default function PortfolioManager() {
                                       ? "Market closed. Black-Scholes off the extended-hours underlying, at the chain's implied volatility."
                                       : 'Contract not quoted. Black-Scholes off the chain spot and implied volatility.'}
                                       style={{ color: T.muted, fontSize: 8, marginLeft: 4, border: `1px solid ${T.border}`, padding: '0 3px', letterSpacing: '0.06em' }}>
-                                      MODEL
+                                      {l.source === 'bs-extended' ? 'BS AH' : 'BS'}
                                     </span>
                                   )}
                                 </div>
@@ -983,7 +988,7 @@ export default function PortfolioManager() {
                     </tbody>
                   </table>
                   <div style={{ padding: '4px 12px 6px', fontSize: 9, color: T.muted, fontFamily: T.mono }}>
-                    Δ = net share-equivalent delta. Marks from the live chain, Black-Scholes when a contract is unlisted.
+                    Δ = net share-equivalent delta. BS AH reprices an option from the extended-hours underlying and the chain's implied volatility.
                   </div>
                 </div>
               )}

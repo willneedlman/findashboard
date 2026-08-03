@@ -99,6 +99,7 @@ def test_portfolio_quotes_batch_all_symbols_in_one_download(monkeypatch):
     columns = pd.MultiIndex.from_product([["Close"], ["MSFT", "NVDA"]])
     frame = pd.DataFrame([[100.0, 200.0], [110.0, 190.0]], index=idx, columns=columns)
     monkeypatch.setattr(market_router, "get_download", lambda *args, **kwargs: frame)
+    monkeypatch.setattr(market_router, "is_market_open", lambda: True)
     market_router.get_quotes.cache_clear()
 
     result = market_router.get_quotes("MSFT,NVDA")
@@ -107,6 +108,46 @@ def test_portfolio_quotes_batch_all_symbols_in_one_download(monkeypatch):
     assert result["quotes"]["MSFT"]["pct_change_1d"] == 10.0
     assert result["quotes"]["NVDA"]["current_price"] == 190.0
     assert result["quotes"]["NVDA"]["pct_change_1d"] == -5.0
+
+
+def test_portfolio_quotes_batch_uses_extended_prices_when_closed(monkeypatch):
+    idx = pd.to_datetime(["2026-07-30", "2026-07-31"])
+    columns = pd.MultiIndex.from_product([["Close"], ["MSFT", "NVDA"]])
+    frame = pd.DataFrame([[100.0, 200.0], [110.0, 190.0]], index=idx, columns=columns)
+    monkeypatch.setattr(market_router, "get_download", lambda *args, **kwargs: frame)
+    monkeypatch.setattr(market_router, "is_market_open", lambda: False)
+    monkeypatch.setattr(market_router, "session_label", lambda: "after-hours")
+    monkeypatch.setattr(market_router, "now_et", lambda: dt.datetime(2026, 7, 31, 18, 0, tzinfo=ET))
+    monkeypatch.setattr(extended_quotes, "extended_quote", lambda sym: {
+        "price": {"MSFT": 112.0, "NVDA": 201.9}[sym], "as_of": "2026-07-31T18:00:00-04:00",
+    })
+    monkeypatch.setattr(market_router.alpaca, "get_latest_prices", lambda symbols: {})
+    market_router.get_quotes.cache_clear()
+
+    result = market_router.get_quotes("MSFT,NVDA")
+
+    assert result["quotes"]["MSFT"]["current_price"] == 112.0
+    assert result["quotes"]["MSFT"]["source"] == "extended_hours"
+    assert result["quotes"]["MSFT"]["extended_pct"] == pytest.approx(1.818)
+    assert result["quotes"]["NVDA"]["current_price"] == 201.9
+    assert result["quotes"]["NVDA"]["pct_change_1d"] == pytest.approx(0.95)
+
+
+def test_portfolio_quotes_batch_prefers_live_equity_trade_when_closed(monkeypatch):
+    idx = pd.to_datetime(["2026-07-30", "2026-07-31"])
+    columns = pd.MultiIndex.from_product([["Close"], ["NVDA"]])
+    frame = pd.DataFrame([[200.0], [190.0]], index=idx, columns=columns)
+    monkeypatch.setattr(market_router, "get_download", lambda *args, **kwargs: frame)
+    monkeypatch.setattr(market_router, "is_market_open", lambda: False)
+    monkeypatch.setattr(market_router, "session_label", lambda: "after-hours")
+    monkeypatch.setattr(market_router, "now_et", lambda: dt.datetime(2026, 7, 31, 18, 0, tzinfo=ET))
+    monkeypatch.setattr(market_router.alpaca, "get_latest_prices", lambda symbols: {"NVDA": 201.9})
+    market_router.get_quotes.cache_clear()
+
+    result = market_router.get_quotes("NVDA")
+
+    assert result["quotes"]["NVDA"]["current_price"] == 201.9
+    assert result["quotes"]["NVDA"]["source"] == "alpaca_extended"
 
 
 # ── option marks ────────────────────────────────────────────────────────────

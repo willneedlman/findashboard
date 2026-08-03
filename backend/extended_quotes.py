@@ -24,11 +24,10 @@ def _bars(sym: str):
     return yf.Ticker(sym).history(period="1d", interval="1m", prepost=True)
 
 
-# 10 minutes: long enough that a portfolio page left open overnight costs almost
-# nothing, short enough that a pre-market move shows up while you are watching.
-# The fetch goes through cache._run_yf so it respects the same yfinance
-# concurrency guard as every other price read.
-@cached(ttl=600, maxsize=512)
+# Portfolio marks need to follow the extended session, not the frozen close.
+# Thirty seconds keeps a visible book responsive while cache._run_yf still caps
+# provider work to the process-wide safe concurrency budget.
+@cached(ttl=30, maxsize=512)
 def extended_quote(sym: str) -> dict:
     """{'price', 'as_of'} from the latest pre/post bar, or price None."""
     empty = {"price": None, "as_of": None}

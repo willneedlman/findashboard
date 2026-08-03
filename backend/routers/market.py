@@ -1,4 +1,5 @@
 import time
+from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import pandas as pd
 import datetime as _dt
@@ -342,7 +343,7 @@ def get_quote(ticker: str):
 
 
 @router.get("/quotes")
-@cached(ttl=30, maxsize=64, persist=True)
+@cached(ttl=5, maxsize=64)
 def get_quotes(tickers: str):
     """Quote a whole portfolio with one bounded market-data request.
 
@@ -366,6 +367,17 @@ def get_quotes(tickers: str):
         cache_ttl=30,
     )
     closes = _close_frame(frame)
+    extended_by_symbol: dict[str, dict] = {}
+    live_by_symbol: dict[str, float] = {}
+    market_open = is_market_open()
+    if not market_open:
+        # Daily history stops at the regular close. Use the same extended-hours
+        # source as individual quotes and option re-marks, without exceeding the
+        # process-wide yfinance budget.
+        live_by_symbol = alpaca.get_latest_prices(tuple(symbols))
+        fallback_symbols = [symbol for symbol in symbols if symbol not in live_by_symbol]
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            extended_by_symbol = dict(zip(fallback_symbols, pool.map(extended_quotes.extended_quote, fallback_symbols)))
     quotes: dict[str, dict] = {}
     for symbol in symbols:
         series = pd.Series(dtype=float)
@@ -377,13 +389,38 @@ def get_quotes(tickers: str):
         if series.empty:
             quotes[symbol] = {"current_price": None, "pct_change_1d": None, "source": "unavailable"}
             continue
-        price = float(series.iloc[-1])
+        regular_close = float(series.iloc[-1])
         prior = float(series.iloc[-2]) if len(series) >= 2 else None
-        quotes[symbol] = {
+        has_today = False
+        try:
+            has_today = series.index[-1].date() == now_et().date()
+        except Exception:
+            pass
+        extended = extended_by_symbol.get(symbol, {})
+        live_price = live_by_symbol.get(symbol)
+        extended_price = live_price or extended.get("price")
+        price = float(extended_price) if extended_price else regular_close
+        # A closing daily bar should still report its regular-session move when
+        # no extended print is available. With an after-hours print, stack that
+        # print on the prior close. With a pre-market print, compare it with the
+        # prior session's close.
+        baseline = (
+            prior if not extended_price else
+            (prior if has_today and prior is not None else regular_close)
+        )
+        quote = {
             "current_price": round(price, 2),
-            "pct_change_1d": round((price / prior - 1) * 100, 3) if prior else None,
-            "source": "batch_history",
+            "pct_change_1d": round((price / baseline - 1) * 100, 3) if baseline else None,
+            "source": "alpaca_extended" if live_price else "extended_hours" if extended_price else "batch_history",
+            "session": session_label(),
         }
+        if extended_price:
+            quote.update({
+                "regular_close": round(regular_close, 2),
+                "extended_pct": round((price / regular_close - 1) * 100, 3) if regular_close else None,
+                "as_of": extended.get("as_of"),
+            })
+        quotes[symbol] = quote
     return {"quotes": quotes, "source": "batch_history"}
 
 

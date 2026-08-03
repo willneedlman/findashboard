@@ -155,3 +155,32 @@ def get_latest_price(symbol: str) -> "float | None":
         pass
     q = get_latest_quote(symbol)
     return q.get("price") or None
+
+
+@ttl_cache(maxsize=128, ttl=1)
+def get_latest_prices(symbols: tuple[str, ...]) -> dict[str, float]:
+    """Latest trade for a basket of US equities in one Alpaca request."""
+    if not available():
+        return {}
+    requested = tuple(dict.fromkeys(symbol.strip().upper() for symbol in symbols if is_equity(symbol)))
+    if not requested:
+        return {}
+    alpaca_to_symbol = {to_alpaca_symbol(symbol): symbol for symbol in requested}
+    try:
+        r = httpx.get(
+            f"{_DATA_BASE}/v2/stocks/trades/latest",
+            headers=_HEADERS,
+            params={"symbols": ",".join(alpaca_to_symbol), "feed": _FEED},
+            timeout=8,
+        )
+        r.raise_for_status()
+        trades = (r.json() or {}).get("trades") or {}
+    except Exception:
+        return {}
+    out: dict[str, float] = {}
+    for alpaca_symbol, trade in trades.items():
+        price = float((trade or {}).get("p") or 0)
+        symbol = alpaca_to_symbol.get(alpaca_symbol)
+        if symbol and price > 0:
+            out[symbol] = round(price, 4)
+    return out
