@@ -31,7 +31,7 @@ _filing_cache:     TTLCache = TTLCache(maxsize=200, ttl=3600)
 _lock = threading.Lock()
 # Bump to invalidate cached EDGAR context + summaries after a fetch-logic change
 # (e.g. the annual-10-K/annual-financials fix).
-_CACHE_VER = "v6"
+_CACHE_VER = "v7"
 
 
 # ── SEC EDGAR helpers ─────────────────────────────────────────────────────────
@@ -246,6 +246,18 @@ def _get_annual_financials(ticker: str, count: int = 3) -> dict:
         }
     except Exception as e:
         logger.warning("annual fin %s: %s", ticker, e)
+    if not result.get("income"):
+        try:
+            import sec_fundamentals
+            income = sec_fundamentals.get_income(ticker, n)
+            if income:
+                result = {
+                    "income": income,
+                    "balance": [sec_fundamentals.get_balance(ticker)],
+                    "cashflow": [sec_fundamentals.get_cashflow(ticker)],
+                }
+        except Exception as e:
+            logger.warning("SEC annual fundamentals %s: %s", ticker, e)
     with _lock:
         _filing_cache[cache_key] = result
     return result
@@ -419,7 +431,7 @@ Respond ONLY with valid JSON matching this exact schema (no markdown, no extra t
   "analyst_questions_focus": "main topics analysts pressed on"
 }}
 
-Use only figures and forecast comparisons explicitly supported by the materials. Include Revenue, Diluted EPS, Net income, Operating income or margin, and Free cash flow when reported; then include up to two company-specific KPIs that management reports. For every metric with a disclosed analyst or management forecast, state the actual, forecast, and variance in `vs_est`. Write "N/A" when no comparable forecast exists—never invent consensus. Keep every bull and bear point numeric where the materials support it."""
+Use only figures and forecast comparisons explicitly supported by the materials. Include Revenue, Diluted EPS, Net income, Operating income or margin, and Free cash flow when reported; then include up to two company-specific KPIs that management reports. For every metric with a disclosed analyst or management forecast, state the actual, forecast, and variance in `vs_est`. Write "N/A" when no comparable forecast exists—never invent consensus. Never output placeholders such as "$X.XB", "X%", or fabricated numbers. Keep every bull and bear point numeric where the materials support it."""
 
     msg = groq_chat(
         [{"role": "user", "content": prompt}],
@@ -437,6 +449,7 @@ Use only figures and forecast comparisons explicitly supported by the materials.
     # Attempt direct parse first
     try:
         parsed = json.loads(raw)
+        _remove_summary_placeholders(parsed)
         if finalise:
             _finalise_period(parsed, ticker, annual, _cur_year)
         return parsed
@@ -454,11 +467,31 @@ Use only figures and forecast comparisons explicitly supported by the materials.
         repaired += ']' * max(open_brackets, 0)
         repaired += '}' * max(open_braces, 0)
         parsed = json.loads(repaired)
+        _remove_summary_placeholders(parsed)
         if finalise:
             _finalise_period(parsed, ticker, annual, _cur_year)
         return parsed
     except Exception:
         raise HTTPException(500, "Claude returned malformed JSON — try again")
+
+
+def _remove_summary_placeholders(summary: dict) -> None:
+    """Keep a failed extraction from appearing as a made-up reported figure."""
+    marker = re.compile(r"\$?X(?:\.X+)?(?:[BMK%])?", re.I)
+
+    def clean(value):
+        return marker.sub("not disclosed", value) if isinstance(value, str) else value
+
+    for key in ("verdict", "guidance", "analyst_questions_focus"):
+        summary[key] = clean(summary.get(key))
+    for key in ("bull_points", "bear_points", "key_themes", "risks"):
+        if isinstance(summary.get(key), list):
+            summary[key] = [clean(item) for item in summary[key]]
+    if isinstance(summary.get("key_metrics"), list):
+        summary["key_metrics"] = [
+            {field: clean(value) for field, value in row.items()} if isinstance(row, dict) else row
+            for row in summary["key_metrics"]
+        ]
 
 
 # ── Request / response schemas ────────────────────────────────────────────────
@@ -942,7 +975,9 @@ def _summarise_one_filing(ticker: str, filing: dict, fin_rows: dict, annual: boo
     summary = _summarise_with_claude(ticker, context, annual=annual, finalise=False)
     # Label this card with its own period (from its statement row, else the LLM
     # guess, else the filing date), never the latest overall period.
-    summary["quarter"] = _income_period_label(inc_row) or summary.get("quarter") or f"Filed {filing['date']}"
+    generated_period = str(summary.get("quarter") or "").strip()
+    usable_generated_period = generated_period if generated_period and generated_period.upper() not in {"N/A", "NA", "UNKNOWN"} else None
+    summary["quarter"] = _income_period_label(inc_row) or usable_generated_period or (f"FY{filing['date'][:4]}" if annual else f"Filed {filing['date']}")
     entry = {"ticker": ticker, "id": cache_key, "company": company, "period": summary["quarter"],
              "form": filing["form"], "filed": filing["date"], "url": filing["url"],
              "metrics": metrics, "segments": segments or None, "reaction": reaction,
@@ -972,6 +1007,8 @@ def _summarise_one_streaming(ticker: str, req: SummariseRequest, queue: list):
     # YoY and prior-period comparisons resolve for every card.
     hist = _income_statements(ticker, "annual" if annual else "quarter", n + (2 if annual else 6))
     fin = _get_annual_financials(ticker, n) if annual else _get_quarterly_financials(ticker)
+    if not hist and fin.get("income"):
+        hist = fin["income"]
     bal, cf = fin.get("balance") or [], fin.get("cashflow") or []
     company = _company_name(ticker)
     reactions = _earnings_reactions(ticker)

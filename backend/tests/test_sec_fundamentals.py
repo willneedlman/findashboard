@@ -94,6 +94,20 @@ def test_build_maps_to_fmp_field_names(monkeypatch):
     assert b["cashflow"]["changeInWorkingCapital"] is None  # rarely tagged -> absent
 
 
+def test_build_includes_reported_income_and_diluted_eps(monkeypatch):
+    facts = _apple_like_facts()
+    facts["NetIncomeLoss"] = _usd(_annual(2024, 93.7, "2023-10-01", "2024-09-28"))
+    facts["EarningsPerShareDiluted"] = {"units": {"USD/shares": [
+        _annual(2024, 6.08, "2023-10-01", "2024-09-28")
+    ]}}
+    monkeypatch.setattr(m, "_fetch_facts", lambda sym: facts)
+    income = m._build("AAPL")["income"][0]
+    assert income["netIncome"] == 93.7
+    assert income["epsdiluted"] == 6.08
+    assert income["period"] == "FY"
+    assert income["fiscalYear"] == 2024
+
+
 def _sane_bundle(**income_over):
     inc = {"revenue": 100.0, "weightedAverageShsOutDil": 10.0, "operatingIncome": 20.0}
     inc.update(income_over)

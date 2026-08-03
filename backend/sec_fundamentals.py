@@ -36,7 +36,10 @@ _CACHE_TTL = 30 * 86400                                # statements change quart
 _INCOME = {
     "revenue": ["RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues",
                 "RevenueFromContractWithCustomerIncludingAssessedTax", "SalesRevenueNet"],
+    "grossProfit": ["GrossProfit"],
     "operatingIncome": ["OperatingIncomeLoss"],
+    "netIncome": ["NetIncomeLoss"],
+    "epsdiluted": ["EarningsPerShareDiluted"],
     "weightedAverageShsOutDil": ["WeightedAverageNumberOfDilutedSharesOutstanding",
                                  "WeightedAverageNumberOfSharesOutstandingBasic"],
     "incomeBeforeTax": [
@@ -67,7 +70,8 @@ _DA_PARTS = (["Depreciation", "DepreciationNonproduction"],
 _SHARE_FIELDS = {"weightedAverageShsOutDil"}
 
 
-def _annual_map(us: dict, concepts: list[str], want_shares: bool, instant: bool) -> dict[int, float]:
+def _annual_map(us: dict, concepts: list[str], want_shares: bool, instant: bool,
+                unit: str | None = None) -> dict[int, float]:
     """{fiscal_year: value} from annual (10-K, fp=FY) facts, merged across concept
     synonyms: the earliest-listed concept wins for any year it covers, and later
     synonyms only fill years it does not. Filers switch tags mid-history (Nvidia
@@ -80,7 +84,7 @@ def _annual_map(us: dict, concepts: list[str], want_shares: bool, instant: bool)
         node = us.get(concept)
         if not node:
             continue
-        facts = node.get("units", {}).get("shares" if want_shares else "USD")
+        facts = node.get("units", {}).get(unit or ("shares" if want_shares else "USD"))
         if not facts:
             continue
         picked: dict[int, tuple[str, float]] = {}
@@ -196,7 +200,11 @@ def _build(sym: str) -> dict | None:
     if not us:
         return None
 
-    income_maps = {k: _annual_map(us, c, k in _SHARE_FIELDS, instant=False) for k, c in _INCOME.items()}
+    income_maps = {
+        k: _annual_map(us, c, k in _SHARE_FIELDS, instant=False,
+                       unit="USD/shares" if k == "epsdiluted" else None)
+        for k, c in _INCOME.items()
+    }
     balance_maps = {k: _annual_map(us, c, False, instant=True) for k, c in _BALANCE.items()}
     debt_lt = _annual_map(us, _DEBT_LT, False, instant=True)
     debt_cur = _annual_map(us, _DEBT_CUR, False, instant=True)
@@ -206,7 +214,8 @@ def _build(sym: str) -> dict | None:
     if not years:
         return None
 
-    income = [{k: income_maps[k].get(fy) for k in _INCOME} for fy in years]
+    income = [{"fiscalYear": fy, "calendarYear": fy, "period": "FY", "date": f"{fy}-12-31",
+               **{k: income_maps[k].get(fy) for k in _INCOME}} for fy in years]
 
     by = years[0]                                     # latest fiscal year for point-in-time statements
     lt = debt_lt.get(by)

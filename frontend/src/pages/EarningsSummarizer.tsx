@@ -468,45 +468,49 @@ export default function EarningsSummarizer() {
     <PageWrapper title="Earnings AI">
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexDirection: isMobile ? 'column' : 'row' }}>
 
-        {/* Side entry bar */}
-        <aside style={{ width: isMobile ? '100%' : 210, flexShrink: 0, background: C.surface, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: '14px 16px', borderBottom: `1px solid ${C.border}` }}>
+        <aside style={{ width: isMobile ? '100%' : 248, flexShrink: 0, background: C.surface, border: `1px solid ${C.border}` }}>
+          <div style={{ padding: '11px 16px', background: 'color-mix(in srgb, var(--theme-bg, #101c2e) 58%, var(--theme-surface, #0d1826))', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+            <span style={{ fontFamily: C.sans, fontSize: 9, fontWeight: 700, color: C.gold, letterSpacing: '0.14em', textTransform: 'uppercase' }}>Analysis inputs</span>
+            <span style={{ fontFamily: C.mono, fontSize: 9, color: C.dim }}>{tickers.length || 'No'} ticker{tickers.length === 1 ? '' : 's'}</span>
+          </div>
+
+          <div style={{ padding: '16px', borderBottom: `1px solid ${C.border}` }}>
             <label style={railLabel}>Tickers</label>
             <TickerTagInput tickers={tickers} onChange={setTickers} />
           </div>
 
-          <div style={{ padding: '14px 16px', borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ padding: '16px', borderBottom: `1px solid ${C.border}` }}>
             <label style={railLabel}>Source filings</label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
               {[
                 { label: 'Quarterly reports (10-Q)', val: include10q, set: setInclude10q },
                 { label: 'Annual reports (10-K)',    val: include10k, set: setInclude10k },
               ].map(opt => (
-                <label key={opt.label} onClick={() => opt.set(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
+                <label key={opt.label} onClick={() => opt.set(v => !v)} style={{ minWidth: 0, padding: '9px 8px', border: `1px solid ${opt.val ? C.gold : C.border}`, background: opt.val ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)' : 'transparent', display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', userSelect: 'none' }}>
                   <div style={{ ...check, border: `1px solid ${opt.val ? C.gold : C.dim}`, background: opt.val ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {opt.val && <div style={{ width: 5, height: 5, background: C.gold }} />}
                   </div>
-                  <span style={{ fontFamily: C.sans, fontSize: 11, color: opt.val ? C.text : C.dim }}>{opt.label}</span>
+                  <span style={{ fontFamily: C.sans, fontSize: 10, lineHeight: 1.25, color: opt.val ? C.text : C.dim }}>{opt.label}</span>
                 </label>
               ))}
             </div>
           </div>
 
-          <div style={{ padding: '14px 16px', borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ padding: '16px', borderBottom: `1px solid ${C.border}` }}>
             <label style={railLabel}>Filings per ticker</label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 5 }}>
               {[1, 2, 4].map(n => (
-                <button key={n} onClick={() => setTxLimit(n)} style={{ width: '100%', textAlign: 'left', background: txLimit === n ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)' : 'transparent', border: `1px solid ${txLimit === n ? C.gold : C.border}`, color: txLimit === n ? C.gold : C.muted, fontFamily: C.mono, fontSize: 11, padding: '6px 10px', cursor: 'pointer' }}>{n} {n === 1 ? 'filing' : 'filings'}</button>
+                <button key={n} onClick={() => setTxLimit(n)} style={{ background: txLimit === n ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)' : 'transparent', border: `1px solid ${txLimit === n ? C.gold : C.border}`, color: txLimit === n ? C.gold : C.muted, fontFamily: C.mono, fontSize: 10, padding: '8px 2px', cursor: 'pointer' }}>{n} {n === 1 ? 'filing' : 'filings'}</button>
               ))}
             </div>
-            <div style={{ fontFamily: C.sans, fontSize: 9, color: C.dim, marginTop: 8, lineHeight: 1.5 }}>
+            <div style={{ fontFamily: C.sans, fontSize: 9, color: C.dim, marginTop: 9, lineHeight: 1.5 }}>
               Each ticker returns one note per recent {include10k && !include10q ? '10-K' : '10-Q'} filing.
             </div>
           </div>
 
-          <div style={{ padding: '14px 16px' }}>
+          <div style={{ padding: '16px' }}>
             <button onClick={startAnalysis} disabled={!canRun}
-              style={{ width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: `1px solid ${C.gold}`, color: C.gold, fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', padding: '10px 0', cursor: canRun ? 'pointer' : 'default', opacity: canRun ? 1 : 0.5 }}>
+              style={{ width: '100%', background: canRun ? C.gold : 'transparent', border: `1px solid ${C.gold}`, color: canRun ? C.surface : C.gold, fontFamily: C.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', padding: '11px 0', cursor: canRun ? 'pointer' : 'default', opacity: canRun ? 1 : 0.5 }}>
               {isPending ? `Analyzing… (${overallProgress}%)` : 'Analyze'}
             </button>
           </div>
