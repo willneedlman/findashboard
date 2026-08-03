@@ -21,9 +21,9 @@ interface Holding {
 }
 
 interface QuoteData {
-  current_price:    number
+  current_price:    number | null
   pct_change_1d:    number | null
-  market_cap:       number | null
+  market_cap?:      number | null
 }
 
 function loadHoldings(): Holding[] {
@@ -318,16 +318,14 @@ export default function PortfolioManager() {
 
   // Fetch live prices for all tickers (normalize so a legacy BRK.B never 404s
   // in the render before the heal effect above persists BRK-B).
-  const priceResults = useQueries({
-    queries: holdings.map(h => {
-      const sym = normalizeTicker(h.ticker)
-      return {
-        queryKey: ['pm-quote', sym],
-        queryFn:  () => axios.get(`/api/market/quote/${encodeURIComponent(sym)}`).then(r => r.data as QuoteData),
-        staleTime: 60_000,
-        retry: 1,
-      }
-    }),
+  const stockSymbols = Array.from(new Set(holdings.map(h => normalizeTicker(h.ticker)))).sort()
+  const portfolioQuotes = useQuery<{ quotes: Record<string, QuoteData> }>({
+    queryKey: ['pm-quotes', stockSymbols.join(',')],
+    queryFn: () => axios.get(`/api/market/quotes?tickers=${encodeURIComponent(stockSymbols.join(','))}`)
+      .then(r => r.data as { quotes: Record<string, QuoteData> }),
+    enabled: stockSymbols.length > 0,
+    staleTime: 30_000,
+    retry: 1,
   })
 
   // Dividend snapshot (yield + $/share) for every distinct holding, batched.
@@ -503,7 +501,7 @@ export default function PortfolioManager() {
   let totalCost  = 0
   let totalAnnualIncome = 0   // sum of (annual $/share dividend × shares)
   const rows = holdings.map((h, i) => {
-    const q        = priceResults[i]?.data as QuoteData | undefined
+    const q        = portfolioQuotes.data?.quotes[normalizeTicker(h.ticker)]
     const price    = q?.current_price ?? 0
     // Auto-fill avg cost from current price when user didn't enter one
     const avgCost  = h.avgCost > 0 ? h.avgCost : price
@@ -518,7 +516,7 @@ export default function PortfolioManager() {
     if (price > 0) totalValue += value
     if (cost > 0) totalCost += cost
     totalAnnualIncome += annualIncome
-    return { ...h, avgCost, costIsAuto, price, value, cost, pnl, pnlPct, divYield, annualIncome, loading: priceResults[i]?.isLoading, pct1d: q?.pct_change_1d }
+    return { ...h, avgCost, costIsAuto, price, value, cost, pnl, pnlPct, divYield, annualIncome, loading: portfolioQuotes.isLoading, pct1d: q?.pct_change_1d }
   })
   const totalPnl    = totalValue - totalCost
   const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : null

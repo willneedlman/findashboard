@@ -341,6 +341,52 @@ def get_quote(ticker: str):
     raise HTTPException(404, "Could not fetch quote")
 
 
+@router.get("/quotes")
+@cached(ttl=30, maxsize=64, persist=True)
+def get_quotes(tickers: str):
+    """Quote a whole portfolio with one bounded market-data request.
+
+    Portfolio Manager used to fan out one /quote call per row. A 15-name book
+    therefore queued behind the two-slot yfinance semaphore and then multiplied
+    fallback vendor traffic. One batch preserves a consistent as-of point and
+    prevents a slow symbol from blanking unrelated holdings.
+    """
+    symbols = validate_tickers(
+        [ticker.strip() for ticker in tickers.split(",") if ticker.strip()][:50],
+        max_count=50,
+    )
+    if not symbols:
+        return {"quotes": {}, "source": "batch_history"}
+    today = _dt.date.today()
+    frame = get_download(
+        tuple(symbols),
+        (today - _dt.timedelta(days=10)).isoformat(),
+        (today + _dt.timedelta(days=1)).isoformat(),
+        "1d",
+        cache_ttl=30,
+    )
+    closes = _close_frame(frame)
+    quotes: dict[str, dict] = {}
+    for symbol in symbols:
+        series = pd.Series(dtype=float)
+        if closes is not None:
+            if symbol in closes.columns:
+                series = closes[symbol].dropna()
+            elif len(symbols) == 1 and not closes.empty:
+                series = closes.iloc[:, 0].dropna()
+        if series.empty:
+            quotes[symbol] = {"current_price": None, "pct_change_1d": None, "source": "unavailable"}
+            continue
+        price = float(series.iloc[-1])
+        prior = float(series.iloc[-2]) if len(series) >= 2 else None
+        quotes[symbol] = {
+            "current_price": round(price, 2),
+            "pct_change_1d": round((price / prior - 1) * 100, 3) if prior else None,
+            "source": "batch_history",
+        }
+    return {"quotes": quotes, "source": "batch_history"}
+
+
 @router.get("/dividends")
 def get_dividends(tickers: str):
     """Per-ticker dividend snapshot for portfolio income tracking.

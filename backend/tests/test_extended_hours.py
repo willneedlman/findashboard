@@ -94,6 +94,21 @@ def test_closed_with_no_extended_print_falls_back_to_the_close(monkeypatch):
     assert "extended_pct" not in got
 
 
+def test_portfolio_quotes_batch_all_symbols_in_one_download(monkeypatch):
+    idx = pd.to_datetime(["2026-07-30", "2026-07-31"])
+    columns = pd.MultiIndex.from_product([["Close"], ["MSFT", "NVDA"]])
+    frame = pd.DataFrame([[100.0, 200.0], [110.0, 190.0]], index=idx, columns=columns)
+    monkeypatch.setattr(market_router, "get_download", lambda *args, **kwargs: frame)
+    market_router.get_quotes.cache_clear()
+
+    result = market_router.get_quotes("MSFT,NVDA")
+
+    assert result["quotes"]["MSFT"]["current_price"] == 110.0
+    assert result["quotes"]["MSFT"]["pct_change_1d"] == 10.0
+    assert result["quotes"]["NVDA"]["current_price"] == 190.0
+    assert result["quotes"]["NVDA"]["pct_change_1d"] == -5.0
+
+
 # ── option marks ────────────────────────────────────────────────────────────
 
 def _mark_request(strike=100.0):
