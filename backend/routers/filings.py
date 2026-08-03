@@ -31,7 +31,7 @@ _filing_cache:     TTLCache = TTLCache(maxsize=200, ttl=3600)
 _lock = threading.Lock()
 # Bump to invalidate cached EDGAR context + summaries after a fetch-logic change
 # (e.g. the annual-10-K/annual-financials fix).
-_CACHE_VER = "v8"
+_CACHE_VER = "v9"
 
 
 # ── SEC EDGAR helpers ─────────────────────────────────────────────────────────
@@ -238,7 +238,7 @@ def _get_edgar_filing_context(ticker: str, form_types: list[str], primary: str |
 def _get_annual_financials(ticker: str, count: int = 3) -> dict:
     """Annual (10-K) income, balance sheet, and cash-flow statements from FMP."""
     n = max(1, min(count, 5))
-    cache_key = f"{ticker}:afin:{n}"
+    cache_key = f"{_CACHE_VER}:{ticker}:afin:{n}"
     with _lock:
         if cache_key in _filing_cache:
             return _filing_cache[cache_key]
@@ -254,6 +254,17 @@ def _get_annual_financials(ticker: str, count: int = 3) -> dict:
         }
     except Exception as e:
         logger.warning("annual fin %s: %s", ticker, e)
+    try:
+        import sec_fundamentals
+        sec_income = sec_fundamentals.get_income(ticker, n)
+        if sec_income:
+            result["income"] = _merge_income_history(result.get("income") or [], sec_income)
+            if not result.get("balance"):
+                result["balance"] = [sec_fundamentals.get_balance(ticker)]
+            if not result.get("cashflow"):
+                result["cashflow"] = [sec_fundamentals.get_cashflow(ticker)]
+    except Exception as e:
+        logger.warning("SEC annual fundamentals %s: %s", ticker, e)
     if not result.get("income"):
         try:
             import sec_fundamentals
@@ -702,7 +713,7 @@ def _sse(data: dict) -> str:
 def _income_statements(ticker: str, period: str, limit: int) -> list:
     """Income statements from FMP (period='quarter'|'annual'), cached. Used both
     for the per-filing context and for computing key metrics deterministically."""
-    cache_key = f"{ticker}:inc:{period}:{limit}"
+    cache_key = f"{_CACHE_VER}:{ticker}:inc:{period}:{limit}"
     with _lock:
         if cache_key in _filing_cache:
             return _filing_cache[cache_key]
@@ -712,6 +723,13 @@ def _income_statements(ticker: str, period: str, limit: int) -> list:
     except Exception as e:
         logger.warning("income %s: %s", ticker, e)
         result = []
+    try:
+        import sec_fundamentals
+        sec_rows = sec_fundamentals.get_income(ticker, limit) if period == "annual" else sec_fundamentals.get_quarterly_income(ticker, limit)
+        if sec_rows:
+            result = _merge_income_history(result, sec_rows)
+    except Exception as e:
+        logger.warning("SEC income enrichment %s: %s", ticker, e)
     with _lock:
         _filing_cache[cache_key] = result
     return result
@@ -731,7 +749,42 @@ def _num(row: dict | None, *keys: str) -> float | None:
         v = (row or {}).get(k)
         if isinstance(v, (int, float)):
             return float(v)
+        if isinstance(v, str):
+            try:
+                return float(v.replace(",", "").replace("$", ""))
+            except ValueError:
+                continue
     return None
+
+
+def _income_year(row: dict) -> str | None:
+    for key in ("fiscalYear", "calendarYear"):
+        value = row.get(key)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    date = str(row.get("date") or row.get("fillingDate") or "")
+    return date[:4] if len(date) >= 4 else None
+
+
+def _merge_income_history(primary: list, fallback: list) -> list:
+    """Fill incomplete provider rows with same-year SEC statement facts."""
+    if not primary:
+        return fallback
+    fallback_by_year = {_income_year(row): row for row in fallback if isinstance(row, dict) and _income_year(row)}
+    core_fields = ("revenue", "grossProfit", "operatingIncome", "netIncome", "epsdiluted", "epsDiluted", "eps", "weightedAverageShsOutDil")
+    merged = []
+    for row in primary:
+        current = dict(row) if isinstance(row, dict) else row
+        if not isinstance(current, dict):
+            merged.append(current)
+            continue
+        sec_row = fallback_by_year.get(_income_year(current))
+        if sec_row:
+            for field in core_fields:
+                if _num(current, field) is None and _num(sec_row, field) is not None:
+                    current[field] = sec_row[field]
+        merged.append(current)
+    return merged
 
 
 def _yoy(cur: float | None, prev: float | None) -> str | None:
@@ -747,7 +800,7 @@ def _gross_margin(row: dict | None) -> float | None:
 
 
 def _eps_of(row: dict | None) -> float | None:
-    return _num(row, "epsdiluted", "epsDiluted", "eps")
+    return _num(row, "epsdiluted", "epsDiluted", "eps", "dilutedEPS", "earningsPerShareDiluted")
 
 
 def _metric_delta(actual: float | None, estimate: float | None, is_money: bool = False) -> tuple[str | None, str | None]:
@@ -777,7 +830,7 @@ def _compute_metrics_block(hist: list, i: int, annual: bool, cashflow: dict | No
     pyb   = hist[i + 1 + step] if i + 1 + step < len(hist) else None   # prior period's year-ago
 
     rev, eps, gm = _num(cur, "revenue"), _eps_of(cur), _gross_margin(cur)
-    net_income = _num(cur, "netIncome")
+    net_income = _num(cur, "netIncome", "netIncomeLoss", "netIncomeApplicableToCommonShares", "netIncomeAvailableToCommonStockholders")
     operating_income = _num(cur, "operatingIncome")
     free_cash_flow = _num(cashflow, "freeCashFlow")
     eps_est = _num(surprise, "estimatedEarning", "estimatedEPS", "epsEstimate")
@@ -808,7 +861,7 @@ def _compute_metrics_block(hist: list, i: int, annual: bool, cashflow: dict | No
         rows.append({"name": "Revenue", "actual": _fmt_money(rev), "estimate": _fmt_money(revenue_est) if revenue_est is not None else None,
                      "variance": variance, "variance_pct": variance_pct, "yoy": _yoy(rev, _num(yb, "revenue"))})
     if net_income is not None:
-        rows.append({"name": "Net income", "actual": _fmt_money(net_income), "yoy": _yoy(net_income, _num(yb, "netIncome"))})
+        rows.append({"name": "Net income", "actual": _fmt_money(net_income), "yoy": _yoy(net_income, _num(yb, "netIncome", "netIncomeLoss", "netIncomeApplicableToCommonShares", "netIncomeAvailableToCommonStockholders"))})
     if operating_income is not None:
         rows.append({"name": "Operating income", "actual": _fmt_money(operating_income), "yoy": _yoy(operating_income, _num(yb, "operatingIncome"))})
     if free_cash_flow is not None:
