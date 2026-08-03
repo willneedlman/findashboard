@@ -64,7 +64,11 @@ interface OptimizerData {
 
 interface OptionExposure { underlying: string; label: string; marketValue: number | null; deltaShares: number | null; source: string }
 interface SectorExposure { sector: string; weight: number; holdings: number }
-interface CompanyProfile { symbol: string; companyName: string | null; sector: string | null }
+interface SectorChartSlice extends SectorExposure { memberSectors: string[] }
+interface CompanyProfile {
+  symbol: string; companyName: string | null; sector: string | null; industry: string | null
+  classification: string | null; source: string | null
+}
 interface PositionDecision extends WeightedHolding {
   sector: string; riskContribution: number | null; beta: number | null; periodReturn: number | null
   idiosyncratic: number | null; decision: string; rationale: string; tone: string
@@ -78,7 +82,7 @@ interface AnalysisResult {
 }
 
 type DetailSelection =
-  | { kind: 'sector'; sector: string }
+  | { kind: 'sector'; sector: string; memberSectors: string[] }
   | { kind: 'return'; point: BacktestData['cumulative'][number] }
   | { kind: 'drawdown'; point: { date: string; drawdown: number } }
   | { kind: 'monte'; point: { day: number; p5: number; p25: number; p50: number; p75: number; p95: number } }
@@ -90,6 +94,7 @@ const HORIZON_DAYS = 756
 const MONTE_CARLO_RUNS = 500
 const SECTOR_FALLBACKS: Record<string, string> = {
   BND: 'Fixed Income',
+  JOBY: 'eVTOL & Advanced Air Mobility',
   QQQ: 'Diversified Equity',
   RVI: 'Financial Services',
   SPY: 'Diversified Equity',
@@ -106,7 +111,7 @@ const endDate = () => new Date().toISOString().slice(0, 10)
 const quotePrice = (q: any) => Number(q?.current_price ?? q?.price ?? q?.regular_market_price ?? 0)
 
 function resolvedSector(ticker: string, profile?: CompanyProfile) {
-  const reported = profile?.sector?.trim() ?? ''
+  const reported = profile?.classification?.trim() || profile?.industry?.trim() || profile?.sector?.trim() || ''
   const sectorKey = reported.toLowerCase().replace(/[^a-z]/g, '')
   if (!INVALID_SECTORS.has(sectorKey)) return reported
   if (SECTOR_FALLBACKS[ticker]) return SECTOR_FALLBACKS[ticker]
@@ -128,10 +133,11 @@ function monteBands(data: MonteCarloData | null) {
   if (!data?.sample_paths?.length) return []
   const rows = data.sample_paths
   const pick = (vals: number[], q: number) => vals[Math.min(vals.length - 1, Math.floor((vals.length - 1) * q))]
+  const pct = (value: number) => Number((value * 100).toFixed(1))
   const step = Math.max(1, Math.floor(rows.length / 100))
   return rows.filter((_, i) => i % step === 0 || i === rows.length - 1).map((row, i) => {
     const s = [...row].sort((a, b) => a - b)
-    return { day: i * step, p5: pick(s, .05) * 100, p25: pick(s, .25) * 100, p50: pick(s, .5) * 100, p75: pick(s, .75) * 100, p95: pick(s, .95) * 100 }
+    return { day: i * step, p5: pct(pick(s, .05)), p25: pct(pick(s, .25)), p50: pct(pick(s, .5)), p75: pct(pick(s, .75)), p95: pct(pick(s, .95)) }
   })
 }
 
@@ -180,7 +186,7 @@ async function runAnalysis(book: PMPortfolio, benchmark: string, lookbackYears: 
     request<FactorData>(axios.post('/api/portfolio/factor-decomposition', { holdings: factorHoldings, lookback_days: lookbackYears * 365, benchmark, mode: 'macro' }, { timeout: 120_000 })),
     request<FactorData>(axios.post('/api/portfolio/factor-decomposition', { holdings: factorHoldings, lookback_days: lookbackYears * 365, benchmark, mode: 'style' }, { timeout: 120_000 })),
     core20.length >= 2 ? request<OptimizerData>(axios.post('/api/portfolio-opt/optimize', { tickers: core20.map(h => h.ticker), start, end, return_model: 'historical', constraint_mode: 'long_only', weights: Object.fromEntries(core20.map((h, i) => [h.ticker, normCoreWeights[i]])) }, { timeout: 120_000 })) : Promise.resolve(null),
-    request<{ rows: CompanyProfile[] }>(axios.get(`/api/earnings/profile?symbols=${encodeURIComponent(tickers.join(','))}&seed_only=false`, { timeout: 45_000 })),
+    request<{ rows: CompanyProfile[] }>(axios.get(`/api/portfolio/sectors?symbols=${encodeURIComponent(tickers.join(','))}`, { timeout: 45_000 })),
   ])
   const value = <T,>(i: number): T | null => tasks[i].status === 'fulfilled' ? tasks[i].value as T : null
   const backtest = value<BacktestData>(0)
@@ -338,10 +344,11 @@ function ConciseAnalysis({ data }: { data: AnalysisResult }) {
   const [selection, setSelection] = useState<DetailSelection | null>(null)
   const drawdowns = drawdownSeries(data.backtest.cumulative)
   const bands = monteBands(data.monteCarlo)
-  const sectorData = data.sectors.length > 7
-    ? [...data.sectors.slice(0, 6), data.sectors.slice(6).reduce((rest, sector) => ({ sector: 'Other sectors', weight: rest.weight + sector.weight, holdings: rest.holdings + sector.holdings }), { sector: 'Other sectors', weight: 0, holdings: 0 })]
-    : [...data.sectors]
-  if (data.cashWeight > 0) sectorData.push({ sector: 'Cash', weight: data.cashWeight, holdings: 1 })
+  const classifiedSlices: SectorChartSlice[] = data.sectors.map(sector => ({ ...sector, memberSectors: [sector.sector] }))
+  const sectorData: SectorChartSlice[] = classifiedSlices.length > 7
+    ? [...classifiedSlices.slice(0, 6), classifiedSlices.slice(6).reduce((rest, sector) => ({ sector: 'Other sectors', weight: rest.weight + sector.weight, holdings: rest.holdings + sector.holdings, memberSectors: [...rest.memberSectors, ...sector.memberSectors] }), { sector: 'Other sectors', weight: 0, holdings: 0, memberSectors: [] } as SectorChartSlice)]
+    : classifiedSlices
+  if (data.cashWeight > 0) sectorData.push({ sector: 'Cash', weight: data.cashWeight, holdings: 1, memberSectors: ['Cash'] })
   const downtrends = data.positions.filter(p => p.periodReturn != null && p.periodReturn < 0).sort((a, b) => (a.periodReturn ?? 0) - (b.periodReturn ?? 0)).slice(0, 5)
   const terminal = data.monteCarlo?.percentiles
 
@@ -350,8 +357,8 @@ function ConciseAnalysis({ data }: { data: AnalysisResult }) {
   return <div className="portfolio-analysis-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
     <Panel label="Sector allocation" meta="Current value · select a sector" style={{ minHeight: 360, overflow: 'hidden' }}>
       <div className="portfolio-sector-layout" style={{ minHeight: 330, display: 'grid', gridTemplateColumns: 'minmax(190px, .9fr) minmax(250px, 1.1fr)', alignItems: 'center', paddingTop: 28, overflow: 'hidden' }}>
-        <div className="portfolio-sector-chart" style={{ minWidth: 0, height: 300, cursor: 'pointer' }}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={sectorData} dataKey="weight" nameKey="sector" innerRadius="50%" outerRadius="76%" paddingAngle={1} stroke={T.surface} onClick={(entry: any) => setSelection({ kind: 'sector', sector: entry?.sector ?? entry?.payload?.sector })}>{sectorData.map((s, i) => <Cell key={s.sector} fill={sectorColors[i % sectorColors.length]} cursor="pointer" />)}</Pie><Tooltip contentStyle={tipStyle} formatter={(value: number) => `${Number(value).toFixed(1)}%`} /></PieChart></ResponsiveContainer></div>
-        <div className="portfolio-sector-legend" style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0, width: '100%', maxWidth: '100%', padding: '0 18px 0 8px', overflow: 'hidden' }}>{sectorData.map((s, i) => <button type="button" aria-label={`Inspect ${s.sector}, ${s.weight.toFixed(1)} percent`} className="portfolio-inspectable" onClick={() => setSelection({ kind: 'sector', sector: s.sector })} key={s.sector} style={{ appearance: 'none', border: `1px solid ${selection?.kind === 'sector' && selection.sector === s.sector ? T.gold : 'transparent'}`, background: selection?.kind === 'sector' && selection.sector === s.sector ? T.hover : 'transparent', color: 'inherit', display: 'grid', gridTemplateColumns: '8px minmax(0, 1fr) 48px', gap: 8, alignItems: 'center', minWidth: 0, width: '100%', maxWidth: '100%', padding: '6px 7px', fontFamily: MONO, fontSize: 9.5, textAlign: 'left', cursor: 'pointer' }}><span style={{ width: 7, height: 7, background: sectorColors[i % sectorColors.length] }} /><span style={{ color: T.muted, minWidth: 0, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{s.sector}</span><span style={{ color: T.text, textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{s.weight.toFixed(1)}%</span></button>)}</div>
+        <div className="portfolio-sector-chart" style={{ minWidth: 0, height: 300, cursor: 'pointer', outline: 'none' }}><ResponsiveContainer width="100%" height="100%"><PieChart style={{ outline: 'none' }}><Pie data={sectorData} dataKey="weight" nameKey="sector" innerRadius="50%" outerRadius="76%" paddingAngle={1} stroke={T.surface} style={{ outline: 'none' }} onClick={(entry: any) => { const slice = sectorData.find(item => item.sector === (entry?.sector ?? entry?.payload?.sector)); if (slice) setSelection({ kind: 'sector', sector: slice.sector, memberSectors: slice.memberSectors }) }}>{sectorData.map((s, i) => <Cell key={s.sector} fill={sectorColors[i % sectorColors.length]} cursor="pointer" style={{ outline: 'none' }} />)}</Pie><Tooltip contentStyle={tipStyle} formatter={(value: number) => `${Number(value).toFixed(1)}%`} /></PieChart></ResponsiveContainer></div>
+        <div className="portfolio-sector-legend" style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0, width: '100%', maxWidth: '100%', padding: '0 18px 0 8px', overflow: 'hidden' }}>{sectorData.map((s, i) => <button type="button" aria-label={`Inspect ${s.sector}, ${s.weight.toFixed(1)} percent`} aria-pressed={selection?.kind === 'sector' && selection.sector === s.sector} className="portfolio-inspectable portfolio-sector-row" onClick={() => setSelection({ kind: 'sector', sector: s.sector, memberSectors: s.memberSectors })} key={s.sector} style={{ appearance: 'none', border: '1px solid transparent', background: selection?.kind === 'sector' && selection.sector === s.sector ? T.hover : 'transparent', color: 'inherit', display: 'grid', gridTemplateColumns: '8px minmax(0, 1fr) 48px', gap: 8, alignItems: 'center', minWidth: 0, width: '100%', maxWidth: '100%', padding: '6px 7px', fontFamily: MONO, fontSize: 9.5, textAlign: 'left', cursor: 'pointer' }}><span style={{ width: 7, height: 7, background: sectorColors[i % sectorColors.length] }} /><span style={{ color: selection?.kind === 'sector' && selection.sector === s.sector ? T.text : T.muted, minWidth: 0, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{s.sector}</span><span style={{ color: T.text, textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{s.weight.toFixed(1)}%</span></button>)}</div>
       </div>
     </Panel>
 
@@ -365,7 +372,7 @@ function ConciseAnalysis({ data }: { data: AnalysisResult }) {
 
     <Panel label="Monte Carlo range" meta="500 paths · select a horizon" style={{ height: 300 }}>
       {data.monteCarlo && bands.length ? <div style={{ height: '100%', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 126px', gap: 8 }}>
-        <div className="portfolio-chart-hit" style={{ minWidth: 0, height: '100%' }}><ResponsiveContainer width="100%" height="100%"><ComposedChart data={bands} margin={{ top: 40, right: 5, bottom: 5, left: 0 }} onClick={(state: any) => { const point = chartPoint(state); if (point) setSelection({ kind: 'monte', point }) }}><CartesianGrid stroke={T.borderFaint} vertical={false} /><XAxis dataKey="day" tick={{ fill: T.muted, fontSize: 9 }} /><YAxis tick={{ fill: T.muted, fontSize: 9 }} width={44} /><Tooltip contentStyle={tipStyle} /><ReferenceLine y={100} stroke={T.border} /><Area dataKey="p95" stroke="none" fill={mix(T.blue, 8)} /><Area dataKey="p75" stroke="none" fill={mix(T.blue, 14)} /><Area dataKey="p25" stroke="none" fill={T.surface} /><Area dataKey="p5" stroke="none" fill={mix(T.neg, 12)} /><Line dataKey="p50" name="Median" stroke={T.gold} strokeWidth={2} dot={false} activeDot={{ r: 4 }} /></ComposedChart></ResponsiveContainer></div>
+        <div className="portfolio-chart-hit" style={{ minWidth: 0, height: '100%' }}><ResponsiveContainer width="100%" height="100%"><ComposedChart data={bands} margin={{ top: 40, right: 5, bottom: 5, left: 0 }} onClick={(state: any) => { const point = chartPoint(state); if (point) setSelection({ kind: 'monte', point }) }}><CartesianGrid stroke={T.borderFaint} vertical={false} /><XAxis dataKey="day" tick={{ fill: T.muted, fontSize: 9 }} /><YAxis tick={{ fill: T.muted, fontSize: 9 }} width={44} /><Tooltip contentStyle={tipStyle} formatter={(value: number) => Number(value).toFixed(1)} /><ReferenceLine y={100} stroke={T.border} /><Area dataKey="p95" stroke="none" fill={mix(T.blue, 8)} /><Area dataKey="p75" stroke="none" fill={mix(T.blue, 14)} /><Area dataKey="p25" stroke="none" fill={T.surface} /><Area dataKey="p5" stroke="none" fill={mix(T.neg, 12)} /><Line dataKey="p50" name="Median" stroke={T.gold} strokeWidth={2} dot={false} activeDot={{ r: 4 }} /></ComposedChart></ResponsiveContainer></div>
         <div style={{ paddingTop: 46, display: 'flex', flexDirection: 'column', gap: 15 }}><Outcome label="Upside (95th)" value={terminal ? fmtPct((terminal.p95 - 1) * 100, 0) : '—'} color={T.pos} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /><Outcome label="Median" value={terminal ? fmtPct((terminal.p50 - 1) * 100, 0) : '—'} color={T.gold} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /><Outcome label="Downside (5th)" value={terminal ? fmtPct((terminal.p5 - 1) * 100, 0) : '—'} color={T.neg} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /><Outcome label="Tail loss" value={`-${data.monteCarlo.cvar_95.toFixed(1)}%`} color={T.neg} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /></div>
       </div> : <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: T.muted, fontFamily: SANS, fontSize: 11 }}>Monte Carlo unavailable</div>}
     </Panel>
@@ -374,7 +381,7 @@ function ConciseAnalysis({ data }: { data: AnalysisResult }) {
       {downtrends.length ? <div className="portfolio-downtrend-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${downtrends.length}, minmax(130px, 1fr))`, gap: 1, background: T.borderFaint }}>{downtrends.map(p => <button type="button" aria-label={`Inspect ${p.ticker}`} className="portfolio-inspectable" onClick={() => setSelection({ kind: 'position', ticker: p.ticker })} key={p.ticker} style={{ appearance: 'none', border: selection?.kind === 'position' && selection.ticker === p.ticker ? `1px solid ${T.gold}` : 0, background: T.surface, color: 'inherit', padding: '12px 14px', textAlign: 'left', cursor: 'pointer' }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontFamily: MONO }}><span style={{ color: T.gold, fontWeight: 800, fontSize: 12 }}>{p.ticker}</span><span style={{ color: T.neg, fontSize: 12 }}>{fmtPct(p.periodReturn)}</span></div><div style={{ color: T.muted, fontFamily: SANS, fontSize: 10, marginTop: 8, lineHeight: 1.4 }}>{p.decision}</div><div style={{ color: T.muted, fontFamily: MONO, fontSize: 9, marginTop: 5 }}>Weight {p.weight.toFixed(1)}% · Beta {p.beta?.toFixed(2) ?? '—'}</div></button>)}</div>
         : <div style={{ color: T.muted, fontFamily: SANS, fontSize: 11 }}>No modeled holding has a negative return over the five-year analysis window.</div>}
     </Panel>
-    {selection && <DetailInspector selection={selection} data={data} onClose={() => setSelection(null)} />}
+    {selection && <DetailInspector selection={selection} data={data} onSelect={setSelection} onClose={() => setSelection(null)} />}
   </div>
 }
 
@@ -382,24 +389,25 @@ function Outcome({ label, value, color, onClick }: { label: string; value: strin
   return <button type="button" className="portfolio-inspectable" onClick={onClick} style={{ appearance: 'none', border: 0, background: 'transparent', padding: '3px 5px', textAlign: 'left', cursor: onClick ? 'pointer' : 'default' }}><div style={{ color: T.muted, fontFamily: SANS, fontSize: 8.5, letterSpacing: '.08em', textTransform: 'uppercase' }}>{label}</div><div style={{ color, fontFamily: MONO, fontSize: 16, fontWeight: 800, marginTop: 3 }}>{value}</div></button>
 }
 
-function DetailInspector({ selection, data, onClose }: { selection: DetailSelection; data: AnalysisResult; onClose: () => void }) {
+function DetailInspector({ selection, data, onSelect, onClose }: { selection: DetailSelection; data: AnalysisResult; onSelect: (selection: DetailSelection) => void; onClose: () => void }) {
   let title = 'Selected detail'
   let context = ''
   let metrics: { label: string; value: string; color?: string }[] = []
   let note = ''
+  let sectorHoldings: PositionDecision[] = []
 
   if (selection.kind === 'sector') {
-    const holdings = data.positions.filter(position => position.sector === selection.sector)
-    const weight = selection.sector === 'Cash' ? data.cashWeight : holdings.reduce((sum, position) => sum + position.weight, 0)
+    sectorHoldings = data.positions.filter(position => selection.memberSectors.includes(position.sector)).sort((a, b) => b.weight - a.weight)
+    const weight = selection.sector === 'Cash' ? data.cashWeight : sectorHoldings.reduce((sum, position) => sum + position.weight, 0)
     title = selection.sector
-    context = 'Sector allocation'
+    context = 'Allocation and holdings'
     metrics = [
       { label: 'Portfolio weight', value: `${weight.toFixed(1)}%`, color: T.gold },
-      { label: 'Positions', value: String(holdings.length) },
-      { label: 'Largest position', value: holdings[0]?.ticker ?? (selection.sector === 'Cash' ? 'Cash' : 'None') },
-      { label: 'Largest weight', value: holdings[0] ? `${holdings[0].weight.toFixed(1)}%` : `${weight.toFixed(1)}%` },
+      { label: 'Positions', value: String(sectorHoldings.length) },
+      { label: 'Largest position', value: sectorHoldings[0]?.ticker ?? (selection.sector === 'Cash' ? 'Cash' : 'None') },
+      { label: 'Largest weight', value: sectorHoldings[0] ? `${sectorHoldings[0].weight.toFixed(1)}%` : `${weight.toFixed(1)}%` },
     ]
-    note = holdings.length ? holdings.map(position => `${position.ticker} ${position.weight.toFixed(1)}%`).join(' · ') : 'Cash is included in total allocation but excluded from equity factor estimates.'
+    note = sectorHoldings.length ? 'Weights use current market value. Return, beta, and risk share use the selected analysis window and available model coverage.' : 'Cash is included in total allocation but excluded from equity factor estimates.'
   } else if (selection.kind === 'return') {
     const active = selection.point.portfolio - selection.point.benchmark
     title = selection.point.date
@@ -446,6 +454,10 @@ function DetailInspector({ selection, data, onClose }: { selection: DetailSelect
   return <Panel label={title} meta={context} style={{ gridColumn: '1 / -1', minHeight: 150, padding: '46px 16px 14px' }}>
     <button type="button" onClick={onClose} aria-label="Close selected detail" style={{ position: 'absolute', top: 39, right: 12, display: 'flex', alignItems: 'center', gap: 5, border: `1px solid ${T.border}`, background: 'transparent', color: T.muted, padding: '5px 7px', fontFamily: SANS, fontSize: 9, cursor: 'pointer' }}><X size={11} /> Close</button>
     <div className="portfolio-detail-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 1, background: T.borderFaint }}>{metrics.map(metric => <div key={metric.label} style={{ background: T.surface, padding: '10px 12px', minWidth: 0 }}><div style={{ color: T.muted, fontFamily: SANS, fontSize: 8.5, letterSpacing: '.08em', textTransform: 'uppercase' }}>{metric.label}</div><div style={{ color: metric.color ?? T.text, fontFamily: MONO, fontSize: 15, fontWeight: 800, marginTop: 4, overflowWrap: 'anywhere' }}>{metric.value}</div></div>)}</div>
+    {selection.kind === 'sector' && sectorHoldings.length > 0 && <div className="portfolio-sector-ledger" style={{ marginTop: 10, border: `1px solid ${T.borderFaint}`, overflowX: 'auto' }}>
+      <div className="portfolio-sector-ledger-row portfolio-sector-ledger-head" style={{ display: 'grid', gridTemplateColumns: '72px minmax(180px, 1fr) 84px 100px 84px 70px 100px', minWidth: 760, padding: '7px 10px', gap: 10, color: T.muted, fontFamily: SANS, fontSize: 8, letterSpacing: '.08em', textTransform: 'uppercase', borderBottom: `1px solid ${T.borderFaint}` }}><span>Holding</span><span>Classification</span><span style={{ textAlign: 'right' }}>Weight</span><span style={{ textAlign: 'right' }}>Market value</span><span style={{ textAlign: 'right' }}>Return</span><span style={{ textAlign: 'right' }}>Beta</span><span style={{ textAlign: 'right' }}>Risk share</span></div>
+      {sectorHoldings.map(position => <button type="button" key={position.ticker} className="portfolio-sector-ledger-row portfolio-inspectable" onClick={() => onSelect({ kind: 'position', ticker: position.ticker })} aria-label={`Inspect ${position.ticker} position`} style={{ appearance: 'none', display: 'grid', gridTemplateColumns: '72px minmax(180px, 1fr) 84px 100px 84px 70px 100px', minWidth: 760, width: '100%', padding: '8px 10px', gap: 10, border: 0, borderBottom: `1px solid ${T.borderFaint}`, background: T.surface, color: T.text, fontFamily: MONO, fontSize: 9.5, textAlign: 'left', cursor: 'pointer' }}><span style={{ color: T.gold, fontWeight: 800 }}>{position.ticker}</span><span style={{ color: T.muted, fontFamily: SANS, overflowWrap: 'anywhere' }}>{position.sector}</span><span style={{ textAlign: 'right' }}>{position.weight.toFixed(1)}%</span><span style={{ textAlign: 'right' }}>{fmtMoney(position.value)}</span><span style={{ textAlign: 'right', color: chg(position.periodReturn) }}>{fmtPct(position.periodReturn)}</span><span style={{ textAlign: 'right' }}>{position.beta?.toFixed(2) ?? '—'}</span><span style={{ textAlign: 'right' }}>{position.riskContribution == null ? '—' : `${position.riskContribution.toFixed(1)}%`}</span></button>)}
+    </div>}
     <div style={{ color: T.muted, fontFamily: SANS, fontSize: 10, lineHeight: 1.5, marginTop: 10, paddingRight: 70 }}>{note}</div>
   </Panel>
 }
@@ -524,7 +536,7 @@ function Scenarios({ data, horizon }: { data: AnalysisResult; horizon: number })
   const terminal = mc.percentiles
   const outcomes = [{ label: 'Severe downside', value: terminal.p5 * 100, color: T.neg }, { label: 'Downside', value: terminal.p25 * 100, color: T.warn }, { label: 'Median', value: terminal.p50 * 100, color: T.gold }, { label: 'Upside', value: terminal.p75 * 100, color: T.blue }, { label: 'Strong upside', value: terminal.p95 * 100, color: T.pos }]
   return <div className="portfolio-analysis-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(280px, .7fr)', gap: 10 }}>
-    <Panel label="Monte Carlo outcome fan" meta={`${Math.round(horizon / 252)} years · correlated portfolio returns`} style={{ height: 390 }}><ResponsiveContainer width="100%" height="100%"><ComposedChart data={bands} margin={{ top: 40, right: 14, left: 2, bottom: 8 }}><CartesianGrid stroke={T.borderFaint} vertical={false}/><XAxis dataKey="day" tick={{ fill: T.muted, fontSize: 9 }}/><YAxis tick={{ fill: T.muted, fontSize: 9 }} width={50}/><Tooltip contentStyle={tipStyle}/><ReferenceLine y={100} stroke={T.border}/><Area dataKey="p95" stroke="none" fill={mix(T.blue, 8)}/><Area dataKey="p75" stroke="none" fill={mix(T.blue, 15)}/><Area dataKey="p25" stroke="none" fill={T.surface}/><Area dataKey="p5" stroke="none" fill={mix(T.neg, 10)}/><Line dataKey="p50" stroke={T.gold} dot={false} strokeWidth={2}/></ComposedChart></ResponsiveContainer></Panel>
+    <Panel label="Monte Carlo outcome fan" meta={`${Math.round(horizon / 252)} years · correlated portfolio returns`} style={{ height: 390 }}><ResponsiveContainer width="100%" height="100%"><ComposedChart data={bands} margin={{ top: 40, right: 14, left: 2, bottom: 8 }}><CartesianGrid stroke={T.borderFaint} vertical={false}/><XAxis dataKey="day" tick={{ fill: T.muted, fontSize: 9 }}/><YAxis tick={{ fill: T.muted, fontSize: 9 }} width={50}/><Tooltip contentStyle={tipStyle} formatter={(value: number) => Number(value).toFixed(1)}/><ReferenceLine y={100} stroke={T.border}/><Area dataKey="p95" stroke="none" fill={mix(T.blue, 8)}/><Area dataKey="p75" stroke="none" fill={mix(T.blue, 15)}/><Area dataKey="p25" stroke="none" fill={T.surface}/><Area dataKey="p5" stroke="none" fill={mix(T.neg, 10)}/><Line dataKey="p50" stroke={T.gold} dot={false} strokeWidth={2}/></ComposedChart></ResponsiveContainer></Panel>
     <Panel label="Terminal outcomes" meta="Starting value = 100" style={{ minHeight: 390, padding: '48px 16px 12px' }}><div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>{outcomes.map(o => <div key={o.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${T.borderFaint}`, paddingBottom: 10 }}><span style={{ fontFamily: SANS, fontSize: 10, color: T.muted }}>{o.label}</span><span style={{ fontFamily: MONO, fontSize: 17, fontWeight: 800, color: o.color }}>{o.value.toFixed(0)}</span></div>)}</div><div style={{ marginTop: 22, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}><Metric label="VaR 95" value={`-${mc.var_95.toFixed(1)}%`} color={T.neg}/><Metric label="CVaR 95" value={`-${mc.cvar_95.toFixed(1)}%`} color={T.neg}/><Metric label="Model return" value={fmtPct(mc.mu * 100)} /><Metric label="Model vol" value={`${(mc.sigma * 100).toFixed(1)}%`} /></div></Panel>
     <Panel label="Scenario interpretation" meta="Decision use" style={{ gridColumn: '1 / -1', padding: '44px 16px 14px' }}><div className="scenario-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, background: T.border }}><ScenarioCard title="Base case" value={`${((terminal.p50 - 1) * 100).toFixed(0)}%`} text="Median terminal wealth change. Use this as the center of the modeled range, not a forecast." color={T.gold}/><ScenarioCard title="Loss budget" value={`${mc.cvar_95.toFixed(1)}%`} text="Average modeled loss in the worst 5% of outcomes. Compare this with the loss the portfolio can actually tolerate." color={T.neg}/><ScenarioCard title="Capital at risk" value={`${mc.pct_wiped.toFixed(1)}%`} text="Share of modeled paths ending at zero. A non-zero result demands leverage or concentration review." color={mc.pct_wiped > 0 ? T.neg : T.pos}/></div></Panel>
   </div>

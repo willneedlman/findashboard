@@ -464,6 +464,23 @@
   cursor: crosshair;
 }
 
+.portfolio-sector-chart,
+.portfolio-sector-chart .recharts-wrapper,
+.portfolio-sector-chart svg,
+.portfolio-sector-chart path,
+.portfolio-sector-chart g {
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.portfolio-sector-row[aria-pressed="true"] {
+  box-shadow: inset 2px 0 0 var(--theme-primary, #c9a84c);
+}
+
+.portfolio-sector-ledger-row:last-child {
+  border-bottom: 0 !important;
+}
+
 @media (min-width: 768px) and (max-width: 1180px) {
   .portfolio-analysis-controls {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;

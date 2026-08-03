@@ -4,7 +4,7 @@ logger = logging.getLogger(__name__)
 import numpy as np
 import pandas as pd
 import requests
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel, Field, model_validator
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -13,6 +13,7 @@ from admin_auth import require_admin
 from validation import validate_tickers, validate_ticker, validate_date
 import factor_models as fm
 import crsp_data
+from sector_classification import classify_security
 
 _FRED_KEY = os.getenv("FRED_API_KEY", "")
 
@@ -24,6 +25,12 @@ STRATEGIES = [
     "RSI Mean Reversion (14)",
     "6-Month Price Momentum",
 ]
+
+
+@router.get("/sectors")
+def sectors(symbols: str = Query(..., description="comma-separated tickers")):
+    tickers = [ticker.strip().upper() for ticker in symbols.split(",") if ticker.strip()][:60]
+    return {"rows": [classify_security(ticker) for ticker in dict.fromkeys(tickers)]}
 
 
 def _get_risk_free_rate() -> float:
