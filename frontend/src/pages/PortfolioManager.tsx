@@ -20,6 +20,7 @@ interface Holding {
   avgCost:  number
   useMarketPrice?: boolean
   pendingInvestmentAmount?: number
+  quantityMode?: 'shares' | 'dollars'
 }
 
 interface QuoteData {
@@ -274,7 +275,7 @@ export default function PortfolioManager() {
   const [cashSince, setCashSince] = useState(todayISO)
 
   // Inline edit state
-  const [editStock, setEditStock] = useState<{ i: number; shares: string; avgCost: string; costMode: 'manual' | 'market' } | null>(null)
+  const [editStock, setEditStock] = useState<{ i: number; quantity: string; quantityMode: 'shares' | 'dollars'; avgCost: string; costMode: 'manual' | 'market' } | null>(null)
   const [fetchingMarketCosts, setFetchingMarketCosts] = useState(false)
   const [marketCostResult, setMarketCostResult] = useState<string | null>(null)
   const [editFut, setEditFut] = useState<{ id: string; contracts: string; entry: string } | null>(null)
@@ -378,12 +379,33 @@ export default function PortfolioManager() {
   const removeFuture = (id: string) => setFutures(prev => prev.filter(f => f.id !== id))
 
   // ── Inline edit handlers ──
+  const changeEditQuantityMode = (quantityMode: 'shares' | 'dollars') => {
+    setEditStock(current => {
+      if (!current || current.quantityMode === quantityMode) return current
+      const holding = holdings[current.i]
+      const quote = portfolioQuotes.data?.quotes[normalizeTicker(holding.ticker)]?.current_price ?? 0
+      const basis = current.costMode === 'manual' ? parseFloat(current.avgCost) : (holding.avgCost || quote)
+      const quantity = parseFloat(current.quantity)
+      const converted = Number.isFinite(quantity) && quantity > 0 && Number.isFinite(basis) && basis > 0
+        ? (quantityMode === 'dollars' ? quantity * basis : quantity / basis)
+        : 0
+      return { ...current, quantityMode, quantity: converted > 0 ? String(Number(converted.toFixed(6))) : '' }
+    })
+  }
+
   const saveEditStock = () => {
     if (!editStock) return
-    const shares = parseFloat(editStock.shares)
+    const quantity = parseFloat(editStock.quantity)
     const avgCost = editStock.costMode === 'market' ? (holdings[editStock.i]?.avgCost ?? 0) : parseFloat(editStock.avgCost)
-    if (isNaN(shares) || shares <= 0 || isNaN(avgCost) || avgCost < 0) return
-    setHoldings(prev => prev.map((h, j) => j === editStock.i ? { ...h, shares, avgCost, useMarketPrice: editStock.costMode === 'market' } : h))
+    if (isNaN(quantity) || quantity <= 0 || isNaN(avgCost) || avgCost < 0 || (editStock.costMode === 'manual' && avgCost <= 0)) return
+    const pendingInvestmentAmount = editStock.quantityMode === 'dollars' && editStock.costMode === 'market' ? quantity : undefined
+    const shares = editStock.quantityMode === 'dollars'
+      ? (editStock.costMode === 'manual' ? quantity / avgCost : 0)
+      : quantity
+    setHoldings(prev => prev.map((h, j) => j === editStock.i ? {
+      ...h, shares, avgCost, useMarketPrice: editStock.costMode === 'market', pendingInvestmentAmount,
+      quantityMode: editStock.quantityMode,
+    } : h))
     setEditStock(null)
   }
   const saveEditFut = () => {
@@ -421,9 +443,9 @@ export default function PortfolioManager() {
     setHoldings(prev => {
       const existing = prev.findIndex(h => h.ticker === ticker)
       if (existing >= 0) {
-        return prev.map((h, i) => i === existing ? { ...h, shares, avgCost, useMarketPrice: newCostMode === 'market', pendingInvestmentAmount } : h)
+        return prev.map((h, i) => i === existing ? { ...h, shares, avgCost, useMarketPrice: newCostMode === 'market', pendingInvestmentAmount, quantityMode: newQuantityMode } : h)
       }
-      return [...prev, { ticker, shares, avgCost, useMarketPrice: newCostMode === 'market', pendingInvestmentAmount }]
+      return [...prev, { ticker, shares, avgCost, useMarketPrice: newCostMode === 'market', pendingInvestmentAmount, quantityMode: newQuantityMode }]
     })
     setNewTicker(''); setNewShares(''); setNewCost('')
   }, [newTicker, newShares, newCost, newCostMode, newQuantityMode, setHoldings])
@@ -959,7 +981,13 @@ export default function PortfolioManager() {
                           <td style={{ padding: '8px 12px', color: T.gold, fontFamily: T.mono, fontWeight: 700, fontSize: 10, letterSpacing: '0.08em' }}>{r.ticker}</td>
                           {editStock?.i === i ? (<>
                             <td style={{ padding: '4px 8px', textAlign: 'right' }}>
-                              <input value={editStock.shares} onChange={e => setEditStock({ ...editStock, shares: e.target.value })} type="number" style={editInp} onKeyDown={e => { if (e.key === 'Enter') saveEditStock(); if (e.key === 'Escape') setEditStock(null) }} autoFocus />
+                              <select value={editStock.quantityMode} onChange={e => changeEditQuantityMode(e.target.value as 'shares' | 'dollars')} style={{ ...editInp, width: 96, marginBottom: 4, textAlign: 'left' }}>
+                                <option value="shares">SHARES</option>
+                                <option value="dollars">DOLLAR AMOUNT</option>
+                              </select>
+                              <input value={editStock.quantity} onChange={e => setEditStock({ ...editStock, quantity: e.target.value })} type="number"
+                                placeholder={editStock.quantityMode === 'shares' ? 'Shares' : 'Amount ($)'} style={{ ...editInp, width: 96 }}
+                                onKeyDown={e => { if (e.key === 'Enter') saveEditStock(); if (e.key === 'Escape') setEditStock(null) }} autoFocus />
                             </td>
                             <td style={{ padding: '4px 8px', textAlign: 'right' }}>
                               <select value={editStock.costMode} onChange={e => setEditStock({ ...editStock, costMode: e.target.value as 'manual' | 'market' })} style={{ ...editInp, width: 86, textAlign: 'left' }}>
@@ -1004,7 +1032,14 @@ export default function PortfolioManager() {
                               <button onClick={saveEditStock} style={{ ...editBtn, color: T.gold }}>Save</button>
                               <button onClick={() => setEditStock(null)} style={{ ...editBtn, color: T.muted }}>×</button>
                             </>) : (<>
-                              <button onClick={() => setEditStock({ i, shares: String(holdings[i].shares), avgCost: holdings[i].avgCost > 0 ? String(holdings[i].avgCost) : '', costMode: holdings[i].useMarketPrice ? 'market' : 'manual' })} style={{ ...editBtn, color: T.muted }}>Edit</button>
+                              <button onClick={() => {
+                                const holding = holdings[i]
+                                const quantityMode = holding.quantityMode ?? (holding.pendingInvestmentAmount ? 'dollars' : 'shares')
+                                const quantity = quantityMode === 'dollars'
+                                  ? holding.pendingInvestmentAmount ?? holding.shares * holding.avgCost
+                                  : holding.shares
+                                setEditStock({ i, quantity: String(quantity), quantityMode, avgCost: holding.avgCost > 0 ? String(holding.avgCost) : '', costMode: holding.useMarketPrice ? 'market' : 'manual' })
+                              }} style={{ ...editBtn, color: T.muted }}>Edit</button>
                               <button onClick={() => removeHolding(i)} style={{ background: 'none', border: 'none', color: T.muted, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 4px' }}>×</button>
                             </>)}
                           </td>
