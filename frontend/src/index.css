@@ -470,13 +470,11 @@
 }
 
 .portfolio-chart-popover {
-  position: absolute;
-  z-index: 20;
-  top: 38px;
-  right: 12px;
-  width: min(390px, calc(100% - 24px));
-  max-height: calc(100% - 50px);
-  overflow-y: auto;
+  position: fixed;
+  z-index: 1200;
+  width: min(390px, calc(100vw - 24px));
+  max-height: none;
+  overflow: visible;
   padding: 12px;
   background: color-mix(in srgb, var(--theme-surface, #0d1826) 97%, #000);
   border: 1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 42%, transparent);
@@ -539,6 +537,16 @@
 
   .portfolio-verdict-grid,
   .portfolio-analysis-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .portfolio-analysis-advanced {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .portfolio-analysis-advanced {
     grid-template-columns: 1fr !important;
   }
 }

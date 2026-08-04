@@ -3,6 +3,7 @@ import sys
 
 import numpy as np
 import pandas as pd
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -64,6 +65,21 @@ def test_monte_carlo_reports_mode_yield_and_dividend_income(monkeypatch):
     assert out["long_maintenance_margin"] == 0.25
     assert "pct_margin_called" in out
     assert "pct_forced_liquidation" in out
+
+
+@pytest.mark.parametrize("model", ["gbm", "student_t", "bootstrap"])
+def test_monte_carlo_supports_distribution_models(monkeypatch, model):
+    _patch(monkeypatch)
+    out = pf.monte_carlo(pf.MonteCarloRequest(
+        tickers=["AAPL"], weights=[1.0], start="2025-01-02", end="2025-01-10",
+        n_sims=20, horizon_days=10, model=model,
+        t_degrees_freedom=4.5, bootstrap_block_days=2,
+    ))
+
+    assert out["model"] == model
+    assert np.isfinite(out["percentiles"]["p50"])
+    assert out["t_degrees_freedom"] == (4.5 if model == "student_t" else None)
+    assert out["bootstrap_block_days"] == (2 if model == "bootstrap" else None)
 
 
 def test_margin_ledger_forces_deleveraging_when_requirement_exceeds_equity():

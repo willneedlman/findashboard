@@ -496,6 +496,9 @@ class MonteCarloRequest(BaseModel):
     long_maintenance_margin: float = Field(default=0.25, ge=0.01, le=2.0)
     short_maintenance_margin: float = Field(default=0.30, ge=0.01, le=2.0)
     dividend_mode: Literal["reinvest", "cash", "exclude"] = "reinvest"
+    model: Literal["gbm", "student_t", "bootstrap"] = "gbm"
+    t_degrees_freedom: float = Field(default=5.0, ge=2.1, le=30.0)
+    bootstrap_block_days: int = Field(default=5, ge=1, le=63)
     # Survivorship-bias-free mode: estimates the GBM drift/vol from the S&P 500's
     # actual point-in-time constituent history (WRDS CRSP) instead of a typed
     # basket — a delisted name's realized wipeout or buyout premium is embedded
@@ -552,7 +555,23 @@ def monte_carlo(req: MonteCarloRequest):
     L = req.leverage
 
     rng = np.random.default_rng()
-    shocks = (mu - 0.5 * sigma ** 2) + sigma * rng.standard_normal((T, n_sims))
+    if req.model == "student_t":
+        standardized = rng.standard_t(req.t_degrees_freedom, size=(T, n_sims))
+        standardized *= np.sqrt((req.t_degrees_freedom - 2.0) / req.t_degrees_freedom)
+        shocks = (mu - 0.5 * sigma ** 2) + sigma * standardized
+    elif req.model == "bootstrap":
+        history = log_ret.dropna().to_numpy(dtype=float)
+        if not len(history):
+            raise HTTPException(400, "Historical bootstrap requires return observations")
+        block = min(req.bootstrap_block_days, len(history))
+        shocks = np.empty((T, n_sims), dtype=float)
+        for start_day in range(0, T, block):
+            width = min(block, T - start_day)
+            starts = rng.integers(0, len(history) - block + 1, size=n_sims)
+            offsets = np.arange(width).reshape(-1, 1)
+            shocks[start_day:start_day + width] = history[starts.reshape(1, -1) + offsets]
+    else:
+        shocks = (mu - 0.5 * sigma ** 2) + sigma * rng.standard_normal((T, n_sims))
     price_gross = np.vstack([np.ones((1, n_sims)), np.exp(np.cumsum(shocks, axis=0))])
     dividend_income = np.zeros_like(price_gross)
     if req.crsp_mode:
@@ -606,6 +625,9 @@ def monte_carlo(req: MonteCarloRequest):
         "borrow_rate": req.borrow_rate,
         "long_maintenance_margin": req.long_maintenance_margin,
         "short_maintenance_margin": req.short_maintenance_margin,
+        "model": req.model,
+        "t_degrees_freedom": req.t_degrees_freedom if req.model == "student_t" else None,
+        "bootstrap_block_days": req.bootstrap_block_days if req.model == "bootstrap" else None,
         "percentiles": percentiles,
         "var_95": var_95,
         "cvar_95": cvar_95,

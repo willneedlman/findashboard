@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import axios from 'axios'
 import { useMutation } from '@tanstack/react-query'
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart,
   ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
-import { AlertTriangle, ArrowRight, CheckCircle2, RefreshCw, X } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, ChevronUp, RefreshCw, X } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import EmptyState from '../components/EmptyState'
 import ErrorState from '../components/ErrorState'
@@ -40,6 +41,10 @@ interface BacktestData {
 
 interface MonteCarloData {
   mu: number; sigma: number; var_95: number; cvar_95: number; pct_wiped: number
+  pct_margin_called: number; pct_forced_liquidation: number; pct_insolvent: number; median_max_margin_utilization: number
+  leverage: number; borrow_rate: number; long_maintenance_margin: number; short_maintenance_margin: number
+  dividend_mode: 'reinvest' | 'cash' | 'exclude' | 'embedded'; median_dividend_income_pct: number | null
+  model: MonteCarloModel; t_degrees_freedom: number | null; bootstrap_block_days: number | null
   percentiles: { p5: number; p25: number; p50: number; p75: number; p95: number }
   percentile_paths: { day: number; p5: number; p25: number; p50: number; p75: number; p95: number }[]
   sample_paths: number[][]; histogram: number[]
@@ -67,7 +72,7 @@ interface OptimizerData {
 interface OptionExposure { underlying: string; label: string; marketValue: number | null; deltaShares: number | null; source: string }
 interface SectorExposure { sector: string; weight: number; holdings: number }
 interface SectorChartSlice extends SectorExposure { memberSectors: string[] }
-interface PopoverAnchor { x: number; y: number; panelWidth: number; panelHeight: number }
+interface PopoverAnchor { clientX: number; clientY: number }
 interface CompanyProfile {
   symbol: string; companyName: string | null; sector: string | null; industry: string | null
   classification: string | null; source: string | null
@@ -82,6 +87,22 @@ interface AnalysisResult {
   backtest: BacktestData; monteCarlo: MonteCarloData | null; macro: FactorData | null; style: FactorData | null
   optimizer: OptimizerData | null; sectors: SectorExposure[]; positions: PositionDecision[]; options: OptionExposure[]
   warnings: string[]; failures: string[]
+  simulationSettings: AnalysisSettings
+}
+
+type DividendMode = 'reinvest' | 'cash' | 'exclude'
+type MonteCarloModel = 'gbm' | 'student_t' | 'bootstrap'
+interface AnalysisSettings {
+  horizonDays: number
+  simulations: number
+  leverage: number
+  borrowRate: number
+  longMaintenance: number
+  shortMaintenance: number
+  dividendMode: DividendMode
+  model: MonteCarloModel
+  tDegreesFreedom: number
+  bootstrapBlockDays: number
 }
 
 type DetailSelection =
@@ -95,6 +116,18 @@ const BENCHMARK = 'SPY'
 const LOOKBACK_YEARS = 5
 const HORIZON_DAYS = 756
 const MONTE_CARLO_RUNS = 500
+const DEFAULT_ANALYSIS_SETTINGS: AnalysisSettings = {
+  horizonDays: HORIZON_DAYS,
+  simulations: MONTE_CARLO_RUNS,
+  leverage: 1,
+  borrowRate: 5,
+  longMaintenance: 25,
+  shortMaintenance: 30,
+  dividendMode: 'reinvest',
+  model: 'gbm',
+  tDegreesFreedom: 5,
+  bootstrapBlockDays: 5,
+}
 const SECTOR_FALLBACKS: Record<string, string> = {
   BND: 'Fixed Income',
   JOBY: 'eVTOL & Advanced Air Mobility',
@@ -109,6 +142,7 @@ const SECTOR_FALLBACKS: Record<string, string> = {
 const INVALID_SECTORS = new Set(['', 'na', 'none', 'null', 'unknown', 'unclassified', 'notavailable'])
 const fmtPct = (v: number | null | undefined, d = 1) => v == null || !Number.isFinite(v) ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(d)}%`
 const fmtMoney = (v: number) => v >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${(v / 1e3).toFixed(1)}K` : `$${v.toFixed(0)}`
+const modelLabel = (model: MonteCarloModel) => model === 'student_t' ? 'Student-t fat tails' : model === 'bootstrap' ? 'Historical bootstrap' : 'Normal GBM'
 const asDate = (years: number) => { const d = new Date(); d.setFullYear(d.getFullYear() - years); return d.toISOString().slice(0, 10) }
 const endDate = () => new Date().toISOString().slice(0, 10)
 const quotePrice = (q: any) => Number(q?.current_price ?? q?.price ?? q?.regular_market_price ?? 0)
@@ -159,7 +193,7 @@ function decisionFor(weight: number, risk: number | null, beta: number | null, r
   return { decision: 'Hold / monitor', rationale: 'Risk and capital weight are broadly aligned', tone: T.text }
 }
 
-async function runAnalysis(book: PMPortfolio, benchmark: string, lookbackYears: number, horizonDays: number, simulations: number): Promise<AnalysisResult> {
+async function runAnalysis(book: PMPortfolio, benchmark: string, lookbackYears: number, settings: AnalysisSettings): Promise<AnalysisResult> {
   const tickers = [...new Set(book.holdings.map(h => normalizeTicker(h.ticker)).filter(Boolean))]
   if (!tickers.length) throw new Error('This Portfolio Manager book has no equity holdings to analyze.')
 
@@ -187,7 +221,17 @@ async function runAnalysis(book: PMPortfolio, benchmark: string, lookbackYears: 
 
   const tasks = await Promise.allSettled([
     request<BacktestData>(axios.post('/api/portfolio/backtest', { tickers: holdings.map(h => h.ticker), weights, cash_weight: cashWeight, benchmark, start, end, rebalance: 'none' }, { timeout: 120_000 })),
-    request<MonteCarloData>(axios.post('/api/portfolio/montecarlo', { tickers: core20.map(h => h.ticker), weights: normCoreWeights, start, end, n_sims: simulations, horizon_days: horizonDays }, { timeout: 120_000 })),
+    request<MonteCarloData>(axios.post('/api/portfolio/montecarlo', {
+      tickers: core20.map(h => h.ticker), weights: normCoreWeights, start, end,
+      n_sims: settings.simulations, horizon_days: settings.horizonDays,
+      leverage: settings.leverage, borrow_rate: settings.borrowRate,
+      long_maintenance_margin: settings.longMaintenance / 100,
+      short_maintenance_margin: settings.shortMaintenance / 100,
+      dividend_mode: settings.dividendMode,
+      model: settings.model,
+      t_degrees_freedom: settings.tDegreesFreedom,
+      bootstrap_block_days: settings.bootstrapBlockDays,
+    }, { timeout: 120_000 })),
     request<FactorData>(axios.post('/api/portfolio/factor-decomposition', { holdings: factorHoldings, lookback_days: lookbackYears * 365, benchmark, mode: 'macro' }, { timeout: 120_000 })),
     request<FactorData>(axios.post('/api/portfolio/factor-decomposition', { holdings: factorHoldings, lookback_days: lookbackYears * 365, benchmark, mode: 'style' }, { timeout: 120_000 })),
     core20.length >= 2 ? request<OptimizerData>(axios.post('/api/portfolio-opt/optimize', { tickers: core20.map(h => h.ticker), start, end, return_model: 'historical', constraint_mode: 'long_only', weights: Object.fromEntries(core20.map((h, i) => [h.ticker, normCoreWeights[i]])) }, { timeout: 120_000 })) : Promise.resolve(null),
@@ -245,7 +289,7 @@ async function runAnalysis(book: PMPortfolio, benchmark: string, lookbackYears: 
   if (options.length) warnings.push('Options are marked and shown as delta-equivalent exposure; historical return and Monte Carlo results remain equity-and-cash based because contract-level history is unavailable.')
   if (book.futuresCount) warnings.push(`${book.futuresCount} futures position${book.futuresCount === 1 ? '' : 's'} cannot yet be reconstructed from the shared Portfolio Manager context.`)
 
-  return { bookName: book.name, generatedAt: new Date().toISOString(), holdings, cashWeight, coverageWeight: coreWeight, backtest, monteCarlo, macro, style, optimizer, sectors, positions, options, warnings, failures }
+  return { bookName: book.name, generatedAt: new Date().toISOString(), holdings, cashWeight, coverageWeight: coreWeight, backtest, monteCarlo, macro, style, optimizer, sectors, positions, options, warnings, failures, simulationSettings: settings }
 }
 
 function analysisBooks() {
@@ -260,7 +304,8 @@ function activeBook(books = analysisBooks()): PMPortfolio | null {
 export default function PortfolioAnalysis() {
   const [books, setBooks] = useState<PMPortfolio[]>(() => analysisBooks())
   const [book, setBook] = useState<PMPortfolio | null>(() => activeBook())
-  const m = useMutation({ mutationFn: (nextBook: PMPortfolio) => runAnalysis(nextBook, BENCHMARK, LOOKBACK_YEARS, HORIZON_DAYS, MONTE_CARLO_RUNS) })
+  const [settings, setSettings] = useState<AnalysisSettings>(DEFAULT_ANALYSIS_SETTINGS)
+  const m = useMutation({ mutationFn: ({ nextBook, nextSettings }: { nextBook: PMPortfolio; nextSettings: AnalysisSettings }) => runAnalysis(nextBook, BENCHMARK, LOOKBACK_YEARS, nextSettings) })
   const { mutate } = m
 
   useEffect(() => {
@@ -274,7 +319,7 @@ export default function PortfolioAnalysis() {
   }, [])
 
   useEffect(() => {
-    if (book) mutate(book)
+    if (book) mutate({ nextBook: book, nextSettings: settings })
   }, [book, mutate])
 
   return (
@@ -284,7 +329,12 @@ export default function PortfolioAnalysis() {
           book={book}
           books={books}
           pending={m.isPending}
+          settings={settings}
           selectBook={id => setBook(books.find(candidate => candidate.id === id) ?? book)}
+          applySettings={nextSettings => {
+            setSettings(nextSettings)
+            mutate({ nextBook: book, nextSettings })
+          }}
           refresh={() => {
             const nextBooks = analysisBooks()
             setBooks(nextBooks)
@@ -293,7 +343,7 @@ export default function PortfolioAnalysis() {
         />}
         {!book ? <EmptyState title="No active equity portfolio" hint="Add equities in Portfolio Manager, then return here. Analysis runs automatically from the active portfolio selection." keys={['Portfolio Manager']} kpis={['Sectors', 'Alpha', 'Beta', 'Drawdown', 'Monte Carlo']} preview="chart" previewLabel="Portfolio analysis" />
           : m.isPending ? <LoadingState label="Analyzing the active portfolio" />
-          : m.error ? <ErrorState message={(m.error as any)?.response?.data?.detail || (m.error as Error).message || 'Portfolio analysis failed.'} onRetry={() => mutate(book)} />
+          : m.error ? <ErrorState message={(m.error as any)?.response?.data?.detail || (m.error as Error).message || 'Portfolio analysis failed.'} onRetry={() => mutate({ nextBook: book, nextSettings: settings })} />
           : m.data ? <Results data={m.data} />
           : null}
       </div>
@@ -301,8 +351,27 @@ export default function PortfolioAnalysis() {
   )
 }
 
-function AnalysisHeader({ book, books, pending, selectBook, refresh }: { book: PMPortfolio; books: PMPortfolio[]; pending: boolean; selectBook: (id: string) => void; refresh: () => void }) {
-  return <div className="portfolio-analysis-header" style={{ display: 'flex', alignItems: 'center', gap: 18, minHeight: 50, padding: '0 14px', border: `1px solid ${T.border}`, background: T.surface }}>
+function AnalysisHeader({ book, books, pending, settings, selectBook, applySettings, refresh }: { book: PMPortfolio; books: PMPortfolio[]; pending: boolean; settings: AnalysisSettings; selectBook: (id: string) => void; applySettings: (settings: AnalysisSettings) => void; refresh: () => void }) {
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [draft, setDraft] = useState(settings)
+  const set = <K extends keyof AnalysisSettings>(key: K, value: AnalysisSettings[K]) => setDraft(current => ({ ...current, [key]: value }))
+  const normalized: AnalysisSettings = {
+    horizonDays: Math.min(2520, Math.max(21, Number(draft.horizonDays) || HORIZON_DAYS)),
+    simulations: Math.min(1000, Math.max(100, Number(draft.simulations) || MONTE_CARLO_RUNS)),
+    leverage: Math.min(10, Math.max(1, Number(draft.leverage) || 1)),
+    borrowRate: Math.min(100, Math.max(0, Number(draft.borrowRate) || 0)),
+    longMaintenance: Math.min(200, Math.max(1, Number(draft.longMaintenance) || 25)),
+    shortMaintenance: Math.min(200, Math.max(1, Number(draft.shortMaintenance) || 30)),
+    dividendMode: draft.dividendMode,
+    model: draft.model,
+    tDegreesFreedom: Math.min(30, Math.max(2.1, Number(draft.tDegreesFreedom) || 5)),
+    bootstrapBlockDays: Math.min(63, Math.max(1, Math.round(Number(draft.bootstrapBlockDays) || 5))),
+  }
+  const dirty = JSON.stringify(normalized) !== JSON.stringify(settings)
+  const inputStyle: React.CSSProperties = { width: '100%', height: 29, border: `1px solid ${T.border}`, background: T.bg, color: T.text, padding: '0 8px', fontFamily: MONO, fontSize: 10, outline: 'none' }
+
+  return <div style={{ display: 'flex', flexDirection: 'column' }}>
+    <div className="portfolio-analysis-header" style={{ display: 'flex', alignItems: 'center', gap: 18, minHeight: 50, padding: '0 14px', border: `1px solid ${T.border}`, background: T.surface }}>
     <label style={{ minWidth: 210, display: 'flex', flexDirection: 'column', gap: 3 }}>
       <span style={{ fontFamily: SANS, fontSize: 8, fontWeight: 800, color: T.muted, letterSpacing: '.12em', textTransform: 'uppercase' }}>Portfolio</span>
       <select aria-label="Portfolio" value={book.id} onChange={event => selectBook(event.target.value)} style={{ minWidth: 210, height: 27, padding: '0 28px 0 8px', border: `1px solid ${T.border}`, background: T.bg, color: T.text, fontFamily: MONO, fontSize: 10.5, outline: 'none', cursor: 'pointer' }}>
@@ -310,9 +379,31 @@ function AnalysisHeader({ book, books, pending, selectBook, refresh }: { book: P
       </select>
     </label>
     <div style={{ minWidth: 0, fontFamily: MONO, fontSize: 9.5, color: T.muted, whiteSpace: 'nowrap' }}>{book.holdings.length} equities · {book.optionsCount} options</div>
-    <div style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 9.5, color: T.muted, whiteSpace: 'nowrap' }}>{BENCHMARK} benchmark · 5Y history · 3Y outlook · 500 paths</div>
+    <div style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 9.5, color: T.muted, whiteSpace: 'nowrap' }}>{BENCHMARK} · 5Y history · {(settings.horizonDays / 252).toFixed(1)}Y · {settings.simulations} {modelLabel(settings.model)}</div>
+    <button type="button" onClick={() => setAdvancedOpen(open => !open)} aria-expanded={advancedOpen} style={{ height: 32, display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px', border: `1px solid ${advancedOpen ? T.gold : T.border}`, background: 'transparent', color: advancedOpen ? T.gold : T.muted, fontFamily: SANS, fontSize: 9, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>Monte Carlo advanced {advancedOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}</button>
     <button onClick={refresh} disabled={pending} aria-label="Refresh portfolio analysis" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', border: `1px solid ${T.border}`, background: 'transparent', color: pending ? T.muted : T.gold, cursor: pending ? 'wait' : 'pointer' }}><RefreshCw size={13} /></button>
+    </div>
+    {advancedOpen && <div className="portfolio-analysis-advanced" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(100px, 1fr))', gap: 10, padding: '12px 14px', border: `1px solid ${T.border}`, borderTop: 0, background: T.surface }}>
+      <AnalysisParameter label="Simulation model"><select value={draft.model} onChange={event => set('model', event.target.value as MonteCarloModel)} style={{ ...inputStyle, cursor: 'pointer' }}><option value="gbm">Normal GBM</option><option value="student_t">Fat tails · Student-t</option><option value="bootstrap">Historical bootstrap</option></select></AnalysisParameter>
+      {draft.model === 'student_t' && <AnalysisParameter label="Tail degrees of freedom"><input type="number" min={2.1} max={30} step={0.5} value={draft.tDegreesFreedom} onChange={event => set('tDegreesFreedom', Number(event.target.value))} style={inputStyle} /></AnalysisParameter>}
+      {draft.model === 'bootstrap' && <AnalysisParameter label="Bootstrap block days"><input type="number" min={1} max={63} step={1} value={draft.bootstrapBlockDays} onChange={event => set('bootstrapBlockDays', Number(event.target.value))} style={inputStyle} /></AnalysisParameter>}
+      <AnalysisParameter label="Horizon (days)"><input type="number" min={21} max={2520} step={21} value={draft.horizonDays} onChange={event => set('horizonDays', Number(event.target.value))} style={inputStyle} /></AnalysisParameter>
+      <AnalysisParameter label="Simulation paths"><input type="number" min={100} max={1000} step={100} value={draft.simulations} onChange={event => set('simulations', Number(event.target.value))} style={inputStyle} /></AnalysisParameter>
+      <AnalysisParameter label="Leverage"><input type="number" min={1} max={10} step={0.1} value={draft.leverage} onChange={event => set('leverage', Number(event.target.value))} style={inputStyle} /></AnalysisParameter>
+      <AnalysisParameter label="Borrow rate %"><input type="number" min={0} max={100} step={0.25} value={draft.borrowRate} onChange={event => set('borrowRate', Number(event.target.value))} style={inputStyle} /></AnalysisParameter>
+      <AnalysisParameter label="Long maintenance %"><input type="number" min={1} max={200} step={1} value={draft.longMaintenance} onChange={event => set('longMaintenance', Number(event.target.value))} style={inputStyle} /></AnalysisParameter>
+      <AnalysisParameter label="Short maintenance %"><input type="number" min={1} max={200} step={1} value={draft.shortMaintenance} onChange={event => set('shortMaintenance', Number(event.target.value))} style={inputStyle} /></AnalysisParameter>
+      <AnalysisParameter label="Dividends"><select value={draft.dividendMode} onChange={event => set('dividendMode', event.target.value as DividendMode)} style={{ ...inputStyle, cursor: 'pointer' }}><option value="reinvest">Reinvest</option><option value="cash">Pay to cash</option><option value="exclude">Exclude</option></select></AnalysisParameter>
+      <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 12, paddingTop: 2 }}>
+        <div style={{ color: T.muted, fontFamily: SANS, fontSize: 9.5, lineHeight: 1.45 }}>{draft.model === 'student_t' ? 'Student-t paths preserve modeled drift and volatility while increasing extreme moves; lower degrees of freedom produce heavier tails.' : draft.model === 'bootstrap' ? 'Historical bootstrap resamples contiguous return blocks, retaining empirical skew, fat tails, and short-run clustering without assuming a normal distribution.' : 'Normal GBM uses independent Gaussian shocks calibrated to the portfolio’s historical drift and volatility.'} Maintenance tracks marked exposure against changing equity and breaches force deleveraging.</div>
+        <button type="button" onClick={() => { setDraft(normalized); applySettings(normalized) }} disabled={!dirty || pending} style={{ marginLeft: 'auto', height: 30, minWidth: 116, border: `1px solid ${dirty ? T.gold : T.border}`, background: dirty ? mix(T.gold, 12) : 'transparent', color: dirty ? T.gold : T.muted, fontFamily: SANS, fontSize: 9, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', cursor: dirty && !pending ? 'pointer' : 'default' }}>{pending ? 'Running…' : dirty ? 'Apply & rerun' : 'Applied'}</button>
+      </div>
+    </div>}
   </div>
+}
+
+function AnalysisParameter({ label, children }: { label: string; children: React.ReactNode }) {
+  return <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}><span style={{ color: T.muted, fontFamily: SANS, fontSize: 8, fontWeight: 800, letterSpacing: '.09em', textTransform: 'uppercase' }}>{label}</span>{children}</label>
 }
 
 function Results({ data }: { data: AnalysisResult }) {
@@ -321,7 +412,8 @@ function Results({ data }: { data: AnalysisResult }) {
   const p5Return = mc ? (mc.percentiles.p5 - 1) * 100 : null
   const p50Return = mc ? (mc.percentiles.p50 - 1) * 100 : null
   const p95Return = mc ? (mc.percentiles.p95 - 1) * 100 : null
-  const liquidatedPaths = mc ? Math.round(mc.pct_wiped / 100 * MONTE_CARLO_RUNS) : null
+  const liquidationOdds = mc?.pct_forced_liquidation ?? mc?.pct_wiped ?? null
+  const liquidatedPaths = liquidationOdds == null ? null : Math.round(liquidationOdds / 100 * data.simulationSettings.simulations)
   const health = b.metrics.port_sharpe >= 1 && b.metrics.max_drawdown > -25 && (macro?.concentration.effective_n ?? 0) >= 5 ? 'Balanced' : b.metrics.max_drawdown <= -35 || (macro?.concentration.effective_n ?? 99) < 3 ? 'High risk' : 'Watch'
   const healthColor = health === 'Balanced' ? T.pos : health === 'High risk' ? T.neg : T.warn
 
@@ -336,7 +428,8 @@ function Results({ data }: { data: AnalysisResult }) {
         { label: 'Monte Carlo 5th percentile', value: p5Return == null ? 'Unavailable' : `${p5Return}%` },
         { label: 'Monte Carlo median', value: p50Return == null ? 'Unavailable' : `${p50Return}%` },
         { label: 'Monte Carlo 95th percentile', value: p95Return == null ? 'Unavailable' : `${p95Return}%` },
-        { label: 'Monte Carlo liquidation odds', value: mc ? `${mc.pct_wiped}% (${liquidatedPaths}/${MONTE_CARLO_RUNS} paths)` : 'Unavailable' },
+        { label: 'Monte Carlo liquidation odds', value: liquidationOdds == null ? 'Unavailable' : `${liquidationOdds}% (${liquidatedPaths}/${data.simulationSettings.simulations} paths)` },
+        { label: 'Monte Carlo margin-call odds', value: mc ? `${mc.pct_margin_called}%` : 'Unavailable' },
         { label: 'Effective holdings', value: macro?.concentration.effective_n?.toFixed(1) ?? 'Unavailable' },
       ]),
       chartClip('Portfolio Analysis', `Cumulative wealth vs ${BENCHMARK}`, 'line', 'date', b.cumulative, [{ key: 'portfolio', label: data.bookName }, { key: 'benchmark', label: BENCHMARK }]),
@@ -369,7 +462,7 @@ function Results({ data }: { data: AnalysisResult }) {
       { label: '5th percentile', value: p5Return == null ? '—' : fmtPct(p5Return), sub: 'Severe downside terminal return', vc: T.neg },
       { label: 'Median outcome', value: p50Return == null ? '—' : fmtPct(p50Return), sub: '50th-percentile terminal return', vc: chg(p50Return) },
       { label: '95th percentile', value: p95Return == null ? '—' : fmtPct(p95Return), sub: 'Strong upside terminal return', vc: T.pos },
-      { label: 'Liquidation odds', value: mc ? `${mc.pct_wiped.toFixed(1)}%` : '—', sub: mc ? `${liquidatedPaths} of ${MONTE_CARLO_RUNS} paths reached $0` : 'Monte Carlo unavailable', vc: mc && mc.pct_wiped > 0 ? T.neg : T.pos },
+      { label: 'Liquidation odds', value: liquidationOdds == null ? '—' : `${liquidationOdds.toFixed(1)}%`, sub: mc ? `${liquidatedPaths} paths · ${mc.pct_margin_called.toFixed(1)}% calls · ${mc.median_max_margin_utilization.toFixed(1)}% peak margin` : 'Monte Carlo unavailable', vc: liquidationOdds != null && liquidationOdds > 0 ? T.neg : T.pos },
     ]} />
     {(data.warnings.length > 0 || data.failures.length > 0) && <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>{data.warnings.map(w => <Notice key={w} text={w} warn />)}{data.failures.map(f => <Notice key={f} text={`${f} was unavailable; the rest of the analysis is still valid.`} />)}</div>}
     <ConciseAnalysis data={data} />
@@ -391,10 +484,7 @@ function ConciseAnalysis({ data }: { data: AnalysisResult }) {
 
   const chartPoint = (state: any) => state?.activePayload?.[0]?.payload
   const capturePopoverAnchor = (event: React.PointerEvent<HTMLElement>) => {
-    const panel = (event.target as HTMLElement | null)?.closest<HTMLElement>('.ft-cockpit-panel')
-    if (!panel) return
-    const bounds = panel.getBoundingClientRect()
-    setPopoverAnchor({ x: event.clientX - bounds.left, y: event.clientY - bounds.top, panelWidth: bounds.width, panelHeight: bounds.height })
+    setPopoverAnchor({ clientX: event.clientX, clientY: event.clientY })
   }
 
   useEffect(() => {
@@ -425,7 +515,7 @@ function ConciseAnalysis({ data }: { data: AnalysisResult }) {
       {selection?.kind === 'drawdown' && <DetailInspector selection={selection} data={data} anchor={popoverAnchor} onClose={() => setSelection(null)} />}
     </Panel>
 
-    <Panel label="Monte Carlo range" meta="500 paths · select a horizon" style={{ gridColumn: '1 / -1', height: 350, overflow: 'hidden' }}>
+    <Panel label="Monte Carlo range" meta={`${modelLabel(data.simulationSettings.model)} · ${data.simulationSettings.simulations} paths · ${data.simulationSettings.leverage.toFixed(1)}x · select a horizon`} style={{ gridColumn: '1 / -1', height: 350, overflow: 'hidden' }}>
       {data.monteCarlo && bands.length ? <div className="portfolio-monte-layout" onPointerDownCapture={capturePopoverAnchor} style={{ height: '100%', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 150px', gap: 14 }}>
         <div className="portfolio-chart-hit" style={{ minWidth: 0, height: '100%' }}><ResponsiveContainer width="100%" height="100%"><ComposedChart data={bands} margin={{ top: 40, right: 5, bottom: 14, left: 0 }} onClick={(state: any) => { const point = chartPoint(state); if (point) setSelection({ kind: 'monte', point }) }}><CartesianGrid stroke={T.borderFaint} vertical={false} /><XAxis dataKey="day" tick={{ fill: T.muted, fontSize: 9 }} /><YAxis tick={{ fill: T.muted, fontSize: 9 }} width={44} /><Tooltip contentStyle={tipStyle} formatter={(value: number) => Number(value).toFixed(1)} /><ReferenceLine y={100} stroke={T.border} /><Area dataKey="p95" stroke="none" fill={mix(T.blue, 8)} /><Area dataKey="p75" stroke="none" fill={mix(T.blue, 14)} /><Area dataKey="p25" stroke="none" fill={T.surface} /><Area dataKey="p5" stroke="none" fill={mix(T.neg, 12)} /><Line dataKey="p50" name="Median" stroke={T.gold} strokeWidth={2} dot={false} activeDot={{ r: 4 }} /></ComposedChart></ResponsiveContainer></div>
         <div className="portfolio-monte-outcomes" style={{ padding: '30px 0 12px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', gap: 24, minHeight: 0 }}><Outcome label="Upside (95th)" value={terminal ? fmtPct((terminal.p95 - 1) * 100, 0) : '—'} color={T.pos} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /><Outcome label="Median" value={terminal ? fmtPct((terminal.p50 - 1) * 100, 0) : '—'} color={T.gold} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /><Outcome label="Downside (5th)" value={terminal ? fmtPct((terminal.p5 - 1) * 100, 0) : '—'} color={T.neg} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /><Outcome label="Tail loss" value={`-${data.monteCarlo.cvar_95.toFixed(1)}%`} color={T.neg} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /></div>
@@ -446,6 +536,8 @@ function Outcome({ label, value, color, onClick }: { label: string; value: strin
 }
 
 function DetailInspector({ selection, data, anchor, onClose }: { selection: DetailSelection; data: AnalysisResult; anchor: PopoverAnchor | null; onClose: () => void }) {
+  const popoverRef = useRef<HTMLDivElement>(null)
+  const [position, setPosition] = useState({ left: 12, top: 12, ready: false })
   let title = 'Selected detail'
   let context = ''
   let metrics: { label: string; value: string; color?: string }[] = []
@@ -499,7 +591,7 @@ function DetailInspector({ selection, data, anchor, onClose }: { selection: Deta
       { label: 'Median', value: `${selection.point.p50.toFixed(0)} (${fmtPct(selection.point.p50 - 100, 0)})`, color: T.gold },
       { label: '95th percentile', value: `${selection.point.p95.toFixed(0)} (${fmtPct(selection.point.p95 - 100, 0)})`, color: T.pos },
     ]
-    note = `Values show modeled wealth from a starting index of 100 across ${MONTE_CARLO_RUNS} correlated paths.`
+    note = `Values show modeled wealth from a starting index of 100 across ${data.simulationSettings.simulations} ${modelLabel(data.simulationSettings.model).toLowerCase()} paths at ${data.simulationSettings.leverage.toFixed(1)}x leverage.`
   } else {
     const position = data.positions.find(item => item.ticker === selection.ticker)
     title = selection.ticker
@@ -513,16 +605,42 @@ function DetailInspector({ selection, data, anchor, onClose }: { selection: Deta
     note = position ? `${position.decision}. ${position.rationale}.` : 'Position detail is unavailable.'
   }
 
-  const popupWidth = anchor ? Math.min(390, anchor.panelWidth - 24) : 390
-  const preferredLeft = anchor && anchor.x > anchor.panelWidth / 2 ? anchor.x - popupWidth - 12 : (anchor?.x ?? 0) + 12
-  const left = anchor ? Math.max(12, Math.min(preferredLeft, anchor.panelWidth - popupWidth - 12)) : undefined
-  const openAbove = Boolean(anchor && anchor.y > anchor.panelHeight / 2)
-  const top = Math.max(38, (anchor?.y ?? 26) + 12)
-  const verticalStyle: React.CSSProperties = openAbove && anchor
-    ? { top: 'auto', bottom: Math.max(12, anchor.panelHeight - anchor.y + 12), maxHeight: Math.max(96, anchor.y - 24) }
-    : { top, bottom: 'auto', maxHeight: anchor ? Math.max(96, anchor.panelHeight - top - 12) : undefined }
+  useLayoutEffect(() => {
+    const place = () => {
+      const popup = popoverRef.current
+      if (!popup) return
+      const margin = 12
+      const gap = 12
+      const bounds = popup.getBoundingClientRect()
+      const x = anchor?.clientX ?? window.innerWidth / 2
+      const y = anchor?.clientY ?? window.innerHeight / 2
+      const preferredLeft = x > window.innerWidth / 2 ? x - bounds.width - gap : x + gap
+      const preferredTop = y > window.innerHeight / 2 ? y - bounds.height - gap : y + gap
+      setPosition({
+        left: Math.max(margin, Math.min(preferredLeft, window.innerWidth - bounds.width - margin)),
+        top: Math.max(margin, Math.min(preferredTop, window.innerHeight - bounds.height - margin)),
+        ready: true,
+      })
+    }
+    place()
+    window.addEventListener('resize', place)
+    return () => window.removeEventListener('resize', place)
+  }, [anchor, selection])
 
-  return <div className="portfolio-chart-popover" role="dialog" aria-modal="false" aria-label={`${title} ${context}`} style={{ left, right: anchor ? 'auto' : undefined, ...verticalStyle }}>
+  useEffect(() => {
+    const dismissOutside = (event: PointerEvent) => {
+      if (!popoverRef.current?.contains(event.target as Node)) onClose()
+    }
+    const dismissOnScroll = () => onClose()
+    window.addEventListener('pointerdown', dismissOutside, true)
+    window.addEventListener('scroll', dismissOnScroll, true)
+    return () => {
+      window.removeEventListener('pointerdown', dismissOutside, true)
+      window.removeEventListener('scroll', dismissOnScroll, true)
+    }
+  }, [onClose])
+
+  const popup = <div ref={popoverRef} className="portfolio-chart-popover" role="dialog" aria-modal="false" aria-label={`${title} ${context}`} style={{ left: position.left, top: position.top, visibility: position.ready ? 'visible' : 'hidden' }}>
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14, paddingBottom: 10, borderBottom: `1px solid ${T.borderFaint}` }}>
       <div style={{ minWidth: 0 }}><div style={{ color: T.text, fontFamily: MONO, fontSize: 13, fontWeight: 800, overflowWrap: 'anywhere' }}>{title}</div><div style={{ color: T.muted, fontFamily: SANS, fontSize: 9, letterSpacing: '.08em', textTransform: 'uppercase', marginTop: 3 }}>{context}</div></div>
       <button type="button" onClick={onClose} aria-label="Close selected detail" className="portfolio-popover-close"><X size={13} /></button>
@@ -534,6 +652,8 @@ function DetailInspector({ selection, data, anchor, onClose }: { selection: Deta
     </div>}
     <div style={{ color: T.muted, fontFamily: SANS, fontSize: 9.5, lineHeight: 1.45, marginTop: 10 }}>{note}</div>
   </div>
+
+  return createPortal(popup, document.body)
 }
 
 function verdict(d: AnalysisResult, active: number) {
