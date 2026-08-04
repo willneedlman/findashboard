@@ -331,14 +331,18 @@ export default function PortfolioAnalysis() {
           pending={m.isPending}
           settings={settings}
           selectBook={id => setBook(books.find(candidate => candidate.id === id) ?? book)}
-          applySettings={nextSettings => {
-            setSettings(nextSettings)
-            mutate({ nextBook: book, nextSettings })
-          }}
           refresh={() => {
             const nextBooks = analysisBooks()
             setBooks(nextBooks)
             setBook(nextBooks.find(candidate => candidate.id === book.id) ?? activeBook(nextBooks))
+          }}
+        />}
+        {book && <AnalysisSettingsDisclosure
+          pending={m.isPending}
+          settings={settings}
+          applySettings={nextSettings => {
+            setSettings(nextSettings)
+            mutate({ nextBook: book, nextSettings })
           }}
         />}
         {!book ? <EmptyState title="No active equity portfolio" hint="Add equities in Portfolio Manager, then return here. Analysis runs automatically from the active portfolio selection." keys={['Portfolio Manager']} kpis={['Sectors', 'Alpha', 'Beta', 'Drawdown', 'Monte Carlo']} preview="chart" previewLabel="Portfolio analysis" />
@@ -351,9 +355,24 @@ export default function PortfolioAnalysis() {
   )
 }
 
-function AnalysisHeader({ book, books, pending, settings, selectBook, applySettings, refresh }: { book: PMPortfolio; books: PMPortfolio[]; pending: boolean; settings: AnalysisSettings; selectBook: (id: string) => void; applySettings: (settings: AnalysisSettings) => void; refresh: () => void }) {
-  const [advancedOpen, setAdvancedOpen] = useState(false)
+function AnalysisHeader({ book, books, pending, settings, selectBook, refresh }: { book: PMPortfolio; books: PMPortfolio[]; pending: boolean; settings: AnalysisSettings; selectBook: (id: string) => void; refresh: () => void }) {
+  return <div className="portfolio-analysis-header" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12, minHeight: 50, padding: '8px 14px', border: `1px solid ${T.border}`, background: T.surface }}>
+    <label style={{ minWidth: 210, display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <span style={{ fontFamily: SANS, fontSize: 8, fontWeight: 800, color: T.muted, letterSpacing: '.12em', textTransform: 'uppercase' }}>Portfolio</span>
+      <select aria-label="Portfolio" value={book.id} onChange={event => selectBook(event.target.value)} style={{ minWidth: 210, height: 27, padding: '0 28px 0 8px', border: `1px solid ${T.border}`, background: T.bg, color: T.text, fontFamily: MONO, fontSize: 10.5, outline: 'none', cursor: 'pointer' }}>
+        {books.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
+      </select>
+    </label>
+    <div style={{ minWidth: 0, fontFamily: MONO, fontSize: 9.5, color: T.muted, whiteSpace: 'nowrap' }}>{book.holdings.length} equities · {book.optionsCount} options</div>
+    <div style={{ marginLeft: 'auto', minWidth: 0, fontFamily: MONO, fontSize: 9.5, color: T.muted, whiteSpace: 'nowrap' }}>{BENCHMARK} · 5Y history · {(settings.horizonDays / 252).toFixed(1)}Y · {settings.simulations} paths · {modelLabel(settings.model)}</div>
+    <button onClick={refresh} disabled={pending} aria-label="Refresh portfolio analysis" style={{ flex: '0 0 auto', width: 32, height: 32, display: 'grid', placeItems: 'center', border: `1px solid ${T.border}`, background: 'transparent', color: pending ? T.muted : T.gold, cursor: pending ? 'wait' : 'pointer' }}><RefreshCw size={13} /></button>
+  </div>
+}
+
+function AnalysisSettingsDisclosure({ pending, settings, applySettings }: { pending: boolean; settings: AnalysisSettings; applySettings: (settings: AnalysisSettings) => void }) {
+  const [advancedOpen, setAdvancedOpen] = useState(true)
   const [draft, setDraft] = useState(settings)
+  useEffect(() => setDraft(settings), [settings])
   const set = <K extends keyof AnalysisSettings>(key: K, value: AnalysisSettings[K]) => setDraft(current => ({ ...current, [key]: value }))
   const normalized: AnalysisSettings = {
     horizonDays: Math.min(2520, Math.max(21, Number(draft.horizonDays) || HORIZON_DAYS)),
@@ -371,18 +390,11 @@ function AnalysisHeader({ book, books, pending, settings, selectBook, applySetti
   const inputStyle: React.CSSProperties = { width: '100%', height: 29, border: `1px solid ${T.border}`, background: T.bg, color: T.text, padding: '0 8px', fontFamily: MONO, fontSize: 10, outline: 'none' }
 
   return <div style={{ display: 'flex', flexDirection: 'column' }}>
-    <div className="portfolio-analysis-header" style={{ display: 'flex', alignItems: 'center', gap: 18, minHeight: 50, padding: '0 14px', border: `1px solid ${T.border}`, background: T.surface }}>
-    <label style={{ minWidth: 210, display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <span style={{ fontFamily: SANS, fontSize: 8, fontWeight: 800, color: T.muted, letterSpacing: '.12em', textTransform: 'uppercase' }}>Portfolio</span>
-      <select aria-label="Portfolio" value={book.id} onChange={event => selectBook(event.target.value)} style={{ minWidth: 210, height: 27, padding: '0 28px 0 8px', border: `1px solid ${T.border}`, background: T.bg, color: T.text, fontFamily: MONO, fontSize: 10.5, outline: 'none', cursor: 'pointer' }}>
-        {books.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
-      </select>
-    </label>
-    <div style={{ minWidth: 0, fontFamily: MONO, fontSize: 9.5, color: T.muted, whiteSpace: 'nowrap' }}>{book.holdings.length} equities · {book.optionsCount} options</div>
-    <div style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 9.5, color: T.muted, whiteSpace: 'nowrap' }}>{BENCHMARK} · 5Y history · {(settings.horizonDays / 252).toFixed(1)}Y · {settings.simulations} {modelLabel(settings.model)}</div>
-    <button type="button" onClick={() => setAdvancedOpen(open => !open)} aria-expanded={advancedOpen} style={{ height: 32, display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px', border: `1px solid ${advancedOpen ? T.gold : T.border}`, background: 'transparent', color: advancedOpen ? T.gold : T.muted, fontFamily: SANS, fontSize: 9, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>Monte Carlo advanced {advancedOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}</button>
-    <button onClick={refresh} disabled={pending} aria-label="Refresh portfolio analysis" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', border: `1px solid ${T.border}`, background: 'transparent', color: pending ? T.muted : T.gold, cursor: pending ? 'wait' : 'pointer' }}><RefreshCw size={13} /></button>
-    </div>
+    <button type="button" onClick={() => setAdvancedOpen(open => !open)} aria-expanded={advancedOpen} className="portfolio-analysis-settings-trigger" style={{ width: '100%', minHeight: 42, display: 'flex', alignItems: 'center', gap: 12, padding: '0 14px', border: `1px solid ${advancedOpen ? mix(T.gold, 65) : T.border}`, background: advancedOpen ? mix(T.gold, 7) : T.surface, color: T.text, cursor: 'pointer', textAlign: 'left' }}>
+      <span style={{ fontFamily: SANS, fontSize: 9, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: T.gold }}>Monte Carlo parameters</span>
+      <span style={{ minWidth: 0, fontFamily: MONO, fontSize: 9.5, color: T.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{modelLabel(settings.model)} · {settings.simulations} paths · {settings.horizonDays} days · {settings.leverage.toFixed(1)}x leverage</span>
+      <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, flex: '0 0 auto', fontFamily: SANS, fontSize: 9, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: advancedOpen ? T.gold : T.text }}>Advanced settings {advancedOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</span>
+    </button>
     {advancedOpen && <div className="portfolio-analysis-advanced" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(100px, 1fr))', gap: 10, padding: '12px 14px', border: `1px solid ${T.border}`, borderTop: 0, background: T.surface }}>
       <AnalysisParameter label="Simulation model"><select value={draft.model} onChange={event => set('model', event.target.value as MonteCarloModel)} style={{ ...inputStyle, cursor: 'pointer' }}><option value="gbm">Normal GBM</option><option value="student_t">Fat tails · Student-t</option><option value="bootstrap">Historical bootstrap</option></select></AnalysisParameter>
       {draft.model === 'student_t' && <AnalysisParameter label="Tail degrees of freedom"><input type="number" min={2.1} max={30} step={0.5} value={draft.tDegreesFreedom} onChange={event => set('tDegreesFreedom', Number(event.target.value))} style={inputStyle} /></AnalysisParameter>}
@@ -537,7 +549,7 @@ function Outcome({ label, value, color, onClick }: { label: string; value: strin
 
 function DetailInspector({ selection, data, anchor, onClose }: { selection: DetailSelection; data: AnalysisResult; anchor: PopoverAnchor | null; onClose: () => void }) {
   const popoverRef = useRef<HTMLDivElement>(null)
-  const [position, setPosition] = useState({ left: 12, top: 12, ready: false })
+  const [position, setPosition] = useState({ left: 12, top: 12, scale: 1, ready: false })
   let title = 'Selected detail'
   let context = ''
   let metrics: { label: string; value: string; color?: string }[] = []
@@ -611,14 +623,19 @@ function DetailInspector({ selection, data, anchor, onClose }: { selection: Deta
       if (!popup) return
       const margin = 12
       const gap = 12
-      const bounds = popup.getBoundingClientRect()
+      const naturalWidth = popup.offsetWidth
+      const naturalHeight = popup.offsetHeight
+      const scale = Math.min(1, (window.innerWidth - margin * 2) / naturalWidth, (window.innerHeight - margin * 2) / naturalHeight)
+      const fittedWidth = naturalWidth * scale
+      const fittedHeight = naturalHeight * scale
       const x = anchor?.clientX ?? window.innerWidth / 2
       const y = anchor?.clientY ?? window.innerHeight / 2
-      const preferredLeft = x > window.innerWidth / 2 ? x - bounds.width - gap : x + gap
-      const preferredTop = y > window.innerHeight / 2 ? y - bounds.height - gap : y + gap
+      const preferredLeft = x > window.innerWidth / 2 ? x - fittedWidth - gap : x + gap
+      const preferredTop = y > window.innerHeight / 2 ? y - fittedHeight - gap : y + gap
       setPosition({
-        left: Math.max(margin, Math.min(preferredLeft, window.innerWidth - bounds.width - margin)),
-        top: Math.max(margin, Math.min(preferredTop, window.innerHeight - bounds.height - margin)),
+        left: Math.max(margin, Math.min(preferredLeft, window.innerWidth - fittedWidth - margin)),
+        top: Math.max(margin, Math.min(preferredTop, window.innerHeight - fittedHeight - margin)),
+        scale,
         ready: true,
       })
     }
@@ -640,7 +657,7 @@ function DetailInspector({ selection, data, anchor, onClose }: { selection: Deta
     }
   }, [onClose])
 
-  const popup = <div ref={popoverRef} className="portfolio-chart-popover" role="dialog" aria-modal="false" aria-label={`${title} ${context}`} style={{ left: position.left, top: position.top, visibility: position.ready ? 'visible' : 'hidden' }}>
+  const popup = <div ref={popoverRef} className={`portfolio-chart-popover${selection.kind === 'sector' ? ' portfolio-chart-popover--sector' : ''}`} role="dialog" aria-modal="false" aria-label={`${title} ${context}`} style={{ left: position.left, top: position.top, transform: `scale(${position.scale})`, visibility: position.ready ? 'visible' : 'hidden' }}>
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14, paddingBottom: 10, borderBottom: `1px solid ${T.borderFaint}` }}>
       <div style={{ minWidth: 0 }}><div style={{ color: T.text, fontFamily: MONO, fontSize: 13, fontWeight: 800, overflowWrap: 'anywhere' }}>{title}</div><div style={{ color: T.muted, fontFamily: SANS, fontSize: 9, letterSpacing: '.08em', textTransform: 'uppercase', marginTop: 3 }}>{context}</div></div>
       <button type="button" onClick={onClose} aria-label="Close selected detail" className="portfolio-popover-close"><X size={13} /></button>

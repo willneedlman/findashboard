@@ -367,6 +367,17 @@
     white-space: normal !important;
   }
 
+  .portfolio-analysis-settings-trigger {
+    flex-wrap: wrap;
+    padding: 9px 10px !important;
+  }
+
+  .portfolio-analysis-settings-trigger > :nth-child(2) {
+    order: 3;
+    width: 100%;
+    white-space: normal !important;
+  }
+
   .portfolio-downtrend-grid {
     grid-template-columns: 1fr !important;
   }
@@ -475,11 +486,20 @@
   width: min(390px, calc(100vw - 24px));
   max-height: none;
   overflow: visible;
+  transform-origin: top left;
   padding: 12px;
   background: color-mix(in srgb, var(--theme-surface, #0d1826) 97%, #000);
   border: 1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 42%, transparent);
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.58);
   animation: portfolio-popover-in 150ms ease-out;
+}
+
+.portfolio-chart-popover--sector {
+  width: min(760px, calc(100vw - 24px));
+}
+
+.portfolio-chart-popover--sector .portfolio-detail-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
 }
 
 .portfolio-popover-close {
@@ -505,8 +525,14 @@
 }
 
 @keyframes portfolio-popover-in {
-  from { opacity: 0; transform: translateY(5px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 560px) {
+  .portfolio-chart-popover--sector .portfolio-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
