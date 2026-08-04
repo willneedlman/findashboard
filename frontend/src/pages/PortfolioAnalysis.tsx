@@ -14,6 +14,7 @@ import { T } from '../lib/theme'
 import { MONO, SANS, Panel, KpiStrip, chg, mix, seg } from './cockpitKit'
 import {
   cashValue, normalizeTicker, PORTFOLIO_CONTEXT_EVENT, readActivePortfolioContext,
+  readPMBooks,
   type PMOptionPosition, type PMPortfolio,
 } from '../lib/pmImport'
 import { useReportCapture } from '../hooks/useReportCapture'
@@ -246,27 +247,27 @@ async function runAnalysis(book: PMPortfolio, benchmark: string, lookbackYears: 
   return { bookName: book.name, generatedAt: new Date().toISOString(), holdings, cashWeight, coverageWeight: coreWeight, backtest, monteCarlo, macro, style, optimizer, sectors, positions, options, warnings, failures }
 }
 
-function activeBook(): PMPortfolio | null {
+function analysisBooks() {
+  return readPMBooks().filter(candidate => candidate.holdings.length > 0)
+}
+
+function activeBook(books = analysisBooks()): PMPortfolio | null {
   const active = readActivePortfolioContext()
-  if (!active.holdings.length) return null
-  return {
-    id: active.id,
-    name: active.name,
-    holdings: active.holdings,
-    cash: active.cashValue > 0 ? [{ id: 'analysis-cash', label: 'Cash', amount: active.cashValue, rate: 0, since: endDate() }] : [],
-    optionsCount: active.optionsCount,
-    futuresCount: active.futuresCount,
-    optionPositions: active.optionPositions,
-  }
+  return books.find(candidate => candidate.id === active.id) ?? books[0] ?? null
 }
 
 export default function PortfolioAnalysis() {
+  const [books, setBooks] = useState<PMPortfolio[]>(() => analysisBooks())
   const [book, setBook] = useState<PMPortfolio | null>(() => activeBook())
   const m = useMutation({ mutationFn: (nextBook: PMPortfolio) => runAnalysis(nextBook, BENCHMARK, LOOKBACK_YEARS, HORIZON_DAYS, MONTE_CARLO_RUNS) })
   const { mutate } = m
 
   useEffect(() => {
-    const sync = () => setBook(activeBook())
+    const sync = () => {
+      const nextBooks = analysisBooks()
+      setBooks(nextBooks)
+      setBook(current => nextBooks.find(candidate => candidate.id === current?.id) ?? activeBook(nextBooks))
+    }
     window.addEventListener(PORTFOLIO_CONTEXT_EVENT, sync)
     return () => window.removeEventListener(PORTFOLIO_CONTEXT_EVENT, sync)
   }, [])
@@ -278,7 +279,17 @@ export default function PortfolioAnalysis() {
   return (
     <PageWrapper title="Portfolio Analysis">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {book && <AnalysisHeader book={book} pending={m.isPending} refresh={() => setBook(activeBook())} />}
+        {book && <AnalysisHeader
+          book={book}
+          books={books}
+          pending={m.isPending}
+          selectBook={id => setBook(books.find(candidate => candidate.id === id) ?? book)}
+          refresh={() => {
+            const nextBooks = analysisBooks()
+            setBooks(nextBooks)
+            setBook(nextBooks.find(candidate => candidate.id === book.id) ?? activeBook(nextBooks))
+          }}
+        />}
         {!book ? <EmptyState title="No active equity portfolio" hint="Add equities in Portfolio Manager, then return here. Analysis runs automatically from the active portfolio selection." keys={['Portfolio Manager']} kpis={['Sectors', 'Alpha', 'Beta', 'Drawdown', 'Monte Carlo']} preview="chart" previewLabel="Portfolio analysis" />
           : m.isPending ? <LoadingState label="Analyzing the active portfolio" />
           : m.error ? <ErrorState message={(m.error as any)?.response?.data?.detail || (m.error as Error).message || 'Portfolio analysis failed.'} onRetry={() => mutate(book)} />
@@ -289,9 +300,15 @@ export default function PortfolioAnalysis() {
   )
 }
 
-function AnalysisHeader({ book, pending, refresh }: { book: PMPortfolio; pending: boolean; refresh: () => void }) {
+function AnalysisHeader({ book, books, pending, selectBook, refresh }: { book: PMPortfolio; books: PMPortfolio[]; pending: boolean; selectBook: (id: string) => void; refresh: () => void }) {
   return <div className="portfolio-analysis-header" style={{ display: 'flex', alignItems: 'center', gap: 18, minHeight: 50, padding: '0 14px', border: `1px solid ${T.border}`, background: T.surface }}>
-    <div style={{ minWidth: 0 }}><div style={{ fontFamily: SANS, fontSize: 13, fontWeight: 750, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{book.name}</div><div style={{ fontFamily: MONO, fontSize: 9.5, color: T.muted, marginTop: 3 }}>{book.holdings.length} equities · {book.optionsCount} options</div></div>
+    <label style={{ minWidth: 210, display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <span style={{ fontFamily: SANS, fontSize: 8, fontWeight: 800, color: T.muted, letterSpacing: '.12em', textTransform: 'uppercase' }}>Portfolio</span>
+      <select aria-label="Portfolio" value={book.id} onChange={event => selectBook(event.target.value)} style={{ minWidth: 210, height: 27, padding: '0 28px 0 8px', border: `1px solid ${T.border}`, background: T.bg, color: T.text, fontFamily: MONO, fontSize: 10.5, outline: 'none', cursor: 'pointer' }}>
+        {books.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
+      </select>
+    </label>
+    <div style={{ minWidth: 0, fontFamily: MONO, fontSize: 9.5, color: T.muted, whiteSpace: 'nowrap' }}>{book.holdings.length} equities · {book.optionsCount} options</div>
     <div style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 9.5, color: T.muted, whiteSpace: 'nowrap' }}>{BENCHMARK} benchmark · 5Y history · 3Y outlook · 500 paths</div>
     <button onClick={refresh} disabled={pending} aria-label="Refresh portfolio analysis" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', border: `1px solid ${T.border}`, background: 'transparent', color: pending ? T.muted : T.gold, cursor: pending ? 'wait' : 'pointer' }}><RefreshCw size={13} /></button>
   </div>
@@ -337,15 +354,15 @@ function Results({ data }: { data: AnalysisResult }) {
         <div style={{ borderLeft: `1px solid ${T.border}`, paddingLeft: 18 }}><div style={{ fontFamily: SANS, fontSize: 9, color: T.muted, letterSpacing: '.12em', textTransform: 'uppercase' }}>First decision</div><div style={{ fontFamily: MONO, fontSize: 12, color: data.positions[0]?.tone ?? T.text, marginTop: 7 }}>{data.positions[0]?.ticker ?? '—'} · {data.positions[0]?.decision ?? 'No position signal'}</div><div style={{ fontFamily: SANS, fontSize: 11, color: T.muted, marginTop: 5 }}>{data.positions[0]?.rationale}</div></div>
       </div>
     </Panel>
-    <KpiStrip cells={[
+    <KpiStrip cellHeight={86} cells={[
       { label: 'Alpha', value: macro ? fmtPct(macro.alpha_ann_pct) : '—', sub: 'Factor adjusted', vc: chg(macro?.alpha_ann_pct) },
       { label: 'Beta', value: b.metrics.beta.toFixed(2), sub: `vs ${BENCHMARK}`, vc: b.metrics.beta > 1.2 ? T.warn : T.text },
       { label: 'Portfolio CAGR', value: fmtPct(b.metrics.port_cagr), sub: `${fmtPct(activeReturn)} active`, vc: chg(activeReturn) },
       { label: 'Max drawdown', value: `${b.metrics.max_drawdown.toFixed(1)}%`, vc: T.neg, sub: `Calmar ${b.metrics.calmar.toFixed(2)}` },
       { label: 'Sharpe', value: b.metrics.port_sharpe.toFixed(2), sub: `Sortino ${b.metrics.sortino.toFixed(2)}`, vc: b.metrics.port_sharpe >= 1 ? T.pos : T.warn },
-      { label: '95% CVaR', value: mc ? `-${mc.cvar_95.toFixed(1)}%` : '—', sub: '500-path Monte Carlo', vc: T.neg },
+      { label: 'Volatility', value: `${b.metrics.port_vol.toFixed(1)}%`, sub: 'Annualized', vc: b.metrics.port_vol >= 30 ? T.warn : T.text },
     ]} />
-    <KpiStrip cells={[
+    <KpiStrip cellHeight={86} cells={[
       { label: 'VaR 95%', value: mc ? `${mc.var_95.toFixed(1)}%` : '—', sub: 'Loss not exceeded in 95% of paths', vc: T.neg },
       { label: 'CVaR 95%', value: mc ? `${mc.cvar_95.toFixed(1)}%` : '—', sub: 'Average loss in worst 5%', vc: T.neg },
       { label: '5th percentile', value: p5Return == null ? '—' : fmtPct(p5Return), sub: 'Severe downside terminal return', vc: T.neg },
@@ -392,7 +409,7 @@ function ConciseAnalysis({ data }: { data: AnalysisResult }) {
     <Panel label="Monte Carlo range" meta="500 paths · select a horizon" style={{ gridColumn: '1 / -1', height: 350, overflow: 'hidden' }}>
       {data.monteCarlo && bands.length ? <div className="portfolio-monte-layout" style={{ height: '100%', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 150px', gap: 14 }}>
         <div className="portfolio-chart-hit" style={{ minWidth: 0, height: '100%' }}><ResponsiveContainer width="100%" height="100%"><ComposedChart data={bands} margin={{ top: 40, right: 5, bottom: 14, left: 0 }} onClick={(state: any) => { const point = chartPoint(state); if (point) setSelection({ kind: 'monte', point }) }}><CartesianGrid stroke={T.borderFaint} vertical={false} /><XAxis dataKey="day" tick={{ fill: T.muted, fontSize: 9 }} /><YAxis tick={{ fill: T.muted, fontSize: 9 }} width={44} /><Tooltip contentStyle={tipStyle} formatter={(value: number) => Number(value).toFixed(1)} /><ReferenceLine y={100} stroke={T.border} /><Area dataKey="p95" stroke="none" fill={mix(T.blue, 8)} /><Area dataKey="p75" stroke="none" fill={mix(T.blue, 14)} /><Area dataKey="p25" stroke="none" fill={T.surface} /><Area dataKey="p5" stroke="none" fill={mix(T.neg, 12)} /><Line dataKey="p50" name="Median" stroke={T.gold} strokeWidth={2} dot={false} activeDot={{ r: 4 }} /></ComposedChart></ResponsiveContainer></div>
-        <div className="portfolio-monte-outcomes" style={{ padding: '38px 0 12px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 0 }}><Outcome label="Upside (95th)" value={terminal ? fmtPct((terminal.p95 - 1) * 100, 0) : '—'} color={T.pos} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /><Outcome label="Median" value={terminal ? fmtPct((terminal.p50 - 1) * 100, 0) : '—'} color={T.gold} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /><Outcome label="Downside (5th)" value={terminal ? fmtPct((terminal.p5 - 1) * 100, 0) : '—'} color={T.neg} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /><Outcome label="Tail loss" value={`-${data.monteCarlo.cvar_95.toFixed(1)}%`} color={T.neg} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /></div>
+        <div className="portfolio-monte-outcomes" style={{ padding: '30px 0 12px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', gap: 24, minHeight: 0 }}><Outcome label="Upside (95th)" value={terminal ? fmtPct((terminal.p95 - 1) * 100, 0) : '—'} color={T.pos} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /><Outcome label="Median" value={terminal ? fmtPct((terminal.p50 - 1) * 100, 0) : '—'} color={T.gold} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /><Outcome label="Downside (5th)" value={terminal ? fmtPct((terminal.p5 - 1) * 100, 0) : '—'} color={T.neg} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /><Outcome label="Tail loss" value={`-${data.monteCarlo.cvar_95.toFixed(1)}%`} color={T.neg} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /></div>
       </div> : <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: T.muted, fontFamily: SANS, fontSize: 11 }}>Monte Carlo unavailable</div>}
     </Panel>
 

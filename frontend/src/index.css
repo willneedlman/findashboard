@@ -239,6 +239,10 @@
     box-shadow: 0 1px 3px rgba(0,0,0,0.15);
   }
 
+  .ft-metric-tile {
+    background: var(--theme-surface, #0d1826);
+  }
+
   /* ── Shared form elements ─────────────────────────────────────────────── */
   .ft-input {
     background: var(--theme-bg, #101c2e);

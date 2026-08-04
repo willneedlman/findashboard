@@ -84,6 +84,10 @@ Some banners/callouts use a colored `border-left` accent stripe, an established
 in-app convention for status banners (pre-profit warning, terminal-dominated
 warning). Charts are `recharts`, themed to the palette, with value-bearing tooltips.
 
+KPI and metric tiles use the recessed `--theme-surface` fill with hairline separators,
+matching the portfolio downside detail row. Never use `--theme-hover` as a persistent
+tile fill. That token is reserved for transient hover and selected-row feedback.
+
 ## Dashboard widgets
 
 The custom dashboard (`pages/CustomDashboard.tsx`) composes draggable widgets via

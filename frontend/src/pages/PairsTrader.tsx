@@ -11,7 +11,7 @@ import HelpTip from '../components/HelpTip'
 import { INPUT, LABEL, SIDEBAR, TICK, TOOLTIP_STYLE } from './valuationShared'
 import { fetchPairsAnalysis } from '../hooks/useApi'
 import { T } from '../lib/theme'
-import { MONO, SANS, mix, chg, signed, Panel, seg } from './cockpitKit'
+import { MONO, SANS, mix, chg, signed, Panel, seg, KpiStrip } from './cockpitKit'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip, chartClip, textClip } from '../lib/reportCaptureRegistry'
@@ -245,19 +245,7 @@ function Cockpit({ d }: { d: Resp }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {/* KPI strip */}
-      <div style={{ display: 'flex', alignItems: 'stretch', background: T.hover, border: `1px solid ${T.border}` }}>
-        {kpis.map((k, i) => (
-          <div key={k.label} style={{ flex: 1, padding: '10px 14px', borderLeft: i ? `1px solid ${T.borderFaint}` : 'none' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, whiteSpace: 'nowrap' }}>{k.label}</span>
-              {k.tip && <HelpTip title={k.tip.title} body={k.tip.body} source={k.tip.source} />}
-            </div>
-            <div style={{ fontFamily: MONO, fontSize: 17, fontWeight: 700, color: k.vc, marginTop: 5 }}>{k.value}</div>
-            <div style={{ fontFamily: MONO, fontSize: 9, color: T.muted, marginTop: 2 }}>{k.sub}</div>
-          </div>
-        ))}
-      </div>
+      <KpiStrip cells={kpis} />
 
       {/* Z-score chart */}
       <Panel label="Spread Z-Score · Trades Marked" meta={`${z.window}-day z window · ${d.observations} closes · ${HEDGE_LABEL[hm] ?? hm} hedge β ${d.hedge_ratio.toFixed(2)}`} style={{ padding: '30px 12px 8px' }}>

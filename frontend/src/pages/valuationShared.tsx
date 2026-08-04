@@ -162,7 +162,7 @@ export function MetricCard({ label, value, sub, help, color }:
   { label: string; value: string; sub?: string; help?: string; color?: string }) {
   const [show, setShow] = useState(false)
   return (
-    <div style={{ background: 'var(--theme-surface, #142032)', border: '1px solid var(--theme-border, rgba(255,255,255,0.07))', borderTop: `3px solid ${color ?? 'var(--theme-primary, #c9a84c)'}`, padding: 10, position: 'relative' }}>
+    <div className="ft-metric-tile" style={{ background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.07))', borderTop: `3px solid ${color ?? 'var(--theme-primary, #c9a84c)'}`, padding: 10, position: 'relative' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
         <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }}>{label}</span>
         {help && <span style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', cursor: 'help' }} onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>ⓘ</span>}
@@ -374,7 +374,7 @@ export function VerdictStrip({ primary, range, cells }:
     <div style={{
       display: 'flex', alignItems: 'stretch', flexWrap: 'wrap',
       borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
-      background: 'var(--theme-hover, rgba(0,0,0,0.12))',
+      background: 'var(--theme-surface, #0d1826)',
     }}>
       <div style={{ padding: '11px 22px', borderRight: '1px solid var(--theme-border-faint, rgba(255,255,255,0.06))', minWidth: 230 }}>
         <div style={{ ...EYEBROW, marginBottom: 5 }}>{primary.label}</div>

@@ -185,9 +185,9 @@ export function KpiCell({ label, value, color, valueSize = 13, grow = false, min
   // align="top" gives every cell the same label/value baseline regardless of
   // whether it has a sub line (so a mixed strip stays aligned).
   return (
-    <div style={{
+    <div className="ft-metric-tile" style={{
       display: 'flex', flexDirection: 'column', justifyContent: align === 'top' ? 'flex-start' : 'center', gap: 3,
-      padding: align === 'top' ? '11px 14px' : '6px 13px', borderRight: `1px solid ${V.border}`,
+      padding: align === 'top' ? '11px 14px' : '6px 13px', borderRight: `1px solid ${V.border}`, background: V.surface,
       flex: grow ? 1 : '0 0 auto', minWidth: minWidth ?? 0,
     }}>
       {help ? (

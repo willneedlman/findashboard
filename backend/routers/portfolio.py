@@ -432,6 +432,55 @@ def backtest(req: BacktestRequest):
     }
 
 
+def _margin_equity_paths(
+    price_gross: np.ndarray,
+    leverage: float,
+    borrow_rate: float,
+    maintenance_margin: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    days, n_sims = price_gross.shape
+    equity = np.zeros_like(price_gross, dtype=float)
+    units = np.full(n_sims, leverage, dtype=float)
+    cash = np.full(n_sims, 1.0 - leverage, dtype=float)
+    margin_called = np.zeros(n_sims, dtype=bool)
+    forced_liquidation = np.zeros(n_sims, dtype=bool)
+    insolvent = np.zeros(n_sims, dtype=bool)
+    max_utilization = np.zeros(n_sims, dtype=float)
+    financing_daily = (1 + borrow_rate / 100.0) ** (1 / 252) - 1
+
+    for day in range(days):
+        if day > 0:
+            cash = np.where(cash < 0, cash * (1 + financing_daily), cash)
+        position = units * price_gross[day]
+        marked_equity = cash + position
+        newly_insolvent = (~insolvent) & ((marked_equity <= 0) | ~np.isfinite(marked_equity))
+        insolvent |= newly_insolvent
+        forced_liquidation |= newly_insolvent
+        units[newly_insolvent] = 0
+        cash[newly_insolvent] = 0
+        position[newly_insolvent] = 0
+        marked_equity[newly_insolvent] = 0
+
+        active = ~insolvent
+        requirement = np.where(active, np.abs(position) * maintenance_margin, 0.0)
+        utilization = np.divide(
+            requirement, marked_equity,
+            out=np.zeros_like(requirement), where=active & (marked_equity > 0),
+        )
+        max_utilization = np.maximum(max_utilization, utilization)
+        breached = active & (requirement > marked_equity)
+        if breached.any():
+            margin_called |= breached
+            forced_liquidation |= breached
+            target_position = marked_equity[breached] / maintenance_margin * 0.999
+            cash[breached] += position[breached] - target_position
+            units[breached] = target_position / np.maximum(price_gross[day, breached], 1e-12)
+            marked_equity[breached] = cash[breached] + target_position
+        equity[day] = np.where(insolvent, 0.0, marked_equity)
+
+    return equity, margin_called, forced_liquidation, insolvent, max_utilization
+
+
 class MonteCarloRequest(BaseModel):
     # min_length=0 so crsp_mode (which ignores tickers/weights — the S&P 500
     # point-in-time universe stands in for them) can send an empty list.
@@ -444,6 +493,8 @@ class MonteCarloRequest(BaseModel):
     # No upper cap — wiped-out simulation paths are floored at 0 (see monte_carlo).
     leverage: float = Field(default=1.0, ge=1.0)
     borrow_rate: float = Field(default=0.0, ge=0.0, le=100.0)
+    long_maintenance_margin: float = Field(default=0.25, ge=0.01, le=2.0)
+    short_maintenance_margin: float = Field(default=0.30, ge=0.01, le=2.0)
     dividend_mode: Literal["reinvest", "cash", "exclude"] = "reinvest"
     # Survivorship-bias-free mode: estimates the GBM drift/vol from the S&P 500's
     # actual point-in-time constituent history (WRDS CRSP) instead of a typed
@@ -498,7 +549,7 @@ def monte_carlo(req: MonteCarloRequest):
     log_ret = np.log1p(port_ret)
     mu = float(log_ret.mean()); sigma = float(log_ret.std())
     n_sims = min(req.n_sims, 1000); T = req.horizon_days
-    L = req.leverage; b_d = (1 + req.borrow_rate / 100.0) ** (1 / 252)
+    L = req.leverage
 
     rng = np.random.default_rng()
     shocks = (mu - 0.5 * sigma ** 2) + sigma * rng.standard_normal((T, n_sims))
@@ -519,9 +570,9 @@ def monte_carlo(req: MonteCarloRequest):
                 dividend_income[day] = dividend_income[day - 1] + payment
                 cash_balance[day] = cash_balance[day - 1] * (1 + cash_daily) + payment
             gross = price_gross + cash_balance if req.dividend_mode == "cash" else price_gross
-    tcol = np.arange(T + 1).reshape(-1, 1)
-    equity = L * gross - (L - 1) * (b_d ** tcol)
-    equity = np.where(np.cumsum(equity <= 0, axis=0) > 0, 0.0, equity)             # floor wiped-out paths
+    equity, margin_called, forced_liquidation, insolvent, max_margin_utilization = _margin_equity_paths(
+        gross, L, req.borrow_rate, req.long_maintenance_margin,
+    )
 
     final = equity[-1, :]
     p5 = float(np.percentile(final, 5))
@@ -553,10 +604,16 @@ def monte_carlo(req: MonteCarloRequest):
         "median_dividend_income_pct": round(float(np.median(dividend_income[-1])) * 100, 3) if not req.crsp_mode else None,
         "leverage": L,
         "borrow_rate": req.borrow_rate,
+        "long_maintenance_margin": req.long_maintenance_margin,
+        "short_maintenance_margin": req.short_maintenance_margin,
         "percentiles": percentiles,
         "var_95": var_95,
         "cvar_95": cvar_95,
         "pct_wiped": round(float((final <= 0).mean() * 100), 1),
+        "pct_margin_called": round(float(margin_called.mean() * 100), 1),
+        "pct_forced_liquidation": round(float(forced_liquidation.mean() * 100), 1),
+        "pct_insolvent": round(float(insolvent.mean() * 100), 1),
+        "median_max_margin_utilization": round(float(np.median(max_margin_utilization) * 100), 1),
         "percentile_paths": percentile_paths,
         "sample_paths": [[round(float(v), 3) for v in row] for row in sample],
         "histogram": sorted([round(float(v), 3) for v in final]),

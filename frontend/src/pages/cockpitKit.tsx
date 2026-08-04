@@ -29,11 +29,11 @@ export const seg = (on: boolean, disabled = false): React.CSSProperties => ({
 
 export interface KpiCellSpec { label: string; value: string; vc?: string; sub?: string; sc?: string; tip?: { title: string; body: string; source: string } }
 // KPI strip: flex row with ⓘ per cell.
-export function KpiStrip({ cells }: { cells: KpiCellSpec[] }) {
+export function KpiStrip({ cells, cellHeight }: { cells: KpiCellSpec[]; cellHeight?: number }) {
   return (
-    <div className="ft-kpi-strip" style={{ display: 'flex', alignItems: 'stretch', background: T.hover, border: `1px solid ${T.border}` }}>
+    <div className="ft-kpi-strip" style={{ display: 'flex', alignItems: 'stretch', background: T.surface, border: `1px solid ${T.border}` }}>
       {cells.map((k, i) => (
-        <div className="ft-kpi-cell" key={k.label} style={{ flex: 1, padding: '10px 14px', borderLeft: i ? `1px solid ${T.borderFaint}` : 'none' }}>
+        <div className="ft-kpi-cell ft-metric-tile" key={k.label} style={{ flex: 1, height: cellHeight, boxSizing: 'border-box', padding: '10px 14px', borderLeft: i ? `1px solid ${T.borderFaint}` : 'none' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <span style={{ fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, whiteSpace: 'nowrap' }}>{k.label}</span>
             {k.tip && <HelpTip title={k.tip.title} body={k.tip.body} source={k.tip.source} />}

@@ -61,3 +61,31 @@ def test_monte_carlo_reports_mode_yield_and_dividend_income(monkeypatch):
     assert terminal_path["day"] == 10
     for key in ("p5", "p25", "p50", "p75", "p95"):
         assert terminal_path[key] == out["percentiles"][key]
+    assert out["long_maintenance_margin"] == 0.25
+    assert "pct_margin_called" in out
+    assert "pct_forced_liquidation" in out
+
+
+def test_margin_ledger_forces_deleveraging_when_requirement_exceeds_equity():
+    gross = np.ones((3, 2))
+    equity, called, liquidated, insolvent, max_util = pf._margin_equity_paths(
+        gross, leverage=5.0, borrow_rate=0.0, maintenance_margin=0.25,
+    )
+
+    assert called.all()
+    assert liquidated.all()
+    assert not insolvent.any()
+    assert np.allclose(equity, 1.0)
+    assert np.allclose(max_util, 1.25)
+
+
+def test_margin_ledger_fully_liquidates_nonpositive_equity():
+    gross = np.array([[1.0], [0.5], [0.4]])
+    equity, called, liquidated, insolvent, _ = pf._margin_equity_paths(
+        gross, leverage=2.0, borrow_rate=0.0, maintenance_margin=0.25,
+    )
+
+    assert not called[0]
+    assert liquidated[0]
+    assert insolvent[0]
+    assert equity[-1, 0] == 0

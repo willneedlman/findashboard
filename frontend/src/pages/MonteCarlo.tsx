@@ -212,6 +212,7 @@ function pathPercentiles(paths: number[][], day: number) {
 type Leg = {
   ticker: string
   weight: number
+  side: 'long' | 'short'
   spot: number
   vol: number
   drift: number
@@ -228,7 +229,7 @@ type ExactAlgoReplay = {
 }
 
 const makeLeg = (ticker: string, weight: number): Leg => ({
-  ticker, weight, spot: 100, vol: 20, drift: 8,
+  ticker, weight, side: 'long', spot: 100, vol: 20, drift: 8,
   strategy: STRATEGIES[0], stratParams: {}, fetched: false, dividendYield: 0,
 })
 
@@ -1444,6 +1445,7 @@ export function MonteCarloContent() {
       const weight = 100 / algoHandoff.positions.length
       return algoHandoff.positions.map(position => ({
         ...makeLeg(position.ticker, weight),
+        side: position.side,
         strategy: CUSTOM_STRATEGY_KEY,
         stratParams: { _custom_def: JSON.stringify(algoHandoff.strategy) } as StrategyParams,
       }))
@@ -1473,6 +1475,9 @@ export function MonteCarloContent() {
   const [dividendMode, setDividendMode] = useState<DividendMode>('reinvest')
   const [leverage, setLeverage] = useState('1')
   const [borrowRate, setBorrowRate] = useState('0')
+  const [longMaintenance, setLongMaintenance] = useState('25')
+  const [shortMaintenance, setShortMaintenance] = useState('30')
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const [rebalance, setRebalance] = useState<RebalanceFreq>('none')
   const [crspMode, setCrspMode] = useState(false)
   // CRSP mode estimates drift/vol from an actual historical window (point-in-time
@@ -1592,6 +1597,8 @@ export function MonteCarloContent() {
             horizon_days: horizon,
             leverage: Math.max(1, Number(leverage) || 1),
             borrow_rate: Math.max(0, Number(borrowRate) || 0),
+            long_maintenance_margin: Math.min(200, Math.max(1, Number(longMaintenance) || 25)) / 100,
+            short_maintenance_margin: Math.min(200, Math.max(1, Number(shortMaintenance) || 30)) / 100,
             dividend_mode: dividendMode,
           }),
           axios.get(`/api/market/history?ticker=${benchmark}&start=2020-01-01`)
@@ -1633,6 +1640,10 @@ export function MonteCarloContent() {
           p95: terminal[Math.floor(terminal.length * 0.95)],
           probProfit: terminal.filter(v => v > 100).length / terminal.length * 100,
           probRuin: simulation.pct_wiped,
+          probMarginCall: simulation.pct_margin_called,
+          probLiquidation: simulation.pct_forced_liquidation,
+          medianMaxMarginUtilization: simulation.median_max_margin_utilization,
+          marginEnabled: Math.max(1, Number(leverage) || 1) > 1,
           varAmt: 100 - p5,
           cvarAmt: 100 - cvarSlice.reduce((sum, value) => sum + value, 0) / cvarSlice.length,
           effDrift: simulation.mu * 100,
@@ -1798,48 +1809,74 @@ export function MonteCarloContent() {
       const rebalStep = { none: 0, daily: 1, weekly: 5, monthly: 21, quarterly: 63, annually: 252 }[rebalance]
       const targetW = legs.map(l => l.weight / totalWeight)
       const cashDaily = Math.pow(1 + (parseFloat(cashYield) || 0) / 100, 1 / 252) - 1
+      const financeDaily = Math.pow(1 + Math.max(0, Number(borrowRate) || 0) / 100, 1 / 252) - 1
+      const requestedLeverage = Math.max(1, Number(leverage) || 1)
+      const longMaint = Math.min(2, Math.max(0.01, Number(longMaintenance) / 100 || 0.25))
+      const shortMaint = Math.min(2, Math.max(0.01, Number(shortMaintenance) / 100 || 0.30))
+      const signs = legs.map(l => l.side === 'short' ? -1 : 1)
+      const maintenanceRates = legs.map(l => l.ticker === CASH_SYMBOL ? 0 : (l.side === 'short' ? shortMaint : longMaint))
       const simulated = Array.from({ length: Math.min(nSims, 500) }, (_, simIdx) => {
-        const h = [...targetW]
-        const path = [1.0]
-        let dividendCash = 0
+        const h = targetW.map((weight, i) => signs[i] * weight * requestedLeverage)
+        let cash = 1 - h.reduce((sum, value) => sum + value, 0)
+        const path: number[] = []
         let dividendIncome = 0
+        let marginCalled = false
+        let forcedLiquidation = false
+        let insolvent = false
+        let maxMarginUtilization = 0
+
+        const markAndEnforceMargin = () => {
+          const equity = cash + h.reduce((sum, value) => sum + value, 0)
+          if (!Number.isFinite(equity) || equity <= 0) {
+            h.fill(0); cash = 0; insolvent = true; forcedLiquidation = true
+            return 0
+          }
+          const requirement = h.reduce((sum, value, i) => sum + Math.abs(value) * maintenanceRates[i], 0)
+          maxMarginUtilization = Math.max(maxMarginUtilization, requirement / equity)
+          if (requirement > equity) {
+            marginCalled = true
+            forcedLiquidation = true
+            const scale = Math.max(0, Math.min(1, (equity / requirement) * 0.999))
+            const before = h.reduce((sum, value) => sum + value, 0)
+            for (let i = 0; i < h.length; i++) h[i] *= scale
+            cash += before - h.reduce((sum, value) => sum + value, 0)
+          }
+          return cash + h.reduce((sum, value) => sum + value, 0)
+        }
+
+        path.push(markAndEnforceMargin())
         for (let day = 1; day <= horizon; day++) {
-          let payment = 0
+          if (insolvent) { path.push(0); continue }
+          cash *= 1 + (cash >= 0 ? cashDaily : financeDaily)
+          let signedPayment = 0
           for (let li = 0; li < legs.length; li++) {
             const prior = h[li]
             h[li] *= allPaths[li][simIdx][day] / (allPaths[li][simIdx][day - 1] || 1e-12)
-            const legPayment = prior * (dividendYields[li] / 100 / 252)
-            payment += legPayment
-            if (dividendMode === 'reinvest') h[li] += legPayment
+            if (legs[li].side === 'short') cash -= Math.abs(prior) * financeDaily
+            const legPayment = dividendMode === 'exclude' ? 0 : Math.abs(prior) * (dividendYields[li] / 100 / 252) * signs[li]
+            signedPayment += legPayment
+            if (dividendMode === 'reinvest' && signs[li] > 0) h[li] += legPayment
+            else cash += legPayment
           }
-          dividendIncome += payment
-          dividendCash *= 1 + cashDaily
-          if (dividendMode === 'cash') dividendCash += payment
-          const v = h.reduce((sum, value) => sum + value, 0) + dividendCash
-          path.push(v)
+          dividendIncome += signedPayment
           if (rebalStep && day % rebalStep === 0) {
-            const investable = Math.max(0, v - dividendCash)
-            for (let li = 0; li < legs.length; li++) h[li] = targetW[li] * investable
+            const equity = cash + h.reduce((sum, value) => sum + value, 0)
+            if (equity > 0) {
+              const before = h.reduce((sum, value) => sum + value, 0)
+              for (let li = 0; li < legs.length; li++) h[li] = signs[li] * targetW[li] * requestedLeverage * equity
+              cash += before - h.reduce((sum, value) => sum + value, 0)
+            }
           }
+          path.push(markAndEnforceMargin())
         }
-        return { path, dividendIncome }
+        return { path, dividendIncome, marginCalled, forcedLiquidation, insolvent, maxMarginUtilization }
       })
-      const rawPortfolioPaths = simulated.map(s => s.path)
       const medianDividendIncome = simulated.map(s => s.dividendIncome * 100).sort((a, b) => a - b)[Math.floor(simulated.length * 0.5)] ?? 0
-      // Apply borrow-to-magnify leverage to the gross portfolio paths (static debt, floored
-      // at 0 on wipeout), then risk controls, then scale to $100.
-      const L = Math.max(1, Number(leverage) || 1)
-      const bDaily = Math.pow(1 + (Math.max(0, Number(borrowRate) || 0)) / 100, 1 / 252)
-      const leveredPaths = L === 1 ? rawPortfolioPaths : rawPortfolioPaths.map(path => {
-        let wiped = false
-        return path.map((g, day) => {
-          if (wiped) return 0
-          const eq = L * g - (L - 1) * Math.pow(bDaily, day)
-          if (eq <= 0) { wiped = true; return 0 }
-          return eq
-        })
-      })
-      const portfolioPaths = applyRiskControls(leveredPaths).map(p => p.map(v => v * 100))
+      const probMarginCall = simulated.filter(s => s.marginCalled).length / simulated.length * 100
+      const probLiquidation = simulated.filter(s => s.forcedLiquidation).length / simulated.length * 100
+      const marginUtils = simulated.map(s => s.maxMarginUtilization * 100).sort((a, b) => a - b)
+      const medianMaxMarginUtilization = marginUtils[Math.floor(marginUtils.length * 0.5)] ?? 0
+      const portfolioPaths = applyRiskControls(simulated.map(s => s.path)).map(p => p.map(v => v * 100))
 
       const benchPaths = runGBM(100, benchDrift / 100, benchVol / 100, horizon, 100)
 
@@ -1857,7 +1894,7 @@ export function MonteCarloContent() {
       const p95     = terminal[Math.floor(terminal.length * 0.95)]
       const median  = terminal[Math.floor(terminal.length * 0.50)]
       const probProfit = terminal.filter(v => v > S0).length / terminal.length * 100
-      const probRuin   = terminal.filter(v => v <= 0).length / terminal.length * 100  // paths wiped to $0
+      const probRuin   = simulated.filter(s => s.insolvent).length / simulated.length * 100
       const varAmt  = S0 - p5
       const cvarSlice = terminal.slice(0, Math.floor(terminal.length * 0.05))
       const cvarAmt = S0 - cvarSlice.reduce((s, v) => s + v, 0) / (cvarSlice.length || 1)
@@ -1870,16 +1907,18 @@ export function MonteCarloContent() {
       })
 
       const effDrift = legs.reduce((s, l, i) =>
-        s + (l.weight / totalWeight) * (l.drift + legAdjs[i].stratAdj + (dividendMode === 'exclude' ? 0 : dividendYields[i])), 0)
+        s + signs[i] * (l.weight / totalWeight) * (l.drift + legAdjs[i].stratAdj + (dividendMode === 'exclude' ? 0 : dividendYields[i])), 0)
 
       const probTarget = targetPrice > 0
         ? terminal.filter(v => v >= targetPrice).length / terminal.length * 100
         : null
 
       return {
-        bands, histogram, S0, median, p5, p95, probProfit, probRuin, varAmt, cvarAmt, effDrift,
+        bands, histogram, S0, median, p5, p95, probProfit, probRuin, probMarginCall, probLiquidation,
+        medianMaxMarginUtilization, varAmt, cvarAmt, effDrift,
         probTarget, targetPrice, model,
         dividendMode, medianDividendIncome,
+        marginEnabled: requestedLeverage > 1 || signs.some(sign => sign < 0),
         bootstrapReady: model !== 'bootstrap' || legs.every((l, i) => l.ticker === CASH_SYMBOL || alignedIdx.includes(i)),
         benchmark, legs: legs.map((l, i) => ({ ...l, ...legAdjs[i], dividendYield: dividendYields[i] })),
         crsp_mode: false,
@@ -1899,6 +1938,9 @@ export function MonteCarloContent() {
         { label: 'CVaR 95%', value: `$${Number(data.cvarAmt).toFixed(2)}` },
         { label: 'Eff. Drift', value: `${Number(data.effDrift).toFixed(1)}%` },
         ...(data.medianDividendIncome != null ? [{ label: 'Median Dividends', value: `$${Number(data.medianDividendIncome).toFixed(2)}` }] : []),
+        ...(data.marginEnabled && data.probMarginCall != null ? [{ label: 'Margin Call Odds', value: `${Number(data.probMarginCall).toFixed(1)}%` }] : []),
+        ...(data.marginEnabled && data.probLiquidation != null ? [{ label: 'Forced Liquidation', value: `${Number(data.probLiquidation).toFixed(1)}%` }] : []),
+        ...(data.marginEnabled && data.medianMaxMarginUtilization != null ? [{ label: 'Median Peak Margin', value: `${Number(data.medianMaxMarginUtilization).toFixed(1)}%` }] : []),
         ...(data.probRuin > 0 ? [{ label: 'Prob of Ruin', value: `${Number(data.probRuin).toFixed(1)}%` }] : []),
       ]),
     ]
@@ -1906,9 +1948,9 @@ export function MonteCarloContent() {
       pieces.push(tableClip(
         'Monte Carlo',
         'Portfolio Legs',
-        ['Ticker', 'Weight %', 'Vol %', 'Price Drift %', 'Dividend Yield %'],
-        data.legs.slice(0, 20).map((l: { ticker: string; weight: number; vol?: number; drift?: number; dividendYield?: number }) => [
-          l.ticker, l.weight, l.vol ?? null, l.drift ?? null, l.dividendYield ?? null,
+        ['Ticker', 'Side', 'Weight %', 'Vol %', 'Price Drift %', 'Dividend Yield %'],
+        data.legs.slice(0, 20).map((l: { ticker: string; side?: string; weight: number; vol?: number; drift?: number; dividendYield?: number }) => [
+          l.ticker, l.side ?? 'long', l.weight, l.vol ?? null, l.drift ?? null, l.dividendYield ?? null,
         ]),
       ))
     }
@@ -1983,7 +2025,7 @@ export function MonteCarloContent() {
           // that leg from defaults and keep only its weight/strategy.
           const prev = legs[i]
           if (next.length === legs.length && prev && prev.ticker !== h.ticker) {
-            return { ...makeLeg(h.ticker, h.weight), strategy: h.strategy, stratParams: h.stratParams }
+            return { ...makeLeg(h.ticker, h.weight), side: h.side ?? 'long', strategy: h.strategy, stratParams: h.stratParams }
           }
           return { ...makeLeg(h.ticker, h.weight), ...h } as Leg
         }))}
@@ -2017,6 +2059,32 @@ export function MonteCarloContent() {
               </select>
             </Field>
             <RebalanceSelect value={rebalance} onChange={setRebalance} />
+            <div style={{ gridColumn: '1 / -1', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+              <button type="button" onClick={() => setAdvancedOpen(open => !open)} aria-expanded={advancedOpen}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '7px 9px', background: 'transparent', border: 0, cursor: 'pointer',
+                  color: advancedOpen ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)',
+                  fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700,
+                  letterSpacing: '0.12em', textTransform: 'uppercase',
+                }}>
+                Advanced Settings
+                {advancedOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              </button>
+              {advancedOpen && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, padding: '9px', borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+                  <Field label="Long Maintenance %">
+                    <NumberInput value={longMaintenance} onChange={setLongMaintenance} step={1} min={1} max={200} />
+                  </Field>
+                  <Field label="Short Maintenance %">
+                    <NumberInput value={shortMaintenance} onChange={setShortMaintenance} step={1} min={1} max={200} />
+                  </Field>
+                  <div style={{ gridColumn: '1 / -1', color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', fontFamily: 'var(--theme-sans)', fontSize: 9, lineHeight: 1.45 }}>
+                    Maintenance is applied to current marked exposure. Broker house requirements can be higher; set these fields to match the account being modeled.
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         }
         overflow={
@@ -2038,10 +2106,11 @@ export function MonteCarloContent() {
             />
             <PortfolioIO
               mode="portfolio"
-              assets={legs.map(l => ({ ticker: l.ticker, weight: l.weight, strategy: l.strategy, stratParams: l.stratParams as Record<string, unknown> }))}
+              assets={legs.map(l => ({ ticker: l.ticker, weight: l.weight, side: l.side, strategy: l.strategy, stratParams: l.stratParams as Record<string, unknown> }))}
               onImportAssets={(imported: PortfolioAsset[]) => {
                 const newLegs = imported.map(a => ({
                   ...makeLeg(a.ticker, a.weight),
+                  side: a.side ?? 'long',
                   strategy: a.strategy ?? STRATEGIES[0],
                   stratParams: (a.stratParams ?? {}) as StrategyParams,
                 }))
@@ -2081,6 +2150,7 @@ export function MonteCarloContent() {
                 {data.legs.map((l: any, i: number) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)' }}>{l.ticker}</span>
+                    <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: l.side === 'short' ? NEG : POS }}>{l.side ?? 'long'}</span>
                     <span style={{ fontSize: 10, color: 'var(--theme-primary, #c9a84c)' }}>{l.weight}%</span>
                     {l.fetched && (
                       <span style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.06em' }}>
@@ -2117,9 +2187,12 @@ export function MonteCarloContent() {
                 <KpiCell grow label="VaR 95%" value={`$${data.varAmt.toFixed(2)}`} color={NEG} />
                 <KpiCell grow label="CVaR 95%" value={`$${data.cvarAmt.toFixed(2)}`} color={NEG} />
                 <KpiCell grow label="Eff. Drift" value={`${data.effDrift.toFixed(1)}%`} />
-                {data.medianDividendIncome != null && <KpiCell grow label="Median Dividends" value={`$${Number(data.medianDividendIncome).toFixed(2)}`} color={POS}
+                {data.medianDividendIncome != null && <KpiCell grow label="Median Dividends" value={`$${Number(data.medianDividendIncome).toFixed(2)}`} color={Number(data.medianDividendIncome) >= 0 ? POS : NEG}
                   sub={data.dividendMode === 'cash' ? 'paid to cash' : data.dividendMode === 'exclude' ? 'observed, excluded' : data.dividendMode === 'embedded' ? 'embedded in CRSP returns' : 'reinvested'} />}
                 {data.probTarget !== null && <KpiCell grow label={`Prob ≥ $${data.targetPrice}`} value={`${data.probTarget.toFixed(1)}%`} color={data.probTarget > 50 ? POS : undefined} />}
+                {data.marginEnabled && data.probMarginCall != null && <KpiCell grow label="Margin Call Odds" value={`${Number(data.probMarginCall).toFixed(1)}%`} color={data.probMarginCall > 0 ? NEG : POS} sub="maintenance breached" />}
+                {data.marginEnabled && data.probLiquidation != null && <KpiCell grow label="Forced Liquidation" value={`${Number(data.probLiquidation).toFixed(1)}%`} color={data.probLiquidation > 0 ? NEG : POS} sub="positions sold / covered" />}
+                {data.marginEnabled && data.medianMaxMarginUtilization != null && <KpiCell grow label="Median Peak Margin" value={`${Number(data.medianMaxMarginUtilization).toFixed(1)}%`} color={data.medianMaxMarginUtilization >= 100 ? NEG : undefined} sub="requirement ÷ equity" />}
                 {data.probRuin > 0 && <KpiCell grow label="Prob of Ruin" value={`${data.probRuin.toFixed(1)}%`} color={NEG} sub="wiped to $0" subColor={NEG} />}
               </div>
 

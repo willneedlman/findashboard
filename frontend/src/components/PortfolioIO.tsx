@@ -17,6 +17,7 @@ import { useRef } from 'react'
 export interface PortfolioAsset {
   ticker: string
   weight: number
+  side?: 'long' | 'short'
   strategy?: string
   avgCost?: number        // portfolio mode: per-share average cost
   stratParams?: Record<string, unknown>
@@ -112,6 +113,7 @@ function normalizeAsset(a: Partial<PortfolioAsset>): PortfolioAsset {
   return {
     ticker:     String(a.ticker ?? '').toUpperCase().trim(),
     weight:     Number(a.weight ?? 0),
+    side:       a.side === 'short' ? 'short' : 'long',
     strategy:   a.strategy,
     avgCost,
     stratParams: a.stratParams ?? {},

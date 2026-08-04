@@ -14,7 +14,7 @@ export default function MetricCard({ label, value, delta, deltaPositive, classNa
   const [visible, setVisible] = useState(false)
 
   return (
-    <div className={clsx('metric-card relative', className)}>
+    <div className={clsx('metric-card ft-metric-tile relative', className)}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
         <p style={{
           fontSize: 9,

@@ -57,7 +57,7 @@ export const railLabel: React.CSSProperties = {
 
 export function StatCard({ label, value, sub, tip }: { label: string; value: string | number; sub?: string; tip?: string }) {
   return (
-    <div style={{ background: C.surf, border: `1px solid ${C.border}`, borderRadius: 6, padding: '10px 14px', minWidth: 120 }}>
+    <div className="ft-metric-tile" style={{ background: C.surf, border: `1px solid ${C.border}`, borderRadius: 0, padding: '10px 14px', minWidth: 120 }}>
       <div style={{ display: 'flex', alignItems: 'center', color: C.muted, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>
         {label}{tip && <HelpTip text={tip} width={240} />}
       </div>

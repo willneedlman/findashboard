@@ -7,6 +7,7 @@ import { type ComboLeg, legsToCombo, mkComboLeg, MAX_COMBO_LEGS, ComboLegEditor,
 
 export type Holding = {
   ticker: string; weight: number; strategy: string; stratParams: StrategyParams
+  side?: 'long' | 'short'
   // Multi-leg options combo instead of a plain equity position — only paired
   // with the Custom Rule strategy (the combo's own entry/exit comes from those
   // rules). Backtester mode only; Monte Carlo's holdings stay equity-only.
@@ -131,18 +132,18 @@ export function RebalanceSelect({ value, onChange }: { value: RebalanceFreq; onC
   )
 }
 
-export function NumberInput({ value, onChange, placeholder, step, min }:
-  { value: number | string; onChange: (v: string) => void; placeholder?: string; step?: number; min?: number }) {
+export function NumberInput({ value, onChange, placeholder, step, min, max }:
+  { value: number | string; onChange: (v: string) => void; placeholder?: string; step?: number; min?: number; max?: number }) {
   return (
-    <input type="number" value={value} placeholder={placeholder} step={step} min={min}
+    <input type="number" value={value} placeholder={placeholder} step={step} min={min} max={max}
       onChange={e => onChange(e.target.value)} onFocus={focusOn} onBlur={focusOff}
       style={{ ...inputBase, MozAppearance: 'textfield' } as React.CSSProperties} />
   )
 }
 
-function HoldingCard({ holding, index, maxWeight, onChange, onRemove, tickerListId, hideDrift, allowCombo }: {
+function HoldingCard({ holding, index, maxWeight, onChange, onRemove, tickerListId, hideDrift, allowCombo, allowShort }: {
   holding: Holding; index: number; maxWeight: number
-  onChange: (patch: Partial<Holding>) => void; onRemove: () => void; tickerListId?: string; hideDrift?: boolean; allowCombo?: boolean
+  onChange: (patch: Partial<Holding>) => void; onRemove: () => void; tickerListId?: string; hideDrift?: boolean; allowCombo?: boolean; allowShort?: boolean
 }) {
   const [hover, setHover] = useState(false)
   const barPct = maxWeight > 0 ? Math.max(0, (holding.weight / maxWeight) * 100) : 0
@@ -173,6 +174,21 @@ function HoldingCard({ holding, index, maxWeight, onChange, onRemove, tickerList
           <div style={{ width: `${barPct}%`, height: '100%', background: shade(index) }} />
         </div>
       </div>
+      {allowShort && (
+        <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+          {(['long', 'short'] as const).map(side => (
+            <button key={side} type="button" onClick={() => onChange({ side })}
+              style={{
+                flex: 1, padding: '3px 0', cursor: 'pointer', fontFamily: T.mono, fontSize: 8,
+                fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+                background: (holding.side ?? 'long') === side
+                  ? `color-mix(in srgb, ${side === 'long' ? T.pos : T.neg} 13%, transparent)` : 'transparent',
+                border: `1px solid ${(holding.side ?? 'long') === side ? (side === 'long' ? T.pos : T.neg) : T.border}`,
+                color: (holding.side ?? 'long') === side ? (side === 'long' ? T.pos : T.neg) : T.sec,
+              }}>{side}</button>
+          ))}
+        </div>
+      )}
       <div style={{ marginTop: 8 }}>
         <StrategySelector value={holding.strategy} params={holding.stratParams}
           onChange={(s, p) => onChange({ strategy: s, stratParams: p })} compact hideDrift={hideDrift} />
@@ -233,6 +249,7 @@ const RISK_PRESETS = [
 export default function ConfigHeader(p: Props) {
   const [menuOpen, setMenuOpen] = useState(false)
   const isBT = p.mode === 'backtester'
+  const hasShort = p.holdings.some(h => h.side === 'short')
 
   const weights = p.holdings.map(h => h.weight)
   const total = weightTotal(weights)
@@ -348,7 +365,7 @@ export default function ConfigHeader(p: Props) {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(166px, 1fr))', gap: 8 }}>
                 {p.holdings.map((h, i) => (
                   <HoldingCard key={i} holding={h} index={i} maxWeight={maxWeight} tickerListId={p.tickerListId}
-                    hideDrift={p.mode === 'backtester'} allowCombo={isBT}
+                    hideDrift={p.mode === 'backtester'} allowCombo={isBT} allowShort={!isBT}
                     onChange={patch => updateHolding(i, patch)}
                     onRemove={() => p.onHoldingsChange(p.holdings.filter((_, j) => j !== i))} />
                 ))}
@@ -389,8 +406,8 @@ export default function ConfigHeader(p: Props) {
                     )}
                     <Field label="Benchmark"><input value={p.benchmark} onChange={e => p.setBenchmark(e.target.value.toUpperCase())} onFocus={focusOn} onBlur={focusOff} style={inputBase} /></Field>
                     <Field label="Leverage (x)"><NumberInput value={p.leverage} onChange={p.setLeverage} step={0.25} min={1} /></Field>
-                    {(Number(p.leverage) || 1) > 1 && (
-                      <Field label="Borrow Rate %"><NumberInput value={p.borrowRate} onChange={p.setBorrowRate} step={0.5} min={0} /></Field>
+                    {((Number(p.leverage) || 1) > 1 || hasShort) && (
+                      <Field label="Financing / Short Fee %"><NumberInput value={p.borrowRate} onChange={p.setBorrowRate} step={0.5} min={0} /></Field>
                     )}
                     <div style={{ gridColumn: '1 / -1' }}>
                       <Field label="Target Endpoint ($)"><NumberInput value={p.targetPrice || ''} onChange={v => p.setTargetPrice?.(v === '' ? 0 : +v)} placeholder="e.g. 120 = +20%" /></Field>
