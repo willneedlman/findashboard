@@ -10,13 +10,13 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/cache.py": {
-    "mtime": 1784428520.701151,
-    "ast_hash": "ad15162bc518d03220b888eea33dcca6",
+    "mtime": 1785868312.3045604,
+    "ast_hash": "94b22b3cbbf417e894ce5030e97bf9cc",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/main.py": {
-    "mtime": 1785421080.0076134,
-    "ast_hash": "b1b7490d00d5fe85fdd73cc271f88979",
+    "mtime": 1785718920.6582987,
+    "ast_hash": "179cc4a7d736e95b953ad895033e029a",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/math_engine.py": {
@@ -35,8 +35,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/routers/corporate.py": {
-    "mtime": 1784522107.6711814,
-    "ast_hash": "ab897eb83d014439bf70acc72e980a15",
+    "mtime": 1785428935.7718818,
+    "ast_hash": "e665055679e419ef31c144c4b0eec8ff",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/routers/correlation.py": {
@@ -50,8 +50,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/routers/market.py": {
-    "mtime": 1785274652.2315943,
-    "ast_hash": "aeecbcf4a8ddbc6eb677d29f7aa0c584",
+    "mtime": 1785724566.6857538,
+    "ast_hash": "778ad4ff309d3d22d082d9f3546aab3b",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/routers/nav.py": {
@@ -60,13 +60,13 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/routers/options.py": {
-    "mtime": 1785274652.2319863,
-    "ast_hash": "18dcb614b4597acae543a1af568e71b4",
+    "mtime": 1785724566.8996327,
+    "ast_hash": "5d42d58e2e8c31c426f03ee8dde40550",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/routers/portfolio.py": {
-    "mtime": 1785274652.2325168,
-    "ast_hash": "3cd2b64bf7a66616400f226e25e2c3b1",
+    "mtime": 1785868857.0481966,
+    "ast_hash": "2d73f2a0bb9b2114d0a602af2d46e854",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/routers/probability.py": {
@@ -95,13 +95,13 @@
     "semantic_hash": "ef3ba2a81ba19f8ea5ddf625521e96f0"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/App.tsx": {
-    "mtime": 1784866031.0486913,
-    "ast_hash": "8abfa2abddb4eeef7260b1e1126ea75e",
+    "mtime": 1785798153.076886,
+    "ast_hash": "6f13c0afb7d07a83024ad05640b6fef9",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/Layout.tsx": {
-    "mtime": 1784437583.3040376,
-    "ast_hash": "43a5d4f9b56a9f2530ba988c26418316",
+    "mtime": 1785732805.7353265,
+    "ast_hash": "39e9815c4f5b02100a1ecef507631380",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/MetricCard.tsx": {
@@ -130,8 +130,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/BondAnalytics.tsx": {
-    "mtime": 1784438172.2568953,
-    "ast_hash": "871e7038bb1fc7cc7357c6163dbe5429",
+    "mtime": 1785798545.2315025,
+    "ast_hash": "3b1626fec343b3928bc4b51232ad2a42",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/CorporateHub.tsx": {
@@ -140,23 +140,23 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/DCFValuation.tsx": {
-    "mtime": 1784868464.350223,
-    "ast_hash": "2f418ebed8ceb5870e2d96b1eb94cf6e",
+    "mtime": 1785798231.31889,
+    "ast_hash": "06940e01acfa7d5519c57c51331cfa24",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/DealerGEX.tsx": {
-    "mtime": 1784438073.9275167,
-    "ast_hash": "89f461ae9fcdf5c02e5efbb60c60d2d1",
+    "mtime": 1785798479.7360797,
+    "ast_hash": "4b30b48402a4d0252da76482e9e48ba9",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/FedRates.tsx": {
-    "mtime": 1784951891.0651457,
-    "ast_hash": "25c0e28247648e7aa6fc5e811916537e",
+    "mtime": 1785798371.9498844,
+    "ast_hash": "7bcbf7af01e5755c19973e735c2093e2",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/Home.tsx": {
-    "mtime": 1784479592.6426482,
-    "ast_hash": "59776e8f48486e4c9a56e3644ed5d3be",
+    "mtime": 1785793104.3055665,
+    "ast_hash": "cc2294d498ffe842ea8bfb449bfcbca3",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/ImpliedProbability.tsx": {
@@ -165,23 +165,23 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/MonteCarlo.tsx": {
-    "mtime": 1784927999.3946958,
-    "ast_hash": "b7bc848ebebb5f2d165dca7492ca00fc",
+    "mtime": 1785868867.2124114,
+    "ast_hash": "bc7b3ed5b1e1002cde55b58628dba228",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/NAVTracker.tsx": {
-    "mtime": 1784438040.127644,
-    "ast_hash": "a80e449577223a8c937b072536b3d8c6",
+    "mtime": 1785798232.074434,
+    "ast_hash": "65b738b50969ebd57f3e80fc5d892339",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/OptionsChainScanner.tsx": {
-    "mtime": 1784438042.5106065,
-    "ast_hash": "f4ff3dcdadcb9a5aae86cfb463c09894",
+    "mtime": 1785798545.4656858,
+    "ast_hash": "3733e1a4ca233b683b9b1e6fd7324d80",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/OptionsPricer.tsx": {
-    "mtime": 1784438042.5106668,
-    "ast_hash": "acf62bef198d6a77c38312faca05184f",
+    "mtime": 1785798545.3505325,
+    "ast_hash": "d86fa5cd5325843de9cd6dd3fdf235cf",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/PortfolioBacktester.tsx": {
@@ -190,8 +190,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/StrategyBuilder.tsx": {
-    "mtime": 1785254162.0923426,
-    "ast_hash": "f7ef05dc956999f4b527bf705bd819b8",
+    "mtime": 1785798515.823111,
+    "ast_hash": "838bb1750c9857a2364af8718863010b",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/tailwind.config.js": {
@@ -235,8 +235,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/fmp.py": {
-    "mtime": 1784673028.9874942,
-    "ast_hash": "cb0c3deb67171764019b467f2224ffe4",
+    "mtime": 1785473188.567975,
+    "ast_hash": "14fcda402d3db02012f7f448eead5758",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/gcloud auth login/google-cloud-sdk/.install/bq-nix.snapshot.json": {
@@ -125680,13 +125680,13 @@
     "semantic_hash": "ac9a64b0df6ea6a82000571a7967162d"
   },
   "/Users/willneedlman/finance_dashboard/backend/routers/filings.py": {
-    "mtime": 1781823168.8014693,
-    "ast_hash": "7b6fb60c8454ae8d95fecd6d74badcde",
+    "mtime": 1785740870.1124547,
+    "ast_hash": "513bc1e7fc535130661ccf81096c8e6d",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/routers/screener.py": {
-    "mtime": 1784315538.5568807,
-    "ast_hash": "8b6c12a1787b68c99dcc03f366b964f2",
+    "mtime": 1785427084.7060843,
+    "ast_hash": "530c3fd61956db47c242156676ec5bd0",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/routers/users.py": {
@@ -125735,8 +125735,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/TickerLogo.tsx": {
-    "mtime": 1785367032.5162444,
-    "ast_hash": "a9cc9a47c1e60f08dccfecbec50c14b6",
+    "mtime": 1785793166.9474525,
+    "ast_hash": "f6eee59ab1a955e8486491b3147c1b29",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/TickerTagInput.tsx": {
@@ -125855,8 +125855,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/EarningsSummarizer.tsx": {
-    "mtime": 1784438073.6952684,
-    "ast_hash": "c4e85ca97c3a3b98fd02aa1b1ae43aa5",
+    "mtime": 1785798479.8475313,
+    "ast_hash": "3972ad2151867538288fe6f4ad072a55",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/Settings.tsx": {
@@ -125865,8 +125865,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/StockScreener.tsx": {
-    "mtime": 1784929135.0367923,
-    "ast_hash": "3e2751661818406c9f9c3e627bd921fe",
+    "mtime": 1785798394.0442247,
+    "ast_hash": "8baa8666be14254b1ed76b4ddabdc6be",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/legal/DataSources.tsx": {
@@ -126640,8 +126640,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/alpaca.py": {
-    "mtime": 1783722850.7793682,
-    "ast_hash": "3408b902e98b2c035540449eaed834a9",
+    "mtime": 1785724566.4700518,
+    "ast_hash": "6ead1e20c9ef7e46198297f7d498afce",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/alphavantage.py": {
@@ -126850,8 +126850,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/market_hours.py": {
-    "mtime": 1785274652.2274392,
-    "ast_hash": "f4c18d07d16a4a41ce9cbb28ff38bd0c",
+    "mtime": 1785732236.9849944,
+    "ast_hash": "615df0fe7e766cdf3b37d68277730674",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/metrics.py": {
@@ -126910,8 +126910,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/routers/ai.py": {
-    "mtime": 1785424601.2260962,
-    "ast_hash": "0243389b14ce0ec4bffd18a206fb7475",
+    "mtime": 1785543335.8247695,
+    "ast_hash": "64a165678721a87bc064d1687c222cc6",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/routers/alerts.py": {
@@ -126945,8 +126945,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/routers/earnings.py": {
-    "mtime": 1784830467.4260721,
-    "ast_hash": "59b629024a2b588c10dda319c92bd730",
+    "mtime": 1785718910.1868916,
+    "ast_hash": "3ee7b0906802957f9ea4374e3b3c0ad2",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/routers/etf.py": {
@@ -127050,8 +127050,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/routers/valuation.py": {
-    "mtime": 1783802143.9654377,
-    "ast_hash": "fcbdbfb214a6252a75357b419a69c1e4",
+    "mtime": 1785473451.4299262,
+    "ast_hash": "4040d7478940669273b28e6e60215c8b",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/scripts/backfill_screener.py": {
@@ -127290,13 +127290,13 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/sec_fundamentals.py": {
-    "mtime": 1784521407.2165632,
-    "ast_hash": "61a700ae05608294141e34a265c1b6b9",
+    "mtime": 1785740738.167492,
+    "ast_hash": "48b07f213a1d85abf40198f6e681a3bc",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/sec_segments.py": {
-    "mtime": 1781842460.889325,
-    "ast_hash": "60e5e03e2ab318bb22ae2a8efe066644",
+    "mtime": 1785470894.265441,
+    "ast_hash": "2bfa6abf167dbb8cec0bf9289faa357f",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/sentiment/__init__.py": {
@@ -127545,8 +127545,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/tests/test_sec_fundamentals.py": {
-    "mtime": 1783645784.164405,
-    "ast_hash": "3dae2c4dd1b55edde7ef05713c94d8b2",
+    "mtime": 1785737446.9152043,
+    "ast_hash": "b4ee9d6d2d22ae72a1aacfa4b571cdfa",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/tests/test_sentiment.py": {
@@ -127690,8 +127690,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/TickerInput.tsx": {
-    "mtime": 1783967935.3795187,
-    "ast_hash": "e7f26b019cc7231c5f97aa0a1d2421d8",
+    "mtime": 1785798480.298939,
+    "ast_hash": "66b83e342a326aa61a96d17117ca6684",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/TickerLaunch.tsx": {
@@ -127870,8 +127870,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/portfolio/ConfigHeader.tsx": {
-    "mtime": 1784523509.5006053,
-    "ast_hash": "cf6d0f8ed402c7ecaa623e5f2b1b0f2a",
+    "mtime": 1785868975.2906768,
+    "ast_hash": "06df4f7521cc436640d1b1767dbafda1",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/portfolio/CustomSelect.tsx": {
@@ -127940,8 +127940,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/lib/hubs.ts": {
-    "mtime": 1785355455.0242674,
-    "ast_hash": "59fc330889ad9762c94634c6eabb6037",
+    "mtime": 1785798152.9559832,
+    "ast_hash": "f90c173427611927dfbf14c87afc164e",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/lib/indicators.ts": {
@@ -127975,8 +127975,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/lib/pmImport.ts": {
-    "mtime": 1785351094.2597191,
-    "ast_hash": "aa7acf29f0f6de6e55b2fc3e1b7f36e0",
+    "mtime": 1785861597.172518,
+    "ast_hash": "d2403ef4bc63c12c97f4919bbb32ed8d",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/lib/recentTickers.ts": {
@@ -127990,8 +127990,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/lib/search.test.ts": {
-    "mtime": 1782151736.3588946,
-    "ast_hash": "01a2b2cf44537a36f19881b8703851bf",
+    "mtime": 1785738322.6557126,
+    "ast_hash": "ccca409311340b5c00f56c91de7d14e7",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/lib/search.ts": {
@@ -128030,18 +128030,18 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/marketing/Marketing.tsx": {
-    "mtime": 1783996303.6929224,
-    "ast_hash": "61ead15ec13dc115f511a77152c6b51b",
+    "mtime": 1785798602.1325986,
+    "ast_hash": "14d003ad39700067ca68ee3890b1b0a7",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/AdminTester.tsx": {
-    "mtime": 1785421152.631038,
+    "mtime": 1785779020.5133235,
     "ast_hash": "381841c3858500144901b168777ac823",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/Alerts.tsx": {
-    "mtime": 1784438167.0747125,
-    "ast_hash": "08efc8d533ca7d5e0e3d4b302f080597",
+    "mtime": 1785798516.5926156,
+    "ast_hash": "e7b8ef7cb261e86ab60a64c54dc6f0c6",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/AlgoRunner.tsx": {
@@ -128050,13 +128050,13 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/AlgoStrategyBuilder.tsx": {
-    "mtime": 1785260280.5124316,
-    "ast_hash": "8c9306821f317482a194fd4ac5d4eccb",
+    "mtime": 1785798515.94966,
+    "ast_hash": "75b042b22b0f1b0e435860d81bfef165",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/ChartStudio.tsx": {
-    "mtime": 1784438488.0483718,
-    "ast_hash": "e312695f45401e0c82ae60029833ea9a",
+    "mtime": 1785798665.6378477,
+    "ast_hash": "ddf4d71404acf740d6e458e98eaf120a",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/ChokepointExposure.tsx": {
@@ -128075,8 +128075,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/CreditDelinquencies.tsx": {
-    "mtime": 1784437603.1982324,
-    "ast_hash": "cfeb7a5aa4bbcbf4e48fd76d35c1ac2f",
+    "mtime": 1785798394.1538117,
+    "ast_hash": "350b11dee2a380762fd1307ad41042db",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/CreditSpreads.tsx": {
@@ -128085,23 +128085,23 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/CurrencyMatrix.tsx": {
-    "mtime": 1784438172.2548852,
-    "ast_hash": "e79dda4eda19db32d2e31cce92cec96b",
+    "mtime": 1785798515.6994503,
+    "ast_hash": "20f2f9cad2200c44bc8cdeee07131634",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/CusipLookup.tsx": {
-    "mtime": 1784438381.0356452,
-    "ast_hash": "bf70afbdae519323526f169dc024234e",
+    "mtime": 1785798232.3431609,
+    "ast_hash": "d78118e362ec59791a7ef480bc1467c7",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/DividendDiscount.tsx": {
-    "mtime": 1784437625.3204007,
-    "ast_hash": "226464150a7b5757201fbe50f8b310b7",
+    "mtime": 1785798296.22868,
+    "ast_hash": "789797e479320877fd52055ee72f17ac",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/EarningsCalendar.tsx": {
-    "mtime": 1784692406.7784798,
-    "ast_hash": "63905077a695bf75c5ba87da190df42c",
+    "mtime": 1785798561.4719963,
+    "ast_hash": "e81b0453812fbacb48c40d398b4e360f",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/EconomyMonitor.tsx": {
@@ -128110,8 +128110,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/EtfXray.tsx": {
-    "mtime": 1784438073.6952226,
-    "ast_hash": "36279cd2690480181520799dc6cdebaa",
+    "mtime": 1785798479.9584696,
+    "ast_hash": "39820f3486dd91b41889d5b6804197b9",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/FactorDecomposition.tsx": {
@@ -128120,8 +128120,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/FixedIncomeMarketMaker.tsx": {
-    "mtime": 1784438436.6219544,
-    "ast_hash": "054b543ec9392e3c0e6acbcbf1f8824d",
+    "mtime": 1785798516.2063553,
+    "ast_hash": "416e1c5b43c600d4eea87baae5ecace0",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/GammaScalping.tsx": {
@@ -128145,8 +128145,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/IVTracker.tsx": {
-    "mtime": 1784438042.5106635,
-    "ast_hash": "f2ebc62e2e604c039fa5289365809076",
+    "mtime": 1785798515.5854814,
+    "ast_hash": "ad4b55952d616f20af702d513e39c3e0",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/ImportRegression.tsx": {
@@ -128155,13 +128155,13 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/IpoCalendar.tsx": {
-    "mtime": 1784438338.091835,
-    "ast_hash": "cc6b5ba1bad29ea5829cfacd565bc092",
+    "mtime": 1785798307.2657726,
+    "ast_hash": "3c0927cbf5598ac0431d6d2bb6a6f825",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/LogisticsMap.tsx": {
-    "mtime": 1784077724.619542,
-    "ast_hash": "cecd2a2d7403ae5838a219271cfb3298",
+    "mtime": 1785793104.4223752,
+    "ast_hash": "a75cbd086a6ca8b5f64368230675f91c",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/MacroEventHub.tsx": {
@@ -128170,8 +128170,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/MaritimeMap.tsx": {
-    "mtime": 1784428514.6163085,
-    "ast_hash": "2a03e142cce6587dd7e4dfd65efc2258",
+    "mtime": 1785798665.749292,
+    "ast_hash": "94d923741720e14787c5c14614509524",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/MarketHours.tsx": {
@@ -128180,8 +128180,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/MarketMakerSimulator.tsx": {
-    "mtime": 1782920290.2159758,
-    "ast_hash": "9c096edb7bd5553a053004c10ca59158",
+    "mtime": 1785798230.8439407,
+    "ast_hash": "495894ca51118086966f8e3050fdbcbe",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/MonteCarloRegression.tsx": {
@@ -128190,13 +128190,13 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/Multiples.tsx": {
-    "mtime": 1784437625.3138933,
-    "ast_hash": "8c548109ac3f6b3483103dd973a0d35f",
+    "mtime": 1785798296.4588988,
+    "ast_hash": "aa17d38d53312ff4139abbbd3436cfb1",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/OptionsMarketMaker.tsx": {
-    "mtime": 1784438436.621804,
-    "ast_hash": "646f98e7c0808bfc1a8089545f39cb3c",
+    "mtime": 1785798516.0835989,
+    "ast_hash": "37cc863b8bf3ebe12163a0590a54b40f",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/PairsTrader.tsx": {
@@ -128210,13 +128210,13 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/PortfolioCompare.tsx": {
-    "mtime": 1784438040.127433,
-    "ast_hash": "564a2c05873bbbe7569c797cd5703753",
+    "mtime": 1785798516.3289135,
+    "ast_hash": "ac332ad5011ae5096e4b34772f7588b0",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/PortfolioManager.tsx": {
-    "mtime": 1785353291.4671133,
-    "ast_hash": "beef7502aa21cdced92d35f0e647e611",
+    "mtime": 1785868285.9612904,
+    "ast_hash": "80a6d7e578630be0fdbc3adcb3d6c140",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/PortfolioOptimizer.tsx": {
@@ -128240,18 +128240,18 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/ReverseDCF.tsx": {
-    "mtime": 1784869231.1009212,
-    "ast_hash": "d0c1cb4dee7e1f7c94544b542c3455d2",
+    "mtime": 1785798232.2101846,
+    "ast_hash": "f0d8bc0724dad3d08fa33a1c3c2d3023",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/SOTP.tsx": {
-    "mtime": 1784437659.4123435,
-    "ast_hash": "8feec21cc880abc5d3f31f843a229025",
+    "mtime": 1785798296.3444314,
+    "ast_hash": "40364d47fcfefda83474a89b657b412b",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/SectorRotation.tsx": {
-    "mtime": 1784438045.9167747,
-    "ast_hash": "1b1871f5854ffbc5f5b4e4bbb5e9e7ee",
+    "mtime": 1785735021.3124995,
+    "ast_hash": "eb294747fed53af511938f4b4162509b",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/SentimentTracker.tsx": {
@@ -128270,13 +128270,13 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/SupplyChain.tsx": {
-    "mtime": 1784847751.6292267,
-    "ast_hash": "249e8f0b0dbae919faa82c953c621c2d",
+    "mtime": 1785798231.2009845,
+    "ast_hash": "3d8fc04035f381fa509624b824f98e14",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/TradeFlows.tsx": {
-    "mtime": 1784438167.074697,
-    "ast_hash": "f263e4620ce5888918678712ffc1340b",
+    "mtime": 1785798296.8064427,
+    "ast_hash": "b04b8ce358cfdabde64032404ec6406e",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/TradeJournal.tsx": {
@@ -128285,8 +128285,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/UnusualOptions.tsx": {
-    "mtime": 1784438073.927584,
-    "ast_hash": "b88bc370f4d598a639f3d111bc4618f6",
+    "mtime": 1785798480.0710306,
+    "ast_hash": "2eb885ebab453f8f7afabe2076cea66d",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/cockpitKit.tsx": {
@@ -128320,8 +128320,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/portfolio-backtester/components.tsx": {
-    "mtime": 1784923496.321325,
-    "ast_hash": "4990a6f8ed8219b257cb510c573e7678",
+    "mtime": 1785868666.48708,
+    "ast_hash": "9e7392c0a035d5d94a0988b8c81eedd7",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/portfolio-backtester/shared.ts": {
@@ -128330,8 +128330,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/regressionShared.tsx": {
-    "mtime": 1784945962.3436918,
-    "ast_hash": "4b9ddbc1372e36e587d799bdebf18e8d",
+    "mtime": 1785798428.6621165,
+    "ast_hash": "e0c448c0501ef672bc4dd2d59f1cecaa",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/strategy-builder/shared.ts": {
@@ -128340,8 +128340,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/valuationShared.tsx": {
-    "mtime": 1784868552.7748182,
-    "ast_hash": "35f14ad2fa3545d34f4df72c01e656a9",
+    "mtime": 1785798428.5459816,
+    "ast_hash": "60fb0667ba2dd3c6625d2d4fd51d03c9",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/utils/customStrategies.ts": {
@@ -129030,8 +129030,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/factor_models.py": {
-    "mtime": 1784076977.4886434,
-    "ast_hash": "0a061ff85edc0dea998372f2cf2b6a3d",
+    "mtime": 1785536927.7120714,
+    "ast_hash": "8e9cda59d5a6cb5ba473116d68627be2",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/industry_ratios.py": {
@@ -129145,8 +129145,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/lib/time.ts": {
-    "mtime": 1783999454.2928004,
-    "ast_hash": "e9d4e680a833cc90cbcebe0c4d232445",
+    "mtime": 1785798153.1944225,
+    "ast_hash": "29ca4dc4d0bb37100876ffc8dca26057",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/SupplyChainPeers.tsx": {
@@ -129310,8 +129310,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/tests/test_report_mode.py": {
-    "mtime": 1785424466.3362732,
-    "ast_hash": "8400df123b2962061407e98d95ade490",
+    "mtime": 1785543352.7521307,
+    "ast_hash": "147936627973217d1e532cfd6bfbdbd5",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/MorningBrief.tsx": {
@@ -129350,23 +129350,23 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/report/ClipRenderer.tsx": {
-    "mtime": 1785381896.3243227,
-    "ast_hash": "6b0477355e8a6f861556108b28544b36",
+    "mtime": 1785543352.6434014,
+    "ast_hash": "5d37b47008322b257a347d31040901a2",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/report/ReportWizardForm.tsx": {
-    "mtime": 1785383316.2348192,
-    "ast_hash": "35b4b65a76af2d1df244a55052a717b2",
+    "mtime": 1785526538.1408978,
+    "ast_hash": "592a9d3f55ba213e9f7c60572705a3e7",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/report/SectionLayout.test.ts": {
-    "mtime": 1785379490.0513742,
-    "ast_hash": "b5ed69de9a3db2ac4e8ddc2dd75d68dd",
+    "mtime": 1785537759.7310264,
+    "ast_hash": "5cc02e19728de9ba104b85e662cd792a",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/report/SectionLayout.tsx": {
-    "mtime": 1785424670.6491377,
-    "ast_hash": "d6d3835ba94e117e3d6269096ac9951d",
+    "mtime": 1785543352.5346637,
+    "ast_hash": "8014003d1f918551699f7d6807cb8696",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/hooks/useReportCapture.ts": {
@@ -129375,8 +129375,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/lib/exportReportPdf.ts": {
-    "mtime": 1785383040.8396368,
-    "ast_hash": "543c0a62c808647a3c4b21c9093c337f",
+    "mtime": 1785534225.6025143,
+    "ast_hash": "368c0e7b3944de286368deaf2d6b376c",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/lib/format.test.ts": {
@@ -129425,8 +129425,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/lib/reportCreator.ts": {
-    "mtime": 1785424385.0674403,
-    "ast_hash": "0e3d05a8f97c17256d5235faf5949fff",
+    "mtime": 1785543335.9327235,
+    "ast_hash": "08e111648a213fada9551189a41d1ce3",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/lib/reportTheme.test.ts": {
@@ -129440,8 +129440,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/MoverRadar.tsx": {
-    "mtime": 1785353365.9166167,
-    "ast_hash": "81394903a19a6c77cfa0dfb94ad66779",
+    "mtime": 1785798480.1857302,
+    "ast_hash": "50064c4d5a5b313ee1f54e338ace7f1c",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/PortfolioBuilder.tsx": {
@@ -129450,13 +129450,13 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/ReportCreator.tsx": {
-    "mtime": 1785374627.5723839,
-    "ast_hash": "1d92ab50716ef12f9a31ba0ac09d36a0",
+    "mtime": 1785539871.3333623,
+    "ast_hash": "53d4198cc52b25133e38a368a094acf2",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/ReportPrint.tsx": {
-    "mtime": 1785423895.0179276,
-    "ast_hash": "feb28d4cea59a3fc81a994d18da1b4ec",
+    "mtime": 1785543414.811346,
+    "ast_hash": "6fd36f9780ad0e9d1b07fb06e092854e",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/grok-install.sh": {
@@ -130190,8 +130190,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/tests/test_market_hours.py": {
-    "mtime": 1785274652.2333455,
-    "ast_hash": "4ff9c7c7ee9e74ee20caee8fbb6710d1",
+    "mtime": 1785732237.19953,
+    "ast_hash": "bd1fe548680b1ae20863367e24a37531",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/backend/tests/test_options_gex_levels.py": {
@@ -130260,8 +130260,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/report/ReviseControls.tsx": {
-    "mtime": 1785048249.8345726,
-    "ast_hash": "049990cf101aee0439f332dde1331a14",
+    "mtime": 1785522486.06755,
+    "ast_hash": "147e9ac2a845a3767628305e5d74d1c4",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/hooks/dashboardComposition.test.ts": {
@@ -130280,8 +130280,8 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/lib/pmImport.combined.test.ts": {
-    "mtime": 1785351610.9757407,
-    "ast_hash": "a7aac9d0bf45890228ef60424ad53a31",
+    "mtime": 1785538880.7512436,
+    "ast_hash": "c24db59c44ff9dc8852e51c52386ef36",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/strategy-builder/savedStrategies.test.ts": {
@@ -130490,18 +130490,18 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/report/chartLabels.test.ts": {
-    "mtime": 1785369230.1659212,
-    "ast_hash": "04cee4c3f2adeed9176df6ddc01def7a",
+    "mtime": 1785537778.6884487,
+    "ast_hash": "f4b0b29fbfc7ff516c588b632ead0d47",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/report/chartLabels.ts": {
-    "mtime": 1785369279.4964895,
-    "ast_hash": "ed1a22a2c03ae2e06ac8e42b24316ed4",
+    "mtime": 1785537778.5800867,
+    "ast_hash": "7eb8a816e240fb25cb97c008caadd843",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/lib/exportReportPdf.test.ts": {
-    "mtime": 1785383394.0284054,
-    "ast_hash": "bcf267f0eb17d86530702e47d37fabbd",
+    "mtime": 1785534225.8033214,
+    "ast_hash": "5c6d0a594a212aafc4e352872eabcff0",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/lib/reportPresentation.test.ts": {
@@ -130515,18 +130515,113 @@
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/lib/reportResearch.test.ts": {
-    "mtime": 1785368532.4028473,
-    "ast_hash": "ac2f1755d9072a87990f86e0f8caa5fb",
+    "mtime": 1785539574.668024,
+    "ast_hash": "bcfc7535291917e497c4a39753b76963",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/lib/reportResearch.ts": {
-    "mtime": 1785368513.0276644,
-    "ast_hash": "c7b00aa885c9f6024ddaa5131f9c0d1a",
+    "mtime": 1785798625.3652313,
+    "ast_hash": "e75f41243097c1e55eab7b19e5f62207",
     "semantic_hash": ""
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/lib/tickerLogos.test.ts": {
     "mtime": 1785367032.2516356,
     "ast_hash": "02b9232d2a280f78bf54b7b4cfd559ff",
+    "semantic_hash": ""
+  },
+  "/Users/willneedlman/finance_dashboard/.impeccable/config.json": {
+    "mtime": 1785525063.4114363,
+    "ast_hash": "4c5fe94c728cc725068efc381f267ae2",
+    "semantic_hash": ""
+  },
+  "/Users/willneedlman/finance_dashboard/.impeccable/hook.cache.json": {
+    "mtime": 1785525299.1362066,
+    "ast_hash": "da18e54e27332cc7b685a1b71a013604",
+    "semantic_hash": ""
+  },
+  "/Users/willneedlman/finance_dashboard/backend/extended_quotes.py": {
+    "mtime": 1785722646.2229114,
+    "ast_hash": "4a146a24ca78da6a761c5ae1c7c08ef0",
+    "semantic_hash": ""
+  },
+  "/Users/willneedlman/finance_dashboard/backend/peer_multiples.py": {
+    "mtime": 1785473408.891282,
+    "ast_hash": "57a812bc8f6661b3a0a63ff6c1b8f95c",
+    "semantic_hash": ""
+  },
+  "/Users/willneedlman/finance_dashboard/backend/sector_classification.py": {
+    "mtime": 1785782015.0194414,
+    "ast_hash": "49618d015527d2478692a0e6fbd17ec5",
+    "semantic_hash": ""
+  },
+  "/Users/willneedlman/finance_dashboard/backend/tests/test_corporate_peers.py": {
+    "mtime": 1785428935.8841295,
+    "ast_hash": "129d9d8e44e9ceb5836ac8ef634a2c97",
+    "semantic_hash": ""
+  },
+  "/Users/willneedlman/finance_dashboard/backend/tests/test_extended_hours.py": {
+    "mtime": 1785724579.1077933,
+    "ast_hash": "a4ef0ed0e7d09f5e41f6dfd7a3c637a9",
+    "semantic_hash": ""
+  },
+  "/Users/willneedlman/finance_dashboard/backend/tests/test_peer_multiples.py": {
+    "mtime": 1785473667.182611,
+    "ast_hash": "4059e3eea766e3d4866109c781c67498",
+    "semantic_hash": ""
+  },
+  "/Users/willneedlman/finance_dashboard/backend/tests/test_portfolio_metrics.py": {
+    "mtime": 1785526138.38182,
+    "ast_hash": "e950e7d80631b2de854ed55fe4d66535",
+    "semantic_hash": ""
+  },
+  "/Users/willneedlman/finance_dashboard/backend/tests/test_screener_ai.py": {
+    "mtime": 1785431053.5635364,
+    "ast_hash": "b947bb3b3d374a8d8349094b45f9f18e",
+    "semantic_hash": ""
+  },
+  "/Users/willneedlman/finance_dashboard/backend/tests/test_sec_segments.py": {
+    "mtime": 1785470987.6671813,
+    "ast_hash": "c8863c2c370604429d7607e42575138c",
+    "semantic_hash": ""
+  },
+  "/Users/willneedlman/finance_dashboard/backend/tests/test_sector_classification.py": {
+    "mtime": 1785782026.6574934,
+    "ast_hash": "a1a210f332a6b4b039eb6c537b84366f",
+    "semantic_hash": ""
+  },
+  "/Users/willneedlman/finance_dashboard/frontend/.impeccable/hook.cache.json": {
+    "mtime": 1785524751.201289,
+    "ast_hash": "afcf2b603ac78603411c39a3bbd43623",
+    "semantic_hash": ""
+  },
+  "/Users/willneedlman/finance_dashboard/frontend/src/components/report/ReportSetupWizard.tsx": {
+    "mtime": 1785526538.2604237,
+    "ast_hash": "6fe9ae9e125fd869cf4e235fe36acfad",
+    "semantic_hash": ""
+  },
+  "/Users/willneedlman/finance_dashboard/frontend/src/lib/reportScope.test.ts": {
+    "mtime": 1785526589.3047228,
+    "ast_hash": "6bc04187b3631d8f6e617b110604249f",
+    "semantic_hash": ""
+  },
+  "/Users/willneedlman/finance_dashboard/frontend/src/lib/researchDirective.test.ts": {
+    "mtime": 1785524678.9112172,
+    "ast_hash": "a25fbbbdafeaac42dd42ee58695eb75b",
+    "semantic_hash": ""
+  },
+  "/Users/willneedlman/finance_dashboard/frontend/src/lib/researchDirective.ts": {
+    "mtime": 1785524751.1481755,
+    "ast_hash": "84ba7a13ffbcd7b0ff27cfc82664d438",
+    "semantic_hash": ""
+  },
+  "/Users/willneedlman/finance_dashboard/frontend/src/pages/PortfolioAnalysis.tsx": {
+    "mtime": 1785783395.6831167,
+    "ast_hash": "aa92a9175426e7207158b6267fda0658",
+    "semantic_hash": ""
+  },
+  "/Users/willneedlman/finance_dashboard/backend/tests/test_portfolio_dividends.py": {
+    "mtime": 1785868718.7487488,
+    "ast_hash": "6756e0ffa9652acd02641ac82bd53dee",
     "semantic_hash": ""
   }
 }

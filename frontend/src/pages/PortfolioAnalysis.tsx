@@ -40,6 +40,7 @@ interface BacktestData {
 interface MonteCarloData {
   mu: number; sigma: number; var_95: number; cvar_95: number; pct_wiped: number
   percentiles: { p5: number; p25: number; p50: number; p75: number; p95: number }
+  percentile_paths: { day: number; p5: number; p25: number; p50: number; p75: number; p95: number }[]
   sample_paths: number[][]; histogram: number[]
 }
 
@@ -130,15 +131,17 @@ function optionLegs(options: PMOptionPosition[]) {
 }
 
 function monteBands(data: MonteCarloData | null) {
-  if (!data?.sample_paths?.length) return []
-  const rows = data.sample_paths
-  const pick = (vals: number[], q: number) => vals[Math.min(vals.length - 1, Math.floor((vals.length - 1) * q))]
-  const pct = (value: number) => Number((value * 100).toFixed(1))
+  if (!data?.percentile_paths?.length) return []
+  const rows = data.percentile_paths
   const step = Math.max(1, Math.floor(rows.length / 100))
-  return rows.filter((_, i) => i % step === 0 || i === rows.length - 1).map((row, i) => {
-    const s = [...row].sort((a, b) => a - b)
-    return { day: i * step, p5: pct(pick(s, .05)), p25: pct(pick(s, .25)), p50: pct(pick(s, .5)), p75: pct(pick(s, .75)), p95: pct(pick(s, .95)) }
-  })
+  return rows.filter((_, i) => i % step === 0 || i === rows.length - 1).map(row => ({
+    day: row.day,
+    p5: Number((row.p5 * 100).toFixed(1)),
+    p25: Number((row.p25 * 100).toFixed(1)),
+    p50: Number((row.p50 * 100).toFixed(1)),
+    p75: Number((row.p75 * 100).toFixed(1)),
+    p95: Number((row.p95 * 100).toFixed(1)),
+  }))
 }
 
 function drawdownSeries(cumulative: BacktestData['cumulative']) {
@@ -297,6 +300,10 @@ function AnalysisHeader({ book, pending, refresh }: { book: PMPortfolio; pending
 function Results({ data }: { data: AnalysisResult }) {
   const { backtest: b, monteCarlo: mc, macro, optimizer } = data
   const activeReturn = b.metrics.port_cagr - b.metrics.bench_cagr
+  const p5Return = mc ? (mc.percentiles.p5 - 1) * 100 : null
+  const p50Return = mc ? (mc.percentiles.p50 - 1) * 100 : null
+  const p95Return = mc ? (mc.percentiles.p95 - 1) * 100 : null
+  const liquidatedPaths = mc ? Math.round(mc.pct_wiped / 100 * MONTE_CARLO_RUNS) : null
   const health = b.metrics.port_sharpe >= 1 && b.metrics.max_drawdown > -25 && (macro?.concentration.effective_n ?? 0) >= 5 ? 'Balanced' : b.metrics.max_drawdown <= -35 || (macro?.concentration.effective_n ?? 99) < 3 ? 'High risk' : 'Watch'
   const healthColor = health === 'Balanced' ? T.pos : health === 'High risk' ? T.neg : T.warn
 
@@ -306,7 +313,12 @@ function Results({ data }: { data: AnalysisResult }) {
         { label: 'CAGR', value: `${b.metrics.port_cagr}%` }, { label: 'Active CAGR', value: `${activeReturn}%` },
         { label: 'Volatility', value: `${b.metrics.port_vol}%` }, { label: 'Max drawdown', value: `${b.metrics.max_drawdown}%` },
         { label: 'Sharpe', value: b.metrics.port_sharpe.toFixed(2) }, { label: 'Beta', value: b.metrics.beta.toFixed(2) },
+        { label: 'Monte Carlo VaR 95', value: mc ? `${mc.var_95}%` : 'Unavailable' },
         { label: 'Monte Carlo CVaR 95', value: mc ? `${mc.cvar_95}%` : 'Unavailable' },
+        { label: 'Monte Carlo 5th percentile', value: p5Return == null ? 'Unavailable' : `${p5Return}%` },
+        { label: 'Monte Carlo median', value: p50Return == null ? 'Unavailable' : `${p50Return}%` },
+        { label: 'Monte Carlo 95th percentile', value: p95Return == null ? 'Unavailable' : `${p95Return}%` },
+        { label: 'Monte Carlo liquidation odds', value: mc ? `${mc.pct_wiped}% (${liquidatedPaths}/${MONTE_CARLO_RUNS} paths)` : 'Unavailable' },
         { label: 'Effective holdings', value: macro?.concentration.effective_n?.toFixed(1) ?? 'Unavailable' },
       ]),
       chartClip('Portfolio Analysis', `Cumulative wealth vs ${BENCHMARK}`, 'line', 'date', b.cumulative, [{ key: 'portfolio', label: data.bookName }, { key: 'benchmark', label: BENCHMARK }]),
@@ -332,6 +344,14 @@ function Results({ data }: { data: AnalysisResult }) {
       { label: 'Max drawdown', value: `${b.metrics.max_drawdown.toFixed(1)}%`, vc: T.neg, sub: `Calmar ${b.metrics.calmar.toFixed(2)}` },
       { label: 'Sharpe', value: b.metrics.port_sharpe.toFixed(2), sub: `Sortino ${b.metrics.sortino.toFixed(2)}`, vc: b.metrics.port_sharpe >= 1 ? T.pos : T.warn },
       { label: '95% CVaR', value: mc ? `-${mc.cvar_95.toFixed(1)}%` : '—', sub: '500-path Monte Carlo', vc: T.neg },
+    ]} />
+    <KpiStrip cells={[
+      { label: 'VaR 95%', value: mc ? `${mc.var_95.toFixed(1)}%` : '—', sub: 'Loss not exceeded in 95% of paths', vc: T.neg },
+      { label: 'CVaR 95%', value: mc ? `${mc.cvar_95.toFixed(1)}%` : '—', sub: 'Average loss in worst 5%', vc: T.neg },
+      { label: '5th percentile', value: p5Return == null ? '—' : fmtPct(p5Return), sub: 'Severe downside terminal return', vc: T.neg },
+      { label: 'Median outcome', value: p50Return == null ? '—' : fmtPct(p50Return), sub: '50th-percentile terminal return', vc: chg(p50Return) },
+      { label: '95th percentile', value: p95Return == null ? '—' : fmtPct(p95Return), sub: 'Strong upside terminal return', vc: T.pos },
+      { label: 'Liquidation odds', value: mc ? `${mc.pct_wiped.toFixed(1)}%` : '—', sub: mc ? `${liquidatedPaths} of ${MONTE_CARLO_RUNS} paths reached $0` : 'Monte Carlo unavailable', vc: mc && mc.pct_wiped > 0 ? T.neg : T.pos },
     ]} />
     {(data.warnings.length > 0 || data.failures.length > 0) && <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>{data.warnings.map(w => <Notice key={w} text={w} warn />)}{data.failures.map(f => <Notice key={f} text={`${f} was unavailable; the rest of the analysis is still valid.`} />)}</div>}
     <ConciseAnalysis data={data} />

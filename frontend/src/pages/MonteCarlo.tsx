@@ -25,7 +25,7 @@ import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
 import UniversePicker from '../components/UniversePicker'
 import { CASH_SYMBOL } from '../lib/pmImport'
 import { screenerFilterToApi } from '../lib/format'
-import ConfigHeader, { Field, NumberInput, paramInput, RebalanceSelect, type RebalanceFreq } from '../components/portfolio/ConfigHeader'
+import ConfigHeader, { Field, NumberInput, paramInput, RebalanceSelect, type DividendMode, type RebalanceFreq } from '../components/portfolio/ConfigHeader'
 import { usePortfolio, type PortfolioHolding } from '../contexts/PortfolioContext'
 import { PRESETS, PRESET_DESC, PRESET_GROUPS } from './strategy-builder/shared'
 import { ALGO_STRATEGIES, ALGO_DEFAULT_PARAMS, ALGO_PARAM_LABELS } from './portfolio-backtester/shared'
@@ -218,6 +218,7 @@ type Leg = {
   strategy: string
   stratParams: StrategyParams
   fetched: boolean
+  dividendYield: number
 }
 
 type ExactAlgoReplay = {
@@ -228,7 +229,7 @@ type ExactAlgoReplay = {
 
 const makeLeg = (ticker: string, weight: number): Leg => ({
   ticker, weight, spot: 100, vol: 20, drift: 8,
-  strategy: STRATEGIES[0], stratParams: {}, fetched: false,
+  strategy: STRATEGIES[0], stratParams: {}, fetched: false, dividendYield: 0,
 })
 
 function readAlgoUniverseHandoff(): AlgoMonteCarloHandoff | null {
@@ -1469,6 +1470,7 @@ export function MonteCarloContent() {
   const [trailPct, setTrailPct] = useState('')
   const [posPct, setPosPct] = useState('100')
   const [cashYield, setCashYield] = useState('4.5')   // % APY earned on the un-deployed cash portion
+  const [dividendMode, setDividendMode] = useState<DividendMode>('reinvest')
   const [leverage, setLeverage] = useState('1')
   const [borrowRate, setBorrowRate] = useState('0')
   const [rebalance, setRebalance] = useState<RebalanceFreq>('none')
@@ -1518,6 +1520,10 @@ export function MonteCarloContent() {
 
   const fetchAll = async () => {
     setFetching(true)
+    const symbols = Array.from(new Set(legs.filter(l => l.ticker && l.ticker !== CASH_SYMBOL).map(l => l.ticker)))
+    const dividendSnapshot: Record<string, { dividend_yield?: number }> = symbols.length
+      ? await axios.get(`/api/market/dividends?tickers=${encodeURIComponent(symbols.join(','))}`).then(r => r.data).catch(() => ({}))
+      : {}
     const updated = await Promise.all(
       legs.map(async (leg) => {
         // The synthetic cash sleeve has no price history; keep its preset vol/drift.
@@ -1528,12 +1534,14 @@ export function MonteCarloContent() {
             const years = Math.max(new Date().getFullYear() - 2022, 1)
             // CAGR = (1 + totalReturn/100)^(1/years) - 1; cap at ±150%/yr for sane simulation
             const cagr = (Math.pow(1 + data.metrics.total_return / 100, 1 / years) - 1) * 100
-            const drift = Math.max(-150, Math.min(150, +cagr.toFixed(1)))
+            const dividendYield = Math.max(0, Number(dividendSnapshot[leg.ticker]?.dividend_yield) || 0)
+            const drift = Math.max(-150, Math.min(150, +(cagr - dividendYield).toFixed(1)))
             return {
               ...leg,
               spot: +data.metrics.current_price.toFixed(2),
               vol:  +data.metrics.ann_volatility.toFixed(1),
               drift,
+              dividendYield,
               fetched: true,
             }
           }
@@ -1584,6 +1592,7 @@ export function MonteCarloContent() {
             horizon_days: horizon,
             leverage: Math.max(1, Number(leverage) || 1),
             borrow_rate: Math.max(0, Number(borrowRate) || 0),
+            dividend_mode: dividendMode,
           }),
           axios.get(`/api/market/history?ticker=${benchmark}&start=2020-01-01`)
             .then(r => r.data)
@@ -1630,14 +1639,17 @@ export function MonteCarloContent() {
           probTarget: target === null ? null : terminal.filter(v => v >= target).length / terminal.length * 100,
           targetPrice, model: 'gbm', benchmark, legs: [],
           crsp_mode: true,
+          dividendMode: simulation.dividend_mode,
+          medianDividendIncome: simulation.median_dividend_income_pct,
           constituent_count: simulation.constituent_count,
           delistings: simulation.delistings ?? [],
         }
       }
       const totalWeight = legs.reduce((s, l) => s + l.weight, 0) || 100
+      const dividendSymbols = legs.filter(l => l.ticker && l.ticker !== CASH_SYMBOL).map(l => l.ticker)
 
       // Fire strategy signals + benchmark fetch in parallel
-      const [legAdjs, benchResult] = await Promise.all([
+      const [legAdjs, benchResult, dividendSnapshot] = await Promise.all([
         Promise.all(
           legs.map(async (leg) => {
             if (leg.strategy === STRATEGIES[0]) return { stratAdj: 0, stratLabel: '', stratDetail: '', stratChartData: [], stratBuyCount: 0, stratSellCount: 0 }
@@ -1691,7 +1703,14 @@ export function MonteCarloContent() {
         axios.get(`/api/market/history?ticker=${benchmark}&start=2020-01-01`)
           .then(r => r.data)
           .catch(() => null),
+        dividendSymbols.length
+          ? axios.get(`/api/market/dividends?tickers=${encodeURIComponent(dividendSymbols.join(','))}`)
+              .then(r => r.data as Record<string, { dividend_yield?: number }>)
+              .catch(() => ({} as Record<string, { dividend_yield?: number }>))
+          : Promise.resolve({} as Record<string, { dividend_yield?: number }>),
       ])
+
+      const dividendYields = legs.map(l => l.ticker === CASH_SYMBOL ? 0 : Math.max(0, Number(dividendSnapshot[l.ticker]?.dividend_yield ?? l.dividendYield) || 0))
 
       const benchVol   = benchResult?.metrics?.ann_volatility ?? 15
       const benchDrift = benchResult?.metrics
@@ -1778,20 +1797,35 @@ export function MonteCarloContent() {
       // days; 0 = never (buy & hold), 1 = constant weights.
       const rebalStep = { none: 0, daily: 1, weekly: 5, monthly: 21, quarterly: 63, annually: 252 }[rebalance]
       const targetW = legs.map(l => l.weight / totalWeight)
-      const rawPortfolioPaths = Array.from({ length: Math.min(nSims, 500) }, (_, simIdx) => {
+      const cashDaily = Math.pow(1 + (parseFloat(cashYield) || 0) / 100, 1 / 252) - 1
+      const simulated = Array.from({ length: Math.min(nSims, 500) }, (_, simIdx) => {
         const h = [...targetW]
         const path = [1.0]
+        let dividendCash = 0
+        let dividendIncome = 0
         for (let day = 1; day <= horizon; day++) {
-          let v = 0
+          let payment = 0
           for (let li = 0; li < legs.length; li++) {
+            const prior = h[li]
             h[li] *= allPaths[li][simIdx][day] / (allPaths[li][simIdx][day - 1] || 1e-12)
-            v += h[li]
+            const legPayment = prior * (dividendYields[li] / 100 / 252)
+            payment += legPayment
+            if (dividendMode === 'reinvest') h[li] += legPayment
           }
+          dividendIncome += payment
+          dividendCash *= 1 + cashDaily
+          if (dividendMode === 'cash') dividendCash += payment
+          const v = h.reduce((sum, value) => sum + value, 0) + dividendCash
           path.push(v)
-          if (rebalStep && day % rebalStep === 0) for (let li = 0; li < legs.length; li++) h[li] = targetW[li] * v
+          if (rebalStep && day % rebalStep === 0) {
+            const investable = Math.max(0, v - dividendCash)
+            for (let li = 0; li < legs.length; li++) h[li] = targetW[li] * investable
+          }
         }
-        return path
+        return { path, dividendIncome }
       })
+      const rawPortfolioPaths = simulated.map(s => s.path)
+      const medianDividendIncome = simulated.map(s => s.dividendIncome * 100).sort((a, b) => a - b)[Math.floor(simulated.length * 0.5)] ?? 0
       // Apply borrow-to-magnify leverage to the gross portfolio paths (static debt, floored
       // at 0 on wipeout), then risk controls, then scale to $100.
       const L = Math.max(1, Number(leverage) || 1)
@@ -1836,7 +1870,7 @@ export function MonteCarloContent() {
       })
 
       const effDrift = legs.reduce((s, l, i) =>
-        s + (l.weight / totalWeight) * (l.drift + legAdjs[i].stratAdj), 0)
+        s + (l.weight / totalWeight) * (l.drift + legAdjs[i].stratAdj + (dividendMode === 'exclude' ? 0 : dividendYields[i])), 0)
 
       const probTarget = targetPrice > 0
         ? terminal.filter(v => v >= targetPrice).length / terminal.length * 100
@@ -1845,8 +1879,9 @@ export function MonteCarloContent() {
       return {
         bands, histogram, S0, median, p5, p95, probProfit, probRuin, varAmt, cvarAmt, effDrift,
         probTarget, targetPrice, model,
+        dividendMode, medianDividendIncome,
         bootstrapReady: model !== 'bootstrap' || legs.every((l, i) => l.ticker === CASH_SYMBOL || alignedIdx.includes(i)),
-        benchmark, legs: legs.map((l, i) => ({ ...l, ...legAdjs[i] })),
+        benchmark, legs: legs.map((l, i) => ({ ...l, ...legAdjs[i], dividendYield: dividendYields[i] })),
         crsp_mode: false,
       }
     },
@@ -1863,6 +1898,7 @@ export function MonteCarloContent() {
         { label: 'VaR 95%', value: `$${Number(data.varAmt).toFixed(2)}` },
         { label: 'CVaR 95%', value: `$${Number(data.cvarAmt).toFixed(2)}` },
         { label: 'Eff. Drift', value: `${Number(data.effDrift).toFixed(1)}%` },
+        ...(data.medianDividendIncome != null ? [{ label: 'Median Dividends', value: `$${Number(data.medianDividendIncome).toFixed(2)}` }] : []),
         ...(data.probRuin > 0 ? [{ label: 'Prob of Ruin', value: `${Number(data.probRuin).toFixed(1)}%` }] : []),
       ]),
     ]
@@ -1870,9 +1906,9 @@ export function MonteCarloContent() {
       pieces.push(tableClip(
         'Monte Carlo',
         'Portfolio Legs',
-        ['Ticker', 'Weight %', 'Vol %', 'Drift %'],
-        data.legs.slice(0, 20).map((l: { ticker: string; weight: number; vol?: number; drift?: number }) => [
-          l.ticker, l.weight, l.vol ?? null, l.drift ?? null,
+        ['Ticker', 'Weight %', 'Vol %', 'Price Drift %', 'Dividend Yield %'],
+        data.legs.slice(0, 20).map((l: { ticker: string; weight: number; vol?: number; drift?: number; dividendYield?: number }) => [
+          l.ticker, l.weight, l.vol ?? null, l.drift ?? null, l.dividendYield ?? null,
         ]),
       ))
     }
@@ -1960,6 +1996,7 @@ export function MonteCarloContent() {
         trail={{ val: trailPct, set: setTrailPct }}
         pos={{ val: posPct, set: setPosPct }}
         cash={{ val: cashYield, set: setCashYield }}
+        dividendMode={dividendMode} setDividendMode={setDividendMode}
         start={crspStart} setStart={setCrspStart}
         end={crspEnd} setEnd={setCrspEnd}
         horizon={horizon} setHorizon={setHorizon}
@@ -2035,7 +2072,7 @@ export function MonteCarloContent() {
                   <span style={{ color: 'var(--theme-primary, #c9a84c)', fontWeight: 700 }}>SURVIVORSHIP-BIAS-FREE (CRSP)</span>
                   <span style={{ color: 'var(--theme-secondary, #99907e)', marginLeft: 8 }}>
                     GBM calibration uses {data.constituent_count} S&amp;P 500 constituents as of {crspStart}
-                    {data.delistings?.length > 0 && `, including ${data.delistings.length} delisted/acquired names carried through the return history`}.
+                    {data.delistings?.length > 0 && `, including ${data.delistings.length} delisted/acquired names carried through the return history`}. Dividend distributions are embedded in CRSP total returns.
                   </span>
                 </div>
               )}
@@ -2047,7 +2084,7 @@ export function MonteCarloContent() {
                     <span style={{ fontSize: 10, color: 'var(--theme-primary, #c9a84c)' }}>{l.weight}%</span>
                     {l.fetched && (
                       <span style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.06em' }}>
-                        ${l.spot.toLocaleString()} · σ {l.vol}%
+                        ${l.spot.toLocaleString()} · σ {l.vol}% · div {Number(l.dividendYield || 0).toFixed(2)}%
                       </span>
                     )}
                     {l.strategy !== STRATEGIES[0] && (
@@ -2080,6 +2117,8 @@ export function MonteCarloContent() {
                 <KpiCell grow label="VaR 95%" value={`$${data.varAmt.toFixed(2)}`} color={NEG} />
                 <KpiCell grow label="CVaR 95%" value={`$${data.cvarAmt.toFixed(2)}`} color={NEG} />
                 <KpiCell grow label="Eff. Drift" value={`${data.effDrift.toFixed(1)}%`} />
+                {data.medianDividendIncome != null && <KpiCell grow label="Median Dividends" value={`$${Number(data.medianDividendIncome).toFixed(2)}`} color={POS}
+                  sub={data.dividendMode === 'cash' ? 'paid to cash' : data.dividendMode === 'exclude' ? 'observed, excluded' : data.dividendMode === 'embedded' ? 'embedded in CRSP returns' : 'reinvested'} />}
                 {data.probTarget !== null && <KpiCell grow label={`Prob ≥ $${data.targetPrice}`} value={`${data.probTarget.toFixed(1)}%`} color={data.probTarget > 50 ? POS : undefined} />}
                 {data.probRuin > 0 && <KpiCell grow label="Prob of Ruin" value={`${data.probRuin.toFixed(1)}%`} color={NEG} sub="wiped to $0" subColor={NEG} />}
               </div>

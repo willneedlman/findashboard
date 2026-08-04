@@ -251,9 +251,18 @@ _download_inflight: dict[tuple, threading.Event] = {}
 _download_inflight_lock = threading.Lock()
 
 
-def get_download(tickers: tuple, start: str, end: str, interval: str = "1d", cache_ttl: int = 300) -> pd.DataFrame:
+def get_download(
+    tickers: tuple,
+    start: str,
+    end: str,
+    interval: str = "1d",
+    cache_ttl: int = 300,
+    *,
+    auto_adjust: bool = True,
+    actions: bool = False,
+) -> pd.DataFrame:
     cache = _download_live_cache if cache_ttl <= 60 else _download_cache
-    key = (tickers, start, end, interval)
+    key = (tickers, start, end, interval, auto_adjust, actions)
     with _lock:
         if key in cache:
             return cache[key]
@@ -271,7 +280,10 @@ def get_download(tickers: tuple, start: str, end: str, interval: str = "1d", cac
         # Leader produced nothing usable — fall through and try ourselves.
 
     def _do():
-        df = yf.download(list(tickers), start=start, end=end, interval=interval, auto_adjust=True, progress=False, threads=True)
+        df = yf.download(
+            list(tickers), start=start, end=end, interval=interval,
+            auto_adjust=auto_adjust, actions=actions, progress=False, threads=True,
+        )
         if not df.empty and df.index.tz is not None:
             df.index = df.index.tz_localize(None)
         return df

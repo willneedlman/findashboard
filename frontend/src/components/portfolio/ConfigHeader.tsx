@@ -16,6 +16,7 @@ export type Holding = {
 }
 
 export type ConfigMode = 'backtester' | 'montecarlo'
+export type DividendMode = 'reinvest' | 'cash' | 'exclude'
 
 interface RiskField { val: string; set: (v: string) => void }
 
@@ -39,6 +40,7 @@ interface Props {
 
   // Risk controls (shared)
   sl: RiskField; tp: RiskField; trail: RiskField; pos: RiskField; cash: RiskField
+  dividendMode: DividendMode; setDividendMode: (v: DividendMode) => void
 
   // Backtester window
   start?: string; setStart?: (v: string) => void
@@ -424,6 +426,19 @@ export default function ConfigHeader(p: Props) {
                     <NumberInput value={f.val} onChange={f.set} placeholder={ph} min={0} step={1} />
                   </Field>
                 ))}
+                <div style={{ gridColumn: 'span 2' }}>
+                  <Field label="Dividend Treatment">
+                    <select value={p.crspMode ? 'embedded' : p.dividendMode} disabled={p.crspMode}
+                      onChange={e => p.setDividendMode(e.target.value as DividendMode)}
+                      title={p.crspMode ? 'CRSP total returns already embed distributions' : 'Reinvest distributions, hold them as cash, or exclude them from modeled returns'}
+                      style={{ ...paramInput, cursor: p.crspMode ? 'not-allowed' : 'pointer', opacity: p.crspMode ? 0.6 : 1 }}>
+                      {p.crspMode && <option value="embedded">Embedded in CRSP returns</option>}
+                      <option value="reinvest">Reinvest payments</option>
+                      <option value="cash">Pay to cash</option>
+                      <option value="exclude">Exclude dividends</option>
+                    </select>
+                  </Field>
+                </div>
               </div>
             </div>
           </div>

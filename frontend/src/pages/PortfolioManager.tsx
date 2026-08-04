@@ -112,30 +112,11 @@ interface Portfolio {
   futures:  FuturePosition[]
   cash:     CashPosition[]
 }
-// overviewIds: the persisted "primary" selection that drives the homescreen
-// Overview and every other place that auto-loads the portfolio (see
-// usePortfolio.loadActivePortfolio). Empty => follow the active tab.
+// overviewIds is the independent cross-tool pointer used by dashboards and
+// analysis tools. Portfolio Manager itself only reads and writes activeId.
 interface PMState { portfolios: Portfolio[]; activeId: string; overviewIds?: string[] }
 const PORTFOLIOS_KEY = 'pm-portfolios-v2'
 const uid = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now() + Math.random())
-
-// Merge holdings across several portfolios into one aggregated set: same ticker
-// sums its shares and keeps a share-weighted average cost. Used when the overview
-// scope spans more than one portfolio.
-function aggregateHoldings(ps: Portfolio[]): Holding[] {
-  const map = new Map<string, { ticker: string; shares: number; costSum: number }>()
-  for (const p of ps) {
-    for (const h of p.holdings) {
-      const ticker = normalizeTicker(h.ticker)
-      if (!ticker) continue
-      const e = map.get(ticker) ?? { ticker, shares: 0, costSum: 0 }
-      e.shares += h.shares
-      e.costSum += h.shares * (h.avgCost || 0)
-      map.set(ticker, e)
-    }
-  }
-  return [...map.values()].map(e => ({ ticker: e.ticker, shares: e.shares, avgCost: e.shares > 0 ? e.costSum / e.shares : 0 }))
-}
 
 function loadPortfolios(): PMState {
   try {
@@ -148,7 +129,8 @@ function loadPortfolios(): PMState {
         d.portfolios = d.portfolios.map((p: Portfolio) => ({
           ...p, holdings: p.holdings ?? [], options: p.options ?? [], futures: p.futures ?? [], cash: p.cash ?? [],
         }))
-        return d
+        const activeId = d.portfolios.some((p: Portfolio) => p.id === d.activeId) ? d.activeId : d.portfolios[0].id
+        return { ...d, activeId }
       }
     }
   } catch { /* fall through to migration */ }
@@ -215,28 +197,10 @@ export default function PortfolioManager() {
   const portfolios = pm.portfolios
   const active = portfolios.find(p => p.id === pm.activeId) ?? portfolios[0]
 
-  // Overview scope: which portfolios the summary/tables reflect AND which the
-  // homescreen Overview (and other auto-load spots) show. Persisted in pm state.
-  // Empty => follow the active tab (single). Selecting more than one aggregates
-  // them into a read-only combined view; editing stays scoped to the active tab.
-  const viewIds = pm.overviewIds ?? []
-  const setViewIds = (next: string[]) => setPm(s => ({ ...s, overviewIds: next }))
-  const validViewIds = viewIds.filter(id => portfolios.some(p => p.id === id))
-  const effViewIds = validViewIds.length ? validViewIds : [active.id]
-  const viewPortfolios = portfolios.filter(p => effViewIds.includes(p.id))
-  const isAggregate = !(effViewIds.length === 1 && effViewIds[0] === active.id)
-
-  const holdings = isAggregate ? aggregateHoldings(viewPortfolios) : active.holdings
-  const options  = isAggregate ? viewPortfolios.flatMap(p => p.options ?? []) : active.options
-  const futures  = isAggregate ? viewPortfolios.flatMap(p => p.futures ?? []) : active.futures
-  const cash     = isAggregate ? viewPortfolios.flatMap(p => p.cash ?? [])    : active.cash
-
-  const toggleView = (id: string) => {
-    const set = new Set(effViewIds)
-    if (set.has(id)) set.delete(id); else set.add(id)
-    const next = portfolios.filter(p => set.has(p.id)).map(p => p.id)
-    setViewIds(next.length ? next : [active.id])
-  }
+  const holdings = active.holdings
+  const options = active.options
+  const futures = active.futures
+  const cash = active.cash
 
   const patchActive = useCallback((patch: (p: Portfolio) => Partial<Portfolio>) =>
     setPm(s => ({ ...s, portfolios: s.portfolios.map(p => p.id === s.activeId ? { ...p, ...patch(p) } : p) })), [])
@@ -287,13 +251,13 @@ export default function PortfolioManager() {
   const addPortfolio = () => setPm(s => { const id = uid(); return { ...s, portfolios: [...s.portfolios, { id, name: `Portfolio ${s.portfolios.length + 1}`, holdings: [], options: [], futures: [], cash: [] }], activeId: id } })
   const switchPortfolio = (id: string) => { clearEdits(); setPm(s => ({ ...s, activeId: id })) }
   const renamePortfolio = (id: string, name: string) => setPm(s => ({ ...s, portfolios: s.portfolios.map(p => p.id === id ? { ...p, name } : p) }))
-  const deletePortfolio = (id: string) => { clearEdits(); setPm(s => { const rest = s.portfolios.filter(p => p.id !== id); if (!rest.length) return s; return { ...s, portfolios: rest, activeId: s.activeId === id ? rest[0].id : s.activeId, overviewIds: (s.overviewIds ?? []).filter(x => rest.some(p => p.id === x)) } }) }
+  const deletePortfolio = (id: string) => { clearEdits(); setPm(s => { const rest = s.portfolios.filter(p => p.id !== id); if (!rest.length) return s; const activeId = s.activeId === id ? rest[0].id : s.activeId; return { ...s, portfolios: rest, activeId, overviewIds: (s.overviewIds ?? []).filter(x => rest.some(p => p.id === x)) } }) }
   const [renaming, setRenaming] = useState<string | null>(null)
 
   const mountRef = useRef(false)
   useEffect(() => {
-    if (!mountRef.current) { mountRef.current = true; return }
     localStorage.setItem(PORTFOLIOS_KEY, JSON.stringify(pm))
+    if (!mountRef.current) { mountRef.current = true; return }
     setDirty(true)
   }, [pm])
 
@@ -320,11 +284,10 @@ export default function PortfolioManager() {
   // Heal legacy share-class symbols (BRK.B -> BRK-B) so they resolve and quote;
   // runs only when a stored ticker actually differs from its normalized form.
   useEffect(() => {
-    if (isAggregate) return   // aggregated holdings are read-only; never write them back to the active tab
     if (holdings.some(h => h.ticker !== normalizeTicker(h.ticker))) {
       setHoldings(prev => prev.map(h => ({ ...h, ticker: normalizeTicker(h.ticker) })))
     }
-  }, [holdings, setHoldings, isAggregate])
+  }, [holdings, setHoldings])
 
   // Fetch live prices for all tickers (normalize so a legacy BRK.B never 404s
   // in the render before the heal effect above persists BRK-B).
@@ -418,7 +381,7 @@ export default function PortfolioManager() {
   const saveEditCash = () => {
     if (!editCash) return
     const amount = parseFloat(editCash.amount), rate = parseFloat(editCash.rate)
-    if (isNaN(amount) || amount < 0 || isNaN(rate)) return
+    if (isNaN(amount) || isNaN(rate)) return
     setCash(prev => prev.map(c => c.id === editCash.id ? { ...c, amount, rate } : c))
     setEditCash(null)
   }
@@ -451,7 +414,6 @@ export default function PortfolioManager() {
   }, [newTicker, newShares, newCost, newCostMode, newQuantityMode, setHoldings])
 
   const fetchSelectedMarketCosts = useCallback(async () => {
-    if (isAggregate) return
     const selected = holdings.filter(h => h.useMarketPrice)
     if (!selected.length) return
     setFetchingMarketCosts(true)
@@ -479,7 +441,7 @@ export default function PortfolioManager() {
     } finally {
       setFetchingMarketCosts(false)
     }
-  }, [holdings, isAggregate, portfolioQuotes, setHoldings])
+  }, [holdings, portfolioQuotes, setHoldings])
 
   const removeHolding = (i: number) => setHoldings(prev => prev.filter((_, j) => j !== i))
 
@@ -617,6 +579,21 @@ export default function PortfolioManager() {
     return { ...p, legViews, cost, value: priced ? value : null, pnl, pnlPct, netDelta: priced ? netDelta : null, priced }
   })
 
+  const closeOptionToCash = (position: (typeof optRows)[number]) => {
+    if (position.value == null) return
+    const amount = Number(position.value.toFixed(2))
+    const direction = amount >= 0 ? 'credit' : 'debit'
+    if (!confirm(`Close ${position.underlying} ${position.name} at the current marked value and post a ${direction} of ${fmtMoney(Math.abs(amount))} to cash?`)) return
+    setCash(prev => [...prev, {
+      id: uid(),
+      label: `${position.underlying} option close`,
+      amount,
+      rate: 0,
+      since: todayISO,
+    }])
+    setOptions(prev => prev.filter(p => p.id !== position.id))
+  }
+
   // Futures rows — notional + mark-to-market P&L (multiplier-aware)
   let futTotalPnl = 0
   const futRows = futures.map(f => {
@@ -676,64 +653,26 @@ export default function PortfolioManager() {
     >
       <div className="w-full">
 
-        {/* Portfolio tabs */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginBottom: 16, borderBottom: `1px solid ${T.border}`, flexWrap: 'wrap' }}>
-          {portfolios.map(p => {
-            const isActive = p.id === active.id
-            return (
-              <div key={p.id} onClick={() => switchPortfolio(p.id)} style={{
-                display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', cursor: 'pointer', marginBottom: -1,
-                borderBottom: isActive ? `2px solid ${T.gold}` : '2px solid transparent',
-                background: isActive ? 'color-mix(in srgb, var(--theme-primary) 8%, transparent)' : 'transparent',
-              }}>
-                {renaming === p.id ? (
-                  <input autoFocus value={p.name} onChange={e => renamePortfolio(p.id, e.target.value)}
-                    onBlur={() => setRenaming(null)} onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setRenaming(null) }}
-                    onClick={e => e.stopPropagation()} style={{ ...inp, width: 110, padding: '2px 6px', fontSize: 11 }} />
-                ) : (
-                  <span onDoubleClick={() => setRenaming(p.id)} title="Double-click to rename"
-                    style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: isActive ? T.gold : T.muted, whiteSpace: 'nowrap' }}>{p.name}</span>
-                )}
-                {portfolios.length > 1 && (
-                  <button onClick={e => { e.stopPropagation(); if (confirm(`Delete portfolio "${p.name}"?`)) deletePortfolio(p.id) }}
-                    style={{ background: 'none', border: 'none', color: T.muted, cursor: 'pointer', fontSize: 12, lineHeight: 1, padding: 0 }}>×</button>
-                )}
-              </div>
-            )
-          })}
-          <button onClick={addPortfolio} style={{ background: 'none', border: 'none', color: T.gold, cursor: 'pointer', fontFamily: T.label, fontSize: 11, fontWeight: 700, padding: '6px 10px', letterSpacing: '0.08em' }}>+ New</button>
-
-          {/* Overview scope — the persisted primary that drives the homescreen
-              Overview and other auto-load spots. One = individual, 2+ = aggregate. */}
-          {portfolios.length > 1 && (
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', paddingBottom: 4 }}>
-              <span style={{ ...lbl, fontSize: 8.5 }}>Overview</span>
-              {portfolios.map(p => {
-                const on = effViewIds.includes(p.id)
-                return (
-                  <button key={p.id} onClick={() => toggleView(p.id)} title="Show this portfolio in the Overview (toggle several to aggregate)" style={{
-                    background: on ? 'color-mix(in srgb, var(--theme-primary) 14%, transparent)' : 'transparent',
-                    border: `1px solid ${on ? T.gold : T.border}`, color: on ? T.gold : T.muted,
-                    fontFamily: T.mono, fontSize: 10, fontWeight: 700, padding: '3px 9px', cursor: 'pointer', letterSpacing: '0.04em', whiteSpace: 'nowrap',
-                  }}>{p.name}</button>
-                )
-              })}
-              <button onClick={() => setViewIds(effViewIds.length === portfolios.length ? [] : portfolios.map(p => p.id))} style={{
-                background: 'transparent', border: `1px solid ${T.border}`, color: T.muted,
-                fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 9px', cursor: 'pointer',
-              }}>{effViewIds.length === portfolios.length ? 'Clear' : 'All'}</button>
-            </div>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, marginBottom: 16, paddingBottom: 10, borderBottom: `1px solid ${T.border}`, flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ ...lbl, fontSize: 8.5 }}>Portfolio</span>
+            <select value={active.id} onChange={e => switchPortfolio(e.target.value)} style={{ ...inp, minWidth: 190, padding: '6px 28px 6px 9px', fontSize: 11, cursor: 'pointer' }}>
+              {portfolios.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </label>
+          {renaming === active.id ? (
+            <input autoFocus value={active.name} onChange={e => renamePortfolio(active.id, e.target.value)}
+              onBlur={() => setRenaming(null)} onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setRenaming(null) }}
+              aria-label="Portfolio name" style={{ ...inp, width: 150, padding: '6px 9px', fontSize: 11 }} />
+          ) : (
+            <button onClick={() => setRenaming(active.id)} style={{ background: 'none', border: `1px solid ${T.border}`, color: T.muted, cursor: 'pointer', fontFamily: T.label, fontSize: 9, fontWeight: 700, padding: '6px 9px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Rename</button>
           )}
+          {portfolios.length > 1 && (
+            <button onClick={() => { if (confirm(`Delete portfolio "${active.name}"?`)) deletePortfolio(active.id) }}
+              style={{ background: 'none', border: `1px solid ${T.border}`, color: T.muted, cursor: 'pointer', fontFamily: T.label, fontSize: 9, fontWeight: 700, padding: '6px 9px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Delete</button>
+          )}
+          <button onClick={addPortfolio} style={{ background: 'none', border: `1px solid ${T.gold}`, color: T.gold, cursor: 'pointer', fontFamily: T.label, fontSize: 9, fontWeight: 700, padding: '6px 10px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>+ New Portfolio</button>
         </div>
-
-        {isAggregate && (
-          <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, marginBottom: 16, marginTop: -8 }}>
-            {effViewIds.length === 1
-              ? <>Overview showing <span style={{ color: T.gold }}>{viewPortfolios[0]?.name}</span></>
-              : <>Overview aggregating <span style={{ color: T.gold }}>{effViewIds.length}</span> portfolios</>}
-            {' '}· read-only (edit on the <span style={{ color: T.gold }}>{active.name}</span> tab)
-          </div>
-        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : '260px 1fr', gap: isMobile ? 16 : 24, alignItems: 'start' }}>
 
@@ -953,16 +892,14 @@ export default function PortfolioManager() {
                       : 'MARK COST BASIS AS MKT PRICE TO FETCH LIVE VALUES'}
                     {marketCostResult && <span style={{ marginLeft: 10, color: marketCostResult === 'FETCH FAILED' ? T.neg : T.pos }}>{marketCostResult}</span>}
                   </div>
-                  {!isAggregate && (
-                    <button type="button" onClick={fetchSelectedMarketCosts}
-                      disabled={fetchingMarketCosts || !holdings.some(h => h.useMarketPrice)}
-                      style={{ minWidth: 76, height: 28, padding: '0 12px', background: 'transparent', border: `1px solid ${T.gold}`,
-                        color: T.gold, opacity: fetchingMarketCosts || !holdings.some(h => h.useMarketPrice) ? 0.42 : 1,
-                        cursor: fetchingMarketCosts || !holdings.some(h => h.useMarketPrice) ? 'default' : 'pointer',
-                        fontFamily: T.label, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.12em' }}>
-                      {fetchingMarketCosts ? 'FETCHING…' : 'FETCH'}
-                    </button>
-                  )}
+                  <button type="button" onClick={fetchSelectedMarketCosts}
+                    disabled={fetchingMarketCosts || !holdings.some(h => h.useMarketPrice)}
+                    style={{ minWidth: 76, height: 28, padding: '0 12px', background: 'transparent', border: `1px solid ${T.gold}`,
+                      color: T.gold, opacity: fetchingMarketCosts || !holdings.some(h => h.useMarketPrice) ? 0.42 : 1,
+                      cursor: fetchingMarketCosts || !holdings.some(h => h.useMarketPrice) ? 'default' : 'pointer',
+                      fontFamily: T.label, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.12em' }}>
+                    {fetchingMarketCosts ? 'FETCHING…' : 'FETCH'}
+                  </button>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse', fontFamily: T.mono, fontSize: 10 }}>
@@ -1028,7 +965,7 @@ export default function PortfolioManager() {
                             {r.loading ? '…' : totalValue > 0 && r.price > 0 ? `${weight.toFixed(1)}%` : '—'}
                           </td>
                           <td style={{ padding: '8px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                            {isAggregate ? null : editStock?.i === i ? (<>
+                            {editStock?.i === i ? (<>
                               <button onClick={saveEditStock} style={{ ...editBtn, color: T.gold }}>Save</button>
                               <button onClick={() => setEditStock(null)} style={{ ...editBtn, color: T.muted }}>×</button>
                             </>) : (<>
@@ -1077,7 +1014,7 @@ export default function PortfolioManager() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: T.mono, fontSize: 10 }}>
                     <thead>
                       <tr style={{ borderBottom: `1px solid ${T.border}`, background: T.bg }}>
-                        {['Position', 'Legs', 'Net Cost', 'Value', 'P&L', 'Return', 'Δ', ''].map(h => (
+                        {['Position', 'Legs', 'Net Cost', 'Value', 'P&L', 'Return', 'Δ', 'Action'].map(h => (
                           <th key={h} style={{ padding: '7px 12px', textAlign: (h === 'Position' || h === 'Legs') ? 'left' : 'right', fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted, whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
@@ -1120,7 +1057,15 @@ export default function PortfolioManager() {
                             <td style={{ padding: '8px 12px', textAlign: 'right', color: p.pnlPct == null ? T.muted : p.pnlPct >= 0 ? T.pos : T.neg }}>{p.pnlPct != null ? `${p.pnlPct >= 0 ? '+' : ''}${p.pnlPct.toFixed(1)}%` : '—'}</td>
                             <td style={{ padding: '8px 12px', textAlign: 'right', color: T.muted }}>{p.netDelta != null ? p.netDelta.toFixed(0) : '—'}</td>
                             <td style={{ padding: '8px 6px', textAlign: 'right' }}>
-                              {!isAggregate && <button onClick={() => removeOption(p.id)} style={{ background: 'none', border: 'none', color: T.muted, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 4px' }}>×</button>}
+                              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6 }}>
+                                <button onClick={() => closeOptionToCash(p)} disabled={!p.priced}
+                                  title={p.priced ? 'Close at the current marked liquidation value and post the proceeds to cash' : 'A live mark is required before closing'}
+                                  style={{ ...editBtn, color: p.priced ? T.gold : T.muted, opacity: p.priced ? 1 : 0.45, cursor: p.priced ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}>
+                                  Close to Cash
+                                </button>
+                                <button onClick={() => removeOption(p.id)} title="Remove without posting cash"
+                                  style={{ background: 'none', border: 'none', color: T.muted, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 4px' }}>×</button>
+                              </div>
                             </td>
                           </tr>
                         )
@@ -1128,7 +1073,7 @@ export default function PortfolioManager() {
                     </tbody>
                   </table>
                   <div style={{ padding: '4px 12px 6px', fontSize: 9, color: T.muted, fontFamily: T.mono }}>
-                    Δ = net share-equivalent delta. BS AH and BS OVERNIGHT reprice an option from the labeled underlying mark and the chain's implied volatility.
+                    Close to Cash posts the current net marked value. Short-option liabilities create a cash debit. Δ = net share-equivalent delta. BS AH and BS OVERNIGHT reprice an option from the labeled underlying mark and the chain's implied volatility.
                   </div>
                 </div>
               )}
@@ -1170,7 +1115,7 @@ export default function PortfolioManager() {
                           <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: f.pnl == null ? T.muted : f.pnl >= 0 ? T.pos : T.neg }}>{f.pnl != null ? `${f.pnl >= 0 ? '+' : ''}${fmtMoney(f.pnl)}` : '…'}</td>
                           <td style={{ padding: '8px 12px', textAlign: 'right', color: f.pnlPct == null ? T.muted : f.pnlPct >= 0 ? T.pos : T.neg }}>{f.pnlPct != null ? `${f.pnlPct >= 0 ? '+' : ''}${f.pnlPct.toFixed(1)}%` : '—'}</td>
                           <td style={{ padding: '8px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                            {isAggregate ? null : editFut?.id === f.id ? (<>
+                            {editFut?.id === f.id ? (<>
                               <button onClick={saveEditFut} style={{ ...editBtn, color: T.gold }}>Save</button>
                               <button onClick={() => setEditFut(null)} style={{ ...editBtn, color: T.muted }}>×</button>
                             </>) : (<>
@@ -1219,7 +1164,7 @@ export default function PortfolioManager() {
                           <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: c.accrued >= 0 ? T.pos : T.neg }}>{`${c.accrued >= 0 ? '+' : ''}${fmtMoney(c.accrued)}`}</td>
                           <td style={{ padding: '8px 12px', textAlign: 'right', color: T.text, fontWeight: 600 }}>{fmtMoney(c.value)}</td>
                           <td style={{ padding: '8px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                            {isAggregate ? null : editCash?.id === c.id ? (<>
+                            {editCash?.id === c.id ? (<>
                               <button onClick={saveEditCash} style={{ ...editBtn, color: T.gold }}>Save</button>
                               <button onClick={() => setEditCash(null)} style={{ ...editBtn, color: T.muted }}>×</button>
                             </>) : (<>

@@ -6,6 +6,7 @@ import pandas as pd
 import requests
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel, Field, model_validator
+from typing import Literal
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from cache import get_download
@@ -63,7 +64,12 @@ def _lever_equity(cum_gross: pd.Series, leverage: float, borrow_rate: float) -> 
     return pd.Series(eq, index=cum_gross.index), liquidated
 
 
-def _series_metrics(equity: pd.Series, bench_ret: pd.Series, rf: float) -> dict:
+def _series_metrics(
+    equity: pd.Series,
+    bench_ret: pd.Series,
+    rf: float,
+    cumulative_return_method: str = "auto-adjusted close, daily time-weighted proxy",
+) -> dict:
     """Risk/return metrics from a wealth-index series and the benchmark's daily returns."""
     elapsed_days = max(int((equity.index[-1] - equity.index[0]).days), 0)
     actual_years = elapsed_days / 365.25
@@ -99,7 +105,7 @@ def _series_metrics(equity: pd.Series, bench_ret: pd.Series, rf: float) -> dict:
         "observations": int(len(equity)),
         "start_date": str(equity.index[0].date()),
         "end_date": str(equity.index[-1].date()),
-        "cumulative_return_method": "auto-adjusted close, daily time-weighted proxy",
+        "cumulative_return_method": cumulative_return_method,
         "return_frequency": "daily",
         "annualization_factor": 252,
         "risk_free_rate_pct": round(rf * 100, 3),
@@ -127,6 +133,7 @@ class BacktestRequest(BaseModel):
     # Holdings drift with prices and reset to target weights at each boundary;
     # "none" = buy and hold, "daily" = constant weights (the old behavior).
     rebalance: str = "none"
+    dividend_mode: Literal["reinvest", "cash", "exclude"] = "reinvest"
     # Survivorship-bias-free mode: ignores tickers/weights/leverage-per-name and
     # instead buys the S&P 500 constituents as they actually stood on `start`
     # (WRDS CRSP data/crsp.db), correctly carrying delisted names' realized
@@ -157,6 +164,57 @@ class BacktestRequest(BaseModel):
 
 
 _REBAL_FREQS = {"none", "daily", "weekly", "monthly", "quarterly", "annually"}
+
+
+def _download_field(dl: pd.DataFrame, field: str, tickers: list[str]) -> pd.DataFrame:
+    if isinstance(dl.columns, pd.MultiIndex):
+        if field not in dl.columns.get_level_values(0):
+            return pd.DataFrame(0.0, index=dl.index, columns=tickers)
+        out = dl[field]
+    elif field == "Close":
+        out = dl
+    elif field in dl.columns and len(tickers) == 1:
+        out = dl[[field]].rename(columns={field: tickers[0]})
+    else:
+        return pd.DataFrame(0.0, index=dl.index, columns=tickers)
+    if isinstance(out, pd.Series):
+        out = out.to_frame(tickers[0])
+    return out.reindex(columns=tickers)
+
+
+def _walk_portfolio_with_dividends(
+    price_growth: np.ndarray,
+    dividend_returns: np.ndarray,
+    equity_target: np.ndarray,
+    cash_target: float,
+    cash_daily: float,
+    mask: np.ndarray,
+    dividend_mode: str,
+) -> tuple[np.ndarray, np.ndarray]:
+    equity = equity_target.copy()
+    cash_sleeve = cash_target
+    dividend_cash = 0.0
+    returns = np.empty(len(price_growth))
+    payments = np.empty(len(price_growth))
+    for t in range(len(price_growth)):
+        prior_total = float(equity.sum() + cash_sleeve + dividend_cash)
+        leg_payments = equity * dividend_returns[t]
+        payment = float(leg_payments.sum())
+        equity = equity * price_growth[t]
+        cash_sleeve *= 1 + cash_daily
+        dividend_cash *= 1 + cash_daily
+        if dividend_mode == "reinvest":
+            equity += leg_payments
+        elif dividend_mode == "cash":
+            dividend_cash += payment
+        total = float(equity.sum() + cash_sleeve + dividend_cash)
+        returns[t] = total / prior_total - 1.0 if prior_total > 0 else -1.0
+        payments[t] = payment
+        if mask[t] and total > 0:
+            investable = total - dividend_cash if dividend_mode == "cash" else total
+            equity = equity_target * investable
+            cash_sleeve = cash_target * investable
+    return returns, payments
 
 
 def _rebalance_mask(index: pd.DatetimeIndex, freq: str) -> np.ndarray:
@@ -234,6 +292,9 @@ def _crsp_backtest_series(req: BacktestRequest) -> tuple[pd.Series, pd.Series, l
 
 @router.post("/backtest")
 def backtest(req: BacktestRequest):
+    dividend_payments: list[dict] = []
+    dividend_total_pct: float | None = None
+    benchmark_dividend_total_pct: float | None = None
     if req.crsp_mode:
         port, bench, delistings, constituent_count = _crsp_backtest_series(req)
     else:
@@ -241,12 +302,16 @@ def backtest(req: BacktestRequest):
 
         all_tickers = list(dict.fromkeys(req.tickers + [req.benchmark]))
         try:
-            dl = get_download(tuple(sorted(all_tickers)), req.start, req.end, req.interval)
-            raw = dl["Close"] if isinstance(dl.columns, pd.MultiIndex) and "Close" in dl.columns.get_level_values(0) else dl
-            if isinstance(raw, pd.Series):
-                raw = raw.to_frame(all_tickers[0])
+            dl = get_download(
+                tuple(sorted(all_tickers)), req.start, req.end, req.interval,
+                auto_adjust=False, actions=True,
+            )
+            raw = _download_field(dl, "Close", all_tickers)
+            dividends = _download_field(dl, "Dividends", all_tickers).fillna(0.0)
             if raw.index.tz is not None:
                 raw.index = raw.index.tz_convert(None)
+            if dividends.index.tz is not None:
+                dividends.index = dividends.index.tz_convert(None)
         except Exception:
             logger.exception("internal error"); raise HTTPException(500, "Internal server error")
 
@@ -273,20 +338,37 @@ def backtest(req: BacktestRequest):
         if raw.empty:
             raise HTTPException(404, "No overlapping data")
 
+        dividends = dividends.reindex(index=raw.index, columns=raw.columns).fillna(0.0)
         daily = raw.pct_change().dropna()
+        dividend_returns = dividends.div(raw.shift(1)).reindex(daily.index).fillna(0.0)
         cash_daily = (1 + _get_risk_free_rate()) ** (1 / 252) - 1   # zero-vol cash sleeve
-        # Cash rides along as an asset column so buy-and-hold lets it drift too.
-        cols, target = [], []
-        if len(eq_w):
-            cols.append((1 + daily[req.tickers]).to_numpy())
-            target.extend(eq_w / total_w)
-        if req.cash_weight > 0:
-            cols.append(np.full((len(daily), 1), 1 + cash_daily))
-            target.append(req.cash_weight / total_w)
-        growth = np.hstack(cols)
         mask = _rebalance_mask(daily.index, req.rebalance)
-        port = pd.Series(_walk_portfolio(growth, np.array(target), mask), index=daily.index)
-        bench = daily[req.benchmark]
+        eq_target = eq_w / total_w if len(eq_w) else np.array([])
+        cash_target = req.cash_weight / total_w
+        port_values, paid = _walk_portfolio_with_dividends(
+            (1 + daily[req.tickers]).to_numpy(),
+            dividend_returns[req.tickers].to_numpy(),
+            eq_target,
+            cash_target,
+            cash_daily,
+            mask,
+            req.dividend_mode,
+        )
+        port = pd.Series(port_values, index=daily.index)
+        bench_values, bench_paid = _walk_portfolio_with_dividends(
+            (1 + daily[[req.benchmark]]).to_numpy(),
+            dividend_returns[[req.benchmark]].to_numpy(),
+            np.array([1.0]), 0.0, cash_daily,
+            np.zeros(len(daily), dtype=bool), req.dividend_mode,
+        )
+        bench = pd.Series(bench_values, index=daily.index)
+        cumulative_paid = np.cumsum(paid) * 100
+        dividend_payments = [
+            {"date": str(d.date()), "value": round(float(v) * 100, 6), "cumulative": round(float(c), 6)}
+            for d, v, c in zip(daily.index, paid, cumulative_paid) if v > 0
+        ]
+        dividend_total_pct = round(float(paid.sum()) * 100, 4)
+        benchmark_dividend_total_pct = round(float(bench_paid.sum()) * 100, 4)
         delistings, constituent_count = [], 0
 
     cum_gross = (1 + port).cumprod()
@@ -295,8 +377,12 @@ def backtest(req: BacktestRequest):
     cum_bench = (1 + bench).cumprod() * 100
 
     rf = _get_risk_free_rate()
-    m = _series_metrics(equity, bench, rf)
-    bench_m = _series_metrics((1 + bench).cumprod(), bench, rf)
+    return_method = (
+        "CRSP total returns with embedded distributions"
+        if req.crsp_mode else f"unadjusted close plus explicit dividends ({req.dividend_mode})"
+    )
+    m = _series_metrics(equity, bench, rf, return_method)
+    bench_m = _series_metrics((1 + bench).cumprod(), bench, rf, return_method)
 
     lev_ret = equity.pct_change().replace([np.inf, -np.inf], np.nan).dropna()
     window = 60
@@ -316,6 +402,10 @@ def backtest(req: BacktestRequest):
         "leverage": req.leverage,
         "borrow_rate": req.borrow_rate,
         "rebalance": req.rebalance,
+        "dividend_mode": "embedded" if req.crsp_mode else req.dividend_mode,
+        "dividend_total_pct": dividend_total_pct,
+        "benchmark_dividend_total_pct": benchmark_dividend_total_pct,
+        "dividend_payments": dividend_payments,
         "liquidated": liquidated,
         "cumulative": [
             # Intraday needs the full timestamp so bars don't collapse onto one date.
@@ -327,7 +417,13 @@ def backtest(req: BacktestRequest):
         # per_ticker_returns is only meaningful (and small) for an explicit few-name
         # book — a 500-constituent CRSP universe reports delistings/count instead.
         "per_ticker_returns": {} if req.crsp_mode else {
-            ticker: [{"date": str(d.date()), "value": round(float(v) * 100, 6)} for d, v in daily[ticker].items()]
+            ticker: [{"date": str(d.date()), "value": round(float(v) * 100, 6)} for d, v in (
+                daily[ticker] + (dividend_returns[ticker] if req.dividend_mode == "reinvest" else 0)
+            ).items()]
+            for ticker in req.tickers
+        },
+        "per_ticker_dividends": {} if req.crsp_mode else {
+            ticker: [{"date": str(d.date()), "value": round(float(v) * 100, 6)} for d, v in dividend_returns[ticker].items() if v > 0]
             for ticker in req.tickers
         },
         "crsp_mode": req.crsp_mode,
@@ -348,6 +444,7 @@ class MonteCarloRequest(BaseModel):
     # No upper cap — wiped-out simulation paths are floored at 0 (see monte_carlo).
     leverage: float = Field(default=1.0, ge=1.0)
     borrow_rate: float = Field(default=0.0, ge=0.0, le=100.0)
+    dividend_mode: Literal["reinvest", "cash", "exclude"] = "reinvest"
     # Survivorship-bias-free mode: estimates the GBM drift/vol from the S&P 500's
     # actual point-in-time constituent history (WRDS CRSP) instead of a typed
     # basket — a delisted name's realized wipeout or buyout premium is embedded
@@ -373,14 +470,17 @@ def monte_carlo(req: MonteCarloRequest):
     """GBM simulation of a (optionally levered) portfolio. Returns terminal equity as a growth
     multiple of starting capital (1.0 = breakeven)."""
     delistings, constituent_count = [], 0
+    dividend_yield_annual: float | None = None
     if req.crsp_mode:
         port_ret, delistings, constituent_count = _crsp_pit_returns(req.start, req.end)
     else:
         try:
-            dl = get_download(tuple(sorted(req.tickers)), req.start, req.end)
-            raw = dl["Close"] if isinstance(dl.columns, pd.MultiIndex) and "Close" in dl.columns.get_level_values(0) else dl
-            if isinstance(raw, pd.Series):
-                raw = raw.to_frame(req.tickers[0])
+            dl = get_download(
+                tuple(sorted(req.tickers)), req.start, req.end,
+                auto_adjust=False, actions=True,
+            )
+            raw = _download_field(dl, "Close", req.tickers)
+            dividends = _download_field(dl, "Dividends", req.tickers).fillna(0.0)
             if raw.index.tz is not None:
                 raw.index = raw.index.tz_convert(None)
         except Exception:
@@ -390,7 +490,10 @@ def monte_carlo(req: MonteCarloRequest):
             raise HTTPException(404, "No data")
 
         w = np.array(req.weights, dtype=float); w = w / w.sum()
-        port_ret = (raw.pct_change().dropna() * w).sum(axis=1)
+        price_ret = raw.pct_change().dropna()
+        dividend_ret = dividends.reindex(index=raw.index, columns=raw.columns).fillna(0.0).div(raw.shift(1)).reindex(price_ret.index).fillna(0.0)
+        port_ret = (price_ret * w).sum(axis=1)
+        dividend_yield_annual = max(0.0, float((dividend_ret * w).sum(axis=1).mean() * 252))
 
     log_ret = np.log1p(port_ret)
     mu = float(log_ret.mean()); sigma = float(log_ret.std())
@@ -399,7 +502,23 @@ def monte_carlo(req: MonteCarloRequest):
 
     rng = np.random.default_rng()
     shocks = (mu - 0.5 * sigma ** 2) + sigma * rng.standard_normal((T, n_sims))
-    gross = np.vstack([np.ones((1, n_sims)), np.exp(np.cumsum(shocks, axis=0))])   # (T+1, n_sims), starts at 1.0
+    price_gross = np.vstack([np.ones((1, n_sims)), np.exp(np.cumsum(shocks, axis=0))])
+    dividend_income = np.zeros_like(price_gross)
+    if req.crsp_mode:
+        gross = price_gross
+    else:
+        div_daily = (dividend_yield_annual or 0.0) / 252
+        if req.dividend_mode == "reinvest":
+            gross = price_gross * ((1 + div_daily) ** np.arange(T + 1).reshape(-1, 1))
+            dividend_income = gross - price_gross
+        else:
+            cash_balance = np.zeros_like(price_gross)
+            cash_daily = (1 + _get_risk_free_rate()) ** (1 / 252) - 1
+            for day in range(1, T + 1):
+                payment = price_gross[day - 1] * div_daily
+                dividend_income[day] = dividend_income[day - 1] + payment
+                cash_balance[day] = cash_balance[day - 1] * (1 + cash_daily) + payment
+            gross = price_gross + cash_balance if req.dividend_mode == "cash" else price_gross
     tcol = np.arange(T + 1).reshape(-1, 1)
     equity = L * gross - (L - 1) * (b_d ** tcol)
     equity = np.where(np.cumsum(equity <= 0, axis=0) > 0, 0.0, equity)             # floor wiped-out paths
@@ -412,17 +531,33 @@ def monte_carlo(req: MonteCarloRequest):
     tail = final[final <= p5]
     cvar_95 = round(float((1.0 - tail.mean()) * 100), 2) if len(tail) else var_95
 
+    path_percentiles = np.percentile(equity, [5, 25, 50, 75, 95], axis=1)
+    percentile_paths = [
+        {
+            "day": day,
+            "p5": round(float(path_percentiles[0, day]), 3),
+            "p25": round(float(path_percentiles[1, day]), 3),
+            "p50": round(float(path_percentiles[2, day]), 3),
+            "p75": round(float(path_percentiles[3, day]), 3),
+            "p95": round(float(path_percentiles[4, day]), 3),
+        }
+        for day in range(T + 1)
+    ]
     step = max(1, n_sims // 50)
     sample = equity[:, ::step]
     return {
-        "mu": round(mu * 252, 4),
+        "mu": round(mu * 252 + ((dividend_yield_annual or 0.0) if req.dividend_mode != "exclude" else 0.0), 4),
         "sigma": round(sigma * np.sqrt(252), 4),
+        "dividend_mode": "embedded" if req.crsp_mode else req.dividend_mode,
+        "dividend_yield_pct": round((dividend_yield_annual or 0.0) * 100, 3) if not req.crsp_mode else None,
+        "median_dividend_income_pct": round(float(np.median(dividend_income[-1])) * 100, 3) if not req.crsp_mode else None,
         "leverage": L,
         "borrow_rate": req.borrow_rate,
         "percentiles": percentiles,
         "var_95": var_95,
         "cvar_95": cvar_95,
         "pct_wiped": round(float((final <= 0).mean() * 100), 1),
+        "percentile_paths": percentile_paths,
         "sample_paths": [[round(float(v), 3) for v in row] for row in sample],
         "histogram": sorted([round(float(v), 3) for v in final]),
         "crsp_mode": req.crsp_mode,

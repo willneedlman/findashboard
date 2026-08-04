@@ -21,7 +21,7 @@ import PortfolioIO, { type PortfolioAsset } from '../../components/PortfolioIO'
 import PMImportPicker from '../../components/PMImportPicker'
 import { CASH_SYMBOL, type ImportResult } from '../../lib/pmImport'
 import { usePortfolio } from '../../contexts/PortfolioContext'
-import ConfigHeader, { RebalanceSelect, type RebalanceFreq } from '../../components/portfolio/ConfigHeader'
+import ConfigHeader, { RebalanceSelect, type DividendMode, type RebalanceFreq } from '../../components/portfolio/ConfigHeader'
 import HelpTip from '../../components/HelpTip'
 import { TAB_BAR, TAB_BASE, type Tab, type Asset, makeAsset, PORT_DEFAULTS, PORT_INPUT, PORT_LABEL, PORT_TICK, ALGO_STRATEGIES, ALGO_DEFAULT_PARAMS, ALGO_PARAM_LABELS, ALGO_INPUT, ALGO_LABEL, ALGO_TICK, ALGO_SECTION_DIVIDER, type BacktestResult, type SignalResult } from './shared'
 import { PRESETS } from '../strategy-builder/shared'
@@ -99,6 +99,7 @@ export function PortfolioTab() {
   const [trailPct, setTrailPct] = useState('')
   const [posPct,   setPosPct]   = useState('100')
   const [cashYield, setCashYield] = useState('4.5')   // % APY earned on the un-deployed / idle cash sleeve
+  const [dividendMode, setDividendMode] = useState<DividendMode>('reinvest')
   const [leverage,   setLeverage]   = useState('1')
   const [borrowRate, setBorrowRate] = useState('0')
   const [rebalance,  setRebalance]  = useState<RebalanceFreq>('none')
@@ -109,6 +110,7 @@ export function PortfolioTab() {
       if (crspMode) {
         const { data: bt } = await axios.post('/api/portfolio/backtest', {
           crsp_mode: true, benchmark, start, end,
+          dividend_mode: dividendMode,
           leverage: Math.max(1, Number(leverage) || 1),
           borrow_rate: Math.max(0, Number(borrowRate) || 0),
         })
@@ -126,6 +128,7 @@ export function PortfolioTab() {
           leverage: Math.max(1, Number(leverage) || 1),
           borrow_rate: Math.max(0, Number(borrowRate) || 0),
           rebalance,
+          dividend_mode: dividendMode,
         }),
         ...assets.map(a => {
           if (a.strategy === STRATEGIES[0]) return Promise.resolve(null)
@@ -186,10 +189,14 @@ export function PortfolioTab() {
         const lastSigs = assets.map(() => 1)
 
         const tickerRetMaps: Record<string, Record<string, number>> = {}
+        const tickerDividendMaps: Record<string, Record<string, number>> = {}
         for (const a of assets) {
           const map: Record<string, number> = {}
           bt.per_ticker_returns[a.ticker]?.forEach((r: any) => { map[r.date] = r.value / 100 })
           tickerRetMaps[a.ticker] = map
+          const dividendMap: Record<string, number> = {}
+          bt.per_ticker_dividends?.[a.ticker]?.forEach((r: any) => { dividendMap[r.date] = r.value / 100 })
+          tickerDividendMaps[a.ticker] = dividendMap
         }
 
         const sl    = slPct    ? parseFloat(slPct)    / 100 : null
@@ -238,6 +245,7 @@ export function PortfolioTab() {
                 return
               }
               const actualRet = tickerRetMaps[a.ticker][row.date] ?? 0
+              const dividendRet = dividendMode === 'cash' ? (tickerDividendMaps[a.ticker][row.date] ?? 0) : 0
               if (!legInTrade[li] || legStopped[li]) { stratPortRet += wt * rfDaily; return }
               legEntryCum[li] *= (1 + actualRet)
               legPeakCum[li]   = Math.max(legPeakCum[li], legEntryCum[li])
@@ -248,7 +256,7 @@ export function PortfolioTab() {
                   (trail !== null && drawFromPeak > trail)) {
                 legStopped[li] = true; stratPortRet += wt * rfDaily; return
               }
-              stratPortRet += wt * (pos * actualRet + (1 - pos) * rfDaily)
+              stratPortRet += wt * (pos * (actualRet + dividendRet) + (1 - pos) * rfDaily)
             })
 
             const portRet = bt.daily_returns[i]?.value / 100 || 0
@@ -340,6 +348,7 @@ export function PortfolioTab() {
         { label: 'Sortino', value: String(m.sortino) },
         { label: 'Calmar', value: String(m.calmar) },
         { label: 'Beta', value: String(m.beta) },
+        ...(data.dividend_total_pct != null ? [{ label: 'Dividend Payments', value: `${Number(data.dividend_total_pct).toFixed(2)}%` }] : []),
       ]),
     ]
     if (Array.isArray(assets) && assets.length) {
@@ -393,6 +402,7 @@ export function PortfolioTab() {
         trail={{ val: trailPct, set: setTrailPct }}
         pos={{ val: posPct, set: setPosPct }}
         cash={{ val: cashYield, set: setCashYield }}
+        dividendMode={dividendMode} setDividendMode={setDividendMode}
         start={start} setStart={setStart}
         end={end} setEnd={setEnd}
         paramExtra={<RebalanceSelect value={rebalance} onChange={setRebalance} />}
@@ -449,7 +459,7 @@ export function PortfolioTab() {
                 <span style={{ color: 'var(--theme-primary, #c9a84c)', fontWeight: 700 }}>SURVIVORSHIP-BIAS-FREE (CRSP)</span>
                 <span style={{ color: 'var(--theme-secondary, #99907e)', marginLeft: 8 }}>
                   {data.constituent_count} S&amp;P 500 constituents as of {start}
-                  {data.delistings?.length > 0 && `, ${data.delistings.length} delisted/acquired during the window and carried through`}.
+                  {data.delistings?.length > 0 && `, ${data.delistings.length} delisted/acquired during the window and carried through`}. Dividend distributions are embedded in CRSP total returns.
                 </span>
               </div>
             )}
@@ -508,6 +518,8 @@ export function PortfolioTab() {
                         sub={`${(data.strategyResult.cagr - m.port_cagr).toFixed(2)}% vs port`} subColor={data.strategyResult.cagr >= m.port_cagr ? POS : NEG} />
                     : <KpiCell grow label="Calmar" value={String(m.calmar)} />}
                   <KpiCell grow label="Beta" value={String(m.beta)} />
+                  {data.dividend_total_pct != null && <KpiCell grow label="Dividend Payments" value={`${Number(data.dividend_total_pct).toFixed(2)}%`} color={POS}
+                    sub={data.dividend_mode === 'cash' ? 'paid to cash' : data.dividend_mode === 'exclude' ? 'observed, excluded' : 'reinvested'} />}
                 </div>
               )
             })()}
