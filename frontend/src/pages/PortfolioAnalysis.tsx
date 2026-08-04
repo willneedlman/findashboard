@@ -67,6 +67,7 @@ interface OptimizerData {
 interface OptionExposure { underlying: string; label: string; marketValue: number | null; deltaShares: number | null; source: string }
 interface SectorExposure { sector: string; weight: number; holdings: number }
 interface SectorChartSlice extends SectorExposure { memberSectors: string[] }
+interface PopoverAnchor { x: number; y: number; panelWidth: number; panelHeight: number }
 interface CompanyProfile {
   symbol: string; companyName: string | null; sector: string | null; industry: string | null
   classification: string | null; source: string | null
@@ -379,6 +380,7 @@ const sectorColors = [T.gold, T.blue, T.pos, T.warn, '#a78bfa', '#22d3ee', '#f97
 
 function ConciseAnalysis({ data }: { data: AnalysisResult }) {
   const [selection, setSelection] = useState<DetailSelection | null>(null)
+  const [popoverAnchor, setPopoverAnchor] = useState<PopoverAnchor | null>(null)
   const drawdowns = drawdownSeries(data.backtest.cumulative)
   const bands = monteBands(data.monteCarlo)
   const classifiedSlices: SectorChartSlice[] = data.sectors.map(sector => ({ ...sector, memberSectors: [sector.sector] }))
@@ -388,6 +390,12 @@ function ConciseAnalysis({ data }: { data: AnalysisResult }) {
   const terminal = data.monteCarlo?.percentiles
 
   const chartPoint = (state: any) => state?.activePayload?.[0]?.payload
+  const capturePopoverAnchor = (event: React.PointerEvent<HTMLElement>) => {
+    const panel = (event.target as HTMLElement | null)?.closest<HTMLElement>('.ft-cockpit-panel')
+    if (!panel) return
+    const bounds = panel.getBoundingClientRect()
+    setPopoverAnchor({ x: event.clientX - bounds.left, y: event.clientY - bounds.top, panelWidth: bounds.width, panelHeight: bounds.height })
+  }
 
   useEffect(() => {
     if (!selection) return
@@ -400,35 +408,35 @@ function ConciseAnalysis({ data }: { data: AnalysisResult }) {
 
   return <div className="portfolio-analysis-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
     <Panel label="Sector allocation" meta="Current value · select a sector" style={{ gridColumn: '1 / -1', minHeight: 360, overflow: 'hidden' }}>
-      <div className="portfolio-sector-layout" style={{ minHeight: 330, display: 'grid', gridTemplateColumns: 'minmax(280px, .72fr) minmax(440px, 1.28fr)', alignItems: 'center', paddingTop: 28, overflow: 'hidden' }}>
+      <div className="portfolio-sector-layout" onPointerDownCapture={capturePopoverAnchor} style={{ minHeight: 330, display: 'grid', gridTemplateColumns: 'minmax(280px, .72fr) minmax(440px, 1.28fr)', alignItems: 'center', paddingTop: 28, overflow: 'hidden' }}>
         <div className="portfolio-sector-chart" style={{ minWidth: 0, height: 300, cursor: 'pointer', outline: 'none' }}><ResponsiveContainer width="100%" height="100%"><PieChart style={{ outline: 'none' }}><Pie data={sectorData} dataKey="weight" nameKey="sector" innerRadius="50%" outerRadius="76%" paddingAngle={1} stroke={T.surface} style={{ outline: 'none' }} onClick={(entry: any) => { const slice = sectorData.find(item => item.sector === (entry?.sector ?? entry?.payload?.sector)); if (slice) setSelection({ kind: 'sector', sector: slice.sector, memberSectors: slice.memberSectors }) }}>{sectorData.map((s, i) => <Cell key={s.sector} fill={sectorColors[i % sectorColors.length]} cursor="pointer" style={{ outline: 'none' }} />)}</Pie><Tooltip contentStyle={tipStyle} formatter={(value: number) => `${Number(value).toFixed(1)}%`} /></PieChart></ResponsiveContainer></div>
         <div className="portfolio-sector-legend" style={{ display: 'grid', gridTemplateColumns: sectorData.length > 8 ? 'repeat(2, minmax(0, 1fr))' : '1fr', alignContent: 'center', gap: 5, minWidth: 0, width: '100%', maxWidth: '100%', padding: '0 18px 0 8px', overflow: 'hidden' }}>{sectorData.map((s, i) => <button type="button" aria-label={`Inspect ${s.sector}, ${s.weight.toFixed(1)} percent`} aria-pressed={selection?.kind === 'sector' && selection.sector === s.sector} className="portfolio-inspectable portfolio-sector-row" onClick={() => setSelection({ kind: 'sector', sector: s.sector, memberSectors: s.memberSectors })} key={s.sector} style={{ appearance: 'none', border: '1px solid transparent', background: selection?.kind === 'sector' && selection.sector === s.sector ? T.hover : 'transparent', color: 'inherit', display: 'grid', gridTemplateColumns: '8px minmax(0, 1fr) 48px', gap: 8, alignItems: 'center', minWidth: 0, width: '100%', maxWidth: '100%', padding: '6px 7px', fontFamily: MONO, fontSize: 9.5, textAlign: 'left', cursor: 'pointer' }}><span style={{ width: 7, height: 7, background: sectorColors[i % sectorColors.length] }} /><span style={{ color: selection?.kind === 'sector' && selection.sector === s.sector ? T.text : T.muted, minWidth: 0, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{s.sector}</span><span style={{ color: T.text, textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{s.weight.toFixed(1)}%</span></button>)}</div>
       </div>
-      {selection?.kind === 'sector' && <DetailInspector selection={selection} data={data} onClose={() => setSelection(null)} />}
+      {selection?.kind === 'sector' && <DetailInspector selection={selection} data={data} anchor={popoverAnchor} onClose={() => setSelection(null)} />}
     </Panel>
 
     <Panel label="Return path" meta={`Growth of $100 vs ${BENCHMARK} · select a date`} style={{ height: 360 }}>
-      <div className="portfolio-chart-hit" style={{ height: '100%' }}><ResponsiveContainer width="100%" height="100%"><ComposedChart data={data.backtest.cumulative} margin={{ top: 40, right: 14, bottom: 5, left: 0 }} onClick={(state: any) => { const point = chartPoint(state); if (point) setSelection({ kind: 'return', point }) }}><CartesianGrid stroke={T.borderFaint} vertical={false} /><XAxis dataKey="date" tick={{ fill: T.muted, fontSize: 9 }} minTickGap={70} /><YAxis tick={{ fill: T.muted, fontSize: 9 }} width={42} /><Tooltip contentStyle={tipStyle} /><ReferenceLine y={100} stroke={T.border} /><Line dataKey="portfolio" name={data.bookName} stroke={T.gold} strokeWidth={2} dot={false} activeDot={{ r: 4 }} /><Line dataKey="benchmark" name={BENCHMARK} stroke={T.blue} strokeWidth={1.2} dot={false} activeDot={{ r: 3 }} /></ComposedChart></ResponsiveContainer></div>
-      {selection?.kind === 'return' && <DetailInspector selection={selection} data={data} onClose={() => setSelection(null)} />}
+      <div className="portfolio-chart-hit" onPointerDownCapture={capturePopoverAnchor} style={{ height: '100%' }}><ResponsiveContainer width="100%" height="100%"><ComposedChart data={data.backtest.cumulative} margin={{ top: 40, right: 14, bottom: 5, left: 0 }} onClick={(state: any) => { const point = chartPoint(state); if (point) setSelection({ kind: 'return', point }) }}><CartesianGrid stroke={T.borderFaint} vertical={false} /><XAxis dataKey="date" tick={{ fill: T.muted, fontSize: 9 }} minTickGap={70} /><YAxis tick={{ fill: T.muted, fontSize: 9 }} width={42} /><Tooltip contentStyle={tipStyle} /><ReferenceLine y={100} stroke={T.border} /><Line dataKey="portfolio" name={data.bookName} stroke={T.gold} strokeWidth={2} dot={false} activeDot={{ r: 4 }} /><Line dataKey="benchmark" name={BENCHMARK} stroke={T.blue} strokeWidth={1.2} dot={false} activeDot={{ r: 3 }} /></ComposedChart></ResponsiveContainer></div>
+      {selection?.kind === 'return' && <DetailInspector selection={selection} data={data} anchor={popoverAnchor} onClose={() => setSelection(null)} />}
     </Panel>
 
     <Panel label="Downside path" meta="Peak-to-trough · select a date" style={{ height: 360 }}>
-      <div className="portfolio-chart-hit" style={{ height: '100%' }}><ResponsiveContainer width="100%" height="100%"><AreaChart data={drawdowns} margin={{ top: 40, right: 14, bottom: 5, left: 0 }} onClick={(state: any) => { const point = chartPoint(state); if (point) setSelection({ kind: 'drawdown', point }) }}><CartesianGrid stroke={T.borderFaint} vertical={false} /><XAxis dataKey="date" tick={{ fill: T.muted, fontSize: 9 }} minTickGap={70} /><YAxis tick={{ fill: T.muted, fontSize: 9 }} width={42} /><Tooltip contentStyle={tipStyle} formatter={(value: number) => `${Number(value).toFixed(1)}%`} /><ReferenceLine y={0} stroke={T.border} /><Area dataKey="drawdown" stroke={T.neg} fill={mix(T.neg, 18)} activeDot={{ r: 4 }} /></AreaChart></ResponsiveContainer></div>
-      {selection?.kind === 'drawdown' && <DetailInspector selection={selection} data={data} onClose={() => setSelection(null)} />}
+      <div className="portfolio-chart-hit" onPointerDownCapture={capturePopoverAnchor} style={{ height: '100%' }}><ResponsiveContainer width="100%" height="100%"><AreaChart data={drawdowns} margin={{ top: 40, right: 14, bottom: 5, left: 0 }} onClick={(state: any) => { const point = chartPoint(state); if (point) setSelection({ kind: 'drawdown', point }) }}><CartesianGrid stroke={T.borderFaint} vertical={false} /><XAxis dataKey="date" tick={{ fill: T.muted, fontSize: 9 }} minTickGap={70} /><YAxis tick={{ fill: T.muted, fontSize: 9 }} width={42} /><Tooltip contentStyle={tipStyle} formatter={(value: number) => `${Number(value).toFixed(1)}%`} /><ReferenceLine y={0} stroke={T.border} /><Area dataKey="drawdown" stroke={T.neg} fill={mix(T.neg, 18)} activeDot={{ r: 4 }} /></AreaChart></ResponsiveContainer></div>
+      {selection?.kind === 'drawdown' && <DetailInspector selection={selection} data={data} anchor={popoverAnchor} onClose={() => setSelection(null)} />}
     </Panel>
 
     <Panel label="Monte Carlo range" meta="500 paths · select a horizon" style={{ gridColumn: '1 / -1', height: 350, overflow: 'hidden' }}>
-      {data.monteCarlo && bands.length ? <div className="portfolio-monte-layout" style={{ height: '100%', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 150px', gap: 14 }}>
+      {data.monteCarlo && bands.length ? <div className="portfolio-monte-layout" onPointerDownCapture={capturePopoverAnchor} style={{ height: '100%', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 150px', gap: 14 }}>
         <div className="portfolio-chart-hit" style={{ minWidth: 0, height: '100%' }}><ResponsiveContainer width="100%" height="100%"><ComposedChart data={bands} margin={{ top: 40, right: 5, bottom: 14, left: 0 }} onClick={(state: any) => { const point = chartPoint(state); if (point) setSelection({ kind: 'monte', point }) }}><CartesianGrid stroke={T.borderFaint} vertical={false} /><XAxis dataKey="day" tick={{ fill: T.muted, fontSize: 9 }} /><YAxis tick={{ fill: T.muted, fontSize: 9 }} width={44} /><Tooltip contentStyle={tipStyle} formatter={(value: number) => Number(value).toFixed(1)} /><ReferenceLine y={100} stroke={T.border} /><Area dataKey="p95" stroke="none" fill={mix(T.blue, 8)} /><Area dataKey="p75" stroke="none" fill={mix(T.blue, 14)} /><Area dataKey="p25" stroke="none" fill={T.surface} /><Area dataKey="p5" stroke="none" fill={mix(T.neg, 12)} /><Line dataKey="p50" name="Median" stroke={T.gold} strokeWidth={2} dot={false} activeDot={{ r: 4 }} /></ComposedChart></ResponsiveContainer></div>
         <div className="portfolio-monte-outcomes" style={{ padding: '30px 0 12px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', gap: 24, minHeight: 0 }}><Outcome label="Upside (95th)" value={terminal ? fmtPct((terminal.p95 - 1) * 100, 0) : '—'} color={T.pos} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /><Outcome label="Median" value={terminal ? fmtPct((terminal.p50 - 1) * 100, 0) : '—'} color={T.gold} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /><Outcome label="Downside (5th)" value={terminal ? fmtPct((terminal.p5 - 1) * 100, 0) : '—'} color={T.neg} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /><Outcome label="Tail loss" value={`-${data.monteCarlo.cvar_95.toFixed(1)}%`} color={T.neg} onClick={() => setSelection({ kind: 'monte', point: bands[bands.length - 1] })} /></div>
       </div> : <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: T.muted, fontFamily: SANS, fontSize: 11 }}>Monte Carlo unavailable</div>}
-      {selection?.kind === 'monte' && <DetailInspector selection={selection} data={data} onClose={() => setSelection(null)} />}
+      {selection?.kind === 'monte' && <DetailInspector selection={selection} data={data} anchor={popoverAnchor} onClose={() => setSelection(null)} />}
     </Panel>
 
     <Panel label="Downtrend watch" meta="Select a holding for detail" style={{ gridColumn: '1 / -1', minHeight: 170, padding: '44px 14px 12px' }}>
-      {downtrends.length ? <div className="portfolio-downtrend-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${downtrends.length}, minmax(130px, 1fr))`, gap: 1, background: T.borderFaint }}>{downtrends.map(p => <button type="button" aria-label={`Inspect ${p.ticker}`} className="portfolio-inspectable" onClick={() => setSelection({ kind: 'position', ticker: p.ticker })} key={p.ticker} style={{ appearance: 'none', border: selection?.kind === 'position' && selection.ticker === p.ticker ? `1px solid ${T.gold}` : 0, background: T.surface, color: 'inherit', padding: '12px 14px', textAlign: 'left', cursor: 'pointer' }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontFamily: MONO }}><span style={{ color: T.gold, fontWeight: 800, fontSize: 12 }}>{p.ticker}</span><span style={{ color: T.neg, fontSize: 12 }}>{fmtPct(p.periodReturn)}</span></div><div style={{ color: T.muted, fontFamily: SANS, fontSize: 10, marginTop: 8, lineHeight: 1.4 }}>{p.decision}</div><div style={{ color: T.muted, fontFamily: MONO, fontSize: 9, marginTop: 5 }}>Weight {p.weight.toFixed(1)}% · Beta {p.beta?.toFixed(2) ?? '—'}</div></button>)}</div>
+      {downtrends.length ? <div className="portfolio-downtrend-grid" onPointerDownCapture={capturePopoverAnchor} style={{ display: 'grid', gridTemplateColumns: `repeat(${downtrends.length}, minmax(130px, 1fr))`, gap: 1, background: T.borderFaint }}>{downtrends.map(p => <button type="button" aria-label={`Inspect ${p.ticker}`} className="portfolio-inspectable" onClick={() => setSelection({ kind: 'position', ticker: p.ticker })} key={p.ticker} style={{ appearance: 'none', border: selection?.kind === 'position' && selection.ticker === p.ticker ? `1px solid ${T.gold}` : 0, background: T.surface, color: 'inherit', padding: '12px 14px', textAlign: 'left', cursor: 'pointer' }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontFamily: MONO }}><span style={{ color: T.gold, fontWeight: 800, fontSize: 12 }}>{p.ticker}</span><span style={{ color: T.neg, fontSize: 12 }}>{fmtPct(p.periodReturn)}</span></div><div style={{ color: T.muted, fontFamily: SANS, fontSize: 10, marginTop: 8, lineHeight: 1.4 }}>{p.decision}</div><div style={{ color: T.muted, fontFamily: MONO, fontSize: 9, marginTop: 5 }}>Weight {p.weight.toFixed(1)}% · Beta {p.beta?.toFixed(2) ?? '—'}</div></button>)}</div>
         : <div style={{ color: T.muted, fontFamily: SANS, fontSize: 11 }}>No modeled holding has a negative return over the five-year analysis window.</div>}
-      {selection?.kind === 'position' && <DetailInspector selection={selection} data={data} onClose={() => setSelection(null)} />}
+      {selection?.kind === 'position' && <DetailInspector selection={selection} data={data} anchor={popoverAnchor} onClose={() => setSelection(null)} />}
     </Panel>
   </div>
 }
@@ -437,7 +445,7 @@ function Outcome({ label, value, color, onClick }: { label: string; value: strin
   return <button type="button" className="portfolio-inspectable" onClick={onClick} style={{ appearance: 'none', border: 0, background: 'transparent', padding: '3px 5px', textAlign: 'left', cursor: onClick ? 'pointer' : 'default' }}><div style={{ color: T.muted, fontFamily: SANS, fontSize: 8.5, letterSpacing: '.08em', textTransform: 'uppercase' }}>{label}</div><div style={{ color, fontFamily: MONO, fontSize: 16, fontWeight: 800, marginTop: 3 }}>{value}</div></button>
 }
 
-function DetailInspector({ selection, data, onClose }: { selection: DetailSelection; data: AnalysisResult; onClose: () => void }) {
+function DetailInspector({ selection, data, anchor, onClose }: { selection: DetailSelection; data: AnalysisResult; anchor: PopoverAnchor | null; onClose: () => void }) {
   let title = 'Selected detail'
   let context = ''
   let metrics: { label: string; value: string; color?: string }[] = []
@@ -505,7 +513,16 @@ function DetailInspector({ selection, data, onClose }: { selection: DetailSelect
     note = position ? `${position.decision}. ${position.rationale}.` : 'Position detail is unavailable.'
   }
 
-  return <div className="portfolio-chart-popover" role="dialog" aria-modal="false" aria-label={`${title} ${context}`}>
+  const popupWidth = anchor ? Math.min(390, anchor.panelWidth - 24) : 390
+  const preferredLeft = anchor && anchor.x > anchor.panelWidth / 2 ? anchor.x - popupWidth - 12 : (anchor?.x ?? 0) + 12
+  const left = anchor ? Math.max(12, Math.min(preferredLeft, anchor.panelWidth - popupWidth - 12)) : undefined
+  const openAbove = Boolean(anchor && anchor.y > anchor.panelHeight / 2)
+  const top = Math.max(38, (anchor?.y ?? 26) + 12)
+  const verticalStyle: React.CSSProperties = openAbove && anchor
+    ? { top: 'auto', bottom: Math.max(12, anchor.panelHeight - anchor.y + 12), maxHeight: Math.max(96, anchor.y - 24) }
+    : { top, bottom: 'auto', maxHeight: anchor ? Math.max(96, anchor.panelHeight - top - 12) : undefined }
+
+  return <div className="portfolio-chart-popover" role="dialog" aria-modal="false" aria-label={`${title} ${context}`} style={{ left, right: anchor ? 'auto' : undefined, ...verticalStyle }}>
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14, paddingBottom: 10, borderBottom: `1px solid ${T.borderFaint}` }}>
       <div style={{ minWidth: 0 }}><div style={{ color: T.text, fontFamily: MONO, fontSize: 13, fontWeight: 800, overflowWrap: 'anywhere' }}>{title}</div><div style={{ color: T.muted, fontFamily: SANS, fontSize: 9, letterSpacing: '.08em', textTransform: 'uppercase', marginTop: 3 }}>{context}</div></div>
       <button type="button" onClick={onClose} aria-label="Close selected detail" className="portfolio-popover-close"><X size={13} /></button>
