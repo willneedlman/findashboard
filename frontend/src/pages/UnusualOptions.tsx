@@ -47,7 +47,7 @@ interface ScanParams {
 // Backend /api/options/unusual caps the universe at 25 names.
 const TICKER_CAP = 25
 
-const DEFAULT_PARAMS: ScanParams = { tickers: '', expiries: 2, minVolume: 300, minVolOi: 1.5 }
+const DEFAULT_PARAMS: ScanParams = { tickers: 'SPY', expiries: 2, minVolume: 300, minVolOi: 1.5 }
 
 type SavedScreen = {
   id: string
@@ -377,7 +377,7 @@ export function UnusualOptionsContent() {
             height:        34,
           }}
         >
-          {isFetching ? 'Scanning…' : 'Scan'}
+          {isFetching ? 'SCANNING…' : 'SCAN'}
         </button>
       </div>
 

@@ -11,6 +11,7 @@ import useIsMobile from '../hooks/useIsMobile'
 import { TOOLTIP_STYLE } from '../components/ChartTooltip'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
+import { formatLocalDate } from '../lib/time'
 
 interface CreditPoint { asof: string; delinquency_rate: number; chargeoff_rate: number | null }
 interface CreditClass {
@@ -236,7 +237,7 @@ export function CreditDelinquenciesContent() {
 
   return <div style={{ width: '100%' }}>
     <PageHeader title="Credit Stress" actions={<div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      {data?.as_of && <div style={{ display: 'flex', gap: 10, fontFamily: T.mono, fontSize: 8.5, color: T.muted }}><span style={{ color: T.pos }}>{data.source}</span><span>latest observation {data.as_of} · {ageLabel(data.as_of)}</span></div>}
+      {data?.as_of && <div style={{ display: 'flex', gap: 10, fontFamily: T.mono, fontSize: 8.5, color: T.muted }}><span style={{ color: T.pos }}>{data.source}</span><span>latest observation {formatLocalDate(data.as_of)} · {ageLabel(data.as_of)}</span></div>}
     </div>} />
 
     {isLoading && <EmptyState title="Loading Credit Stress" hint="Assembling financial stress, lending standards, delinquency, and charge-off observations." variant="loading" />}

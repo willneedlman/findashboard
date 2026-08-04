@@ -187,6 +187,8 @@ export function EarningsCalendarContent() {
       .finally(() => { if (loadIdRef.current === id) setLoading(false) })
   }, [date, days])
 
+  useEffect(() => { loadCalendar() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const filtered = useMemo(() => {
     const q = query.trim().toUpperCase()
     // Alias match only for meaningful queries (avoid "G" matching Google).
@@ -573,7 +575,7 @@ export function EarningsCalendarContent() {
               fontFamily: C.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
               padding: '9px 18px', whiteSpace: 'nowrap', opacity: loading ? 0.6 : 1,
             }}
-          >{loading ? 'Loading…' : started ? 'Reload' : 'Load'}</button>
+          >{loading ? 'SCANNING…' : 'SCAN'}</button>
         </div>
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 8 }}>
@@ -606,7 +608,7 @@ export function EarningsCalendarContent() {
       )}
 
       {!started && (
-        <EmptyState title="Earnings Scanner" hint="Set the date, window, and market cap above, then click Load." action="Load" />
+        <EmptyState title="Earnings Scanner" hint="Set the date, window, and market cap above, then click SCAN." action="SCAN" />
       )}
       {started && !error && (loading || !fullyEnriched) && (
         <EmptyState title="Loading…" variant="loading"

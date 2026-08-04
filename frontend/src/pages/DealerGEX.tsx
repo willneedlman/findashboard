@@ -41,7 +41,7 @@ const SELECT: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', bo
 export default function DealerGEX() {
   const cc = useChartColors()
   const [sp] = useSearchParams()
-  const urlTicker = (sp.get('ticker') || '').trim().toUpperCase()
+  const urlTicker = (sp.get('ticker') || 'SPY').trim().toUpperCase()
   const [ticker, setTicker] = useState(urlTicker)
   const [nStrikes, setNStrikes] = useState(20)
   const [paramsOpen, setParamsOpen] = useState(true)
@@ -51,7 +51,7 @@ export default function DealerGEX() {
   // 15-min staleTime serve instantly from the react-query cache. Arriving with
   // ?ticker= (drawer, palette, linked mode) auto-loads it.
   const [submitted, setSubmitted] = useState<{ ticker: string; expiry: string } | null>(
-    urlTicker ? { ticker: urlTicker, expiry: '' } : null)
+    { ticker: urlTicker, expiry: '' })
   // Same-route ?ticker= navigations (palette, drawer, linked mode) change only
   // the search string — no remount, so sync from the URL when it changes.
   useEffect(() => {
@@ -211,7 +211,7 @@ export default function DealerGEX() {
               fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
               textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer', opacity: isPending ? 0.6 : 1,
             }}>
-              {isPending ? 'Loading chains…' : 'Load GEX Profile'}
+              {isPending ? 'FETCHING…' : 'FETCH'}
             </button>
           </div>
         </>}>
@@ -342,8 +342,8 @@ export default function DealerGEX() {
             </>
           )}
           {!data && !isPending && (
-            <EmptyState title="Dealer GEX" hint="Enter a ticker and press Load GEX."
-              action="Load GEX Profile"
+            <EmptyState title="Dealer GEX" hint="Enter a ticker and press FETCH."
+              action="FETCH"
               keys={['Enter']} kpis={['Net GEX', 'Gamma Flip', 'Call Wall', 'Put Wall', 'Spot']}
               preview="chart" previewLabel="Gamma by Strike" />
           )}

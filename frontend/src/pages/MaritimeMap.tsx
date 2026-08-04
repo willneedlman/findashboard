@@ -9,7 +9,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import PageWrapper from '../components/PageWrapper'
 import { readToken } from '../lib/theme'
-import { formatLocalTime, localTimeZone } from '../lib/time'
+import { formatLocalTime } from '../lib/time'
 import { TOOLTIP_STYLE } from '../components/ChartTooltip'
 
 // Leaflet SVG/canvas can't consume CSS var(), so resolve theme tokens to concrete
@@ -256,7 +256,7 @@ function Sparkline({ data, w = 44, h = 15, color }: { data: number[]; w?: number
   return <svg width={w} height={h} style={{ display: 'block' }}><polyline points={pts} fill="none" stroke={color} strokeWidth={1.4} /></svg>
 }
 
-const fmtClockLocal = () => `${formatLocalTime(new Date())} ${localTimeZone()}`
+const fmtClockLocal = () => formatLocalTime(new Date())
 
 export function MaritimeMapContent() {
   const [C, setC] = useState<Colors>(buildColors)
@@ -693,7 +693,7 @@ export function MaritimeMapContent() {
 
         {/* ── Brand chip ── */}
         <motion.div {...mv(0)} style={{ position: 'absolute', top: 14, left: 14, zIndex: 520, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 13px', background: panelBg(), border: goldBorder(0.4) }}>
-          <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.18em', color: GOLD }}>GLOBAL ENERGY FLOWS</span>
+          <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.18em', color: GOLD }}>ENERGY FLOWS</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 5, height: 5, borderRadius: '50%', background: C.positive, boxShadow: `0 0 7px ${C.positive}`, animation: reduced ? undefined : 'gfm-pulse 2.6s infinite' }} />
             <span style={{ fontFamily: MONO, fontSize: 9, color: SEC }}>LIVE · {vess.data?.count ?? 0} · {clock}</span>
@@ -875,7 +875,7 @@ export function MaritimeMapContent() {
                     <StatRow k="Destination" v={inspectedVessel?.destination || '—'} />
                     <StatRow k="Speed" v={inspectedVessel?.sog != null ? `${inspectedVessel.sog.toFixed(1)} kn` : '—'} />
                     <StatRow k="Heading" v={inspectedVessel?.heading != null && inspectedVessel.heading !== 511 ? `${inspectedVessel.heading}°` : inspectedVessel?.cog != null ? `COG ${inspectedVessel.cog.toFixed(0)}°` : '—'} />
-                    <StatRow k="Updated" v={inspectedVessel?.time_utc ? new Date(inspectedVessel.time_utc).toLocaleTimeString() : '—'} />
+                    <StatRow k="Updated" v={inspectedVessel?.time_utc ? formatLocalTime(inspectedVessel.time_utc) : '—'} />
                     <StatRow k="Source" v={inspectedVessel?.source === 'kystverket' ? 'Kystverket' : inspectedVessel?.source === 'vesselapi' ? 'VesselAPI' : 'AISStream'} />
                   </>
                 )}
@@ -938,7 +938,7 @@ export function MaritimeMapContent() {
                       : <span style={{ width: 0, height: 0, borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '8px solid var(--theme-bg, #0a0e16)' }} />}
                   </button>
                   <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: GOLD }}>
-                    {replayVessels ? `${replayVessels.time.toISOString().slice(11, 16)} UTC` : 'REPLAY'}
+                    {replayVessels ? formatLocalTime(replayVessels.time, { timeZone: 'UTC' }) : 'REPLAY'}
                   </span>
                   <span style={{ fontFamily: MONO, fontSize: 9, color: MUTED }}>{frames.length} frames · 10 min sampling</span>
                   <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
@@ -1038,7 +1038,7 @@ function NowcastBlock({ nc, C }: { nc: Nowcast; C: Colors }) {
             {nc.calls_96h} crossings{capM ? ` · ~${capM}M t transited (est)` : ''}
           </div>
           <div style={{ fontFamily: SANS, fontSize: 8.5, color: FAINT, marginTop: 4 }}>
-            Capacity is a draught-based estimate, not manifest tonnage.{nc.as_of ? ` Last ${new Date(nc.as_of).toLocaleTimeString()}.` : ''}
+            Capacity is a draught-based estimate, not manifest tonnage.{nc.as_of ? ` Last ${formatLocalTime(nc.as_of)}.` : ''}
           </div>
         </>
       )}

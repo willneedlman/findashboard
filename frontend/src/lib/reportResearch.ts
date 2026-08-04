@@ -129,7 +129,7 @@ const SOURCE_META: Record<ReportResearchSourceId, Omit<ReportResearchSource, 're
   'portfolio-risk': { id: 'portfolio-risk', label: 'Risk and performance', tool: 'Portfolio Compare', route: '/portfolio-compare' },
   company: { id: 'company', label: 'Company snapshot', tool: 'Corporate Hub', route: '/corporate' },
   'price-history': { id: 'price-history', label: 'Price and drawdown', tool: 'Chart Studio', route: '/chart-studio' },
-  'market-compare': { id: 'market-compare', label: 'Relative performance', tool: 'Compare', route: '/compare' },
+  'market-compare': { id: 'market-compare', label: 'Relative performance', tool: 'Asset Overlay', route: '/asset-overlay' },
   mover: { id: 'mover', label: 'Catalyst scan', tool: 'Mover Radar', route: '/mover-radar' },
   news: { id: 'news', label: 'Recent news', tool: 'Mover Radar', route: '/mover-radar' },
   options: { id: 'options', label: 'Options snapshot', tool: 'Options Desk', route: '/options' },

@@ -252,7 +252,7 @@ export function DCFValuationContent() {
               color: 'var(--theme-secondary, #99907e)', fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
               textTransform: 'uppercase', padding: '5px 0', cursor: fetching ? 'default' : 'pointer', opacity: fetching ? 0.6 : 1,
             }}>
-              {fetching ? 'Loading…' : 'Fetch Fundamentals'}
+              {fetching ? 'FETCHING…' : 'FETCH'}
             </button>
             <button onClick={aiSuggest} disabled={aiSuggesting || fetching} style={{
               marginTop: 4, width: '100%', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)',
@@ -438,7 +438,7 @@ export function DCFValuationContent() {
     </>}>
 
       {!data && (
-        <EmptyState title="DCF Valuation Engine" hint="Enter a ticker and press Fetch Fundamentals, adjust stages/curves/discount rate, then Run."
+        <EmptyState title="DCF Valuation Engine" hint="Enter a ticker and press FETCH, adjust stages, curves, and the discount rate, then RUN."
           keys={['Enter']} action="Run DCF Model" />
       )}
 

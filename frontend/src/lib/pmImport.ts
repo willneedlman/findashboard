@@ -12,7 +12,7 @@ export function normalizeTicker(raw: string): string {
   return raw.trim().toUpperCase().replace(/[./]/g, '-')
 }
 
-export interface PMHolding { ticker: string; shares: number; avgCost: number }
+export interface PMHolding { ticker: string; shares: number; avgCost: number; useMarketPrice?: boolean; pendingInvestmentAmount?: number }
 export interface PMCash { id: string; label: string; amount: number; rate: number; since: string }
 export interface PMOptionLeg {
   type: 'call' | 'put'

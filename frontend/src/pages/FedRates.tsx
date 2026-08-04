@@ -11,7 +11,7 @@ import PageWrapper from '../components/PageWrapper'
 import EmptyState from '../components/EmptyState'
 import { fetchYieldCurve, fetchFedProjections, fetchSepDots, fetchCurveSpreads } from '../hooks/useApi'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../components/ChartTooltip'
-import { formatLocalTime, localTimeZone } from '../lib/time'
+import { formatLocalTime } from '../lib/time'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip, chartClip } from '../lib/reportCaptureRegistry'
@@ -65,7 +65,7 @@ function LiveClock() {
   return (
     <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
       <span style={{ width: 5, height: 5, borderRadius: '50%', background: T.pos }} />
-      <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>LIVE · {clock} {localTimeZone()}</span>
+      <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>LIVE · {clock}</span>
     </span>
   )
 }

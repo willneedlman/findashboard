@@ -15,6 +15,7 @@ import { formatScreenerFilterDisplay, screenerFilterPlaceholder, screenerFilterT
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip, textClip } from '../lib/reportCaptureRegistry'
+import { formatLocalTime } from '../lib/time'
 
 const C = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', surface: 'var(--theme-surface, #0d1826)',
@@ -576,7 +577,7 @@ export default function StockScreener() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', padding: isMobile ? '12px' : '15px 24px', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 22%, transparent)', flex: 'none' }}>
           <span style={{ fontFamily: C.sans, fontSize: 14, fontWeight: 700, letterSpacing: '0.22em', textTransform: 'uppercase', color: C.gold }}>Stock Screener</span>
           <span style={{ fontFamily: C.mono, fontSize: 10, letterSpacing: '0.04em', color: C.dim }}>
-            {universeLabel.toUpperCase()} · {data ? `${data.total} MATCHES` : 'READY'} · {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+            {universeLabel.toUpperCase()} · {data ? `${data.total} MATCHES` : 'READY'} · {formatLocalTime(new Date())}
           </span>
         </div>
 
@@ -717,7 +718,7 @@ export default function StockScreener() {
                 </select>
                 <button onClick={runScreen} disabled={isPending}
                   style={{ marginLeft: 'auto', fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.gold, background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)', border: `1px solid ${C.gold}`, padding: '7px 16px', cursor: isPending ? 'default' : 'pointer', opacity: isPending ? 0.6 : 1 }}>
-                  {isPending ? 'Screening…' : 'Run'}
+                  {isPending ? 'SCANNING…' : 'SCAN'}
                 </button>
               </div>
               {/* filter chips — scroll horizontally instead of wrapping off-screen */}
@@ -774,8 +775,8 @@ export default function StockScreener() {
             ) : !data && isPending ? (
               <div style={{ padding: 24 }}><LoadingState label="Screening" /></div>
             ) : !data ? (
-              <div style={{ padding: 24 }}><EmptyState title="Stock Screener" hint="Pick a screen from the library or set filters, then run the screen."
-                action="Run"
+              <div style={{ padding: 24 }}><EmptyState title="Stock Screener" hint="Pick a screen from the library or set filters, then scan the universe."
+                action="SCAN"
                 kpis={['Matches', 'Avg P/E', 'Median Growth', 'Avg Margin', 'Market Cap']}
                 preview="table" previewLabel="Screen Results" columns={['Company', 'Sector', 'P/E', 'Growth']} /></div>
             ) : (

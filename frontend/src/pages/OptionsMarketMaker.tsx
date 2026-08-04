@@ -408,7 +408,7 @@ export function OptionsMarketMakerContent() {
     return row
   })
 
-  const TAB = 'Market Maker Simulator'
+  const TAB = 'Market Maker'
   useReportCapture(() => {
     if (!f || !g) return null
     const spotChgCap = f.spotHistory.length > 1 ? (f.spot / f.spotHistory[0] - 1) * 100 : 0

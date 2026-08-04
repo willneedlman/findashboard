@@ -198,7 +198,7 @@ export function ReverseDCFContent() {
           <label style={LABEL}>Ticker</label>
           <TickerInput style={INPUT} value={ticker} onChange={setTicker} onEnter={() => loadAndSolve(false)} placeholder="Ticker or company" />
           <button onClick={() => loadAndSolve(false)} disabled={loading} style={{ ...PRIMARY_BTN, marginTop: 8 }}>
-            {loading ? 'Solving…' : 'Load & Solve'}
+            {loading ? 'FETCHING…' : 'FETCH'}
           </button>
         </div>
 
@@ -241,9 +241,9 @@ export function ReverseDCFContent() {
 
       {!data && !error && (
         <EmptyState title="Reverse DCF"
-          hint="A reverse DCF flips a normal DCF around. Instead of guessing growth to get a value, it solves for the revenue growth rate the current price already implies, holding margins fixed. Enter a ticker and Load & Solve."
+          hint="A reverse DCF flips a normal DCF around. Instead of guessing growth to get a value, it solves for the revenue growth rate the current price already implies, holding margins fixed. Enter a ticker and press FETCH."
           keys={['Enter']} kpis={['Implied Growth', 'Market Price', 'WACC', 'Op Margin', 'Years']}
-          preview="chart" previewLabel="Implied Revenue Path" action="Load & Solve" />
+          preview="chart" previewLabel="Implied Revenue Path" action="FETCH" />
       )}
 
       {data && implied == null && (

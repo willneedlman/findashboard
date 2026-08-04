@@ -331,7 +331,7 @@ export function PortfolioTab() {
       max_drawdown: number; sortino: number; calmar: number; beta: number
     }
     const pieces: ClipDraft[] = [
-      kpiClip('Backtester', 'Portfolio Backtest Snapshot', [
+      kpiClip('Portfolio Backtester', 'Portfolio Backtest Snapshot', [
         { label: 'Portfolio CAGR', value: `${m.port_cagr}%` },
         { label: `${benchmark} CAGR`, value: `${m.bench_cagr}%` },
         { label: 'Sharpe', value: String(m.port_sharpe) },
@@ -344,7 +344,7 @@ export function PortfolioTab() {
     ]
     if (Array.isArray(assets) && assets.length) {
       pieces.push(tableClip(
-        'Backtester',
+        'Portfolio Backtester',
         'Holdings',
         ['Ticker', 'Weight %'],
         assets.slice(0, 20).map(a => [a.ticker, a.weight]),
@@ -360,7 +360,7 @@ export function PortfolioTab() {
         ...(data.strategyResult ? [{ key: 'strategy', label: 'Strategy' }] : []),
       ]
       pieces.push(chartClip(
-        'Backtester',
+        'Portfolio Backtester',
         'Cumulative Return — Base 100',
         'line',
         'date',
@@ -374,7 +374,7 @@ export function PortfolioTab() {
       ))
     }
     return pieces
-  }, { disabled: !data?.metrics, sourceTab: 'Backtester' })
+  }, { disabled: !data?.metrics, sourceTab: 'Portfolio Backtester' })
 
   return (
     <>

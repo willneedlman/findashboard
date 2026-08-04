@@ -845,7 +845,7 @@ export function SupplyChainContent() {
               padding: '8px 20px', cursor: loading ? 'not-allowed' : 'pointer', outline: 'none',
             }}
           >
-            {loading ? 'Loading…' : 'Fetch'}
+            {loading ? 'FETCHING…' : 'FETCH'}
           </button>
           {error && <span style={{ fontFamily: T.mono, fontSize: 10, color: 'var(--theme-negative)' }}>{error}</span>}
         </div>
@@ -1009,7 +1009,7 @@ export function SupplyChainContent() {
               preview="table"
               previewLabel="Revenue Profile"
               columns={['Segment', 'Revenue', 'Share', 'YoY']}
-              action="Fetch"
+              action="FETCH"
             />
           </>
         )}

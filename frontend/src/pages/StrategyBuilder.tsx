@@ -314,7 +314,7 @@ export default function StrategyBuilder() {
   const updateLeg = (i: number, k: keyof Leg, v: string | number) =>
     setLegs(p => p.map((l, idx) => idx === i ? { ...l, [k]: v } : l))
 
-  const TAB = 'Options Strategy Builder'
+  const TAB = 'Options Strategy'
   useReportCapture(() => {
     if (!legs.length) return null
     const netCost = legs.reduce((s, l) => s + (l.action === 'buy' ? 1 : -1) * (l.premium ?? 0) * (l.quantity ?? 0), 0) * 100
@@ -371,7 +371,7 @@ export default function StrategyBuilder() {
   }, { disabled: !legs.length, sourceTab: TAB })
 
   return (
-    <PageWrapper title="Options Strategy Builder">
+    <PageWrapper title="Options Strategy">
       <SidebarLayout sidebarWidth={210} sidebarTitle="" sidebar={<>
           <RailSection title="Parameters" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1424,4 +1424,3 @@ function AiOptionsStrategyChat({ onAccept }: { onAccept: (draft: OptionsStrategy
     </div>
   )
 }
-

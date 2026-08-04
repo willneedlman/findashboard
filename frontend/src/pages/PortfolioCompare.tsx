@@ -108,13 +108,13 @@ export function PortfolioCompareContent() {
   useReportCapture(() => {
     if (!r?.metrics?.length) return null
     const pieces: ClipDraft[] = [
-      kpiClip('Compare Portfolios', 'Portfolio Comparison Snapshot', r.metrics.map(mt => ({
+      kpiClip('Portfolio Compare', 'Portfolio Comparison Snapshot', r.metrics.map(mt => ({
         label: mt.name,
         value: `${mt.cagr >= 0 ? '+' : ''}${mt.cagr}% CAGR`,
         sub: `Sharpe ${mt.sharpe} · DD ${mt.max_drawdown}%`,
       }))),
       tableClip(
-        'Compare Portfolios',
+        'Portfolio Compare',
         'Metrics',
         ['Portfolio', 'Lev', 'CAGR %', 'Vol %', 'Sharpe', 'Max DD %', 'Sortino', 'Calmar'],
         r.metrics.map(mt => [
@@ -133,7 +133,7 @@ export function PortfolioCompareContent() {
       const step = Math.max(1, Math.ceil(chartData.length / 80))
       const sampled = chartData.filter((_, i) => i % step === 0 || i === chartData.length - 1) as Record<string, string | number>[]
       pieces.push(chartClip(
-        'Compare Portfolios',
+        'Portfolio Compare',
         mode === 'pct' ? 'Cumulative Return' : 'Growth of $100',
         'line',
         'date',
@@ -146,7 +146,7 @@ export function PortfolioCompareContent() {
       ))
     }
     return pieces
-  }, { disabled: !r?.metrics?.length, sourceTab: 'Compare Portfolios' })
+  }, { disabled: !r?.metrics?.length, sourceTab: 'Portfolio Compare' })
 
   return (
     <>
@@ -218,7 +218,7 @@ export function PortfolioCompareContent() {
           </div>
         )}
         {!r && !m.isPending && (
-          <EmptyState title="Compare Portfolios" hint="Define two to four portfolios, then compare return, risk and drawdown."
+          <EmptyState title="Portfolio Compare" hint="Define two to four portfolios, then compare return, risk and drawdown."
             action="Compare" />
         )}
         {r && (
@@ -298,5 +298,5 @@ export function PortfolioCompareContent() {
 }
 
 export default function PortfolioCompare() {
-  return <PageWrapper title="Compare Portfolios"><PortfolioCompareContent /></PageWrapper>
+  return <PageWrapper title="Portfolio Compare"><PortfolioCompareContent /></PageWrapper>
 }

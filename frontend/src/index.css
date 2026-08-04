@@ -841,3 +841,17 @@ textarea:focus:not(:focus-visible) {
 /* EmptyState loading variant: indeterminate sliding fill. */
 @keyframes es-load-slide { 0% { transform: translateX(-100%) } 100% { transform: translateX(275%) } }
 @media (prefers-reduced-motion: reduce) { .es-load-fill { animation: none !important; opacity: 0.6 } }
+
+/* Shared terminal control geometry. Individual tools may size wider controls,
+   but text/select controls keep one compact baseline across the application. */
+.ft-control,
+input.ft-control,
+select.ft-control,
+textarea.ft-control {
+  min-height: 32px;
+  box-sizing: border-box;
+  border-radius: 0;
+  color: var(--theme-text, #d7e3fc);
+  background: var(--theme-bg, #101c2e);
+  border: 1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent);
+}

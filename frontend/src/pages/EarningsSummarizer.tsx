@@ -314,7 +314,7 @@ function ResultCard({ result }: { result: Result }) {
 
 export default function EarningsSummarizer() {
   const isMobile = useIsMobile()
-  const [tickers,    setTickers]    = useState<string[]>([])
+  const [tickers,    setTickers]    = useState<string[]>(['MSFT'])
   const [include10q, setInclude10q] = useState(true)
   const [include10k, setInclude10k] = useState(false)
   const [txLimit,    setTxLimit]    = useState(1)
@@ -523,7 +523,7 @@ export default function EarningsSummarizer() {
           <div style={{ padding: '20px' }}>
             <button onClick={startAnalysis} disabled={!canRun}
               style={{ width: '100%', background: canRun ? C.gold : 'transparent', border: `1px solid ${C.gold}`, color: canRun ? C.surface : C.gold, fontFamily: C.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', padding: '11px 0', cursor: canRun ? 'pointer' : 'default', opacity: canRun ? 1 : 0.5 }}>
-              {isPending ? `Analyzing… (${overallProgress}%)` : 'Analyze'}
+              {isPending ? `FETCHING… (${overallProgress}%)` : 'FETCH'}
             </button>
           </div>
         </aside>
@@ -561,7 +561,7 @@ export default function EarningsSummarizer() {
 
           {!inProgress && streamedResults.length === 0 && !error && (
             <EmptyState title="Earnings Notes" hint="Add tickers, then analyze their latest filings and earnings commentary."
-              action="Analyze"
+              action="FETCH"
               kpis={['Filing', 'Key Metric', 'Guidance', 'Tone']}
               preview="table" previewLabel="Earnings Notes" columns={['Ticker', 'Filing', 'Key Read', 'Tone']} />
           )}

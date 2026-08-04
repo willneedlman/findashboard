@@ -335,7 +335,8 @@ export default function App() {
               <Route path="/market-maker"       element={<MarketMakerSimulator />} />
               <Route path="/fixed-income-mm"    element={<Navigate to="/market-maker?desk=fixed-income" replace />} />
               <Route path="/unusual-options"    element={<UnusualOptions />} />
-              <Route path="/compare"            element={<Compare />} />
+              <Route path="/asset-overlay"      element={<Compare />} />
+              <Route path="/compare"            element={<RedirectWithSearch to="/asset-overlay" />} />
               <Route path="/etf-analyzer"       element={<EtfXray />} />
               <Route path="/logistics-map"      element={<LogisticsMap />} />
               <Route path="/chokepoint-exposure" element={<ChokepointExposure />} />

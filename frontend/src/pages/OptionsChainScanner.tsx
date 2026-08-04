@@ -26,7 +26,8 @@ const SELECT: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', bo
 export function OptionsChainScannerContent() {
   const cc = useChartColors()
   const [sp] = useSearchParams()
-  const [ticker, setTicker] = useState((sp.get('ticker') ?? '').toUpperCase())
+  const initialTicker = (sp.get('ticker') ?? 'SPY').toUpperCase()
+  const [ticker, setTicker] = useState(initialTicker)
   const [topN, setTopN]     = useState(12)
   const [paramsOpen, setParamsOpen] = useState(true)
   const [view, setView]     = useState<'calls' | 'puts' | 'chart'>('calls')
@@ -51,6 +52,10 @@ export function OptionsChainScannerContent() {
     const t = (sp.get('ticker') || '').trim().toUpperCase()
     if (t) { setTicker(t); mutate(t) }
   }, [sp])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!sp.get('ticker')) mutate(initialTicker)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const spot: number | null = data?.spot ?? null
 
@@ -134,7 +139,7 @@ export function OptionsChainScannerContent() {
                   ))}
                 </select>
               ) : (
-                <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>Load chain to see expirations</div>
+                <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>FETCH to see expirations</div>
               )}
               {spot && <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', marginTop: 4 }}>Spot: <span style={{ color: 'var(--theme-primary, #c9a84c)' }}>${spot.toFixed(2)}</span></div>}
             </div>
@@ -146,7 +151,7 @@ export function OptionsChainScannerContent() {
               fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
               textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer', opacity: isPending ? 0.6 : 1,
             }}>
-              {isPending ? 'Loading…' : 'Load Chain'}
+              {isPending ? 'FETCHING…' : 'FETCH'}
             </button>
           </div>
         </>}>
@@ -249,14 +254,14 @@ export function OptionsChainScannerContent() {
           )}
 
           {!data && !isPending && (
-            <EmptyState title="Options Chain Scanner" hint="Enter a ticker and expiry, then press Load Chain."
+            <EmptyState title="Chain Scanner" hint="Enter a ticker and expiry, then press FETCH."
               keys={['Enter']} kpis={['Spot', 'ATM IV', 'Put/Call', 'Max Pain', 'Total OI']}
-              preview="table" previewLabel="Options Chain" columns={['Strike', 'Bid', 'Ask', 'IV', 'Open Int']} action="Load Chain" />
+              preview="table" previewLabel="Options Chain" columns={['Strike', 'Bid', 'Ask', 'IV', 'Open Int']} action="FETCH" />
           )}
         </SidebarLayout>
   )
 }
 
 export default function OptionsChainScanner() {
-  return <PageWrapper title="Options Chain Scanner"><OptionsChainScannerContent /></PageWrapper>
+  return <PageWrapper title="Chain Scanner"><OptionsChainScannerContent /></PageWrapper>
 }

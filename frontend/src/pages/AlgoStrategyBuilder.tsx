@@ -1594,7 +1594,7 @@ export function AlgoStrategyBuilderContent() {
   const R = mode === 'portfolio' ? pf : data          // active result for the current mode
   const mR = R?.metrics
 
-  const TAB = 'Algorithmic Strategy Builder'
+  const TAB = 'Algo Builder'
   useReportCapture(() => {
     if (!mR || !R) return null
     const label = mode === 'portfolio'
@@ -1812,7 +1812,7 @@ export function AlgoStrategyBuilderContent() {
       )}
 
       {!R && !(mode === 'portfolio' ? runPortfolio.isPending : isPending) && (
-        <EmptyState title="Algorithmic Strategy Builder"
+        <EmptyState title="Algo Builder"
           hint={mode === 'portfolio'
             ? 'Add positions (each = a saved rule-set + ticker + weight + the trade its BUY signal opens), then Run Portfolio. Long/short shares and long/short modeled options aggregate into one book.'
             : 'Build a strategy from entry/exit rules, pick a ticker, then Run Backtest. Saved strategies import into Monte Carlo and the Backtester.'}
@@ -2183,7 +2183,7 @@ export function AlgoStrategyBuilderContent() {
 }
 
 export default function AlgoStrategyBuilder() {
-  return <PageWrapper title="Algorithmic Strategy Builder"><AlgoStrategyBuilderContent /></PageWrapper>
+  return <PageWrapper title="Algo Builder"><AlgoStrategyBuilderContent /></PageWrapper>
 }
 
 interface AlgoStrategyDraft {

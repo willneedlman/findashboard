@@ -103,6 +103,7 @@ export default function TickerInput({
   return (
     <div style={{ position: 'relative', minWidth: 0, flex: style?.flex }}>
       <input
+        className="ft-control"
         value={text}
         onChange={e => onType(e.target.value)}
         onKeyDown={onKeyDown}

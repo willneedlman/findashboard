@@ -445,7 +445,7 @@ export function OptionsPricerContent() {
               textTransform: 'uppercase', padding: '7px 0', cursor: (!chainSym || chainMut.isPending) ? 'default' : 'pointer',
               opacity: (!chainSym || chainMut.isPending) ? 0.6 : 1,
             }}>
-              {chainMut.isPending ? 'Loading…' : 'Load Chain'}
+              {chainMut.isPending ? 'FETCHING…' : 'FETCH'}
             </button>
             {chainMut.isError && <div style={{ fontSize: 9, color: 'var(--theme-negative, #ef4444)', fontFamily: 'var(--theme-sans)' }}>No chain found for that symbol.</div>}
             {chain && (
@@ -544,7 +544,7 @@ export function OptionsPricerContent() {
                   textTransform: 'uppercase', padding: '8px 0', cursor: pending ? 'default' : 'pointer',
                   opacity: pending ? 0.6 : 1, transition: 'opacity 0.15s',
                 }}>
-                  {pending ? 'Calculating…' : 'Calculate'}
+                  {pending ? 'RUNNING…' : 'RUN'}
                 </button>
                 {err && <div style={{ fontSize: 9, color: 'var(--theme-negative, #ef4444)', textAlign: 'center', fontFamily: 'var(--theme-sans)' }}>Server unavailable. Is the backend running?</div>}
               </>
@@ -554,7 +554,7 @@ export function OptionsPricerContent() {
 
           {mode === 'single' && !priceData && !pricePending && (
             <EmptyState title="Options Pricer" hint="Set your contract assumptions or load a listed option, then calculate its premium and Greeks."
-              action="Calculate" />
+              action="RUN" />
           )}
 
           {mode === 'single' && priceData && (<>
@@ -636,7 +636,7 @@ export function OptionsPricerContent() {
 
           {mode === 'multi' && !multiData && !multiPending && (
             <EmptyState title="Multi-Leg Options Pricer" hint="Set the strategy legs, then calculate the combined premium, Greeks and payoff."
-              action="Calculate" />
+              action="RUN" />
           )}
 
         </SidebarLayout>

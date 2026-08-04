@@ -8,11 +8,17 @@ export const localDateInputValue = (date = new Date()) => {
 export const formatLocalTime = (value: string | number | Date, options: Intl.DateTimeFormatOptions = {}) => {
   const date = value instanceof Date ? value : new Date(value)
   if (Number.isNaN(date.getTime())) return '—'
-  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false, ...options })
+  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short', ...options })
 }
 
 export const formatLocalDateTime = (value: string | number | Date) => {
   const date = value instanceof Date ? value : new Date(value)
   if (Number.isNaN(date.getTime())) return '—'
-  return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+  return date.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short' })
+}
+
+export const formatLocalDate = (value: string | number | Date) => {
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }

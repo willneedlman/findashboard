@@ -90,7 +90,7 @@ function QueryBar({ reporter, setReporter, cmd, setCmd, year, setYear, flow, set
         <label><span style={{ ...LABEL, display: 'block', marginBottom: 5 }}>Commodity</span><select value={cmd} onChange={e => setCmd(e.target.value)} style={{ ...SELECT, width: '100%' }}>{COMMODITIES.map(([c, n]) => <option key={c} value={c}>{n}</option>)}</select></label>
         <label><span style={{ ...LABEL, display: 'block', marginBottom: 5 }}>Year</span><select value={year} onChange={e => setYear(e.target.value)} style={{ ...SELECT, width: '100%' }}>{YEARS.map(y => <option key={y} value={y}>{y}</option>)}</select></label>
         <div><div style={{ ...LABEL, marginBottom: 5 }}>Flow</div><div style={{ display: 'flex', gap: 5 }}><button onClick={() => setFlow('X')} style={seg(flow === 'X')}>Exports</button><button onClick={() => setFlow('M')} style={seg(flow === 'M')}>Imports</button></div></div>
-        <button onClick={run} disabled={loading} style={{ height: 30, minWidth: 112, fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.gold, border: `1px solid ${T.gold}`, background: mix(T.gold, dirty ? 12 : 6), padding: '0 14px', cursor: loading ? 'wait' : 'pointer', opacity: loading ? 0.6 : 1 }}>{loading ? 'Loading' : dirty ? 'Update flows' : 'Refresh'}</button>
+        <button onClick={run} disabled={loading} style={{ height: 32, minWidth: 112, fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.gold, border: `1px solid ${T.gold}`, background: mix(T.gold, dirty ? 12 : 6), padding: '0 14px', cursor: loading ? 'wait' : 'pointer', opacity: loading ? 0.6 : 1 }}>{loading ? 'RUNNING…' : 'RUN'}</button>
       </div>
     </Panel>
   )

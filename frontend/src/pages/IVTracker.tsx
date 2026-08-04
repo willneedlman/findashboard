@@ -324,7 +324,7 @@ export function IVTrackerContent() {
     : ivRank <= 25 ? T.pos
     : T.warn
 
-  const TAB = 'IV Rank & Term'
+  const TAB = 'IV Rank'
   useReportCapture(() => {
     if (!data) return null
     const pieces: ClipDraft[] = [
@@ -692,5 +692,5 @@ export function IVTrackerContent() {
 }
 
 export default function IVTracker() {
-  return <PageWrapper title="IV Rank & Term Structure"><IVTrackerContent /></PageWrapper>
+  return <PageWrapper title="IV Rank"><IVTrackerContent /></PageWrapper>
 }

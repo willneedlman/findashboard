@@ -35,7 +35,8 @@ export const C = {
 }
 
 export const inputStyle: React.CSSProperties = {
-  background: 'var(--theme-bg)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
+  height: 32, minHeight: 32, borderRadius: 0,
+  background: 'var(--theme-bg, #101c2e)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)',
   color: 'var(--theme-text, #d7e3fc)', padding: '6px 10px', fontSize: 12,
   fontFamily: 'var(--theme-mono)', width: '100%', outline: 'none', boxSizing: 'border-box',
 }
@@ -43,7 +44,8 @@ export const inputStyle: React.CSSProperties = {
 export const selectStyle: React.CSSProperties = { ...inputStyle, cursor: 'pointer' }
 
 export const btnStyle: React.CSSProperties = {
-  background: 'var(--theme-bg)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
+  height: 32, minHeight: 32, borderRadius: 0,
+  background: 'var(--theme-bg, #101c2e)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)',
   color: 'var(--theme-text, #d7e3fc)', padding: '6px 14px', fontSize: 12,
   fontFamily: 'var(--theme-mono)', cursor: 'pointer',
 }

@@ -18,6 +18,8 @@ interface Holding {
   ticker:   string
   shares:   number
   avgCost:  number
+  useMarketPrice?: boolean
+  pendingInvestmentAmount?: number
 }
 
 interface QuoteData {
@@ -245,6 +247,8 @@ export default function PortfolioManager() {
   const [newTicker,  setNewTicker]  = useState('')
   const [newShares,  setNewShares]  = useState('')
   const [newCost,    setNewCost]    = useState('')
+  const [newCostMode, setNewCostMode] = useState<'manual' | 'market'>('manual')
+  const [newQuantityMode, setNewQuantityMode] = useState<'shares' | 'dollars'>('shares')
 
   const [saveFlash,  setSaveFlash]  = useState(false)
   const [dirty,      setDirty]      = useState(false)
@@ -270,7 +274,9 @@ export default function PortfolioManager() {
   const [cashSince, setCashSince] = useState(todayISO)
 
   // Inline edit state
-  const [editStock, setEditStock] = useState<{ i: number; shares: string; avgCost: string } | null>(null)
+  const [editStock, setEditStock] = useState<{ i: number; shares: string; avgCost: string; costMode: 'manual' | 'market' } | null>(null)
+  const [fetchingMarketCosts, setFetchingMarketCosts] = useState(false)
+  const [marketCostResult, setMarketCostResult] = useState<string | null>(null)
   const [editFut, setEditFut] = useState<{ id: string; contracts: string; entry: string } | null>(null)
   const [editCash, setEditCash] = useState<{ id: string; amount: string; rate: string } | null>(null)
   const [portfolioName, setPortfolioName] = useState(() => localStorage.getItem('pmPortfolioName') || 'Portfolio')
@@ -375,9 +381,9 @@ export default function PortfolioManager() {
   const saveEditStock = () => {
     if (!editStock) return
     const shares = parseFloat(editStock.shares)
-    const avgCost = editStock.avgCost.trim() === '' ? 0 : parseFloat(editStock.avgCost)  // blank = auto-fill
+    const avgCost = editStock.costMode === 'market' ? (holdings[editStock.i]?.avgCost ?? 0) : parseFloat(editStock.avgCost)
     if (isNaN(shares) || shares <= 0 || isNaN(avgCost) || avgCost < 0) return
-    setHoldings(prev => prev.map((h, j) => j === editStock.i ? { ...h, shares, avgCost } : h))
+    setHoldings(prev => prev.map((h, j) => j === editStock.i ? { ...h, shares, avgCost, useMarketPrice: editStock.costMode === 'market' } : h))
     setEditStock(null)
   }
   const saveEditFut = () => {
@@ -405,18 +411,53 @@ export default function PortfolioManager() {
 
   const addHolding = useCallback(() => {
     const ticker  = normalizeTicker(newTicker)
-    const shares  = parseFloat(newShares)
-    const avgCost = parseFloat(newCost)
-    if (!ticker || isNaN(shares) || shares <= 0 || isNaN(avgCost) || avgCost <= 0) return
+    const quantity = parseFloat(newShares)
+    const avgCost = newCostMode === 'market' ? 0 : parseFloat(newCost)
+    if (!ticker || isNaN(quantity) || quantity <= 0 || isNaN(avgCost) || (newCostMode === 'manual' && avgCost <= 0)) return
+    const pendingInvestmentAmount = newQuantityMode === 'dollars' && newCostMode === 'market' ? quantity : undefined
+    const shares = newQuantityMode === 'dollars'
+      ? (newCostMode === 'manual' ? quantity / avgCost : 0)
+      : quantity
     setHoldings(prev => {
       const existing = prev.findIndex(h => h.ticker === ticker)
       if (existing >= 0) {
-        return prev.map((h, i) => i === existing ? { ...h, shares, avgCost } : h)
+        return prev.map((h, i) => i === existing ? { ...h, shares, avgCost, useMarketPrice: newCostMode === 'market', pendingInvestmentAmount } : h)
       }
-      return [...prev, { ticker, shares, avgCost }]
+      return [...prev, { ticker, shares, avgCost, useMarketPrice: newCostMode === 'market', pendingInvestmentAmount }]
     })
     setNewTicker(''); setNewShares(''); setNewCost('')
-  }, [newTicker, newShares, newCost])
+  }, [newTicker, newShares, newCost, newCostMode, newQuantityMode, setHoldings])
+
+  const fetchSelectedMarketCosts = useCallback(async () => {
+    if (isAggregate) return
+    const selected = holdings.filter(h => h.useMarketPrice)
+    if (!selected.length) return
+    setFetchingMarketCosts(true)
+    setMarketCostResult(null)
+    try {
+      const refreshed = await portfolioQuotes.refetch()
+      if (refreshed.error) throw refreshed.error
+      const quotes = refreshed.data?.quotes ?? portfolioQuotes.data?.quotes ?? {}
+      const updated = selected.filter(h => {
+        const price = quotes[normalizeTicker(h.ticker)]?.current_price
+        return price != null && price > 0
+      }).length
+      setHoldings(prev => prev.map(h => {
+        if (!h.useMarketPrice) return h
+        const price = quotes[normalizeTicker(h.ticker)]?.current_price
+        if (price == null || price <= 0) return h
+        const shares = h.pendingInvestmentAmount && h.pendingInvestmentAmount > 0
+          ? h.pendingInvestmentAmount / price
+          : h.shares
+        return { ...h, shares, avgCost: price, pendingInvestmentAmount: undefined }
+      }))
+      setMarketCostResult(updated === selected.length ? `${updated} UPDATED` : `${updated}/${selected.length} UPDATED`)
+    } catch {
+      setMarketCostResult('FETCH FAILED')
+    } finally {
+      setFetchingMarketCosts(false)
+    }
+  }, [holdings, isAggregate, portfolioQuotes, setHoldings])
 
   const removeHolding = (i: number) => setHoldings(prev => prev.filter((_, j) => j !== i))
 
@@ -521,7 +562,7 @@ export default function PortfolioManager() {
     if (price > 0) totalValue += value
     if (cost > 0) totalCost += cost
     totalAnnualIncome += annualIncome
-    return { ...h, avgCost, costIsAuto, price, value, cost, pnl, pnlPct, divYield, annualIncome, loading: portfolioQuotes.isLoading, pct1d: q?.pct_change_1d, quoteSource: q?.source, quoteSession: q?.session, quoteAsOf: q?.as_of }
+    return { ...h, avgCost, costIsAuto, costIsMarket: !!h.useMarketPrice, price, value, cost, pnl, pnlPct, divYield, annualIncome, loading: portfolioQuotes.isLoading, pct1d: q?.pct_change_1d, quoteSource: q?.source, quoteSession: q?.session, quoteAsOf: q?.as_of }
   })
   const totalPnl    = totalValue - totalCost
   const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : null
@@ -696,12 +737,46 @@ export default function PortfolioManager() {
                   <input value={newTicker} onChange={e => setNewTicker(e.target.value.toUpperCase())}
                     placeholder="Ticker (e.g. AAPL)" style={inp}
                     onKeyDown={e => e.key === 'Enter' && addHolding()} />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', border: `1px solid ${T.border}` }}>
+                    {([
+                      ['shares', 'SHARES'],
+                      ['dollars', 'DOLLAR AMOUNT'],
+                    ] as const).map(([mode, label]) => (
+                      <button key={mode} type="button" onClick={() => setNewQuantityMode(mode)} style={{
+                        height: 30, border: 'none', borderRight: mode === 'shares' ? `1px solid ${T.border}` : 'none',
+                        background: newQuantityMode === mode ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' : 'transparent',
+                        color: newQuantityMode === mode ? T.gold : T.muted, cursor: 'pointer', fontFamily: T.label,
+                        fontSize: 8.5, fontWeight: 700, letterSpacing: '0.08em',
+                      }}>{label}</button>
+                    ))}
+                  </div>
                   <input value={newShares} onChange={e => setNewShares(e.target.value)}
-                    placeholder="Shares" type="number" min="0" style={inp}
+                    placeholder={newQuantityMode === 'shares' ? 'Shares' : 'Investment amount ($)'} type="number" min="0" style={inp}
                     onKeyDown={e => e.key === 'Enter' && addHolding()} />
-                  <input value={newCost} onChange={e => setNewCost(e.target.value)}
-                    placeholder="Avg Cost ($)" type="number" min="0" style={inp}
-                    onKeyDown={e => e.key === 'Enter' && addHolding()} />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', border: `1px solid ${T.border}` }}>
+                    {([
+                      ['manual', 'AVG COST'],
+                      ['market', 'MKT PRICE'],
+                    ] as const).map(([mode, label]) => (
+                      <button key={mode} type="button" onClick={() => setNewCostMode(mode)} style={{
+                        height: 30, border: 'none', borderRight: mode === 'manual' ? `1px solid ${T.border}` : 'none',
+                        background: newCostMode === mode ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' : 'transparent',
+                        color: newCostMode === mode ? T.gold : T.muted, cursor: 'pointer', fontFamily: T.label,
+                        fontSize: 8.5, fontWeight: 700, letterSpacing: '0.08em',
+                      }}>{label}</button>
+                    ))}
+                  </div>
+                  {newCostMode === 'manual' ? (
+                    <input value={newCost} onChange={e => setNewCost(e.target.value)}
+                      placeholder="Avg Cost ($)" type="number" min="0" style={inp}
+                      onKeyDown={e => e.key === 'Enter' && addHolding()} />
+                  ) : (
+                    <div style={{ ...inp, height: 32, display: 'flex', alignItems: 'center', color: T.muted }}>
+                      {newQuantityMode === 'dollars'
+                        ? 'FETCH converts this amount to fractional shares at the current price.'
+                        : 'Add now, then FETCH current market prices in the portfolio table.'}
+                    </div>
+                  )}
                   <button onClick={addHolding} style={addBtn}>Add</button>
                 </div>
               ) : entryMode === 'option' ? (
@@ -849,6 +924,24 @@ export default function PortfolioManager() {
             ) : (<>
               {holdings.length > 0 && (
               <div style={{ background: T.surface, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
+                <div style={{ minHeight: 38, padding: '5px 10px 5px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderBottom: `1px solid ${T.border}`, background: T.bg }}>
+                  <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>
+                    {holdings.filter(h => h.useMarketPrice).length
+                      ? `${holdings.filter(h => h.useMarketPrice).length} MKT PRICE ${holdings.filter(h => h.useMarketPrice).length === 1 ? 'POSITION' : 'POSITIONS'}`
+                      : 'MARK COST BASIS AS MKT PRICE TO FETCH LIVE VALUES'}
+                    {marketCostResult && <span style={{ marginLeft: 10, color: marketCostResult === 'FETCH FAILED' ? T.neg : T.pos }}>{marketCostResult}</span>}
+                  </div>
+                  {!isAggregate && (
+                    <button type="button" onClick={fetchSelectedMarketCosts}
+                      disabled={fetchingMarketCosts || !holdings.some(h => h.useMarketPrice)}
+                      style={{ minWidth: 76, height: 28, padding: '0 12px', background: 'transparent', border: `1px solid ${T.gold}`,
+                        color: T.gold, opacity: fetchingMarketCosts || !holdings.some(h => h.useMarketPrice) ? 0.42 : 1,
+                        cursor: fetchingMarketCosts || !holdings.some(h => h.useMarketPrice) ? 'default' : 'pointer',
+                        fontFamily: T.label, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.12em' }}>
+                      {fetchingMarketCosts ? 'FETCHING…' : 'FETCH'}
+                    </button>
+                  )}
+                </div>
                 <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse', fontFamily: T.mono, fontSize: 10 }}>
                   <thead>
@@ -869,12 +962,22 @@ export default function PortfolioManager() {
                               <input value={editStock.shares} onChange={e => setEditStock({ ...editStock, shares: e.target.value })} type="number" style={editInp} onKeyDown={e => { if (e.key === 'Enter') saveEditStock(); if (e.key === 'Escape') setEditStock(null) }} autoFocus />
                             </td>
                             <td style={{ padding: '4px 8px', textAlign: 'right' }}>
-                              <input value={editStock.avgCost} onChange={e => setEditStock({ ...editStock, avgCost: e.target.value })} type="number" placeholder="auto" style={editInp} onKeyDown={e => { if (e.key === 'Enter') saveEditStock(); if (e.key === 'Escape') setEditStock(null) }} />
+                              <select value={editStock.costMode} onChange={e => setEditStock({ ...editStock, costMode: e.target.value as 'manual' | 'market' })} style={{ ...editInp, width: 86, textAlign: 'left' }}>
+                                <option value="manual">AVG COST</option>
+                                <option value="market">MKT PRICE</option>
+                              </select>
+                              {editStock.costMode === 'manual' && (
+                                <input value={editStock.avgCost} onChange={e => setEditStock({ ...editStock, avgCost: e.target.value })} type="number" placeholder="Avg cost" style={{ ...editInp, marginLeft: 4 }} onKeyDown={e => { if (e.key === 'Enter') saveEditStock(); if (e.key === 'Escape') setEditStock(null) }} />
+                              )}
                             </td>
                           </>) : (<>
-                            <td style={{ padding: '8px 12px', textAlign: 'right', color: T.text }}>{r.shares.toLocaleString()}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', color: T.text }}>
+                              {r.pendingInvestmentAmount
+                                ? <span title="Select FETCH to convert this dollar allocation into fractional shares at the current market price" style={{ color: T.gold, whiteSpace: 'nowrap' }}>${r.pendingInvestmentAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} PENDING</span>
+                                : r.shares.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                            </td>
                             <td style={{ padding: '8px 12px', textAlign: 'right', color: r.costIsAuto ? T.muted : T.text }}>
-                              {r.loading ? '…' : r.avgCost > 0 ? `$${r.avgCost.toFixed(2)}${r.costIsAuto ? '*' : ''}` : '—'}
+                              {r.loading ? '…' : r.avgCost > 0 ? <>{`$${r.avgCost.toFixed(2)}${r.costIsAuto ? '*' : ''}`}{r.costIsMarket && <span title="Cost basis is managed by MKT PRICE. Use FETCH above to refresh it." style={{ marginLeft: 5, color: T.gold, fontSize: 8, border: `1px solid ${T.gold}`, padding: '0 3px' }}>MKT</span>}</> : '—'}
                             </td>
                           </>)}
                           <td style={{ padding: '8px 12px', textAlign: 'right', color: T.text }}>{r.loading ? '…' : r.price > 0 ? <>{`$${r.price.toFixed(2)}`}{(r.quoteSource === 'extended_hours' || r.quoteSource === 'alpaca_extended' || r.quoteSource === 'alpaca_overnight_indicative') && <span title={`${r.quoteSource === 'alpaca_overnight_indicative' ? 'Alpaca free overnight quote midpoint — not a BOATS trade' : r.quoteSource === 'alpaca_extended' ? 'Live Alpaca extended-hours trade' : 'Extended-hours print'}${r.quoteAsOf ? ` as of ${r.quoteAsOf}` : ''}`} style={{ color: 'var(--theme-tertiary, #60a5fa)', fontSize: 8, marginLeft: 5, border: '1px solid var(--theme-tertiary, #60a5fa)', padding: '0 3px', letterSpacing: '0.06em' }}>{r.quoteSource === 'alpaca_overnight_indicative' ? 'OVERNIGHT' : r.quoteSession === 'pre-market' ? 'PRE' : 'AH'}</span>}</> : '—'}</td>
@@ -901,7 +1004,7 @@ export default function PortfolioManager() {
                               <button onClick={saveEditStock} style={{ ...editBtn, color: T.gold }}>Save</button>
                               <button onClick={() => setEditStock(null)} style={{ ...editBtn, color: T.muted }}>×</button>
                             </>) : (<>
-                              <button onClick={() => setEditStock({ i, shares: String(holdings[i].shares), avgCost: holdings[i].avgCost > 0 ? String(holdings[i].avgCost) : '' })} style={{ ...editBtn, color: T.muted }}>Edit</button>
+                              <button onClick={() => setEditStock({ i, shares: String(holdings[i].shares), avgCost: holdings[i].avgCost > 0 ? String(holdings[i].avgCost) : '', costMode: holdings[i].useMarketPrice ? 'market' : 'manual' })} style={{ ...editBtn, color: T.muted }}>Edit</button>
                               <button onClick={() => removeHolding(i)} style={{ background: 'none', border: 'none', color: T.muted, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 4px' }}>×</button>
                             </>)}
                           </td>
@@ -915,7 +1018,7 @@ export default function PortfolioManager() {
                 {/* Auto-cost footnote */}
                 {rows.some(r => r.costIsAuto) && (
                   <div style={{ padding: '4px 12px 6px', fontSize: 9, color: T.muted, fontFamily: T.mono }}>
-                    * avg cost auto-filled from current price — enter your actual cost basis to see P&L
+                    * temporary current-price preview — select MKT PRICE and press FETCH to store the quote as average cost
                   </div>
                 )}
 

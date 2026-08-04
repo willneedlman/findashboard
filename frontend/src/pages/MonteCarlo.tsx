@@ -1923,7 +1923,7 @@ export function MonteCarloContent() {
               {exactReplayPending ? 'Replaying…' : 'Run Exact Algo Replay'}
             </button>
           </div>
-          <div style={{ marginTop: 4, color: 'var(--theme-secondary, #8099b0)' }}>The normal Monte Carlo view remains a correlated equal-weight proxy. Exact Replay uses the same universe event queue, risk exits, and modeled option/combo P&amp;L engine as the Algorithmic Strategy Builder.</div>
+          <div style={{ marginTop: 4, color: 'var(--theme-secondary, #8099b0)' }}>The normal Monte Carlo view remains a correlated equal-weight proxy. Exact Replay uses the same universe event queue, risk exits, and modeled option/combo P&amp;L engine as Algo Builder.</div>
         </div>
       )}
       {exactReplay && (
@@ -2019,7 +2019,7 @@ export function MonteCarloContent() {
       <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
 
           {!data && !isPending && (
-            <EmptyState title="Monte Carlo Simulator" hint="Add legs, set parameters, then press Run Simulation."
+            <EmptyState title="Monte Carlo" hint="Add legs, set parameters, then press RUN."
               keys={['Enter']} action="Run Simulation" />
           )}
 
@@ -2201,5 +2201,5 @@ export function MonteCarloContent() {
 }
 
 export default function MonteCarlo() {
-  return <PageWrapper title="Monte Carlo Simulator"><MonteCarloContent /></PageWrapper>
+  return <PageWrapper title="Monte Carlo"><MonteCarloContent /></PageWrapper>
 }

@@ -153,7 +153,7 @@ export function MultiplesContent() {
           <label style={LABEL}>Ticker</label>
           <TickerInput style={INPUT} value={ticker} onChange={setTicker} onEnter={load} placeholder="Ticker or company" />
           <button onClick={load} disabled={loading} style={{ ...PRIMARY_BTN, marginTop: 8 }}>
-            {loading ? 'Loading…' : 'Load multiples'}
+            {loading ? 'FETCHING…' : 'FETCH'}
           </button>
         </div>
         {data && data.metrics.length > 0 && (
@@ -175,9 +175,9 @@ export function MultiplesContent() {
 
       {!data && !error && (
         <EmptyState title="Multiples Valuation"
-          hint="Set a target multiple on any line to see the share price it implies. Enter a ticker and Load multiples."
+          hint="Set a target multiple on any line to see the share price it implies. Enter a ticker and press FETCH."
           keys={['Enter']} kpis={['Implied Price', 'Upside', 'P/E', 'EV/EBITDA', 'P/S']}
-          preview="table" previewLabel="Valuation Multiples" columns={['Metric', 'Current', 'Target', 'Implied Price']} action="Load multiples" />
+          preview="table" previewLabel="Valuation Multiples" columns={['Metric', 'Current', 'Target', 'Implied Price']} action="FETCH" />
       )}
 
       {data && !data.metrics.length && (

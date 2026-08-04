@@ -66,7 +66,7 @@ function Panel({ title, right, children, style, bodyStyle }: { title: string; ri
 }
 
 export function EtfXrayContent() {
-  const [picked, setPicked] = useState<string[]>([])
+  const [picked, setPicked] = useState<string[]>(['SPY'])
   const [open, setOpen] = useState(true)
   const [sort, setSort] = useState<'weight' | 'funds' | 'ticker' | 'change'>('weight')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -251,13 +251,13 @@ export function EtfXrayContent() {
           width: '100%', background: GOLD, border: `1px solid ${GOLD}`, color: 'var(--theme-bg)',
           fontFamily: 'inherit', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '9px 0',
           cursor: (picked.length < 1 || isPending) ? 'default' : 'pointer', opacity: (picked.length < 1 || isPending) ? 0.6 : 1,
-        }}>{isPending ? 'Loading…' : 'Run Analysis'}</button>
+        }}>{isPending ? 'FETCHING…' : 'FETCH'}</button>
         {picked.length < 1 && <div style={{ fontSize: 9, color: FAINT, fontFamily: SANS, textAlign: 'center' }}>Select at least one ETF.</div>}
         {isError && <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: SANS, textAlign: 'center' }}>{(error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Analysis failed'}</div>}
       </div>
     </>}>
       {!data && !isPending && <EmptyState title="ETF Analyzer" hint="Pick one or more ETFs to inspect holdings, overlap and concentration."
-        action="Run Analysis" />}
+        action="FETCH" />}
       {isPending && <EmptyState title="Reading holdings…" hint="Pulling each fund's holdings." variant="loading" />}
 
       {data && (

@@ -21,7 +21,7 @@ export default function MarketMakerSimulator() {
   }, { replace: true })
 
   return (
-    <PageWrapper title="Market Maker Simulator">
+    <PageWrapper title="Market Maker">
       <ToolTabs tabs={TABS} value={desk} onChange={setDesk} />
       {desk === 'fixed-income' ? <FixedIncomeMarketMakerContent /> : <OptionsMarketMakerContent />}
     </PageWrapper>

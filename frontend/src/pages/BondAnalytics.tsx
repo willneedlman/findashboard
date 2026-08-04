@@ -159,7 +159,7 @@ export function BondAnalyticsContent() {
                 border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
                 fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
                 padding: '7px 0', cursor: lookupPending ? 'default' : 'pointer', opacity: lookupPending ? 0.6 : 1,
-              }}>{lookupPending ? 'Looking up…' : 'Look up'}</button>
+              }}>{lookupPending ? 'FETCHING…' : 'FETCH'}</button>
               {lookupErr && <div style={{ fontSize: 9, color: 'var(--theme-negative, #ef4444)', fontFamily: 'var(--theme-sans)' }}>{lookupErr}</div>}
               {lookup && (
                 <div style={{ background: 'var(--theme-surface, #142032)', border: '1px solid var(--theme-border, rgba(255,255,255,0.10))', padding: '8px 9px', display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -207,7 +207,7 @@ export function BondAnalyticsContent() {
               textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer',
               opacity: isPending ? 0.6 : 1, transition: 'opacity 0.15s',
             }}>
-              {isPending ? 'Analyzing…' : 'Analyze Bond'}
+              {isPending ? 'RUNNING…' : 'RUN'}
             </button>
             {isError && <div style={{ fontSize: 9, color: 'var(--theme-negative, #ef4444)', textAlign: 'center', fontFamily: 'var(--theme-sans)' }}>Server unavailable — is the backend running?</div>}
           </div>
@@ -320,8 +320,8 @@ export function BondAnalyticsContent() {
             </div>
           )}
           {!data && (
-            <EmptyState title="Bond Analytics" hint="Enter face value, coupon rate, market price and maturity, then press Analyze Bond."
-              keys={['Enter']} action="Analyze Bond" />
+            <EmptyState title="Bond Analytics" hint="Enter face value, coupon rate, market price and maturity, then press RUN."
+              keys={['Enter']} action="RUN" />
           )}
       </SidebarLayout>
   )

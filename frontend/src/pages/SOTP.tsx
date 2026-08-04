@@ -235,7 +235,7 @@ export function SOTPContent() {
           <label style={LABEL}>Ticker</label>
           <TickerInput style={INPUT} value={ticker} onChange={setTicker} onEnter={load} placeholder="Ticker or company" />
           <button onClick={load} disabled={loading} style={{ ...PRIMARY_BTN, marginTop: 8 }}>
-            {loading ? 'Loading…' : 'Load segments'}
+            {loading ? 'FETCHING…' : 'FETCH'}
           </button>
         </div>
 
@@ -290,9 +290,9 @@ export function SOTPContent() {
 
       {!data && !error && (
         <EmptyState title="Sum-of-the-Parts"
-          hint="Value each business segment on its own pure-play P/S multiple, then sum to an equity value. Enter a ticker and Load segments."
+          hint="Value each business segment on its own pure-play P/S multiple, then sum to an equity value. Enter a ticker and press FETCH."
           keys={['Enter']} kpis={['Equity Value', 'Per Share', 'Upside', 'Segments']}
-          preview="table" previewLabel="Segment Valuation" columns={['Segment', 'Peer comp', 'Revenue', 'P/S', 'Value']} action="Load segments" />
+          preview="table" previewLabel="Segment Valuation" columns={['Segment', 'Peer comp', 'Revenue', 'P/S', 'Value']} action="FETCH" />
       )}
 
       {data && !data.segments.length && (

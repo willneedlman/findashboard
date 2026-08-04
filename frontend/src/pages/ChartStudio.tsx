@@ -9,7 +9,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import { readToken } from '../lib/theme'
 import { smaArr, emaArr, bollinger, vwapArr, rsiArr, macdArr, hvArr } from '../lib/indicators'
-import { formatLocalTime, localTimeZone } from '../lib/time'
+import { formatLocalTime } from '../lib/time'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip, chartClip, textClip } from '../lib/reportCaptureRegistry'
@@ -327,7 +327,7 @@ const formatChartTime = (time: Time) => {
     : typeof time === 'string'
       ? new Date(`${time}T00:00:00`)
       : new Date(time.year, time.month - 1, time.day)
-  return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+  return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
 }
 
 const baseOptions = (C: Colors, h: number) => ({
@@ -476,7 +476,7 @@ function LiveClock() {
   return (
     <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
       <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#2e9a62', boxShadow: '0 0 6px #2e9a62' }} />
-      <span style={{ fontFamily: MONO, fontSize: 9, color: 'var(--theme-secondary, #8099b0)' }}>LIVE · {clock} {localTimeZone()}</span>
+      <span style={{ fontFamily: MONO, fontSize: 9, color: 'var(--theme-secondary, #8099b0)' }}>LIVE · {clock}</span>
     </span>
   )
 }
@@ -1520,7 +1520,7 @@ export function ChartStudioContent() {
               </span>
             ))}
             <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 8.5, letterSpacing: '0.08em', color: 'var(--theme-secondary, #8099b0)', whiteSpace: 'nowrap' }}>
-              BARS · REFRESH {INTRADAY.has(tf) ? '60S' : '5M'}{candlesQ.dataUpdatedAt ? ` · AS OF ${new Date(candlesQ.dataUpdatedAt).toLocaleTimeString('en-US', { hour12: false })}` : ''}
+              BARS · REFRESH {INTRADAY.has(tf) ? '60S' : '5M'}{candlesQ.dataUpdatedAt ? ` · AS OF ${formatLocalTime(candlesQ.dataUpdatedAt)}` : ''}
             </span>
           </div>
 

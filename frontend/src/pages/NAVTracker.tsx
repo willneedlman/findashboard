@@ -214,7 +214,7 @@ export default function NAVTracker() {
               textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer',
               opacity: isPending ? 0.6 : 1,
             }}>
-              {isPending ? 'Loading…' : 'Calculate NAV'}
+              {isPending ? 'RUNNING…' : 'RUN'}
             </button>
           </div>
 
@@ -222,8 +222,8 @@ export default function NAVTracker() {
       </>}>
 
           {!data && !isPending && (
-            <EmptyState title="NAV Proxy Tracker" hint="Pick a preset company or enter holdings, then press Calculate NAV."
-              action="Calculate NAV"
+            <EmptyState title="NAV Proxy Tracker" hint="Pick a preset company or enter holdings, then press RUN."
+              action="RUN"
               keys={['Enter']} kpis={['Price', 'True Net NAV', 'Premium', 'Holdings', 'Spot']}
               preview="chart" previewLabel="Price vs Net NAV Floor" />
           )}

@@ -358,7 +358,7 @@ export default function Alerts() {
                       <label style={lbl}>Strategy</label>
                       {savedStrategies.length === 0 ? (
                         <div style={{ fontFamily: T.mono, fontSize: 10, color: T.muted, lineHeight: 1.5, padding: '7px 10px', border: `1px solid ${T.border}`, background: T.bg }}>
-                          No saved strategies yet. Build one in the Algorithmic Strategy Builder and it shows up here.
+                          No saved strategies yet. Build one in Algo Builder and it shows up here.
                         </div>
                       ) : (
                         <select value={stratName} onChange={e => setStratName(e.target.value)} style={{ ...inp, appearance: 'none', cursor: 'pointer' }}>
@@ -412,7 +412,7 @@ export default function Alerts() {
                   {isMacro(condition)
                     ? 'A daily heads-up when a watched economic release is within your window. Reads the macro calendar, fires at most once per day, and names what is coming. "Major movers" stays quiet between the big prints; "All high-impact" includes weekly claims.'
                     : isStrategy(condition)
-                    ? `The server runs this saved strategy's ${condition === 'strategy_entry' ? 'entry' : 'exit'} rules across the tickers above on daily bars, about every 10 minutes. It fires when the ${condition === 'strategy_entry' ? 'entry' : 'exit'} signal triggers on any of them, naming which, and fires at most once per day. Build and backtest strategies in the Algorithmic Strategy Builder.`
+                    ? `The server runs this saved strategy's ${condition === 'strategy_entry' ? 'entry' : 'exit'} rules across the tickers above on daily bars, about every 10 minutes. It fires when the ${condition === 'strategy_entry' ? 'entry' : 'exit'} signal triggers on any of them, naming which, and fires at most once per day. Build and backtest strategies in Algo Builder.`
                     : isSlow(condition)
                     ? 'This condition reads daily data (IV rank, gamma flip, sentiment, earnings dates). The server checks it about every 10 minutes and it fires at most once per day. IV rank needs about 20 accrued daily points before it can trigger.'
                     : 'Alerts are checked server-side about every 30 seconds against the latest price. After firing, an alert enters a 1-hour cooldown before it can trigger again; rearm it manually or wait for the cooldown to clear.'}

@@ -54,8 +54,8 @@ const TIMEFRAMES: { key: string; label: string }[] = [
 
 export function MoverRadarContent() {
   const [searchParams] = useSearchParams()
-  const [input, setInput] = useState(searchParams.get('ticker') || '')
-  const [ticker, setTicker] = useState<string | null>((searchParams.get('ticker') || '').toUpperCase() || null)
+  const [input, setInput] = useState(searchParams.get('ticker') || 'AAPL')
+  const [ticker, setTicker] = useState<string | null>((searchParams.get('ticker') || 'AAPL').toUpperCase())
   const [timeframe, setTimeframe] = useState('1d')
   const [evidenceSort, setEvidenceSort] = useState<'relevance' | 'recency'>('relevance')
   const recent = getRecentTickers()
@@ -122,7 +122,7 @@ export function MoverRadarContent() {
                 background: GOLD, border: `1px solid ${GOLD}`, color: 'var(--theme-bg)', fontFamily: SANS, fontSize: 10,
                 fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '0 16px',
                 cursor: isFetching ? 'default' : 'pointer', opacity: isFetching ? 0.6 : 1,
-              }}>{isFetching ? 'Scanning…' : 'Scan'}</button>
+              }}>{isFetching ? 'SCANNING…' : 'SCAN'}</button>
             </div>
           </div>
           <div>
@@ -153,7 +153,7 @@ export function MoverRadarContent() {
         </div>
 
         {!ticker && (
-          <EmptyState title="Mover Radar" hint="Enter a ticker to see what's actually moving it — real news, filings, and social chatter, or confirmation it's just noise." action="Scan" />
+          <EmptyState title="Mover Radar" hint="Enter a ticker to see what's actually moving it — real news, filings, and social chatter, or confirmation it's just noise." action="SCAN" />
         )}
         {ticker && isFetching && (
           <EmptyState title="Scanning…" hint={`Pulling price action, filings, and news/social evidence for ${ticker}.`} variant="loading" />

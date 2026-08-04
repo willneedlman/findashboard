@@ -380,7 +380,7 @@ export default function CusipLookup() {
             {query && <button onClick={clear} aria-label="Clear" style={{ background: 'none', border: 'none', cursor: 'pointer', color: SEC, display: 'flex', padding: 0 }}>✕</button>}
           </div>
           <button onClick={onSubmit} disabled={isPending} style={{ ...PRIMARY_BTN, padding: '0 26px', height: 46, width: 'auto', flex: '0 0 auto', opacity: isPending ? 0.6 : 1 }}>
-            {isPending ? 'Resolving…' : 'Look up'}
+            {isPending ? 'FETCHING…' : 'FETCH'}
           </button>
         </div>
 

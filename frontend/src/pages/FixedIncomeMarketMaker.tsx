@@ -396,7 +396,7 @@ export function FixedIncomeMarketMakerContent() {
   const overLimit = r ? (Math.abs(r.netDV01) > DV01_LIMIT || Math.abs(r.worstDV01) > BUCKET_LIMIT) : false
   const selQuote = f?.book[selected]
 
-  const TAB = 'Market Maker Simulator'
+  const TAB = 'Market Maker'
   useReportCapture(() => {
     if (!f || !r) return null
     const pieces: ClipDraft[] = [

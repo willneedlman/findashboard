@@ -684,10 +684,10 @@ const SectorStrip = () => (
 /* ── Landing ────────────────────────────────────────────────────────────── */
 
 const TAPE_FEATURES = [
-  'Global Energy Flows', 'Chart Studio', 'Dealer GEX', 'Market Maker Simulator', 'Sentiment Tracker',
+  'Energy Flows', 'Chart Studio', 'Dealer GEX', 'Market Maker', 'Sentiment Tracker',
   'Options Flow', 'Volatility Skew', 'IV Rank', 'Implied Probability', 'Strategy Builder', 'Rate Engine',
   'DCF Valuation', 'Reverse DCF', 'Stock Screener', 'Monte Carlo', 'Credit Spreads',
-  'Currency Matrix', 'Paper Trading', 'Trade Journal', 'Price Alerts',
+  'FX Matrix', 'Paper Trading', 'Trade Journal', 'Price Alerts',
 ]
 function TickerTape() {
   const seq = (p: string) => TAPE_FEATURES.map(f => (
@@ -772,7 +772,7 @@ export function Landing() {
         </Reveal>
         <StaggerGroup className="bento">
           <TiltCard className="card c-tall glow-gold" to="/product/trading" item={item}>
-            <div className="k">Market Maker Simulator</div>
+            <div className="k">Market Maker</div>
             <h3>Quote both sides of the market.</h3>
             <p>Make markets on simulated options and Treasury desks: absorb flow, manage inventory, and hedge. A timed five-minute challenge scores your net P&amp;L on a global leaderboard.</p>
             <div className="mini">
@@ -1132,7 +1132,7 @@ export function LogisticsPage() {
 
       <section className="blk"><div className="wrap">
         <Reveal className="sec-head">
-          <div className="eyebrow">Energy Flows Map</div>
+          <div className="eyebrow">Energy Flows</div>
           <h2>Tankers, LNG, and pipelines through the chokepoints.</h2>
           <p>Live AIS tankers and LNG carriers on real geography, the pipeline network, export terminals, and the world's energy chokepoints. A real-time nowcast bridges the reporting lag on transits, and a 24-hour replay scrubs vessel movement.</p>
         </Reveal>
@@ -1246,7 +1246,7 @@ export function MacroPage() {
 
       <section className="blk" style={{ borderTop: '1px solid var(--line)', background: 'var(--bg2)' }}><div className="wrap">
         <div className="showcase" style={{ marginBottom: 18 }}>
-          <VPanel title="Currency Matrix" desc="Spot cross-rates, forward points, cross-currency basis, and FX vol.">
+          <VPanel title="FX Matrix" desc="Spot cross-rates, forward points, cross-currency basis, and FX vol.">
             <FxGrid />
           </VPanel>
           <VPanel title="Credit Spreads" desc="Investment-grade and high-yield option-adjusted spreads, an early signal of market stress.">
@@ -1264,7 +1264,7 @@ export function MacroPage() {
           <Mod icon={Landmark} title="Global Markets">World indices, FX, commodities, yields, and crypto on one board.</Mod>
           <Mod icon={Landmark} title="Bond Analytics">Yield-to-maturity, duration, and convexity.</Mod>
           <Mod icon={BookOpen} title="Bond Lookup">Resolve a CUSIP or issuer to bond reference data.</Mod>
-          <Mod icon={ArrowLeftRight} title="Currency Matrix">Spot crosses, forwards, basis, and FX volatility.</Mod>
+          <Mod icon={ArrowLeftRight} title="FX Matrix">Spot crosses, forwards, basis, and FX volatility.</Mod>
           <Mod icon={Clock} title="Market Hours">A live global session clock across futures, US, Europe, and Asia.</Mod>
         </div>
       </div></section>
@@ -1309,7 +1309,7 @@ export function ChartingPage() {
             <div className="tags"><span className="tag">Rebased to 100</span><span className="tag">Multi-asset</span></div>
           </div></div>
           <div className="frow"><div className="idx">03</div><div>
-            <h3>Compare Portfolios</h3>
+            <h3>Portfolio Compare</h3>
             <p>Two to four books drawn together on one chart, so you can see which one is carrying the return and which is carrying the risk.</p>
             <div className="tags"><span className="tag">2 to 4 books</span><span className="tag">Return vs risk</span></div>
           </div></div>
@@ -1369,7 +1369,7 @@ export function TradingPage() {
             tags={['3 models', 'VaR + CVaR']}>
             <PercentileCone />
           </VPanel>
-          <VPanel title="Market Maker Simulator" desc="Quote two-sided markets on options and Treasury desks. A five-minute challenge scores net P&L on a global leaderboard."
+          <VPanel title="Market Maker" desc="Quote two-sided markets on options and Treasury desks. A five-minute challenge scores net P&L on a global leaderboard."
             tags={['Options desk', 'Treasury desk', 'Leaderboard']}>
             <LadderRows />
           </VPanel>

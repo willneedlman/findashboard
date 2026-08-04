@@ -226,7 +226,7 @@ export function DividendDiscountContent() {
           <input style={INPUT} value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
             onKeyDown={e => e.key === 'Enter' && load()} placeholder="KO" />
           <button onClick={load} disabled={loading} style={{ ...PRIMARY_BTN, marginTop: 8 }}>
-            {loading ? 'Loading…' : 'Load dividend'}
+            {loading ? 'FETCHING…' : 'FETCH'}
           </button>
         </div>
 
@@ -261,8 +261,8 @@ export function DividendDiscountContent() {
 
       {!data && !error && (
         <EmptyState title="Dividend Discount Model"
-          hint="Value a dividend-paying stock as the present value of its future dividends. Enter a ticker and Load dividend."
-          action="Load dividend"
+          hint="Value a dividend-paying stock as the present value of its future dividends. Enter a ticker and press FETCH."
+          action="FETCH"
           keys={['Enter']} kpis={['Fair Value', 'Upside', 'Cost of Equity', 'Growth', 'Yield']}
           preview="chart" previewLabel="Discounted Dividend Stream" />
       )}

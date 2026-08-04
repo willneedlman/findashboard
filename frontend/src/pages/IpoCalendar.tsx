@@ -195,6 +195,7 @@ export function IpoCalendarContent() {
   const [priced, setPriced] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [scanVersion, setScanVersion] = useState(0)
 
   const [status, setStatus] = useState('')
   const [method, setMethod] = useState<'' | MethodKey>('')
@@ -222,7 +223,7 @@ export function IpoCalendarContent() {
       .catch(() => { if (cancelled) return; setError('Could not load the IPO calendar. Try again shortly.') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [days])
+  }, [days, scanVersion])
 
   const exchanges = useMemo(() => {
     const seen = new Set<string>()
@@ -419,6 +420,11 @@ export function IpoCalendarContent() {
         {watchSet.size > 0 && (
           <Toggle label="Watchlist" active={watchOnly} onClick={() => setWatchOnly(v => !v)} />
         )}
+        <button onClick={() => setScanVersion(v => v + 1)} disabled={loading} style={{
+          height: 32, padding: '0 16px', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)',
+          border: `1px solid ${C.gold}`, color: C.gold, cursor: loading ? 'wait' : 'pointer', opacity: loading ? 0.6 : 1,
+          fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
+        }}>{loading ? 'SCANNING…' : 'SCAN'}</button>
         {anyFilter && (
           <button onClick={clearFilters} style={{
             background: 'transparent', border: `1px solid ${C.border}`, color: C.muted, cursor: 'pointer',

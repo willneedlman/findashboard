@@ -7,6 +7,7 @@ import ErrorState from '../components/ErrorState'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { tableClip, textClip } from '../lib/reportCaptureRegistry'
+import { formatLocalTime } from '../lib/time'
 
 const T = {
   bg: 'var(--theme-bg, #101c2e)', surface: 'var(--theme-surface, #0d1826)',
@@ -83,7 +84,7 @@ export function CurrencyMatrixContent() {
     refetchInterval: 15 * 60 * 1000,
   })
 
-  const TAB = 'Currency Matrix'
+  const TAB = 'FX Matrix'
   const trendMark = (t: FxRow['vol_trend']) => t === 'up' ? '↑' : t === 'down' ? '↓' : '→'
   useReportCapture(() => {
     if (!data?.rows?.length) return null
@@ -122,10 +123,10 @@ export function CurrencyMatrixContent() {
 
   if (isLoading) return <LoadingState label="Loading FX" />
   if (error) return <ErrorState title="FX feed failed" message="Could not load the currency matrix." onRetry={() => refetch()} />
-  if (!data || !data.rows.length) return <EmptyState title="Currency Matrix" hint="No FX data available right now." variant="unavailable" onRetry={refetch} />
+  if (!data || !data.rows.length) return <EmptyState title="FX Matrix" hint="No FX data available right now." variant="unavailable" onRetry={refetch} />
 
   const { currencies, matrix, rows } = data
-  const asOf = new Date(data.as_of * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const asOf = formatLocalTime(data.as_of * 1000)
 
   // Per-column min/max over off-diagonal values — each quote column is its own scale.
   const colRange = currencies.map((_, j) => {
@@ -138,7 +139,7 @@ export function CurrencyMatrixContent() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <span style={{ ...eyebrow, fontSize: 14, letterSpacing: '0.22em', color: T.gold }}>Currency Matrix</span>
+        <span style={{ ...eyebrow, fontSize: 14, letterSpacing: '0.22em', color: T.gold }}>FX Matrix</span>
         <span style={{ fontFamily: T.sans, fontSize: 10, color: T.muted, letterSpacing: '0.08em' }}>G10 · as of {asOf}</span>
       </div>
 
@@ -254,5 +255,5 @@ export function CurrencyMatrixContent() {
 }
 
 export default function CurrencyMatrix() {
-  return <PageWrapper title="Currency Matrix"><CurrencyMatrixContent /></PageWrapper>
+  return <PageWrapper title="FX Matrix"><CurrencyMatrixContent /></PageWrapper>
 }

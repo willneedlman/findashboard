@@ -4,8 +4,9 @@ import { useState, useRef, useLayoutEffect } from 'react'
 // consistent, well-spaced system. Matches the DCF tab's density.
 
 export const INPUT: React.CSSProperties = {
-  background: 'var(--theme-bg, #0a1628)',
-  border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
+  height: 32, minHeight: 32, borderRadius: 0,
+  background: 'var(--theme-bg, #101c2e)',
+  border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)',
   color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 12,
   padding: '6px 8px', width: '100%', outline: 'none', boxSizing: 'border-box',
 }
@@ -41,7 +42,7 @@ export const SECTION: React.CSSProperties = {
 }
 
 export const PRIMARY_BTN: React.CSSProperties = {
-  ...INPUT, cursor: 'pointer', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+  ...INPUT, minHeight: 32, cursor: 'pointer', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
   color: 'var(--theme-primary, #c9a84c)', borderColor: 'var(--theme-primary, #c9a84c)',
   background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)',
 }
