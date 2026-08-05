@@ -113,7 +113,7 @@ describe('report section composition', () => {
     })).toBe('full-width')
   })
 
-  it('turns a repetitive split into text wrap when the prose can reclaim the visual depth', () => {
+  it('does not override a server-selected split because prose is long', () => {
     const compact = chart('compact', 'Peer Multiples')
     compact.payload = {
       kind: 'chart',
@@ -129,10 +129,10 @@ describe('report section composition', () => {
       visual: compact,
       analysis: Array.from({ length: 52 }, (_, index) => `word${index}`).join(' '),
       keyFigures: [{ label: 'Lowest', value: 'WEN 12x' }],
-    })).toBe('wrap-left')
+    })).toBe('visual-left')
   })
 
-  it('keeps an evidence band only when a real metric rail can fill it', () => {
+  it('keeps a server-selected evidence band even without a metric rail', () => {
     const compact = chart('compact', 'Quality Comparison')
     compact.payload = {
       kind: 'chart',
@@ -154,7 +154,7 @@ describe('report section composition', () => {
       analysis: 'Quality supports the conclusion.',
       keyFigures: [],
       index: 1,
-    })).toBe('visual-right')
+    })).toBe('evidence-band')
   })
 
   it('uses a metric rail for evidence-heavy prose without a visual', () => {

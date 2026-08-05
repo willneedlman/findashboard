@@ -30,8 +30,7 @@ def _fundamentals(ticker: str) -> dict:
         return {}
 
 
-@router.get("/sotp")
-def sotp(ticker: str):
+def build_sotp_data(ticker: str, fundamentals_override: dict | None = None):
     """Segment revenue for a sum-of-the-parts valuation. The client applies a P/S
     multiple per segment and sums straight to an equity value per share (P/S is an
     equity multiple, so no net-debt step). Segments are seeded at the company's
@@ -76,7 +75,7 @@ def sotp(ticker: str):
                          "peer_note": peer_multiples.PEER_NOTE.get(group)})
     total_rev = round(sum(s["revenue"] for s in segments), 1)
 
-    f = _fundamentals(sym)
+    f = fundamentals_override if fundamentals_override is not None else _fundamentals(sym)
     net_debt = round(f["net_debt"], 1) if f.get("net_debt") is not None else None
     shares   = round(f["shares"], 1) if f.get("shares") else None
     price    = f.get("market_price")
@@ -102,6 +101,11 @@ def sotp(ticker: str):
         "suggested_multiple": blended,
         "peer_groups":        peer_multiples.catalogue(),
     }
+
+
+@router.get("/sotp")
+def sotp(ticker: str):
+    return build_sotp_data(ticker)
 
 
 # ── Dividend Discount Model ─────────────────────────────────────────────────────

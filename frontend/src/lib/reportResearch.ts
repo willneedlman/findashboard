@@ -4,7 +4,7 @@ import type { ActivePortfolioContext } from './pmImport'
 import { smaArr, emaArr, rsiArr, hvArr, bollinger } from './indicators'
 import { parseChartDirective } from './researchDirective'
 import { normalizeTicker } from './pmImport'
-import type { ClipDraft, ReportScope } from './reportCreator'
+import type { ClipDraft, ReportClip, ReportScope } from './reportCreator'
 
 export type ReportResearchIntent =
   | 'portfolio'
@@ -63,6 +63,31 @@ export interface ReportResearchPlan {
   blockedReason?: string
   aiEnhanced?: boolean
   aiSummary?: string
+  objectivePlan?: ReportObjectivePlan
+  requiredSourceIds?: ReportResearchSourceId[]
+}
+
+export interface ReportObjectivePlan {
+  thesis: string
+  requiredDataPoints: string[]
+  requiredChecks: string[]
+}
+
+export interface ReportDataBankRun {
+  sourceId: ReportResearchSourceId
+  label: string
+  status: 'complete' | 'partial' | 'failed'
+  targets: string[]
+  clipIds: string[]
+  missingTargets: string[]
+  error: string
+}
+
+export interface ReportDataBank {
+  phase: 'complete'
+  requiredSourceIds: ReportResearchSourceId[]
+  runs: ReportDataBankRun[]
+  objectivePlan: ReportObjectivePlan
 }
 
 export interface ReportResearchFailure {
@@ -771,7 +796,16 @@ export async function enhanceReportResearchPlan(
   client: ResearchClient = DEFAULT_CLIENT,
 ): Promise<ReportResearchPlan> {
   if (baseline.blockedReason) return baseline
-  const toolCatalog = REPORT_RESEARCH_TOOL_CATALOG.filter(tool => sourceMatchesHorizon(tool.id, scope))
+  const manifestResponse = record(await client.get('/api/ai/report-tools'))
+  const serverToolIds = new Set(
+    array(manifestResponse.tools)
+      .map(item => plain(record(item).id) as ReportResearchSourceId)
+      .filter(Boolean),
+  )
+  const toolCatalog = REPORT_RESEARCH_TOOL_CATALOG.filter(
+    tool => serverToolIds.has(tool.id) && sourceMatchesHorizon(tool.id, scope),
+  )
+  if (!toolCatalog.length) throw new Error('AlphaTape report tool registry is unavailable')
   const historicalWindow = scope.lookbackPreset === 'none'
     ? 'historical lookback disabled'
     : `${lookbackRange(scope).start} to ${lookbackRange(scope).end}`
@@ -793,7 +827,6 @@ export async function enhanceReportResearchPlan(
       cashIncluded: portfolio.cashValue > 0,
     },
     baselineSourceIds: baseline.sources.map(source => source.id),
-    tools: toolCatalog,
   }))
   const additions = array(response.additions)
   const catalog = new Map(toolCatalog.map(item => [item.id, item]))
@@ -837,11 +870,28 @@ export async function enhanceReportResearchPlan(
     return text && text !== '—' ? { ...source, directive: text } : source
   })
 
+  const objectiveRaw = record(response.objectivePlan)
+  const objectivePlan: ReportObjectivePlan = {
+    thesis: plain(objectiveRaw.thesis) === '—' ? '' : plain(objectiveRaw.thesis),
+    requiredDataPoints: array(objectiveRaw.requiredDataPoints).map(plain).filter(value => value !== '—').slice(0, 12),
+    requiredChecks: array(objectiveRaw.requiredChecks).map(plain).filter(value => value !== '—').slice(0, 10),
+  }
+  const requiredResponse = array(response.requiredSourceIds)
+    .map(value => String(value) as ReportResearchSourceId)
+    .filter(id => directed.some(source => source.id === id))
+  const requiredSourceIds = unique([
+    ...baseline.sources.map(source => source.id),
+    ...requiredResponse,
+    ...directed.filter(source => source.selectionOrigin === 'ai').map(source => source.id),
+  ])
+
   return {
     ...baseline,
     sources: directed,
     aiEnhanced: true,
     aiSummary: String(response.summary ?? '').replace(/\s+/g, ' ').trim().slice(0, 240),
+    objectivePlan,
+    requiredSourceIds,
   }
 }
 
@@ -2690,5 +2740,44 @@ export async function collectReportResearch(
     completed,
     failed,
     finishedAt: new Date().toISOString(),
+  }
+}
+
+export function buildReportDataBank(
+  plan: ReportResearchPlan,
+  result: ReportResearchResult,
+  clips: ReportClip[],
+): ReportDataBank {
+  const requiredSourceIds = unique(plan.requiredSourceIds?.length
+    ? plan.requiredSourceIds
+    : plan.sources.map(source => source.id))
+  const runs = requiredSourceIds.map((sourceId): ReportDataBankRun => {
+    const source = plan.sources.find(candidate => candidate.id === sourceId)
+    const sourceClips = clips.filter(clip => clip.origin === 'alphatape' && clip.researchSourceId === sourceId)
+    const failures = result.failed.filter(failure => failure.sourceId === sourceId)
+    const status = sourceClips.length
+      ? failures.length ? 'partial' : 'complete'
+      : 'failed'
+    return {
+      sourceId,
+      label: source?.label ?? sourceId,
+      status,
+      targets: source?.targets ?? [],
+      clipIds: sourceClips.map(clip => clip.id),
+      missingTargets: failures.flatMap(failure => failure.target ? [failure.target] : []),
+      error: failures.length
+        ? failures.map(failure => failure.message).filter(Boolean).join(' ') || 'Some requested evidence did not complete.'
+        : status === 'failed' ? 'No usable evidence returned.' : '',
+    }
+  })
+  return {
+    phase: 'complete',
+    requiredSourceIds,
+    runs,
+    objectivePlan: plan.objectivePlan ?? {
+      thesis: '',
+      requiredDataPoints: [],
+      requiredChecks: [],
+    },
   }
 }

@@ -57,10 +57,7 @@ class AnnualAssumption(BaseModel):
 
 
 class TerminalConfig(BaseModel):
-    method: Literal["perpetuity", "exit", "blended"] = "blended"
     perpetual_growth: float = Field(default=3.0, ge=-10, le=15)
-    exit_ebitda_multiple: float = Field(default=16.0, gt=0, le=100)
-    perpetuity_weight: float = Field(default=50, ge=0, le=100)
 
 
 class MultipleTarget(BaseModel):
@@ -73,7 +70,7 @@ class MultipleTarget(BaseModel):
 class SotpSegment(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     revenue_share: float = Field(gt=0, le=100)
-    ev_revenue_multiple: float = Field(gt=0, le=100)
+    price_to_sales_multiple: float = Field(gt=0, le=100)
 
 
 class MethodWeights(BaseModel):
@@ -104,10 +101,12 @@ class MasterValuationRequest(BaseModel):
             raise ValueError(f"Schedule must contain 3 to {MAX_YEARS} years")
         if [row.year for row in self.schedule] != list(range(1, len(self.schedule) + 1)):
             raise ValueError("Schedule years must be consecutive and begin at year 1")
-        if self.terminal.method in {"perpetuity", "blended"} and self.wacc <= self.terminal.perpetual_growth:
+        if self.wacc <= self.terminal.perpetual_growth:
             raise ValueError("WACC must be greater than perpetual growth")
         if any(target.year > len(self.schedule) for target in self.multiple_targets):
             raise ValueError("Multiple reference year exceeds the forecast horizon")
+        if self.multiple_targets and self.weights.multiples > 0 and sum(target.weight for target in self.multiple_targets) <= 0:
+            raise ValueError("At least one target multiple must have a positive within-method weight")
         if self.cost_of_equity <= self.dividend_terminal_growth and any(row.payout_pct > 0 for row in self.schedule):
             raise ValueError("Cost of equity must exceed dividend terminal growth")
         if sum(self.weights.model_dump().values()) <= 0:
@@ -161,6 +160,9 @@ def fundamentals(ticker: str):
     sym = validate_ticker(ticker)
     base = get_fundamentals(sym)
     current_multiples = {}
+    business_segments = []
+    business_segments_source = None
+    business_segments_fiscal_year = None
     dps = None
     dividend_yield = None
     try:
@@ -185,6 +187,27 @@ def fundamentals(ticker: str):
     net_debt = base.get("net_debt") or 0
     if price and shares and revenue:
         current_multiples["ev_revenue"] = round((price * shares + net_debt) / revenue, 2)
+    try:
+        from routers.valuation import build_sotp_data
+        parts = build_sotp_data(sym, fundamentals_override=base)
+        reported_segments = parts.get("segments") or []
+        reported_revenue = sum(_finite_or(segment.get("revenue"), 0) for segment in reported_segments)
+        company_ps = _finite_or(parts.get("suggested_multiple"), 1.0)
+        for segment in reported_segments:
+            segment_revenue = _finite_or(segment.get("revenue"), 0)
+            if segment_revenue <= 0 or reported_revenue <= 0:
+                continue
+            peer_ps = _finite_or(segment.get("peer_ps"), company_ps)
+            seeded_ps = round(max(0.01, min(100, (company_ps + peer_ps) / 2)), 2)
+            business_segments.append({
+                "name": segment.get("name") or "Reported segment",
+                "revenue_share": round(segment_revenue / reported_revenue * 100, 2),
+                "price_to_sales_multiple": seeded_ps,
+            })
+        business_segments_source = parts.get("source")
+        business_segments_fiscal_year = parts.get("fiscalYear")
+    except Exception:
+        pass
 
     return {
         "ticker": sym,
@@ -196,6 +219,9 @@ def fundamentals(ticker: str):
         "source": base.get("assumptions_source"),
         "schedule": _default_schedule(base),
         "current_multiples": current_multiples,
+        "business_segments": business_segments,
+        "business_segments_source": business_segments_source,
+        "business_segments_fiscal_year": business_segments_fiscal_year,
         "dividend_per_share": dps,
         "dividend_yield": round(dividend_yield, 2) if dividend_yield is not None else None,
     }
@@ -250,19 +276,8 @@ def _project(req: MasterValuationRequest, schedule: list[AnnualAssumption] | Non
         })
 
     final = rows[-1]
-    terminal_ebitda = final["ebit"] + final["da"]
-    exit_tv = terminal_ebitda * req.terminal.exit_ebitda_multiple
-    perpetuity_tv = None
-    if req.terminal.method in {"perpetuity", "blended"}:
-        terminal_fcf = final["fcf"] * (1 + req.terminal.perpetual_growth / 100)
-        perpetuity_tv = terminal_fcf / ((discount_rate - req.terminal.perpetual_growth) / 100)
-    if req.terminal.method == "perpetuity":
-        terminal_value = perpetuity_tv
-    elif req.terminal.method == "exit":
-        terminal_value = exit_tv
-    else:
-        perpetuity_weight = req.terminal.perpetuity_weight / 100
-        terminal_value = perpetuity_tv * perpetuity_weight + exit_tv * (1 - perpetuity_weight)
+    terminal_fcf = final["fcf"] * (1 + req.terminal.perpetual_growth / 100)
+    terminal_value = terminal_fcf / ((discount_rate - req.terminal.perpetual_growth) / 100)
     pv_terminal = terminal_value / ((1 + discount_rate / 100) ** len(rows))
     enterprise_value = pv_fcfs + pv_terminal
     dcf_equity = enterprise_value - req.net_debt
@@ -287,6 +302,8 @@ def _project(req: MasterValuationRequest, schedule: list[AnnualAssumption] | Non
                 "value_per_share": value,
             })
     multiple_weight = sum(line["weight"] for line in multiple_lines)
+    for line in multiple_lines:
+        line["effective_weight"] = line["weight"] / multiple_weight * 100 if multiple_weight > 0 else 0
     multiples_per_share = (
         sum(line["value_per_share"] * line["weight"] for line in multiple_lines) / multiple_weight
         if multiple_weight > 0 else None
@@ -301,12 +318,12 @@ def _project(req: MasterValuationRequest, schedule: list[AnnualAssumption] | Non
     sotp_per_share = None
     if req.sotp_segments:
         share_total = sum(segment.revenue_share for segment in req.sotp_segments)
-        terminal_enterprise = sum(
-            final["revenue"] * segment.revenue_share / share_total * segment.ev_revenue_multiple
+        terminal_equity = sum(
+            final["revenue"] * segment.revenue_share / share_total * segment.price_to_sales_multiple
             for segment in req.sotp_segments
         )
-        present_enterprise = terminal_enterprise / ((1 + discount_rate / 100) ** len(rows))
-        sotp_per_share = (present_enterprise - req.net_debt) / final["shares"]
+        present_equity = terminal_equity / ((1 + discount_rate / 100) ** len(rows))
+        sotp_per_share = present_equity / final["shares"]
 
     methods = {
         "dcf": dcf_per_share,
@@ -327,12 +344,12 @@ def _project(req: MasterValuationRequest, schedule: list[AnnualAssumption] | Non
         total_weight = 1.0
     active_weights = {key: weight / total_weight * 100 for key, weight in requested_active_weights.items()}
     composite = sum(methods[key] * weight / 100 for key, weight in active_weights.items())
-    values = [value for value in methods.values() if value is not None and math.isfinite(value)]
+    values = [methods[key] for key in active_weights]
     terminal_pct = pv_terminal / enterprise_value * 100 if enterprise_value else None
     warnings = []
     if terminal_pct is not None and terminal_pct > 85:
         warnings.append(f"Terminal value contributes {terminal_pct:.0f}% of enterprise value.")
-    if req.terminal.method in {"perpetuity", "blended"} and final["fcf"] <= 0:
+    if final["fcf"] <= 0:
         warnings.append("Terminal free cash flow is non-positive; the perpetuity result is not economically meaningful.")
     if req.sotp_segments and abs(sum(segment.revenue_share for segment in req.sotp_segments) - 100) > 0.5:
         warnings.append("SOTP segment shares were normalized to 100%.")
@@ -340,7 +357,7 @@ def _project(req: MasterValuationRequest, schedule: list[AnnualAssumption] | Non
     if non_positive_methods:
         warnings.append(f"Non-positive equity value from: {', '.join(non_positive_methods)}. The result remains in the connected valuation.")
     if used_weight_fallback:
-        warnings.append("No weighted method was available. Cash flow was used at 100% effective weight.")
+        warnings.append("No weighted method was available. Intrinsic DCF was used at 100% effective weight.")
 
     return {
         "rows": rows,
@@ -351,11 +368,6 @@ def _project(req: MasterValuationRequest, schedule: list[AnnualAssumption] | Non
             "pv_forecast_fcf": pv_fcfs,
             "pv_terminal": pv_terminal,
             "terminal_pct": terminal_pct,
-            "perpetuity_value_per_share": (
-                (pv_fcfs + perpetuity_tv / ((1 + discount_rate / 100) ** len(rows)) - req.net_debt) / final["shares"]
-                if perpetuity_tv is not None else None
-            ),
-            "exit_value_per_share": (pv_fcfs + exit_tv / ((1 + discount_rate / 100) ** len(rows)) - req.net_debt) / final["shares"],
         },
         "multiples": {"value_per_share": multiples_per_share, "lines": multiple_lines},
         "ddm": {"value_per_share": ddm_per_share},
@@ -491,6 +503,13 @@ def _sensitivity_grid(
 def _sensitivity_tables(req: MasterValuationRequest) -> dict:
     base_cagr = _schedule_cagr(req.schedule)
     base_margin = req.schedule[-1].margin
+    ebitda_targets = [target for target in req.multiple_targets if target.metric == "ev_ebitda"]
+    ebitda_weight = sum(target.weight for target in ebitda_targets)
+    base_ebitda_multiple = (
+        sum(target.multiple * target.weight for target in ebitda_targets) / ebitda_weight
+        if ebitda_weight > 0
+        else ebitda_targets[0].multiple if ebitda_targets else 16.0
+    )
 
     def connected(changed: MasterValuationRequest) -> float:
         return _project(changed)["composite"]["value_per_share"]
@@ -500,7 +519,6 @@ def _sensitivity_tables(req: MasterValuationRequest) -> dict:
             return None
         changed = req.model_copy(deep=True)
         changed.wacc = wacc_value
-        changed.terminal.method = "blended"
         changed.terminal.perpetual_growth = growth_value
         return connected(changed)
 
@@ -521,15 +539,16 @@ def _sensitivity_tables(req: MasterValuationRequest) -> dict:
     def exit_framework(margin_value: float, multiple_value: float) -> float:
         changed = req.model_copy(deep=True)
         changed.schedule = _shifted_schedule(req, "margin", margin_value - base_margin)
-        changed.terminal.method = "blended"
-        changed.terminal.exit_ebitda_multiple = multiple_value
+        for target in changed.multiple_targets:
+            if target.metric == "ev_ebitda":
+                target.multiple = multiple_value
         return connected(changed)
 
     wacc_values, wacc_base = _bounded_axis(req.wacc, 1, 0.01, 50)
     terminal_growth_values, terminal_growth_base = _bounded_axis(req.terminal.perpetual_growth, 0.5, -10, 15)
     cagr_values, cagr_base = _bounded_axis(base_cagr, 5, -75, 200)
     margin_values, margin_base = _bounded_axis(base_margin, 5, -100, 100)
-    exit_values, exit_base = _bounded_axis(req.terminal.exit_ebitda_multiple, 2, 0.01, 100)
+    exit_values, exit_base = _bounded_axis(base_ebitda_multiple, 2, 0.01, 200)
 
     tables = {
         "discount_rate": _sensitivity_grid(
@@ -545,7 +564,7 @@ def _sensitivity_tables(req: MasterValuationRequest) -> dict:
             wacc_values, cagr_values, "%", "%", wacc_base, cagr_base, growth_risk,
         ),
         "exit_framework": _sensitivity_grid(
-            "Terminal margin x exit multiple", "Terminal margin", "Exit EV / EBITDA",
+            "Terminal margin x market multiple", "Terminal margin", "Target EV / EBITDA",
             margin_values, exit_values, "%", "x", margin_base, exit_base, exit_framework,
         ),
     }
@@ -570,14 +589,16 @@ def _reverse(req: MasterValuationRequest, base: dict) -> dict:
     )
     wacc = _bisect_value(
         lambda rate: _project(req, wacc=rate)["dcf"]["value_per_share"],
-        price, max(req.terminal.perpetual_growth + 0.25, 1) if req.terminal.method in {"perpetuity", "blended"} else 1, 40,
+        price, max(req.terminal.perpetual_growth + 0.25, 1), 40,
     )
-    final = base["rows"][-1]
+    reference_target = next((target for target in req.multiple_targets if target.metric == "ev_ebitda" and target.weight > 0), None)
+    reference_year = reference_target.year if reference_target else len(req.schedule)
+    reference_row = base["rows"][reference_year - 1]
     implied_exit = None
-    if final["ebit"] + final["da"] > 0:
-        discount = (1 + req.wacc / 100) ** len(req.schedule)
-        required_terminal = (price * final["shares"] + req.net_debt - base["dcf"]["pv_forecast_fcf"]) * discount
-        implied_exit = required_terminal / (final["ebit"] + final["da"])
+    if reference_row["ebit"] + reference_row["da"] > 0:
+        discount = (1 + req.wacc / 100) ** reference_year
+        required_enterprise_value = (price * reference_row["shares"] + req.net_debt) * discount
+        implied_exit = required_enterprise_value / (reference_row["ebit"] + reference_row["da"])
         if not math.isfinite(implied_exit) or implied_exit <= 0:
             implied_exit = None
 
@@ -595,6 +616,7 @@ def _reverse(req: MasterValuationRequest, base: dict) -> dict:
         "implied_margin_schedule": [row.margin for row in margin_schedule] if margin_schedule else None,
         "implied_wacc": wacc,
         "implied_exit_multiple": implied_exit,
+        "implied_exit_year": reference_year,
     }
 
 

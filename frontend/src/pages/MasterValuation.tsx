@@ -37,7 +37,7 @@ type AnnualAssumption = {
 
 type MetricKey = 'ev_revenue' | 'ev_ebitda'
 type MultipleTarget = { metric: MetricKey; multiple: number; weight: number; year: number }
-type SotpSegment = { name: string; revenue_share: number; ev_revenue_multiple: number }
+type SotpSegment = { name: string; revenue_share: number; price_to_sales_multiple: number }
 type MethodKey = 'dcf' | 'multiples' | 'ddm' | 'sotp'
 type DriverKey = keyof Pick<AnnualAssumption, 'growth' | 'margin' | 'tax_rate' | 'da_pct' | 'capex_pct' | 'change_nwc_pct' | 'sbc_pct' | 'cash_adjustment_pct' | 'fcf_conversion_pct' | 'net_interest_pct' | 'dilution_pct' | 'payout_pct'>
 type DriverView = 'endpoints' | 'annual'
@@ -66,6 +66,9 @@ type Fundamentals = {
   source: string | null
   schedule: AnnualAssumption[]
   current_multiples: Record<string, number | null>
+  business_segments: SotpSegment[]
+  business_segments_source: string | null
+  business_segments_fiscal_year: number | string | null
   dividend_per_share: number | null
   dividend_yield: number | null
 }
@@ -100,10 +103,8 @@ type Analysis = {
     pv_forecast_fcf: number
     pv_terminal: number
     terminal_pct: number | null
-    perpetuity_value_per_share: number | null
-    exit_value_per_share: number
   }
-  multiples: { value_per_share: number | null; lines: Array<MultipleTarget & { value_per_share: number }> }
+  multiples: { value_per_share: number | null; lines: Array<MultipleTarget & { value_per_share: number; effective_weight: number }> }
   ddm: { value_per_share: number | null }
   sotp: { value_per_share: number | null }
   methods: Record<MethodKey, number | null>
@@ -116,6 +117,7 @@ type Analysis = {
     implied_margin_schedule?: number[] | null
     implied_wacc?: number | null
     implied_exit_multiple?: number | null
+    implied_exit_year?: number | null
   }
   driver_effects: Partial<Record<DriverKey, DriverEffect>>
   sensitivity_tables: Record<SensitivityKey, SensitivityTable>
@@ -137,7 +139,7 @@ const LABEL: React.CSSProperties = { display: 'block', marginBottom: 5, fontFami
 const INPUT: React.CSSProperties = { width: '100%', height: 34, boxSizing: 'border-box', background: T.bg, border: `1px solid ${T.border}`, borderRadius: 0, color: T.text, fontFamily: T.mono, fontSize: 11, padding: '0 10px', outline: 'none' }
 const BUTTON: React.CSSProperties = { minHeight: 31, padding: '0 12px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 0, color: T.muted, fontFamily: T.label, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.09em', textTransform: 'uppercase', cursor: 'pointer' }
 const PRIMARY_BUTTON: React.CSSProperties = { ...BUTTON, background: T.gold, borderColor: T.gold, color: T.bg }
-const METHOD_LABEL: Record<MethodKey, string> = { dcf: 'Cash flow', multiples: 'Market multiples', ddm: 'Dividend value', sotp: 'Parts value' }
+const METHOD_LABEL: Record<MethodKey, string> = { dcf: 'Intrinsic DCF', multiples: 'Market multiples', ddm: 'Dividend value', sotp: 'Parts value' }
 const METRIC_LABEL: Record<MetricKey, string> = { ev_revenue: 'EV / Revenue', ev_ebitda: 'EV / EBITDA' }
 const DRIVER_LABEL: Record<DriverKey, string> = {
   growth: 'Revenue growth', margin: 'Operating margin', tax_rate: 'Tax rate', da_pct: 'D&A / revenue', capex_pct: 'CapEx / revenue',
@@ -327,8 +329,6 @@ export function MasterValuationContent() {
   const [wacc, setWacc] = useState(9.5)
   const [costOfEquity, setCostOfEquity] = useState(10)
   const [terminalGrowth, setTerminalGrowth] = useState(3)
-  const [exitMultiple, setExitMultiple] = useState(16)
-  const [perpetuityWeight, setPerpetuityWeight] = useState(50)
   const [dividendGrowth, setDividendGrowth] = useState(3)
   const [targets, setTargets] = useState<MultipleTarget[]>([])
   const [segments, setSegments] = useState<SotpSegment[]>([])
@@ -338,8 +338,7 @@ export function MasterValuationContent() {
   const [calculating, setCalculating] = useState(false)
   const [error, setError] = useState('')
   const [moreCashOpen, setMoreCashOpen] = useState(false)
-  const [moreTerminalOpen, setMoreTerminalOpen] = useState(false)
-  const [crossChecksOpen, setCrossChecksOpen] = useState(false)
+  const [additionalMethodsOpen, setAdditionalMethodsOpen] = useState(false)
   const [auditOpen, setAuditOpen] = useState(false)
   const [sensitivityId, setSensitivityId] = useState<SensitivityKey>('discount_rate')
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion | null>(null)
@@ -359,7 +358,7 @@ export function MasterValuationContent() {
     wacc,
     cost_of_equity: costOfEquity,
     schedule,
-    terminal: { method: 'blended', perpetual_growth: terminalGrowth, exit_ebitda_multiple: exitMultiple, perpetuity_weight: perpetuityWeight },
+    terminal: { perpetual_growth: terminalGrowth },
     multiple_targets: targets,
     sotp_segments: segments,
     weights,
@@ -430,16 +429,13 @@ export function MasterValuationContent() {
       }
       setSchedule(normalizedSchedule)
       setTargets(seededTargets)
-      setSegments([])
+      setSegments((data.business_segments || []).map(segment => ({ ...segment })))
       setWacc(9.5)
       setCostOfEquity(10)
       setTerminalGrowth(3)
-      setExitMultiple((data.current_multiples.ev_ebitda || 0) > 0 ? clamp(data.current_multiples.ev_ebitda!, .01, 100) : 16)
-      setPerpetuityWeight(50)
       setDividendGrowth(3)
       const multiplesWeight = seededTargets.length ? 35 : 0
-      const dividendWeight = paysDividend ? 10 : 0
-      setWeights({ dcf: 100 - multiplesWeight - dividendWeight, multiples: multiplesWeight, ddm: dividendWeight, sotp: 0 })
+      setWeights({ dcf: 100 - multiplesWeight, multiples: multiplesWeight, ddm: 0, sotp: 0 })
       recordRecentTicker(nextTicker)
       setSearchParams({ ticker: nextTicker }, { replace: true })
     } catch (reason) {
@@ -514,7 +510,7 @@ export function MasterValuationContent() {
     if (!fundamentals || loading || schedule.length < 3) return
     const timer = window.setTimeout(() => { void runModel() }, 320)
     return () => window.clearTimeout(timer)
-  }, [fundamentals, revenue, shares, netDebt, marketPrice, schedule, wacc, costOfEquity, terminalGrowth, exitMultiple, perpetuityWeight, dividendGrowth, targets, segments, weights])
+  }, [fundamentals, revenue, shares, netDebt, marketPrice, schedule, wacc, costOfEquity, terminalGrowth, dividendGrowth, targets, segments, weights])
 
   useEffect(() => {
     const symbol = searchParams.get('ticker')
@@ -539,10 +535,57 @@ export function MasterValuationContent() {
     if (Object.values(next).reduce((sum, weight) => sum + weight, 0) <= 0) next[key] = 1
     return next
   })
+  const addMultipleTarget = () => {
+    const seededMultiple = targets.find(target => target.metric === 'ev_ebitda')?.multiple
+      ?? fundamentals?.current_multiples.ev_ebitda
+      ?? 16
+    setTargets(rows => [...rows, {
+      metric: 'ev_ebitda',
+      multiple: clamp(seededMultiple, .01, 200),
+      weight: rows.length ? 25 : 100,
+      year: Math.min(3, schedule.length),
+    }])
+    setWeights(current => {
+      if (current.multiples > 0) return current
+      const coreTotal = current.dcf + current.multiples || 100
+      const multiplesWeight = Math.min(35, coreTotal)
+      return { ...current, dcf: coreTotal - multiplesWeight, multiples: multiplesWeight }
+    })
+  }
+  const removeMultipleTarget = (index: number) => {
+    setTargets(rows => rows.filter((_, rowIndex) => rowIndex !== index))
+    if (targets.length === 1) setWeights(current => ({ ...current, dcf: Math.min(100, current.dcf + current.multiples), multiples: 0 }))
+  }
+  const updateMultipleWeight = (index: number, value: number) => setTargets(rows => {
+    const next = rows.map((row, rowIndex) => rowIndex === index ? { ...row, weight: clamp(value, 0, 100) } : row)
+    if (next.every(row => row.weight <= 0)) next[index].weight = 1
+    return next
+  })
+  const updateCoreBlend = (dcfShare: number) => setWeights(current => {
+    const coreTotal = current.dcf + current.multiples || 100
+    return {
+      ...current,
+      dcf: Number((coreTotal * clamp(dcfShare, 0, 100) / 100).toFixed(2)),
+      multiples: Number((coreTotal * (100 - clamp(dcfShare, 0, 100)) / 100).toFixed(2)),
+    }
+  })
+  const adoptImpliedMultiple = () => {
+    const implied = analysis?.reverse.implied_exit_multiple
+    if (implied == null) return
+    const year = clamp(analysis?.reverse.implied_exit_year || Math.min(3, schedule.length), 1, schedule.length)
+    const existingIndex = targets.findIndex(target => target.metric === 'ev_ebitda')
+    if (existingIndex >= 0) {
+      setTargets(rows => rows.map((row, index) => index === existingIndex ? { ...row, multiple: Number(implied.toFixed(2)), year } : row))
+    } else {
+      setTargets(rows => [...rows, { metric: 'ev_ebitda', multiple: Number(clamp(implied, .01, 200).toFixed(2)), weight: 100, year }])
+      setWeights(current => current.multiples > 0 ? current : { ...current, dcf: 65, multiples: 35 })
+    }
+    setStep(5)
+  }
 
   const capture = (): ClipDraft[] | null => !analysis ? null : [
     { sourceTab: 'Master Valuation', dataType: 'kpi', payload: { kind: 'kpi', title: `${ticker} Master Valuation`, cells: [
-      { label: 'Connected Value', value: fmtMoney(analysis.composite.value_per_share) }, { label: 'Market Price', value: fmtMoney(marketPrice) },
+      { label: 'Blended Value', value: fmtMoney(analysis.composite.value_per_share) }, { label: 'Market Price', value: fmtMoney(marketPrice) },
       { label: 'DCF', value: fmtMoney(analysis.dcf.value_per_share) }, { label: 'Multiples', value: fmtMoney(analysis.multiples.value_per_share) },
       { label: 'Dividend', value: fmtMoney(analysis.ddm.value_per_share) }, { label: 'SOTP', value: fmtMoney(analysis.sotp.value_per_share) },
     ] } },
@@ -558,7 +601,7 @@ export function MasterValuationContent() {
   const rangeSpan = Math.max(rangeHigh - rangeLow, 1)
   const pricePct = marketPrice == null ? null : clamp((marketPrice - rangeLow) / rangeSpan * 100, 0, 100)
   const valuePct = connectedValue == null ? null : clamp((connectedValue - rangeLow) / rangeSpan * 100, 0, 100)
-  const methodValues = analysis ? Object.values(analysis.methods).filter((value): value is number => value != null && Number.isFinite(value)) : []
+  const methodValues = analysis ? (Object.keys(analysis.methods) as MethodKey[]).map(key => analysis.active_weights[key] ? analysis.methods[key] : null).filter((value): value is number => value != null && Number.isFinite(value)) : []
   const methodSpread = methodValues.length > 1 ? Math.max(...methodValues) - Math.min(...methodValues) : 0
   const spreadWarning = connectedValue != null && methodSpread > connectedValue * .4
   const marketCap = marketPrice == null ? null : marketPrice * shares
@@ -567,50 +610,61 @@ export function MasterValuationContent() {
   const lastRow = analysis?.rows[analysis.rows.length - 1]
   const status = calculating ? 'RECONCILING' : analysis ? 'MODEL LIVE' : error ? 'CHECK INPUTS' : fundamentals ? 'MODEL READY' : 'LOAD A COMPANY'
   const statusColor = calculating ? T.gold : analysis ? T.pos : error ? T.neg : T.muted
+  const coreWeightTotal = weights.dcf + weights.multiples
+  const dcfBlend = coreWeightTotal > 0 ? weights.dcf / coreWeightTotal * 100 : 100
 
   const steps: Array<{ key: StepKey; label: string; sub: string }> = [
     { key: 1, label: 'Business today', sub: fundamentals ? `${fmtM(revenue)} revenue` : 'Load the baseline' },
     { key: 2, label: 'Growth & profit', sub: schedule.length ? `${selectedCagr.toFixed(1)}% CAGR to ${lastSchedule?.margin.toFixed(1)}% margin` : 'Shape the forecast' },
     { key: 3, label: 'Cash from profit', sub: analysis ? `${fmtM(lastRow?.fcf)} year ${schedule.length} FCF` : 'Build the cash bridge' },
-    { key: 4, label: `Value after Y${schedule.length || 10}`, sub: `${wacc.toFixed(1)}% WACC, ${perpetuityWeight}% forever` },
-    { key: 5, label: 'Value per share', sub: connectedValue == null ? 'Reconcile the evidence' : `${fmtMoney(connectedValue)} connected value` },
+    { key: 4, label: 'Intrinsic DCF', sub: analysis ? `${fmtMoney(analysis.dcf.value_per_share)} standalone value` : `${wacc.toFixed(1)}% WACC, ${terminalGrowth.toFixed(1)}% terminal growth` },
+    { key: 5, label: 'Multiples & blend', sub: connectedValue == null ? 'Build the market method' : `${fmtMoney(connectedValue)} blended value` },
   ]
 
   const stepDrivers = (drivers: DriverKey[]) => drivers.map(key => <DriverRow key={key} driverKey={key} schedule={schedule} view={driverView} effect={analysis?.driver_effects[key]} onCurve={applyCurve} onYear={updateYear} />)
 
-  const renderCrossChecks = () => (
-    <div className="mv-crosschecks" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderTop: `1px solid ${T.border}` }}>
-      <div style={{ padding: 15, borderRight: `1px solid ${T.border}` }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <div><div style={{ fontFamily: T.label, fontSize: 10.5, fontWeight: 770 }}>Target multiples</div><div style={{ marginTop: 3, fontFamily: T.label, fontSize: 8.5, color: T.muted }}>Applied to one forecast year and discounted to today.</div></div>
-          <button type="button" onClick={() => setTargets(rows => [...rows, { metric: 'ev_ebitda', multiple: exitMultiple, weight: 25, year: Math.min(3, schedule.length) }])} style={BUTTON}><Plus size={11} /> Add</button>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 11 }}>
-          {targets.map((target, index) => <div key={`${target.metric}-${index}`} className="mv-target-row" style={{ display: 'grid', gridTemplateColumns: '1.35fr .68fr .55fr .55fr 42px 28px', gap: 5 }}>
-            <select value={target.metric} onChange={event => setTargets(rows => rows.map((row, rowIndex) => rowIndex === index ? { ...row, metric: event.target.value as MetricKey } : row))} style={{ ...INPUT, height: 29 }}>{Object.entries(METRIC_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
-            <input aria-label="Target multiple" type="number" step={.5} value={target.multiple} onChange={event => setTargets(rows => rows.map((row, rowIndex) => rowIndex === index ? { ...row, multiple: +event.target.value } : row))} style={{ ...INPUT, height: 29, padding: '0 5px' }} />
-            <input aria-label="Forecast year" type="number" min={1} max={schedule.length} value={target.year} onChange={event => setTargets(rows => rows.map((row, rowIndex) => rowIndex === index ? { ...row, year: clamp(+event.target.value, 1, schedule.length) } : row))} style={{ ...INPUT, height: 29, padding: '0 5px' }} />
-            <input aria-label="Target weight" type="number" min={0} max={100} value={target.weight} onChange={event => setTargets(rows => rows.map((row, rowIndex) => rowIndex === index ? { ...row, weight: +event.target.value } : row))} style={{ ...INPUT, height: 29, padding: '0 5px' }} />
-            <button type="button" disabled={target.metric !== 'ev_ebitda'} title="Use as the terminal exit multiple" onClick={() => { setExitMultiple(target.multiple); setStep(4) }} style={{ ...BUTTON, minHeight: 29, padding: 0, color: target.metric === 'ev_ebitda' ? T.gold : T.muted, opacity: target.metric === 'ev_ebitda' ? 1 : .35 }}>Use</button>
-            <button type="button" aria-label="Remove target" onClick={() => setTargets(rows => rows.filter((_, rowIndex) => rowIndex !== index))} style={{ ...BUTTON, minHeight: 29, padding: 0 }}><Trash2 size={11} /></button>
-          </div>)}
-          {!targets.length && <div style={{ padding: 12, border: `1px dashed ${T.border}`, fontFamily: T.label, fontSize: 9, lineHeight: 1.5, color: T.muted }}>No target multiple is active.</div>}
+  const renderMultiplesBuilder = () => (
+    <div style={{ padding: '16px 18px 18px', borderBottom: `1px solid ${T.border}` }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14 }}>
+        <div><div style={{ fontFamily: T.label, fontSize: 10.5, fontWeight: 780, color: T.text }}>Standalone market valuation</div><div style={{ maxWidth: 650, marginTop: 4, fontFamily: T.label, fontSize: 9, lineHeight: 1.5, color: T.muted }}>Choose the multiples you trust. Each target produces a complete present value; their internal weights create one market-method value.</div></div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><div style={{ textAlign: 'right' }}><div style={LABEL}>Multiples value</div><div style={{ fontFamily: T.mono, fontSize: 19, fontWeight: 790, color: T.blue }}>{fmtMoney(analysis?.multiples.value_per_share)}</div></div><button type="button" onClick={addMultipleTarget} style={{ ...BUTTON, borderColor: T.blue, color: T.blue }}><Plus size={11} /> Add multiple</button></div>
+      </div>
+      <div style={{ marginTop: 13, overflowX: 'auto' }}>
+        {targets.length > 0 && <div className="mv-target-row" style={{ minWidth: 650, display: 'grid', gridTemplateColumns: '1.35fr .68fr .58fr .68fr .8fr 28px', gap: 5, padding: '0 0 5px' }}>{['Metric', 'Target', 'Year', 'Weight', 'Value / share', ''].map(label => <div key={label} style={{ fontFamily: T.label, fontSize: 7.5, fontWeight: 780, letterSpacing: '.08em', textTransform: 'uppercase', color: T.muted }}>{label}</div>)}</div>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {targets.map((target, index) => {
+            const line = analysis?.multiples.lines[index]
+            return <div key={`${target.metric}-${index}`} className="mv-target-row" style={{ minWidth: 650, display: 'grid', gridTemplateColumns: '1.35fr .68fr .58fr .68fr .8fr 28px', gap: 5, alignItems: 'center' }}>
+              <select aria-label={`Multiple metric ${index + 1}`} value={target.metric} onChange={event => setTargets(rows => rows.map((row, rowIndex) => rowIndex === index ? { ...row, metric: event.target.value as MetricKey } : row))} style={{ ...INPUT, height: 31 }}>{Object.entries(METRIC_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
+              <input aria-label={`Target multiple ${index + 1}`} type="number" min={.01} max={200} step={.5} value={target.multiple} onChange={event => setTargets(rows => rows.map((row, rowIndex) => rowIndex === index ? { ...row, multiple: +event.target.value } : row))} style={{ ...INPUT, height: 31, padding: '0 6px' }} />
+              <input aria-label={`Forecast year ${index + 1}`} type="number" min={1} max={schedule.length} value={target.year} onChange={event => setTargets(rows => rows.map((row, rowIndex) => rowIndex === index ? { ...row, year: clamp(+event.target.value, 1, schedule.length) } : row))} style={{ ...INPUT, height: 31, padding: '0 6px' }} />
+              <input aria-label={`Within-method weight ${index + 1}`} type="number" min={0} max={100} value={target.weight} onChange={event => updateMultipleWeight(index, +event.target.value)} style={{ ...INPUT, height: 31, padding: '0 6px' }} />
+              <div style={{ padding: '0 8px', fontFamily: T.mono, fontSize: 11, fontWeight: 770, color: T.text }}>{fmtMoney(line?.value_per_share)}<span style={{ display: 'block', marginTop: 2, fontSize: 7, fontWeight: 500, color: T.muted }}>{line ? `${line.effective_weight.toFixed(0)}% OF METHOD` : 'CALCULATING'}</span></div>
+              <button type="button" aria-label={`Remove multiple ${index + 1}`} onClick={() => removeMultipleTarget(index)} style={{ ...BUTTON, minHeight: 31, padding: 0 }}><Trash2 size={11} /></button>
+            </div>
+          })}
+          {!targets.length && <button type="button" onClick={addMultipleTarget} style={{ minHeight: 68, width: '100%', background: 'color-mix(in srgb, var(--theme-tertiary) 3%, transparent)', border: '1px dashed color-mix(in srgb, var(--theme-tertiary) 30%, transparent)', color: T.muted, fontFamily: T.label, fontSize: 9, cursor: 'pointer' }}>Add EV / Revenue or EV / EBITDA to build the standalone market method.</button>}
         </div>
       </div>
+    </div>
+  )
+
+  const renderAdditionalMethods = () => (
+    <div className="mv-crosschecks" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderTop: `1px solid ${T.border}` }}>
+      <div style={{ padding: 15, borderRight: `1px solid ${T.border}` }}>
+        <div style={{ fontFamily: T.label, fontSize: 10.5, fontWeight: 770 }}>Dividend method</div><div style={{ marginTop: 3, fontFamily: T.label, fontSize: 8.5, lineHeight: 1.5, color: T.muted }}>Available when the forecast includes a payout. This remains separate from both DCF and market multiples.</div>
+        <div style={{ marginTop: 12, fontFamily: T.mono, fontSize: 18, fontWeight: 780, color: T.text }}>{fmtMoney(analysis?.ddm.value_per_share)}</div>
+        <div className="mv-two-fields" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}><Field label="Cost of equity" value={costOfEquity} onChange={setCostOfEquity} step={.25} suffix="%" /><Field label="Dividend growth" value={dividendGrowth} onChange={setDividendGrowth} step={.25} suffix="%" /></div>
+        <input aria-label="Dividend value weight" type="range" min={0} max={100} step={5} value={weights.ddm} disabled={analysis?.ddm.value_per_share == null} onChange={event => updateMethodWeight('ddm', +event.target.value)} style={{ width: '100%', marginTop: 13, accentColor: T.gold }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: T.label, fontSize: 8, color: T.muted }}><span>Final blend weight</span><span style={{ fontFamily: T.mono }}>{(analysis?.active_weights.ddm || 0).toFixed(0)}% effective</span></div>
+      </div>
       <div style={{ padding: 15 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <div><div style={{ fontFamily: T.label, fontSize: 10.5, fontWeight: 770 }}>Business parts</div><div style={{ marginTop: 3, fontFamily: T.label, fontSize: 8.5, color: T.muted }}>Use only when distinct businesses deserve different multiples.</div></div>
-          <button type="button" onClick={() => { setSegments(rows => [...rows, { name: `Segment ${rows.length + 1}`, revenue_share: rows.length ? 25 : 100, ev_revenue_multiple: 5 }]); setWeights(current => ({ ...current, sotp: current.sotp || 10 })) }} style={BUTTON}><Plus size={11} /> Add</button>
-        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><div><div style={{ fontFamily: T.label, fontSize: 10.5, fontWeight: 770 }}>Parts method</div><div style={{ marginTop: 3, fontFamily: T.label, fontSize: 8.5, color: T.muted }}>{fundamentals?.business_segments?.length ? `${fundamentals.business_segments.length} reported segments auto-loaded${fundamentals.business_segments_fiscal_year ? ` · FY${fundamentals.business_segments_fiscal_year}` : ''}${fundamentals.business_segments_source ? ` · ${fundamentals.business_segments_source}` : ''}. Edit the shares or P/S assumptions before adding this method to the blend.` : 'Use when distinct businesses deserve separate revenue multiples.'}</div></div><div style={{ display: 'flex', gap: 6 }}>{fundamentals?.business_segments?.length ? <button type="button" onClick={() => setSegments(fundamentals.business_segments.map(segment => ({ ...segment })))} style={BUTTON}><RefreshCw size={10} /> Reset</button> : null}<button type="button" onClick={() => { setSegments(rows => [...rows, { name: `Segment ${rows.length + 1}`, revenue_share: rows.length ? 25 : 100, price_to_sales_multiple: 5 }]); setWeights(current => ({ ...current, sotp: current.sotp || 10 })) }} style={BUTTON}><Plus size={11} /> Add part</button></div></div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 11 }}>
-          {segments.map((segment, index) => <div key={index} className="mv-segment-row" style={{ display: 'grid', gridTemplateColumns: '1fr .55fr .62fr 28px', gap: 5 }}>
-            <input aria-label="Segment name" value={segment.name} onChange={event => setSegments(rows => rows.map((row, rowIndex) => rowIndex === index ? { ...row, name: event.target.value } : row))} style={{ ...INPUT, height: 29 }} />
-            <input aria-label="Revenue share" type="number" value={segment.revenue_share} onChange={event => setSegments(rows => rows.map((row, rowIndex) => rowIndex === index ? { ...row, revenue_share: +event.target.value } : row))} style={{ ...INPUT, height: 29 }} />
-            <input aria-label="Revenue multiple" type="number" step={.5} value={segment.ev_revenue_multiple} onChange={event => setSegments(rows => rows.map((row, rowIndex) => rowIndex === index ? { ...row, ev_revenue_multiple: +event.target.value } : row))} style={{ ...INPUT, height: 29 }} />
-            <button type="button" aria-label="Remove segment" onClick={() => setSegments(rows => rows.filter((_, rowIndex) => rowIndex !== index))} style={{ ...BUTTON, minHeight: 29, padding: 0 }}><Trash2 size={11} /></button>
-          </div>)}
-          {!segments.length && <div style={{ padding: 12, border: `1px dashed ${T.border}`, fontFamily: T.label, fontSize: 9, lineHeight: 1.5, color: T.muted }}>No segment valuation is active.</div>}
-          {segments.length > 0 && <div style={{ fontFamily: T.label, fontSize: 8, color: T.muted }}>Revenue shares normalize to 100%. Current input total {segments.reduce((sum, segment) => sum + segment.revenue_share, 0).toFixed(0)}%.</div>}
+          {segments.length > 0 && <div className="mv-segment-row" style={{ display: 'grid', gridTemplateColumns: '1fr .55fr .62fr 28px', gap: 5 }}>{['Segment', 'Revenue %', 'P / S', ''].map(label => <div key={label} style={{ fontFamily: T.label, fontSize: 7.5, fontWeight: 780, letterSpacing: '.08em', textTransform: 'uppercase', color: T.muted }}>{label}</div>)}</div>}
+          {segments.map((segment, index) => <div key={index} className="mv-segment-row" style={{ display: 'grid', gridTemplateColumns: '1fr .55fr .62fr 28px', gap: 5 }}><input aria-label="Segment name" value={segment.name} onChange={event => setSegments(rows => rows.map((row, rowIndex) => rowIndex === index ? { ...row, name: event.target.value } : row))} style={{ ...INPUT, height: 29 }} /><input aria-label="Revenue share" type="number" value={segment.revenue_share} onChange={event => setSegments(rows => rows.map((row, rowIndex) => rowIndex === index ? { ...row, revenue_share: +event.target.value } : row))} style={{ ...INPUT, height: 29 }} /><input aria-label="Price to sales multiple" type="number" step={.5} value={segment.price_to_sales_multiple} onChange={event => setSegments(rows => rows.map((row, rowIndex) => rowIndex === index ? { ...row, price_to_sales_multiple: +event.target.value } : row))} style={{ ...INPUT, height: 29 }} /><button type="button" aria-label="Remove segment" onClick={() => setSegments(rows => rows.filter((_, rowIndex) => rowIndex !== index))} style={{ ...BUTTON, minHeight: 29, padding: 0 }}><Trash2 size={11} /></button></div>)}
+          {!segments.length && <div style={{ padding: 12, border: `1px dashed ${T.border}`, fontFamily: T.label, fontSize: 9, lineHeight: 1.5, color: T.muted }}>No parts valuation is active.</div>}
+          {segments.length > 0 && <><div style={{ fontFamily: T.label, fontSize: 8, color: T.muted }}>Revenue shares normalize to 100%. Current input total {segments.reduce((sum, segment) => sum + segment.revenue_share, 0).toFixed(0)}%.</div><input aria-label="Parts value weight" type="range" min={0} max={100} step={5} value={weights.sotp} onChange={event => updateMethodWeight('sotp', +event.target.value)} style={{ width: '100%', marginTop: 5, accentColor: T.gold }} /><div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: T.label, fontSize: 8, color: T.muted }}><span>{fmtMoney(analysis?.sotp.value_per_share)} parts value</span><span style={{ fontFamily: T.mono }}>{(analysis?.active_weights.sotp || 0).toFixed(0)}% effective</span></div></>}
         </div>
       </div>
     </div>
@@ -725,47 +779,37 @@ export function MasterValuationContent() {
               </div>
             </div>}
             <Disclosure label="Remaining ownership and cash drivers" detail="Stock compensation, other cash items, interest, dilution, and payout." open={moreCashOpen} onToggle={() => setMoreCashOpen(open => !open)}><div>{stepDrivers(['sbc_pct', 'cash_adjustment_pct', 'net_interest_pct', 'dilution_pct', 'payout_pct'])}</div></Disclosure>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: 13, borderTop: `1px solid ${T.border}` }}><button type="button" onClick={() => setStep(4)} style={PRIMARY_BUTTON}>Set terminal value <ChevronRight size={12} /></button></div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: 13, borderTop: `1px solid ${T.border}` }}><button type="button" onClick={() => setStep(4)} style={PRIMARY_BUTTON}>Complete the intrinsic DCF <ChevronRight size={12} /></button></div>
           </>}
 
           {step === 4 && <>
-            <StepHeader step={4} title={`Value the business after year ${schedule.length}`} detail="Balance two terminal stories. One assumes the business keeps growing. The other assumes it is sold at a market multiple." />
-            <div className="mv-three-fields" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, padding: 18 }}>
+            <StepHeader step={4} title="Complete the intrinsic DCF" detail="Discount forecast cash flow and a perpetual-growth terminal value. Market multiples do not enter this method." />
+            <div className="mv-two-fields" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12, padding: 18 }}>
               <Field label="WACC" value={wacc} onChange={setWacc} step={.25} suffix="%" />
               <Field label="Terminal growth" value={terminalGrowth} onChange={setTerminalGrowth} step={.25} suffix="%" />
-              <Field label="Exit EV / EBITDA" value={exitMultiple} onChange={setExitMultiple} step={.5} suffix="x" />
             </div>
-            <div style={{ padding: '17px 19px 19px', borderTop: `1px solid ${T.border}` }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 15, alignItems: 'end' }}>
-                <div><div style={{ fontFamily: T.label, fontSize: 10, fontWeight: 760, color: T.text }}>Keeps growing forever</div><div style={{ marginTop: 4, fontFamily: T.mono, fontSize: 19, fontWeight: 780, color: T.text }}>{fmtMoney(analysis?.dcf.perpetuity_value_per_share)}</div></div>
-                <div style={{ fontFamily: T.mono, fontSize: 18, fontWeight: 790, color: T.gold }}>{perpetuityWeight}% / {100 - perpetuityWeight}%</div>
-                <div style={{ textAlign: 'right' }}><div style={{ fontFamily: T.label, fontSize: 10, fontWeight: 760, color: T.text }}>Sold at a multiple</div><div style={{ marginTop: 4, fontFamily: T.mono, fontSize: 19, fontWeight: 780, color: T.text }}>{fmtMoney(analysis?.dcf.exit_value_per_share)}</div></div>
-              </div>
-              <input aria-label="Terminal story blend" type="range" min={0} max={100} step={5} value={perpetuityWeight} onChange={event => setPerpetuityWeight(+event.target.value)} style={{ width: '100%', marginTop: 14, accentColor: T.gold }} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: T.label, fontSize: 8.5, color: T.muted }}><span>More weight on exit value</span><span>More weight on perpetual growth</span></div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 18, alignItems: 'center', padding: '18px 19px', borderTop: `1px solid ${T.border}`, background: T.goldTint(4) }}>
+              <div><div style={{ fontFamily: T.label, fontSize: 10.5, fontWeight: 780, color: T.text }}>Standalone intrinsic value</div><div style={{ maxWidth: 610, marginTop: 5, fontFamily: T.label, fontSize: 9, lineHeight: 1.55, color: T.muted }}>This is the completed DCF: present value of forecast free cash flow plus a perpetual-growth terminal value, less net debt, divided by diluted shares.</div></div>
+              <div style={{ textAlign: 'right' }}><div style={LABEL}>DCF value / share</div><div style={{ fontFamily: T.mono, fontSize: 27, fontWeight: 810, letterSpacing: '-.03em', color: T.gold }}>{fmtMoney(analysis?.dcf.value_per_share)}</div></div>
             </div>
             <div className="mv-three-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', borderTop: `1px solid ${T.border}` }}>
               {[
                 ['Forecast cash flow value', fmtM(analysis?.dcf.pv_forecast_fcf)], ['Terminal value today', fmtM(analysis?.dcf.pv_terminal)], ['Terminal share of EV', analysis?.dcf.terminal_pct == null ? '-' : `${analysis.dcf.terminal_pct.toFixed(0)}%`],
               ].map(([label, value], index) => <div key={label} style={{ padding: '14px 16px', borderRight: index < 2 ? `1px solid ${T.border}` : 0 }}><div style={LABEL}>{label}</div><div style={{ fontFamily: T.mono, fontSize: 16, fontWeight: 770, color: index === 2 && (analysis?.dcf.terminal_pct || 0) > 85 ? T.neg : T.text }}>{value}</div></div>)}
             </div>
-            <Disclosure label="More terminal assumptions" detail="Cost of equity and dividend growth affect the dividend cross-check." open={moreTerminalOpen} onToggle={() => setMoreTerminalOpen(open => !open)}><div className="mv-two-fields" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '14px 16px 17px', borderTop: `1px solid ${T.border}` }}><Field label="Cost of equity" value={costOfEquity} onChange={setCostOfEquity} step={.25} suffix="%" /><Field label="Dividend terminal growth" value={dividendGrowth} onChange={setDividendGrowth} step={.25} suffix="%" /></div></Disclosure>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: 13, borderTop: `1px solid ${T.border}` }}><button type="button" onClick={() => setStep(5)} style={PRIMARY_BUTTON}>Reconcile value <ChevronRight size={12} /></button></div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: 13, borderTop: `1px solid ${T.border}` }}><button type="button" onClick={() => setStep(5)} style={PRIMARY_BUTTON}>Build market multiples <ChevronRight size={12} /></button></div>
           </>}
 
           {step === 5 && <>
-            <StepHeader step={5} title="Reconcile value per share" detail="Weight the evidence you trust, then test the connected value across operating, risk, and terminal assumptions." />
-            <div className="mv-method-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', borderBottom: `1px solid ${T.border}` }}>
-              {(Object.keys(METHOD_LABEL) as MethodKey[]).map((key, index) => {
-                const value = analysis?.methods[key]
-                const available = value != null && Number.isFinite(value)
-                return <div key={key} style={{ minHeight: 142, padding: '14px 14px 12px', borderRight: index < 3 ? `1px solid ${T.border}` : 0, opacity: available || key === 'dcf' ? 1 : .45 }}>
-                  <div style={{ fontFamily: T.label, fontSize: 9.5, fontWeight: 770, color: T.text }}>{METHOD_LABEL[key]}</div>
-                  <div style={{ marginTop: 7, fontFamily: T.mono, fontSize: 20, fontWeight: 790, color: key === 'dcf' ? T.gold : T.text }}>{fmtMoney(value)}</div>
-                  <input aria-label={`${METHOD_LABEL[key]} weight`} type="range" min={0} max={100} step={5} value={weights[key]} disabled={!available && key !== 'dcf'} onChange={event => updateMethodWeight(key, +event.target.value)} style={{ width: '100%', marginTop: 12, accentColor: T.gold }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2, fontFamily: T.label, fontSize: 8, color: T.muted }}><span>{available || key === 'dcf' ? 'Relative weight' : key === 'ddm' ? 'Set a payout first' : key === 'sotp' ? 'Add business parts' : 'Add a target multiple'}</span><span style={{ fontFamily: T.mono }}>{(analysis?.active_weights[key] || 0).toFixed(0)}% effective</span></div>
-                </div>
-              })}
+            <StepHeader step={5} title="Build the market method, then blend" detail="Choose one or more multiples to produce a complete market valuation. Only then blend it with the completed intrinsic DCF." />
+            {renderMultiplesBuilder()}
+            <div style={{ padding: '17px 18px 19px', borderBottom: `1px solid ${T.border}` }}>
+              <div><div style={{ fontFamily: T.label, fontSize: 10.5, fontWeight: 780, color: T.text }}>Core DCF / multiples split</div><div style={{ marginTop: 4, fontFamily: T.label, fontSize: 9, color: T.muted }}>Set the split inside the core valuation sleeve. The cards show final effective weights after optional dividend or parts methods dilute both proportionally.</div></div>
+              <div className="mv-method-cards" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', marginTop: 13, border: `1px solid ${T.border}` }}>
+                {[{ key: 'dcf' as const, label: 'Intrinsic DCF', detail: 'Forecast FCF + perpetuity', color: T.gold }, { key: 'multiples' as const, label: 'Market multiples', detail: `${targets.length} target${targets.length === 1 ? '' : 's'} blended internally`, color: T.blue }].map((method, index) => <div key={method.key} style={{ minHeight: 104, padding: '14px 16px', borderRight: index === 0 ? `1px solid ${T.border}` : 0, opacity: method.key === 'multiples' && analysis?.multiples.value_per_share == null ? .45 : 1 }}><div style={{ fontFamily: T.label, fontSize: 9.5, fontWeight: 780, color: T.text }}>{method.label}</div><div style={{ marginTop: 6, fontFamily: T.mono, fontSize: 21, fontWeight: 800, color: method.color }}>{fmtMoney(analysis?.methods[method.key])}</div><div style={{ marginTop: 5, display: 'flex', justifyContent: 'space-between', gap: 8, fontFamily: T.label, fontSize: 8, color: T.muted }}><span>{method.detail}</span><span style={{ fontFamily: T.mono }}>{(analysis?.active_weights[method.key] || 0).toFixed(0)}% EFFECTIVE</span></div></div>)}
+              </div>
+              <input aria-label="Core DCF and multiples split" type="range" min={0} max={100} step={5} value={dcfBlend} disabled={analysis?.multiples.value_per_share == null} onChange={event => updateCoreBlend(+event.target.value)} style={{ width: '100%', marginTop: 15, accentColor: T.gold }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: T.label, fontSize: 8.5, color: T.muted }}><span>Core multiples share <strong style={{ marginLeft: 5, fontFamily: T.mono, color: T.blue }}>{(100 - dcfBlend).toFixed(0)}%</strong></span><span><strong style={{ marginRight: 5, fontFamily: T.mono, color: T.gold }}>{dcfBlend.toFixed(0)}%</strong> Core DCF share</span></div>
             </div>
             {analysis?.sensitivity_tables && (() => {
               const table = analysis.sensitivity_tables[sensitivityId] || analysis.sensitivity_tables.discount_rate
@@ -773,7 +817,7 @@ export function MasterValuationContent() {
               const min = Math.min(...upsets)
               const max = Math.max(...upsets)
               return <div style={{ padding: '17px 18px 19px' }}>
-                <div className="mv-sensitivity-head" style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: 12, marginBottom: 11 }}><div><div style={{ fontFamily: T.label, fontSize: 10.5, fontWeight: 770 }}>{table.title} sensitivity</div><div style={{ marginTop: 3, fontFamily: T.label, fontSize: 8.5, color: T.muted }}>Connected value per share. The outlined cell is the current model.</div></div><label style={{ minWidth: 205 }}><span style={LABEL}>Sensitivity view</span><select value={sensitivityId} onChange={event => setSensitivityId(event.target.value as SensitivityKey)} style={{ ...INPUT, height: 30 }}><option value="discount_rate">Discount rate</option><option value="operating_case">CAGR and margin</option><option value="growth_risk">Growth and risk</option><option value="exit_framework">Margin and exit multiple</option></select></label></div>
+                <div className="mv-sensitivity-head" style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: 12, marginBottom: 11 }}><div><div style={{ fontFamily: T.label, fontSize: 10.5, fontWeight: 770 }}>{table.title} sensitivity</div><div style={{ marginTop: 3, fontFamily: T.label, fontSize: 8.5, color: T.muted }}>Blended value per share. The outlined cell is the current model.</div></div><label style={{ minWidth: 205 }}><span style={LABEL}>Sensitivity view</span><select value={sensitivityId} onChange={event => setSensitivityId(event.target.value as SensitivityKey)} style={{ ...INPUT, height: 30 }}><option value="discount_rate">DCF: discount rate</option><option value="operating_case">CAGR and margin</option><option value="growth_risk">Growth and risk</option><option value="exit_framework">Multiples: margin and EV / EBITDA</option></select></label></div>
                 <div style={{ marginBottom: 5, textAlign: 'right', fontFamily: T.mono, fontSize: 8, color: T.muted }}>{table.column_label.toUpperCase()} -&gt;</div>
                 <div className="mv-sensitivity" style={{ display: 'grid', gridTemplateColumns: `92px repeat(${table.column_values.length}, minmax(72px, 1fr))`, gap: 3, overflowX: 'auto' }}>
                   <div style={{ padding: 9, fontFamily: T.mono, fontSize: 8, color: T.muted }}>{table.row_label.toUpperCase()}</div>
@@ -786,14 +830,14 @@ export function MasterValuationContent() {
                 </div>
               </div>
             })()}
-            <Disclosure label="Cross-checks" detail="Target multiples and business-part assumptions." open={crossChecksOpen} onToggle={() => setCrossChecksOpen(open => !open)}>{renderCrossChecks()}</Disclosure>
+            <Disclosure label="Additional valuation methods" detail="Optionally add a dividend or sum-of-the-parts value to the final blend." open={additionalMethodsOpen} onToggle={() => setAdditionalMethodsOpen(open => !open)}>{renderAdditionalMethods()}</Disclosure>
             <Disclosure label="Full annual audit" detail="Inspect every operating and per-share bridge behind the model." open={auditOpen} onToggle={() => setAuditOpen(open => !open)}>{analysis && <div style={{ overflowX: 'auto', borderTop: `1px solid ${T.border}` }}><table style={{ width: '100%', minWidth: 1120, borderCollapse: 'collapse', fontFamily: T.mono, fontSize: 9 }}><thead><tr>{['Year', 'Growth', 'Margin', 'Revenue', 'NOPAT', 'Interest', 'Net income', 'D&A', 'CapEx', 'NWC', 'SBC', 'Other', 'Conversion', 'FCF', 'DPS', 'Shares'].map(label => <th key={label} style={{ padding: '8px 9px', textAlign: label === 'Year' ? 'left' : 'right', borderBottom: `1px solid ${T.border}`, color: T.muted, fontFamily: T.label, fontSize: 8, letterSpacing: '.08em', textTransform: 'uppercase' }}>{label}</th>)}</tr></thead><tbody>{analysis.rows.map(row => <tr key={row.year}>{[String(row.year), `${row.growth.toFixed(1)}%`, `${row.margin.toFixed(1)}%`, fmtM(row.revenue), fmtM(row.nopat), fmtM(row.interest_expense), fmtM(row.net_income), fmtM(row.da), fmtM(row.capex), fmtM(row.change_nwc), fmtM(row.sbc), fmtM(row.cash_adjustment), `${row.fcf_conversion_pct.toFixed(0)}%`, fmtM(row.fcf), fmtMoney(row.dividend_per_share), `${row.shares.toFixed(1)}M`].map((value, index) => <td key={index} style={{ padding: '7px 9px', textAlign: index === 0 ? 'left' : 'right', borderBottom: `1px solid ${T.borderFaint}`, color: index === 13 ? T.gold : T.text }}>{value}</td>)}</tr>)}</tbody></table></div>}</Disclosure>
           </>}
         </main>
 
         <aside className="mv-rail" style={{ ...PANEL, position: 'sticky', top: 8 }}>
           <div style={{ padding: '18px 18px 15px', borderBottom: `1px solid ${T.border}` }}>
-            <div style={{ fontFamily: T.label, fontSize: 9, fontWeight: 760, color: T.muted }}>Your connected value is</div>
+            <div style={{ fontFamily: T.label, fontSize: 9, fontWeight: 760, color: T.muted }}>Your final blended value is</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 4 }}><span style={{ fontFamily: T.mono, fontSize: 33, fontWeight: 820, letterSpacing: '-.035em', color: T.gold }}>{fmtMoney(connectedValue)}</span><span style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 770, color: (upside ?? 0) >= 0 ? T.pos : T.neg }}>{signedPct(upside)}</span></div>
             <div style={{ marginTop: 5, fontFamily: T.label, fontSize: 9.5, lineHeight: 1.45, color: T.muted }}>{marketPrice == null ? 'Load a market price to compare value and price.' : `${fmtMoney(marketPrice)} market price. ${upside == null ? '' : upside >= 0 ? 'The model sits above the market.' : 'The model sits below the market.'}`}</div>
             {analysis && <div style={{ marginTop: 15 }}>
@@ -819,7 +863,7 @@ export function MasterValuationContent() {
               { label: 'Revenue CAGR', value: analysis?.reverse.implied_revenue_cagr, suffix: '%', action: () => adoptSchedule('growth', analysis?.reverse.implied_growth_schedule), enabled: Boolean(analysis?.reverse.implied_growth_schedule) },
               { label: 'Terminal margin', value: analysis?.reverse.implied_terminal_margin, suffix: '%', action: () => adoptSchedule('margin', analysis?.reverse.implied_margin_schedule), enabled: Boolean(analysis?.reverse.implied_margin_schedule) },
               { label: 'WACC', value: analysis?.reverse.implied_wacc, suffix: '%', action: () => analysis?.reverse.implied_wacc != null && setWacc(Number(analysis.reverse.implied_wacc.toFixed(2))), enabled: analysis?.reverse.implied_wacc != null },
-              { label: 'Exit EV / EBITDA', value: analysis?.reverse.implied_exit_multiple, suffix: 'x', action: () => analysis?.reverse.implied_exit_multiple != null && setExitMultiple(Number(analysis.reverse.implied_exit_multiple.toFixed(2))), enabled: analysis?.reverse.implied_exit_multiple != null },
+              { label: `EV / EBITDA in Y${analysis?.reverse.implied_exit_year || schedule.length}`, value: analysis?.reverse.implied_exit_multiple, suffix: 'x', action: adoptImpliedMultiple, enabled: analysis?.reverse.implied_exit_multiple != null },
             ].map(item => <div key={item.label} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 8, alignItems: 'center', padding: '6px 0' }}><span style={{ fontFamily: T.label, fontSize: 9, color: T.muted }}>{item.label}</span><span style={{ fontFamily: T.mono, fontSize: 10.5, color: T.text }}>{item.value == null ? 'No solve' : `${item.value.toFixed(1)}${item.suffix}`}</span><button type="button" onClick={item.action} disabled={!item.enabled} title={`Use implied ${item.label.toLowerCase()}`} style={{ ...BUTTON, minWidth: 39, minHeight: 23, padding: '0 5px', color: item.enabled ? T.gold : T.muted, opacity: item.enabled ? 1 : .35 }}><ArrowDownToLine size={10} /> Use</button></div>)}
           </div>
 

@@ -79,22 +79,6 @@ export function resolveReportSectionLayout({
   if ((normalized === 'wrap-left' || normalized === 'wrap-right') && !visualCanWrap(visual)) {
     return normalized === 'wrap-left' ? 'visual-left' : 'visual-right'
   }
-  if (
-    (normalized === 'metric-rail'
-      || normalized === 'metric-rail-left'
-      || normalized === 'evidence-band'
-      || normalized === 'analysis-first')
-    && figureCount < 2
-  ) {
-    return index % 2 === 0 ? 'visual-left' : 'visual-right'
-  }
-  if (
-    (normalized === 'visual-left' || normalized === 'visual-right')
-    && visualCanWrap(visual)
-    && wordCount >= 48
-  ) {
-    return normalized === 'visual-left' ? 'wrap-left' : 'wrap-right'
-  }
   if (normalized) return normalized
 
   if (visualCanWrap(visual) && wordCount >= 45) return index % 2 === 0 ? 'wrap-left' : 'wrap-right'

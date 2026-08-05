@@ -39,7 +39,7 @@ import yfinance as yf
 from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
 
-from strategies.base import MarketDataPoint, SignalEvent, Strategy
+from strategies.base import MarketDataPoint, Signal, Strategy
 import paper_engine
 from routers.users import _require_owner
 
@@ -187,6 +187,19 @@ def _warmup(inst: Strategy, ticker: str, params: dict) -> None:
             ))
         except Exception:
             pass
+
+
+def _evaluate_signal(inst: Strategy, ticker: str, price: float, timestamp: float) -> str:
+    signal = inst.on_data(MarketDataPoint(
+        timestamp=timestamp,
+        symbol=ticker,
+        price=price,
+        size=0,
+        side="trade",
+    ))
+    if not isinstance(signal, Signal):
+        raise TypeError(f"Strategy returned {type(signal).__name__}; expected Signal")
+    return signal.value
 
 
 _OPT_MULT = 100
@@ -548,11 +561,7 @@ async def _run_scheduler_loop() -> None:
 
                 # Feed current tick
                 try:
-                    event: SignalEvent = inst.on_data(MarketDataPoint(
-                        timestamp=float(now_ts), symbol=ticker,
-                        price=price, size=0, side="trade",
-                    ))
-                    signal_str = event.signal.name if event else "HOLD"
+                    signal_str = _evaluate_signal(inst, ticker, price, float(now_ts))
                 except Exception as e:
                     _log.warning("on_data error job %s: %s", job_id, e)
                     signal_str = "HOLD"

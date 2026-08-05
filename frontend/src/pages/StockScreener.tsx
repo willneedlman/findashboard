@@ -614,7 +614,7 @@ export default function StockScreener() {
                               onKeyDown={e => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setRenamingId(null) }}
                               style={{ ...INPUT, fontSize: 12.5, fontWeight: 600, padding: '2px 5px' }} />
                           ) : (
-                            <span style={{ fontFamily: C.sans, fontSize: 12.5, fontWeight: 600, color: on ? C.emph : 'var(--theme-text-muted, #aebdd4)' }}>{p.name}</span>
+                            <span style={{ fontFamily: C.sans, fontSize: 12.5, fontWeight: 600, color: on ? C.emph : C.text }}>{p.name}</span>
                           )}
                           <span style={{ marginLeft: 'auto', fontFamily: C.mono, fontSize: 11, color: on ? C.gold : C.dim }}>{on && data ? data.total : ''}</span>
                         </div>

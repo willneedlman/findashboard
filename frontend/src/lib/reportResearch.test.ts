@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defaultScope, mergeAlphaTapeClips, type ReportClip } from './reportCreator'
 import {
   collectReportResearch,
+  buildReportDataBank,
   enhanceReportResearchPlan,
   inferResearchSymbols,
   parseResearchSymbols,
@@ -9,6 +10,7 @@ import {
   screenReportSymbols,
   runSavedScreen,
   readSavedScreens,
+  REPORT_RESEARCH_TOOL_CATALOG,
   SAVED_SCREENS_STORAGE_KEY,
 } from './reportResearch'
 import type { ActivePortfolioContext } from './pmImport'
@@ -40,10 +42,53 @@ const portfolio: ActivePortfolioContext = {
   hasData: true,
 }
 
+const reportToolManifest = { tools: REPORT_RESEARCH_TOOL_CATALOG }
+
 describe('Report Creator AlphaTape research', () => {
   it('parses explicit symbols and ignores common uppercase prose', () => {
     expect(parseResearchSymbols('aapl, msft BRK.B')).toEqual(['AAPL', 'MSFT', 'BRK-B'])
     expect(inferResearchSymbols('Compare NVDA vs AAPL and include EPS')).toEqual(['NVDA', 'AAPL'])
+  })
+
+  it('serializes successful and failed tool runs into a terminal DataBank', () => {
+    const scope = {
+      ...defaultScope(),
+      evidenceMode: 'alphatape' as const,
+      researchSymbols: 'AAPL',
+      goal: 'Assess AAPL',
+    }
+    const plan = planReportResearch(scope, emptyPortfolio)
+    plan.sources = plan.sources.filter(source => source.id === 'company' || source.id === 'news')
+    plan.requiredSourceIds = ['company', 'news']
+    plan.objectivePlan = {
+      thesis: 'Test whether AAPL fundamentals support the current price.',
+      requiredDataPoints: ['Latest fundamentals'],
+      requiredChecks: ['Relative valuation'],
+    }
+    const draft = {
+      sourceTab: 'Corporate Hub',
+      dataType: 'text' as const,
+      payload: { kind: 'text' as const, title: 'AAPL snapshot', body: 'Price and fundamentals.' },
+      origin: 'alphatape' as const,
+      researchSourceId: 'company' as const,
+      researchKey: 'company:AAPL',
+    }
+    const clips = mergeAlphaTapeClips([], 'project-1', [draft])
+    const result = {
+      clips: [draft],
+      completed: [{ sourceId: 'company' as const, label: 'Company snapshot', clipCount: 1 }],
+      failed: [{ sourceId: 'news' as const, label: 'Recent news', message: 'No usable data returned.' }],
+      finishedAt: '2026-08-05T12:00:00Z',
+    }
+
+    const dataBank = buildReportDataBank(plan, result, clips)
+
+    expect(dataBank.phase).toBe('complete')
+    expect(dataBank.runs).toEqual([
+      expect.objectContaining({ sourceId: 'company', status: 'complete', clipIds: [clips[0].id] }),
+      expect.objectContaining({ sourceId: 'news', status: 'failed', clipIds: [], error: 'No usable data returned.' }),
+    ])
+    expect(dataBank.objectivePlan.thesis).toContain('AAPL fundamentals')
   })
 
   it('uses the AI interpretation as an exact Stock Screener request', async () => {
@@ -506,7 +551,7 @@ describe('Report Creator AlphaTape research', () => {
     const baseline = planReportResearch(scope, emptyPortfolio)
     expect(baseline.intent).toBe('comparison')
     const enhanced = await enhanceReportResearchPlan(baseline, scope, emptyPortfolio, {
-      get: async () => ({}),
+      get: async () => reportToolManifest,
       post: async () => ({
         summary: 'Add dependence and rates context.',
         additions: [
@@ -538,7 +583,7 @@ describe('Report Creator AlphaTape research', () => {
     expect(baseline.sources.map(source => source.id)).toEqual(['company', 'news'])
     let plannerRequest: any
     const enhanced = await enhanceReportResearchPlan(baseline, scope, emptyPortfolio, {
-      get: async () => ({}),
+      get: async () => reportToolManifest,
       post: async (_url, body) => {
         plannerRequest = body
         return {
@@ -551,8 +596,7 @@ describe('Report Creator AlphaTape research', () => {
       },
     })
     expect(plannerRequest.timeframe).toBe('historical lookback disabled; forward outlook disabled')
-    expect(plannerRequest.tools.map((tool: { id: string }) => tool.id)).not.toContain('price-history')
-    expect(plannerRequest.tools.map((tool: { id: string }) => tool.id)).not.toContain('earnings')
+    expect(plannerRequest.tools).toBeUndefined()
     expect(enhanced.sources.map(source => source.id)).toEqual(['company', 'news', 'rate-engine'])
   })
 
@@ -567,7 +611,7 @@ describe('Report Creator AlphaTape research', () => {
     const baseline = planReportResearch(scope, emptyPortfolio)
     let plannerRequest: any
     await enhanceReportResearchPlan(baseline, scope, emptyPortfolio, {
-      get: async () => ({}),
+      get: async () => reportToolManifest,
       post: async (_url, body) => {
         plannerRequest = body
         return { additions: [] }
@@ -1237,7 +1281,7 @@ describe('relationship tools get more than one subject', () => {
     const enhanced = await enhanceReportResearchPlan(baseline, {
       ...defaultScope(), researchSymbols: 'NVDA, MSFT, QCOM, MU', goal: 'Review the risk in my book',
     }, emptyPortfolio, {
-      get: async () => ({}),
+      get: async () => reportToolManifest,
       post: async () => ({
         summary: 'Add dependence evidence.',
         additions: [{ id: 'correlation', reason: 'Show whether the holdings diversify.' }],
@@ -1256,7 +1300,7 @@ describe('relationship tools get more than one subject', () => {
     const enhanced = await enhanceReportResearchPlan(baseline, {
       ...defaultScope(), researchSymbols: 'NVDA, MSFT', goal: 'Is NVDA a buy',
     }, emptyPortfolio, {
-      get: async () => ({}),
+      get: async () => reportToolManifest,
       post: async () => ({
         summary: 'Add valuation.',
         additions: [{ id: 'dcf-valuation', reason: 'Fundamental anchor.' }],

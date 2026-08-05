@@ -161,6 +161,7 @@ export type ReportSectionLayout =
   | 'evidence-band'
   | 'analysis-first'
 export interface GeneratedSection {
+  templateSection?: string
   clipId: string
   heading: string
   analysis: string

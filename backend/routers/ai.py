@@ -27,6 +27,8 @@ from routers.screener import (
     run_screen,
 )
 from disk_cache import disk_get, disk_set
+from reporting.pipeline import ReportDataBankIn, template_contract, validate_data_bank, validate_template_sections
+from reporting.tool_registry import REPORT_TOOL_BY_ID, report_tool_manifest
 import fmp
 
 logger = logging.getLogger(__name__)
@@ -1901,17 +1903,6 @@ def options_strategy_chat(req: StrategyChatRequest):
 
 # ── Report Creator: plan research and synthesize clipped evidence ─────────────
 
-class ReportResearchToolIn(BaseModel):
-    id: str
-    label: str = ""
-    description: str = ""
-    targetMode: str = "market"
-    producesVisuals: bool = False
-
-
-# Headroom over the current catalogue so new tools reach the planner as they are
-# added. Bounded only to keep one prompt from growing without limit.
-_RESEARCH_CATALOG_CAP = 64
 # Beyond the deterministic baseline. Four was tight enough that a broad objective
 # could not reach the evidence it needed.
 _RESEARCH_MAX_ADDITIONS = 8
@@ -1924,11 +1915,11 @@ class ReportResearchPlanRequest(BaseModel):
     symbols: list[str] = Field(default_factory=list)
     portfolio: dict = Field(default_factory=dict)
     baselineSourceIds: list[str] = Field(default_factory=list)
-    tools: list[ReportResearchToolIn] = Field(default_factory=list)
 
 
-_REPORT_RESEARCH_PLANNER_SYSTEM = """You are AlphaTape's research director.
-Choose only ADDITIONAL tools that materially improve the evidence for the stated report objective.
+_REPORT_RESEARCH_PLANNER_SYSTEM = """You are Phase 1 of AlphaTape's deterministic report pipeline: Objective and Thesis Formation.
+Form a preliminary analytical thesis, enumerate the exact data points and valuation/statistical checks needed to test it, then choose only ADDITIONAL tools that materially improve the deterministic baseline.
+The thesis is a hypothesis to test, not a conclusion supported by evidence you have not collected yet.
 The deterministic baseline tools are already included. Do not repeat them.
 Prefer a chart-producing tool when a visual relationship, trend, distribution, or comparison would make the conclusion clearer.
 Do not add tools merely for breadth. Every selection must close a specific evidence gap.
@@ -1945,6 +1936,9 @@ Name overlays by ticker and indicators by their common name and period.
 
 Return only valid JSON:
 {
+  "thesis": "one preliminary analytical thesis that directly answers the objective",
+  "requiredDataPoints": ["specific measurement needed to test the thesis"],
+  "requiredChecks": ["specific valuation or statistical check needed"],
   "summary": "one short sentence describing the evidence strategy",
   "additions": [
     {"id": "exact catalog id", "reason": "specific evidence gap this tool closes"}
@@ -1957,6 +1951,17 @@ Select at most 8 additions. An empty additions array is valid when the baseline 
 
 def _normalize_report_research_plan(raw, allowed: set[str], baseline: set[str]) -> dict:
     data = raw if isinstance(raw, dict) else {}
+    thesis = re.sub(r"\s+", " ", str(data.get("thesis", "")).strip())[:500]
+    required_data_points = [
+        re.sub(r"\s+", " ", str(item).strip())[:220]
+        for item in data.get("requiredDataPoints", [])
+        if str(item).strip()
+    ][:12]
+    required_checks = [
+        re.sub(r"\s+", " ", str(item).strip())[:220]
+        for item in data.get("requiredChecks", [])
+        if str(item).strip()
+    ][:10]
     summary = re.sub(r"\s+", " ", str(data.get("summary", "")).strip())[:240]
     additions: list[dict] = []
     seen: set[str] = set()
@@ -1987,7 +1992,25 @@ def _normalize_report_research_plan(raw, allowed: set[str], baseline: set[str]) 
             body = re.sub(r"\s+", " ", str(text).strip())[:240]
             if body:
                 directives[key] = body
-    return {"summary": summary, "additions": additions, "directives": directives}
+    required_source_ids = sorted(baseline, key=lambda source_id: list(REPORT_TOOL_BY_ID).index(source_id))
+    required_source_ids.extend(item["id"] for item in additions)
+    return {
+        "phase": "tool-discovery",
+        "objectivePlan": {
+            "thesis": thesis,
+            "requiredDataPoints": required_data_points,
+            "requiredChecks": required_checks,
+        },
+        "summary": summary,
+        "requiredSourceIds": required_source_ids,
+        "additions": additions,
+        "directives": directives,
+    }
+
+
+@router.get("/report-tools")
+def get_report_tools():
+    return {"tools": report_tool_manifest()}
 
 
 @router.post("/report-research-plan")
@@ -1995,11 +2018,8 @@ def plan_report_research(req: ReportResearchPlanRequest):
     objective = req.objective.strip()
     if not objective:
         raise HTTPException(400, "Report objective is required")
-    # The catalogue is the planner's whole world: anything trimmed here is a tool
-    # it can never choose. This was pinned at 24 while exactly 23 tools existed,
-    # so the next tool added would have been silently invisible to it.
-    tools = req.tools[:_RESEARCH_CATALOG_CAP]
-    allowed = {tool.id for tool in tools if tool.id}
+    tools = report_tool_manifest()
+    allowed = set(REPORT_TOOL_BY_ID)
     baseline = {source_id for source_id in req.baselineSourceIds if source_id in allowed}
     if not allowed:
         raise HTTPException(400, "No supported research tools supplied")
@@ -2012,13 +2032,13 @@ def plan_report_research(req: ReportResearchPlanRequest):
         "baselineSourceIds": sorted(baseline),
         "toolCatalog": [
             {
-                "id": tool.id,
-                "label": tool.label[:80],
-                "description": tool.description[:240],
-                "targetMode": tool.targetMode,
-                "producesVisuals": tool.producesVisuals,
+                "id": tool["id"],
+                "label": tool["label"][:80],
+                "description": tool["description"][:240],
+                "targetMode": tool["targetMode"],
+                "producesVisuals": tool["producesVisuals"],
             }
-            for tool in tools if tool.id
+            for tool in tools
         ],
     }, separators=(",", ":"))
     raw = groq_complete(
@@ -2027,7 +2047,15 @@ def plan_report_research(req: ReportResearchPlanRequest):
         model=MODEL_SMART,
         system=_REPORT_RESEARCH_PLANNER_SYSTEM,
     )
-    return _normalize_report_research_plan(parse_json(raw), allowed, baseline)
+    result = _normalize_report_research_plan(parse_json(raw), allowed, baseline)
+    if not result["objectivePlan"]["thesis"]:
+        result["objectivePlan"]["thesis"] = f"Test the evidence needed to answer: {objective[:420]}"
+    if not result["objectivePlan"]["requiredDataPoints"]:
+        result["objectivePlan"]["requiredDataPoints"] = [
+            f"Decision-relevant evidence from {REPORT_TOOL_BY_ID[source_id].label}"
+            for source_id in result["requiredSourceIds"][:8]
+        ]
+    return result
 
 class ReportClipIn(BaseModel):
     id: str
@@ -2052,10 +2080,12 @@ class ReportGenRequest(BaseModel):
     reportType: str = ""
     # Page-composition preference, chosen in setup. Biases the per-section layout.
     layoutPreset: str = ""
+    evidenceMode: str = "manual"
     # Free-text requirements the report must satisfy (a stat, a verdict, a chart,
     # a specific figure) — not curated away even if the model wouldn't otherwise pick them.
     mustInclude: str = ""
     clips: list[ReportClipIn]
+    dataBank: ReportDataBankIn | None = None
 
 _LENGTH_SPEC = {
     "short": {
@@ -2159,9 +2189,13 @@ Write for an investor deciding what to do, not for a reader learning the topic.
 
 _REPORT_SYSTEM = """You are a senior investment analyst writing a formal research note for a professional desk. Write directly, support claims with supplied evidence, and answer the Goal.
 
-You receive: Purpose, Goal, Timeframe (lookback and/or lookforward), DATA CLIPS (each with id, source tool, title, optional user note, data summary), valuationContext (live spot, optional day change, optional DCF, signalDigest of directional cues extracted from clips, reportMode, and reportLength), and optionally an `outline`.
+You receive: Purpose, Goal, Timeframe (lookback and/or lookforward), a `dataBank` containing DATA CLIPS, tool-run status, and valuationContext (live spot, optional day change, optional DCF, signalDigest, reportMode, and reportLength), plus an `outline`.
 
 OUTLINE: if the input includes an `outline` (a thesis plus planned sections), it was drafted first as the report's analytical structure and you MUST follow it. Anchor the entire report to outline.thesis. Write exactly the outline's sections, in order, each using its heading and developing its `argues` point with the clip figures. Do not add, drop, reorder, split, or merge sections. If no outline is present, plan a thesis-first structure yourself with one section per comparative theme (never one section per subject for the same theme).
+
+{{TEMPLATE_CONTRACT}}
+
+DATA BOUNDARY: use only evidence inside dataBank.evidence and deterministic values in dataBank.valuationContext. dataBank.toolRuns records tools that failed or returned partial data. Treat those records as missing evidence, disclose material gaps, and never fill them with invented figures.
 
 ════════════════════════════════════════
 LENGTH — valuationContext.reportLength sets the target depth
@@ -2268,6 +2302,7 @@ Respond ONLY with valid JSON (no markdown, no code fences):
   "executiveSummary": "one tight paragraph stating the verdict (range or open) and how the clips jointly justify it (not a list of panel summaries)",
   "sections": [
     {
+      "templateSection": "<exact required template section key>",
       "clipId": "<id>",
       "heading": "analytical heading naming the comparative theme, not the tool name or a single subject",
       "design": "visual | narrative | balanced | compact",
@@ -2361,10 +2396,8 @@ _BOOK_LEVEL_VERDICT_GUIDANCE = (
 
 
 def _report_system_prompt(mode: str, length_key: str, must_include: str,
-                          report_type: str = "", book_level: bool = False) -> str:
-    """The layout preset is deliberately NOT passed here: renderer preset names are
-    kept out of the model's vocabulary (it emits a coarse `design` intent instead)
-    and layout is resolved deterministically in _apply_section_layout_architecture."""
+                          report_type: str = "", book_level: bool = False,
+                          contract: dict | None = None) -> str:
     mode_key = "range" if mode == "range" else "open"
     mode_guidance = _REPORT_RANGE_GUIDANCE if mode_key == "range" else _REPORT_OPEN_GUIDANCE
     # Independent of report type: a project stored before the setup flow existed
@@ -2376,12 +2409,26 @@ def _report_system_prompt(mode: str, length_key: str, must_include: str,
     if type_guidance:
         mode_guidance = f"{mode_guidance}\n\n{type_guidance}"
     schema = _REPORT_SCHEMA_BY_MODE[mode_key]
+    template = contract or template_contract(report_type, length_key)
+    template_rows = "\n".join(
+        f"{index + 1}. `{section['key']}` — {section['purpose']}"
+        for index, section in enumerate(template["sections"])
+    )
+    template_prompt = (
+        "════════════════════════════════════════\n"
+        f"SELECTED TEMPLATE — {template['id']}\n"
+        "════════════════════════════════════════\n"
+        "Return exactly these sections, in this order. Set templateSection to the exact key shown. "
+        "Headings may state a sharper evidence-backed conclusion, but the section purpose cannot change.\n"
+        f"{template_rows}"
+    )
     return (
         _REPORT_SYSTEM
         .replace("{{MODE_GUIDANCE}}", mode_guidance)
         .replace("{{LENGTH_GUIDANCE}}", _LENGTH_SPEC[length_key]["guidance"])
         .replace("{{MUST_INCLUDE_SECTION}}", must_include)
         .replace("{{EDITORIAL_STANDARD}}", _RESEARCH_NOTE_EDITORIAL_STANDARD)
+        .replace("{{TEMPLATE_CONTRACT}}", template_prompt)
         .replace("{{BASE_CASE_SCHEMA}}", schema["baseCase"])
         .replace("{{KEY_RESULT_LABEL_SCHEMA}}", schema["label"])
         .replace("{{KEY_RESULT_VALUE_SCHEMA}}", schema["value"])
@@ -4151,7 +4198,7 @@ def _inject_mechanical_charts(sections: list[dict], clips: list[ReportClipIn]) -
             sections[best_i]["chart"] = chart
             used_sigs.add(sig)
 
-def _build_sections(raw_sections, valid_ids: set[str]) -> list[dict]:
+def _build_sections(raw_sections, valid_ids: set[str], contract: dict | None = None) -> list[dict]:
     """Clean model-returned sections and drop a section's chart if an earlier
     section already drew the same comparison — the model generates each
     section's chart independently and sometimes redraws the same one twice
@@ -4182,7 +4229,24 @@ def _build_sections(raw_sections, valid_ids: set[str]) -> list[dict]:
         design = str(s.get("design", "")).strip().lower()
         if design in _SECTION_DESIGN_INTENTS:
             section["design"] = design
+        template_section = str(s.get("templateSection", "")).strip()
+        if template_section:
+            section["templateSection"] = template_section
         sections.append(section)
+    if contract:
+        expected = [item["key"] for item in contract["sections"]]
+        ordered: list[dict] = []
+        remaining = list(sections)
+        for section_key in expected:
+            match = next((section for section in remaining if section.get("templateSection") == section_key), None)
+            if match is None and remaining:
+                match = remaining[0]
+            if match is None:
+                continue
+            match["templateSection"] = section_key
+            ordered.append(match)
+            remaining.remove(match)
+        sections = ordered
     return sections
 
 
@@ -4373,6 +4437,7 @@ def _apply_section_layout_architecture(
     safety rules above it (a dense table needs the full width; a section with no
     visual cannot use a side-by-side layout). 'editorial' is the historical
     default and deliberately falls through to the unchanged behaviour."""
+    preset = preset if preset in {"editorial", "visual-first", "data-dense", "narrative"} else "editorial"
     clips_by_id = {clip.id: clip for clip in clips}
     side_index = 0
     rail_index = 0
@@ -4398,9 +4463,12 @@ def _apply_section_layout_architecture(
             layout = "evidence-band" if band_index % 2 == 0 else "full-width"
             band_index += 1
             preset_locked = True
-        elif preset == "data-dense" and figures >= 2:
-            layout = "metric-rail-left" if rail_index % 2 == 0 else "metric-rail"
-            rail_index += 1
+        elif preset == "data-dense":
+            if figures >= 2:
+                layout = "metric-rail-left" if rail_index % 2 == 0 else "metric-rail"
+                rail_index += 1
+            else:
+                layout = "evidence-band"
             preset_locked = True
         elif preset == "narrative":
             layout = "analysis-first" if figures < 3 else "full-width"
@@ -4507,14 +4575,38 @@ Rules:
 - Each section names the single most relevant chart family, or "none".
 - Use ONLY evidence present in the clips. Do not invent sections the data cannot support.
 - The input may contain coverageRequirements. Treat each as non-negotiable and create enough distinct sections to satisfy them without repeating a theme.
+- The input contains templateContract. Return exactly its section keys, in order. Do not add, drop, merge, or rename a templateSection key.
 
 Respond ONLY with JSON (no markdown, no code fences):
 {
   "thesis": "one decisive sentence answering the goal",
   "sections": [
-    { "heading": "Title Case Comparative Theme", "argues": "what this section establishes, one sentence", "chartHint": "growth | margins | valuation | sensitivity | segments | multiples | upside | none" }
+    { "templateSection": "exact key from templateContract", "heading": "Title Case Comparative Theme", "argues": "what this section establishes, one sentence", "chartHint": "growth | margins | valuation | sensitivity | segments | multiples | upside | none" }
   ]
 }"""
+
+
+def _template_outline_fallback(payload: dict) -> dict:
+    contract = payload.get("templateContract") or template_contract(
+        payload.get("reportType", ""),
+        _length_key(payload.get("reportLength")),
+    )
+    objective_plan = payload.get("objectivePlan") if isinstance(payload.get("objectivePlan"), dict) else {}
+    thesis = str(objective_plan.get("thesis", "")).strip()
+    if not thesis:
+        thesis = "Build the conclusion from the required evidence while making every material data gap explicit."
+    return {
+        "thesis": thesis,
+        "sections": [
+            {
+                "templateSection": section["key"],
+                "heading": section["label"],
+                "argues": section["purpose"],
+                "chartHint": "none",
+            }
+            for section in contract["sections"]
+        ],
+    }
 
 def _generate_outline(payload: dict) -> dict | None:
     """Step 1 — draft a thesis-first section outline. Returns None on any failure
@@ -4528,10 +4620,10 @@ def _generate_outline(payload: dict) -> dict | None:
         return {
             "thesis": "Assess the book through measured performance, concentration, and decision-relevant risk.",
             "sections": [
-                {"heading": "What Happened: Return and Risk Versus SPY", "argues": "Compare portfolio and SPY period return, active return, volatility, and maximum drawdown using matching dates and methods.", "chartHint": "performance"},
-                {"heading": "Why It Happened: Market Sensitivity and Name-Specific Risk", "argues": "Separate measured market sensitivity, factor coefficients, and holding concentration from unsupported active-return attribution.", "chartHint": "risk"},
-                {"heading": forward_heading, "argues": "Show beta-only market stress, any supplied compact valuation evidence, and only catalysts with actual supplied dates.", "chartHint": "scenario"},
-                {"heading": "What Action Follows: Evidence Before Reallocation", "argues": "Recommend no allocation change unless a proposed portfolio and quantified before-and-after risk and return evidence are supplied.", "chartHint": "none"},
+                {"templateSection": "what-happened", "heading": "What Happened: Return and Risk Versus SPY", "argues": "Compare portfolio and SPY period return, active return, volatility, and maximum drawdown using matching dates and methods.", "chartHint": "performance"},
+                {"templateSection": "why-it-happened", "heading": "Why It Happened: Market Sensitivity and Name-Specific Risk", "argues": "Separate measured market sensitivity, factor coefficients, and holding concentration from unsupported active-return attribution.", "chartHint": "risk"},
+                {"templateSection": "what-could-happen-next", "heading": forward_heading, "argues": "Show beta-only market stress, any supplied compact valuation evidence, and only catalysts with actual supplied dates.", "chartHint": "scenario"},
+                {"templateSection": "what-action-follows", "heading": "What Action Follows: Evidence Before Reallocation", "argues": "Recommend no allocation change unless a proposed portfolio and quantified before-and-after risk and return evidence are supplied.", "chartHint": "none"},
             ],
         }
     try:
@@ -4542,20 +4634,34 @@ def _generate_outline(payload: dict) -> dict | None:
         resp = groq_chat(messages, model=MODEL_SMART, max_tokens=900, temperature=0.2)
         out = parse_json((resp.choices[0].message.content or "").strip())
         if not isinstance(out, dict):
-            return None
-        secs = [
-            {"heading": _title_case(str(s.get("heading", "")).strip()),
-             "argues": str(s.get("argues", "")).strip(),
-             "chartHint": str(s.get("chartHint", "")).strip().lower()}
-            for s in (out.get("sections") or []) if isinstance(s, dict) and str(s.get("heading", "")).strip()
-        ]
-        if not secs:
-            return None
-        section_cap = 4 if payload.get("reportType") == "portfolio-review" else {"short": 2, "medium": 5, "long": 8}[_length_key(payload.get("reportLength"))]
-        return {"thesis": str(out.get("thesis", "")).strip(), "sections": secs[:section_cap]}
+            return _template_outline_fallback(payload)
+        raw_sections = [section for section in (out.get("sections") or []) if isinstance(section, dict)]
+        contract = payload.get("templateContract") or template_contract(
+            payload.get("reportType", ""),
+            _length_key(payload.get("reportLength")),
+        )
+        sections: list[dict] = []
+        remaining = list(raw_sections)
+        for required in contract["sections"]:
+            section = next(
+                (item for item in remaining if str(item.get("templateSection", "")).strip() == required["key"]),
+                None,
+            )
+            if section is None and remaining:
+                section = remaining[0]
+            if section is not None:
+                remaining.remove(section)
+            section = section or {}
+            sections.append({
+                "templateSection": required["key"],
+                "heading": _title_case(str(section.get("heading", "")).strip()) or required["label"],
+                "argues": str(section.get("argues", "")).strip() or required["purpose"],
+                "chartHint": str(section.get("chartHint", "")).strip().lower() or "none",
+            })
+        return {"thesis": str(out.get("thesis", "")).strip(), "sections": sections}
     except Exception as e:  # noqa: BLE001 — outline is best-effort
         logger.warning("report outline step failed: %s", e)
-        return None
+        return _template_outline_fallback(payload)
 
 _REPORT_VERIFY_SYSTEM = """You are a senior equity-research copy editor doing the final proofreading pass. You receive the report's executiveSummary and conclusion, plus CHART FACTS: the exact figures shown in the report's charts.
 
@@ -5265,6 +5371,26 @@ def generate_report(req: ReportGenRequest):
     if not req.clips:
         raise HTTPException(400, "No clips to synthesize")
     valid_ids = {c.id for c in req.clips}
+    length_key = _length_key(req.length)
+    contract = template_contract((req.reportType or "").strip(), length_key)
+    if req.evidenceMode.strip().lower() == "alphatape":
+        if req.dataBank is None:
+            raise HTTPException(409, "AlphaTape research must complete before report assembly")
+        data_bank_errors = validate_data_bank(req.dataBank, valid_ids)
+        if data_bank_errors:
+            raise HTTPException(409, {"message": "AlphaTape DataBank checkpoint failed", "errors": data_bank_errors})
+        data_bank_meta = req.dataBank.model_dump()
+    else:
+        data_bank_meta = {
+            "phase": "complete",
+            "requiredSourceIds": [],
+            "runs": [],
+            "objectivePlan": {
+                "thesis": "",
+                "requiredDataPoints": [],
+                "requiredChecks": [],
+            },
+        }
 
     subject = _subject_ticker(req)
     subjects_ranked = _ranked_subjects(req)
@@ -5287,7 +5413,6 @@ def generate_report(req: ReportGenRequest):
             f"{evidence_subject}. Re-run AlphaTape research for {subject} before generating.",
         )
     mode = "open" if book_level else _report_mode(req, subjects_ranked)
-    length_key = _length_key(req.length)
     dcf_names = sorted(_dcf_tickers_from_clips(req.clips))
     subject_dcf = _subject_dcf_present(req.clips, subject)
     quote = _fetch_market_quote(subject)
@@ -5375,6 +5500,7 @@ def generate_report(req: ReportGenRequest):
         )
 
     clip_payload = _report_prompt_clips(req.clips, length_key, book_level)
+    data_bank = {**data_bank_meta, "evidence": clip_payload, "valuationContext": valuation_context}
     goal_text = req.goal or "(not specified)"
     purpose_text = req.purpose or "(not specified)"
     coverage_requirements = _auto_must_include(req.clips)
@@ -5389,9 +5515,10 @@ def generate_report(req: ReportGenRequest):
             for clip in req.clips
         ),
         "reportLength": length_key,
-        "valuationContext": valuation_context,
+        "templateContract": contract,
+        "objectivePlan": data_bank_meta.get("objectivePlan", {}),
         "coverageRequirements": coverage_requirements,
-        "clips": clip_payload,
+        "dataBank": data_bank,
     })
 
     # STEP 2 — Draft: write the full report, following the outline when present.
@@ -5400,9 +5527,9 @@ def generate_report(req: ReportGenRequest):
         "timeframe": req.timeframe,
         "purpose": purpose_text,
         "goal": goal_text,
-        "valuationContext": valuation_context,
+        "templateContract": contract,
         "outline": outline,  # may be None → the model plans and writes in one shot
-        "clips": clip_payload,
+        "dataBank": data_bank,
     }
     sys_prompt = _report_system_prompt(
         mode,
@@ -5410,6 +5537,7 @@ def generate_report(req: ReportGenRequest):
         _must_include_section(req.mustInclude, coverage_requirements),
         (req.reportType or "").strip(),
         book_level,
+        contract,
     )
     messages = [
         {"role": "system", "content": sys_prompt},
@@ -5422,7 +5550,7 @@ def generate_report(req: ReportGenRequest):
     if not isinstance(result, dict) or "executiveSummary" not in result:
         raise HTTPException(502, "AI returned an unexpected report shape")
 
-    sections = _build_sections(result.get("sections"), valid_ids)
+    sections = _build_sections(result.get("sections"), valid_ids, contract)
     material_positions = _material_portfolio_positions(req.clips) if book_level else []
     position_decisions = _portfolio_position_decisions(req.clips) if book_level else []
     if (req.reportType or "").strip() == "portfolio-review":
@@ -5583,9 +5711,11 @@ def generate_report(req: ReportGenRequest):
             else "No allocation change is supported. The evidence identifies recent market sensitivity and concentration risk, but does not quantify a superior trade."
         )
 
-    if not book_level:
-        _ensure_risks_section(sections, subject, valuation_context)
     _apply_section_layout_architecture(sections, req.clips, (req.layoutPreset or "").strip())
+    template_errors = validate_template_sections(sections, contract)
+    if template_errors:
+        logger.error("report template validation failed: %s", template_errors)
+        raise HTTPException(502, {"message": "Generated report did not satisfy the selected template", "errors": template_errors})
 
     return {
         "headline": headline,
@@ -5598,6 +5728,12 @@ def generate_report(req: ReportGenRequest):
         "positionDecisions": position_decisions,
         "model": MODEL_SMART,
         "valuationContext": valuation_context,
+        "pipeline": {
+            "phase": "complete",
+            "templateId": contract["id"],
+            "layoutPreset": (req.layoutPreset or "editorial").strip(),
+            "requiredSourceIds": data_bank_meta.get("requiredSourceIds", []),
+        },
     }
 
 

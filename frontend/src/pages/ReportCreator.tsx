@@ -21,10 +21,12 @@ import {
   removeClip, updateClipDescription, moveClip, timeframeLabel, clipTitle, formatCaptured,
   setGenerated, updateGenerated, updateGeneratedSection, updateKeyResult, isGenerationStale, summarizeClipForAI,
   deleteSnapshot, replaceAlphaTapeClips,
+  getProject,
   type ReportProject, type ReportClip, type ReportSnapshot,
 } from '../lib/reportCreator'
 import {
-  collectReportResearch, enhanceReportResearchPlan, planReportResearch, researchSourceProducesVisuals, screenReportSymbols,
+  buildReportDataBank, collectReportResearch, enhanceReportResearchPlan, planReportResearch, researchSourceProducesVisuals, screenReportSymbols,
+  type ReportDataBank,
   type ReportResearchPlan, type ReportResearchProgress, type ReportResearchResult,
   type ReportResearchSourceId, type ReportScreenerSelection,
 } from '../lib/reportResearch'
@@ -978,10 +980,60 @@ export default function ReportCreator() {
   }, [selectionCollapseSignal])
 
   const generate = async () => {
-    if (!active || active.clips.length === 0 || researching || planningResearch) return
+    if (!active || researching || planningResearch) return
     setSelectionCollapseSignal(signal => signal + 1)
     setGenerating(true); setGenError(null); setJustDone(false)
     try {
+      let clipsForGeneration = active.clips
+      let dataBank: ReportDataBank | undefined
+      if (active.scope.evidenceMode === 'alphatape') {
+        if (!baselineResearchPlan || baselineResearchPlan.blockedReason) {
+          throw new Error(baselineResearchPlan?.blockedReason || 'AlphaTape research needs a valid objective and subject.')
+        }
+        let planToRun = researchPlan ?? baselineResearchPlan
+        if (!planToRun.aiEnhanced) {
+          setPlanningResearch(true)
+          try {
+            planToRun = await enhanceReportResearchPlan(baselineResearchPlan, active.scope, activePortfolio)
+            setAiResearchPlan(planToRun)
+          } finally {
+            setPlanningResearch(false)
+          }
+        }
+        const requiredIds = planToRun.requiredSourceIds?.length
+          ? planToRun.requiredSourceIds
+          : planToRun.sources.map(source => source.id)
+        const terminalIds = new Set([
+          ...(researchResult?.completed.map(item => item.sourceId) ?? []),
+          ...(researchResult?.failed.map(item => item.sourceId) ?? []),
+        ])
+        let result = researchResult
+        if (!result || requiredIds.some(sourceId => !terminalIds.has(sourceId))) {
+          setResearching(true)
+          setResearchResult(null)
+          setResearchStatuses(Object.fromEntries(planToRun.sources.map(source => [source.id, 'queued'])))
+          try {
+            result = await collectReportResearch(
+              planToRun,
+              active.scope,
+              activePortfolio,
+              progress => setResearchStatuses(current => ({ ...current, [progress.sourceId]: progress.status })),
+            )
+          } finally {
+            setResearching(false)
+          }
+          if (!result.clips.length) throw new Error('No AlphaTape tool returned usable evidence.')
+          replaceAlphaTapeClips(active.id, result.clips, {
+            sourceIds: result.failed.filter(failure => !failure.researchKey).map(failure => failure.sourceId),
+            researchKeys: result.failed.flatMap(failure => failure.researchKey ? [failure.researchKey] : []),
+          })
+          setResearchResult(result)
+        }
+        if (!result) throw new Error('AlphaTape research did not reach a terminal state.')
+        clipsForGeneration = getProject(active.id)?.clips ?? active.clips
+        dataBank = buildReportDataBank(planToRun, result, clipsForGeneration)
+      }
+      if (!clipsForGeneration.length) throw new Error('Add evidence before generating the report.')
       const payload = {
         projectName: active.name,
         timeframe: timeframeLabel(active.scope),
@@ -990,11 +1042,13 @@ export default function ReportCreator() {
         length: active.scope.length,
         reportType: active.scope.reportType,
         layoutPreset: active.scope.layoutPreset,
+        evidenceMode: active.scope.evidenceMode,
         mustInclude: active.scope.mustInclude,
-        clips: active.clips.map(c => ({ id: c.id, sourceTab: c.sourceTab, dataType: c.dataType, title: clipTitle(c), userDescription: c.userDescription ?? '', dataSummary: summarizeClipForAI(c) })),
+        dataBank,
+        clips: clipsForGeneration.map(c => ({ id: c.id, sourceTab: c.sourceTab, dataType: c.dataType, title: clipTitle(c), userDescription: c.userDescription ?? '', dataSummary: summarizeClipForAI(c) })),
       }
       const r = await axios.post('/api/ai/report', payload)
-      const activeClipById = new Map(active.clips.map(clip => [clip.id, clip]))
+      const activeClipById = new Map(clipsForGeneration.map(clip => [clip.id, clip]))
       const appendixClipIds = Array.isArray(r.data.appendixClipIds)
         ? [...new Set<string>(r.data.appendixClipIds)]
           .filter(id => activeClipById.get(id)?.payload.kind !== 'chart')
@@ -1013,8 +1067,18 @@ export default function ReportCreator() {
       setJustDone(true)
       window.setTimeout(() => setJustDone(false), 6000)
     } catch (e) {
-      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setGenError(detail || 'The AI writer is unavailable right now. You can still export the data as a plain report.')
+      const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+      const detailRecord = detail && typeof detail === 'object' ? detail as { message?: unknown; errors?: unknown } : null
+      const detailErrors = Array.isArray(detailRecord?.errors)
+        ? detailRecord.errors.map(String).filter(Boolean)
+        : []
+      const serverMessage = typeof detail === 'string'
+        ? detail
+        : typeof detailRecord?.message === 'string'
+          ? [detailRecord.message, ...detailErrors].join(': ')
+          : ''
+      const message = e instanceof Error ? e.message : ''
+      setGenError(serverMessage || message || 'The AI writer is unavailable right now. You can still export the data as a plain report.')
     } finally {
       setGenerating(false)
     }
@@ -1112,7 +1176,9 @@ export default function ReportCreator() {
 
   const clips = active?.clips ?? []
   const inSetup = !!active && !active.scope.setupComplete
-  const canGenerate = !!active && clips.length > 0 && !researching && !planningResearch && !inSetup
+  const canGenerate = !!active
+    && (clips.length > 0 || (active.scope.evidenceMode === 'alphatape' && !baselineResearchPlan?.blockedReason))
+    && !researching && !planningResearch && !inSetup
   const scopeIncomplete = !!active && !active.scope.goal.trim() && !active.scope.purpose.trim()
   const researchedClipCount = clips.filter(clip => clip.origin === 'alphatape').length
   const manualClipCount = clips.length - researchedClipCount

@@ -48,15 +48,21 @@ def test_report_research_planner_keeps_only_supported_nonbaseline_tools(monkeypa
         objective="Compare AAPL and MSFT risk",
         symbols=["AAPL", "MSFT"],
         baselineSourceIds=["company"],
-        tools=[
-            ai.ReportResearchToolIn(id="company", label="Company"),
-            ai.ReportResearchToolIn(id="correlation", label="Correlation", producesVisuals=True),
-            ai.ReportResearchToolIn(id="rate-engine", label="Rate Engine", producesVisuals=True),
-        ],
     )
     result = ai.plan_report_research(req)
     assert result == {
+        "phase": "tool-discovery",
+        "objectivePlan": {
+            "thesis": "Test the evidence needed to answer: Compare AAPL and MSFT risk",
+            "requiredDataPoints": [
+                "Decision-relevant evidence from Company snapshot",
+                "Decision-relevant evidence from Correlation structure",
+                "Decision-relevant evidence from Rates and Fed path",
+            ],
+            "requiredChecks": [],
+        },
         "summary": "Add visual dependence and rates evidence.",
+        "requiredSourceIds": ["company", "correlation", "rate-engine"],
         "additions": [
             {"id": "correlation", "reason": "Show whether the subjects diversify one another."},
             {"id": "rate-engine", "reason": "Frame duration-sensitive valuation risk."},
@@ -81,10 +87,6 @@ def test_planner_directives_are_kept_only_for_known_tools():
         objective="Compare AAPL and MSFT",
         symbols=["AAPL", "MSFT"],
         baselineSourceIds=["company"],
-        tools=[
-            ai.ReportResearchToolIn(id="company", label="Company"),
-            ai.ReportResearchToolIn(id="correlation", label="Correlation"),
-        ],
     )
     got = ai.plan_report_research(req)["directives"]
     assert got == {
@@ -306,8 +308,16 @@ def test_outline_targets_three_pages_but_keeps_material_evidence(monkeypatch):
 
     assert long_outline is not None
     assert short_outline is not None
-    assert len(long_outline["sections"]) == 8
+    assert len(long_outline["sections"]) == 6
     assert len(short_outline["sections"]) == 2
+    assert [section["templateSection"] for section in long_outline["sections"]] == [
+        "investment-view",
+        "financial-trajectory",
+        "operating-drivers",
+        "valuation",
+        "scenarios",
+        "catalysts-and-risks",
+    ]
     assert "Target a compact two-to-three-page decision note" in captured["system"]
     assert "Continue beyond three pages only when material evidence" in captured["system"]
 

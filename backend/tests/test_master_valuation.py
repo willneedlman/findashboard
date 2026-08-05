@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+import routers.master_valuation as master_valuation
 from routers.master_valuation import MasterValuationRequest, _default_schedule, _driver_effects, _project, _reverse, _sensitivity_tables
 
 
@@ -35,18 +36,15 @@ def request(**overrides):
             for year in range(1, 6)
         ],
         "terminal": {
-            "method": "blended",
             "perpetual_growth": 3,
-            "exit_ebitda_multiple": 14,
-            "perpetuity_weight": 60,
         },
         "multiple_targets": [
             {"metric": "ev_revenue", "multiple": 4, "weight": 50, "year": 3},
             {"metric": "ev_ebitda", "multiple": 16, "weight": 50, "year": 3},
         ],
         "sotp_segments": [
-            {"name": "Platform", "revenue_share": 70, "ev_revenue_multiple": 5},
-            {"name": "Services", "revenue_share": 30, "ev_revenue_multiple": 2},
+            {"name": "Platform", "revenue_share": 70, "price_to_sales_multiple": 5},
+            {"name": "Services", "revenue_share": 30, "price_to_sales_multiple": 2},
         ],
         "weights": {"dcf": 50, "multiples": 25, "ddm": 10, "sotp": 15},
         "dividend_terminal_growth": 3,
@@ -69,16 +67,63 @@ def test_all_methods_share_the_same_schedule():
     assert changed["sotp"]["value_per_share"] > base["sotp"]["value_per_share"]
 
 
-def test_blended_terminal_and_composite_reconcile():
+def test_fundamentals_seed_business_parts_from_reported_segments(monkeypatch):
+    base = {
+        "revenue": 1000, "shares": 100, "net_debt": 50, "market_price": 30,
+        "beta": 1, "assumptions_source": "test", "rev_growth": 8, "op_margin": 20,
+        "capex_pct": 5, "da_pct": 4, "wc_pct": 1, "tax_rate": 21,
+    }
+    monkeypatch.setattr(master_valuation, "get_fundamentals", lambda _ticker: base)
+
+    import routers.valuation as valuation
+    import cache
+    monkeypatch.setattr(valuation, "multiples", lambda _ticker: {"metrics": []})
+    monkeypatch.setattr(valuation, "build_sotp_data", lambda _ticker, fundamentals_override=None: {
+        "segments": [
+            {"name": "Platform", "revenue": 700, "peer_ps": 6},
+            {"name": "Services", "revenue": 300, "peer_ps": None},
+        ],
+        "suggested_multiple": 4,
+        "source": "SEC 10-K",
+        "fiscalYear": 2025,
+    })
+    monkeypatch.setattr(cache, "get_info", lambda _ticker: {})
+
+    result = master_valuation.fundamentals("AAPL")
+
+    assert result["business_segments"] == [
+        {"name": "Platform", "revenue_share": 70, "price_to_sales_multiple": 5},
+        {"name": "Services", "revenue_share": 30, "price_to_sales_multiple": 4},
+    ]
+    assert result["business_segments_source"] == "SEC 10-K"
+    assert result["business_segments_fiscal_year"] == 2025
+
+
+def test_complete_methods_reconcile_only_in_the_final_blend():
     req = request()
     result = _project(req)
-    dcf = result["dcf"]
 
-    assert min(dcf["perpetuity_value_per_share"], dcf["exit_value_per_share"]) <= dcf["value_per_share"]
-    assert dcf["value_per_share"] <= max(dcf["perpetuity_value_per_share"], dcf["exit_value_per_share"])
+    assert result["dcf"]["value_per_share"] != result["multiples"]["value_per_share"]
     total = sum(result["active_weights"].values())
     expected = sum(result["methods"][key] * weight for key, weight in result["active_weights"].items()) / total
     assert result["composite"]["value_per_share"] == pytest.approx(expected)
+
+
+def test_dcf_and_multiples_are_independent_complete_methods():
+    base_request = request()
+    base = _project(base_request)
+
+    richer_multiple = base_request.model_copy(deep=True)
+    richer_multiple.multiple_targets[0].multiple *= 2
+    multiple_change = _project(richer_multiple)
+    assert multiple_change["dcf"]["value_per_share"] == pytest.approx(base["dcf"]["value_per_share"])
+    assert multiple_change["multiples"]["value_per_share"] > base["multiples"]["value_per_share"]
+
+    richer_terminal_growth = base_request.model_copy(deep=True)
+    richer_terminal_growth.terminal.perpetual_growth += 1
+    dcf_change = _project(richer_terminal_growth)
+    assert dcf_change["dcf"]["value_per_share"] > base["dcf"]["value_per_share"]
+    assert dcf_change["multiples"]["value_per_share"] == pytest.approx(base["multiples"]["value_per_share"])
 
 
 def test_future_multiple_and_sotp_outputs_are_discounted_to_present():
@@ -88,10 +133,11 @@ def test_future_multiple_and_sotp_outputs_are_discounted_to_present():
     expected_ev_revenue = (year_three["revenue"] * 4 / 1.1**3 - req.net_debt) / year_three["shares"]
     line = next(item for item in result["multiples"]["lines"] if item["metric"] == "ev_revenue")
     assert line["value_per_share"] == pytest.approx(expected_ev_revenue)
+    assert line["effective_weight"] == pytest.approx(50)
 
     final = result["rows"][-1]
     weighted_segment_multiple = 5 * 0.7 + 2 * 0.3
-    expected_sotp = (final["revenue"] * weighted_segment_multiple / 1.1**5 - req.net_debt) / final["shares"]
+    expected_sotp = final["revenue"] * weighted_segment_multiple / 1.1**5 / final["shares"]
     assert result["sotp"]["value_per_share"] == pytest.approx(expected_sotp)
 
 
@@ -117,14 +163,24 @@ def test_reverse_outputs_can_be_applied_back_to_price():
     assert _project(adopted)["dcf"]["value_per_share"] == pytest.approx(req.market_price, rel=1e-5)
 
 
-def test_invalid_terminal_spread_is_rejected_only_when_perpetuity_is_used():
-    with pytest.raises(ValidationError, match="WACC must be greater"):
-        request(wacc=3, terminal={"method": "perpetuity", "perpetual_growth": 3, "exit_ebitda_multiple": 14})
+def test_implied_market_multiple_solves_the_standalone_multiples_method():
+    req = request()
+    base = _project(req)
+    implied = _reverse(req, base)
+    target_year = implied["implied_exit_year"]
+    row = base["rows"][target_year - 1]
+    solved_value = (
+        (row["ebit"] + row["da"]) * implied["implied_exit_multiple"] / 1.1**target_year
+        - req.net_debt
+    ) / row["shares"]
 
-    exit_only = request(wacc=3, terminal={"method": "exit", "perpetual_growth": 3, "exit_ebitda_multiple": 14})
-    result = _project(exit_only)
-    assert result["dcf"]["value_per_share"] > 0
-    assert result["dcf"]["perpetuity_value_per_share"] is None
+    assert target_year == 3
+    assert solved_value == pytest.approx(req.market_price)
+
+
+def test_invalid_intrinsic_terminal_spread_is_rejected():
+    with pytest.raises(ValidationError, match="WACC must be greater"):
+        request(wacc=3, terminal={"perpetual_growth": 3})
 
 
 def test_unavailable_methods_do_not_dilute_composite_weight():
@@ -197,12 +253,8 @@ def test_sensitivity_tables_center_on_the_current_model():
 
 
 def test_sensitivity_axes_stay_unique_and_in_range_at_model_boundaries():
-    req = request(wacc=50, terminal={
-        "method": "blended",
-        "perpetual_growth": 15,
-        "exit_ebitda_multiple": 100,
-        "perpetuity_weight": 60,
-    })
+    req = request(wacc=50, terminal={"perpetual_growth": 15})
+    req.multiple_targets[1].multiple = 200
     req.schedule = [row.model_copy(update={"growth": 200, "margin": 100}) for row in req.schedule]
     tables = _sensitivity_tables(req)
     base_value = _project(req)["composite"]["value_per_share"]
@@ -221,6 +273,13 @@ def test_operating_sensitivity_moves_value_with_cagr_and_margin():
     assert table["row_label"] == "Revenue CAGR"
     assert table["column_label"] == "Terminal margin"
     assert table["values"][4][4] > table["values"][0][0]
+
+
+def test_market_multiple_sensitivity_changes_the_standalone_multiple_method():
+    table = _sensitivity_tables(request())["exit_framework"]
+
+    assert table["column_label"] == "Target EV / EBITDA"
+    assert table["values"][2][4] > table["values"][2][0]
 
 
 def test_zero_fundamentals_remain_zero_in_default_schedule():
@@ -243,7 +302,7 @@ def test_non_positive_method_values_remain_in_connected_value():
 
     assert result["methods"]["dcf"] < 0
     assert result["methods"]["multiples"] < 0
-    assert result["methods"]["sotp"] < 0
+    assert result["methods"]["sotp"] > 0
     assert set(result["active_weights"]) == {"dcf", "multiples", "ddm", "sotp"}
     expected = sum(result["methods"][key] * weight / 100 for key, weight in result["active_weights"].items())
     assert result["composite"]["value_per_share"] == pytest.approx(expected)
@@ -252,3 +311,11 @@ def test_non_positive_method_values_remain_in_connected_value():
 def test_all_zero_method_weights_are_rejected():
     with pytest.raises(ValidationError, match="positive weight"):
         request(weights={"dcf": 0, "multiples": 0, "ddm": 0, "sotp": 0})
+
+
+def test_active_multiples_method_requires_a_positive_internal_weight():
+    with pytest.raises(ValidationError, match="target multiple"):
+        request(
+            multiple_targets=[{"metric": "ev_revenue", "multiple": 4, "weight": 0, "year": 3}],
+            weights={"dcf": 65, "multiples": 35, "ddm": 0, "sotp": 0},
+        )
