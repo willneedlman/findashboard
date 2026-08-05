@@ -140,18 +140,18 @@ function TableClip({ p, pal, maxRows, print }: { p: TablePayload; pal: Palette; 
                   background: heatBackground(cell, c),
                 }}>
                   {print && c === tickerColumn && typeof cell === 'string' && isTickerSymbol(cell) ? (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                    <span title={cell} aria-label={cell} style={{ display: 'inline-flex', alignItems: 'center', minWidth: 0 }}>
                       <TickerLogo
                         ticker={cell}
-                        size={16}
+                        size={20}
                         crossOrigin="anonymous"
                         fit="contain"
                         cornerRadius={3}
                         padding={1}
                         logoBackground="#ffffff"
                         normalizeVisualWeight
+                        showFallbackText={false}
                       />
-                      <span>{cell}</span>
                     </span>
                   ) : (cell == null ? '—' : String(cell))}
                 </td>

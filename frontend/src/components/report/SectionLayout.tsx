@@ -7,6 +7,7 @@ import type {
   ChartPayload,
   TablePayload,
   ReportSectionLayout,
+  LayoutPreset,
 } from '../../lib/reportCreator'
 import { toTitleCase } from '../../lib/reportCreator'
 import type { ReportPalette, ClipPalette } from '../../lib/reportTheme'
@@ -32,6 +33,29 @@ export function normalizeReportSectionLayout(value: unknown): ReportSectionLayou
   return typeof value === 'string' && REPORT_SECTION_LAYOUTS.has(value as ReportSectionLayout)
     ? value as ReportSectionLayout
     : undefined
+}
+
+export function applyReportLayoutPreset({
+  preset,
+  requested,
+  visual,
+  keyFigures,
+  index = 0,
+}: {
+  preset?: LayoutPreset
+  requested?: unknown
+  visual?: ReportClip
+  keyFigures?: KeyFigure[]
+  index?: number
+}): ReportSectionLayout | undefined {
+  const normalized = normalizeReportSectionLayout(requested)
+  if (!preset || preset === 'editorial' || !visual || visual.payload.kind === 'text') return normalized
+  if (visual.payload.kind === 'table') return 'full-width'
+  if (preset === 'visual-first') return 'evidence-band'
+  if (preset === 'narrative') return 'analysis-first'
+  const figureCount = keyFigures?.filter(figure => figure.label || figure.value).length ?? 0
+  if (figureCount < 2) return 'evidence-band'
+  return index % 2 === 0 ? 'metric-rail-left' : 'metric-rail'
 }
 
 function visualIsDense(visual?: ReportClip): boolean {
@@ -75,7 +99,12 @@ export function resolveReportSectionLayout({
 
   if (!hasVisual) return figureCount >= 2 ? 'metric-rail' : 'full-width'
   if (normalized === 'full-width') return 'full-width'
-  if (visualIsDense(visual)) return 'full-width'
+  if (visualIsDense(visual)) {
+    const preservesReadableChartWidth = visual?.payload.kind === 'chart'
+      && normalized != null
+      && ['metric-rail', 'metric-rail-left', 'evidence-band', 'analysis-first'].includes(normalized)
+    if (!preservesReadableChartWidth) return 'full-width'
+  }
   if ((normalized === 'wrap-left' || normalized === 'wrap-right') && !visualCanWrap(visual)) {
     return normalized === 'wrap-left' ? 'visual-left' : 'visual-right'
   }
@@ -870,6 +899,7 @@ export default function SectionLayout({
   keyFigures,
   index = 0,
   layout,
+  layoutPreset,
   projectClips = [],
   visual: visualOverride,
   showKeyFigures: showKeyFiguresOverride,
@@ -882,6 +912,7 @@ export default function SectionLayout({
   keyFigures?: KeyFigure[]
   index?: number
   layout?: ReportSectionLayout
+  layoutPreset?: LayoutPreset
   projectClips?: ReportClip[]
   visual?: ReportClip
   showKeyFigures?: boolean
@@ -900,7 +931,13 @@ export default function SectionLayout({
   const hasVisual = !!visual && visual.payload.kind !== 'text'
   const textBody = analysis?.trim() || ''
   const resolvedLayout = resolveReportSectionLayout({
-    requested: layout,
+    requested: applyReportLayoutPreset({
+      preset: layoutPreset,
+      requested: layout,
+      visual,
+      keyFigures: showKeyFigures ? figures : [],
+      index,
+    }),
     visual,
     analysis: textBody,
     keyFigures: showKeyFigures ? figures : [],

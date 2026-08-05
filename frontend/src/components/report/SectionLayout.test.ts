@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   assignBodyVisuals,
   assignReportBodyVisuals,
+  applyReportLayoutPreset,
   preferChartVisual,
   promoteKeyFiguresToChart,
   promoteTableToChart,
@@ -92,6 +93,46 @@ describe('report section composition', () => {
       analysis: 'The full ranking needs enough width for every category label.',
       keyFigures: [{ label: 'Leader', value: 'Energy' }],
     })).toBe('full-width')
+  })
+
+  it('preserves explicit evidence compositions for dense charts', () => {
+    const dense = chart('dense', 'Rolling Portfolio Beta')
+    dense.payload = {
+      kind: 'chart',
+      title: 'Rolling Portfolio Beta',
+      chartType: 'line',
+      xKey: 'date',
+      data: Array.from({ length: 30 }, (_, index) => ({ date: `Day ${index + 1}`, beta: 1 + index / 100 })),
+      series: [{ key: 'beta', label: 'Rolling beta' }],
+    }
+    for (const requested of ['metric-rail', 'metric-rail-left', 'evidence-band', 'analysis-first'] as const) {
+      expect(resolveReportSectionLayout({
+        requested,
+        visual: dense,
+        analysis: 'The selected composition must remain visible in the exported report.',
+        keyFigures: [{ label: 'Latest beta', value: '1.29' }],
+      })).toBe(requested)
+    }
+  })
+
+  it('reapplies the selected preset to saved section layouts at export time', () => {
+    const dense = chart('dense', 'Portfolio Performance History')
+    dense.payload = {
+      kind: 'chart',
+      title: 'Portfolio Performance History',
+      chartType: 'line',
+      xKey: 'date',
+      data: Array.from({ length: 30 }, (_, index) => ({ date: `Day ${index + 1}`, portfolio: index })),
+      series: [{ key: 'portfolio', label: 'Portfolio' }],
+    }
+    const figures = [{ label: 'Return', value: '+4.0%' }, { label: 'Volatility', value: '51.1%' }]
+
+    expect(applyReportLayoutPreset({ preset: 'data-dense', requested: 'full-width', visual: dense, keyFigures: figures, index: 0 }))
+      .toBe('metric-rail-left')
+    expect(applyReportLayoutPreset({ preset: 'visual-first', requested: 'full-width', visual: dense, keyFigures: figures }))
+      .toBe('evidence-band')
+    expect(applyReportLayoutPreset({ preset: 'narrative', requested: 'full-width', visual: dense, keyFigures: figures }))
+      .toBe('analysis-first')
   })
 
   it('honors an explicit full-width editorial layout', () => {

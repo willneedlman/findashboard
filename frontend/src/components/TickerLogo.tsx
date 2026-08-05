@@ -57,7 +57,7 @@ export default function TickerLogo({
         position: 'relative',
       }}
     >
-      {showFallbackText && (
+      {showFallbackText && idx >= sources.length && (
         <span aria-hidden="true" style={{ color: 'var(--theme-text, #d7e3fc)', fontSize: size * 0.36, fontWeight: 700 }}>
           {ticker.slice(0, 2).toUpperCase()}
         </span>

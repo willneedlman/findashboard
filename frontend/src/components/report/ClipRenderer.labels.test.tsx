@@ -1,7 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { ClipPalette } from '../../lib/reportTheme'
-import { HorizontalCategoryTick, reportChartHeight } from './ClipRenderer'
+import TickerLogo from '../TickerLogo'
+import ClipRenderer, { HorizontalCategoryTick, reportChartHeight } from './ClipRenderer'
 
 const palette: ClipPalette = {
   ink: '#d7e3fc',
@@ -57,5 +58,31 @@ describe('horizontal chart SVG labels', () => {
     expect(reportChartHeight(shortChart, true)).toBe(138)
     expect(reportChartHeight(shortChart, true, true)).toBe(124)
     expect(reportChartHeight(denseChart, true)).toBe(262)
+  })
+
+  it('prints ticker cells as clean logo marks without duplicate ticker text', () => {
+    const markup = renderToStaticMarkup(
+      <ClipRenderer
+        payload={{
+          kind: 'table',
+          title: 'Current allocation',
+          columns: ['Ticker', 'Weight %'],
+          rows: [['NVDA', 13.13]],
+        }}
+        mode="print"
+        palette={palette}
+      />,
+    )
+
+    expect(markup).toContain('aria-label="NVDA"')
+    expect(markup).toContain('aria-label="NVDA logo"')
+    expect(markup).not.toContain('>NVDA<')
+  })
+
+  it('does not paint fallback letters underneath a loading logo', () => {
+    const markup = renderToStaticMarkup(<TickerLogo ticker="NVDA" showFallbackText />)
+
+    expect(markup).toContain('<img')
+    expect(markup).not.toContain('>NV<')
   })
 })

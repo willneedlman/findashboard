@@ -847,7 +847,7 @@ def _draft_parameter_review(draft: dict) -> str:
     size_text = f"{size}% of total portfolio per admitted trade" if size is not None else "not yet specified"
     leverage_text = ""
     if draft.get("mode") == "portfolio":
-        leverage_text = f" Leverage: {draft.get('leverage', 1)}x; borrowing EAR: {draft.get('effective_annual_rate', 0)}% (interest applies only above portfolio equity)."
+        leverage_text = f" Maximum simultaneous positions: {draft.get('max_open_positions', 'not specified')}. Leverage: {draft.get('leverage', 1)}x; borrowing EAR: {draft.get('effective_annual_rate', 0)}% (interest applies only above portfolio equity)."
     risk_text = "; ".join(
         f"{label}: {risk[key]}%" if risk.get(key) not in (None, 0) else f"{label}: not configured"
         for key, label in (("stopLossPct", "stop-loss"), ("takeProfitPct", "take-profit"), ("trailingStopPct", "trailing stop"))
@@ -1079,6 +1079,12 @@ def _portfolio_allocation_issue(draft: dict) -> str | None:
     if not 0 < allocation <= 100:
         return "What trade size between 1% and 100% of the total portfolio should each admitted trade use?"
     try:
+        max_open_positions = float(draft.get("max_open_positions"))
+    except (TypeError, ValueError):
+        return "What is the maximum number of positions that may be open at the same time?"
+    if not max_open_positions.is_integer() or not 1 <= max_open_positions <= 1000:
+        return "What whole-number maximum between 1 and 1000 should apply to simultaneous open positions?"
+    try:
         leverage = float(draft.get("leverage", 1))
         interest_rate = float(draft.get("effective_annual_rate", 0))
     except (TypeError, ValueError):
@@ -1154,6 +1160,9 @@ def _normalize_fractional_percentages(draft: dict) -> None:
     if draft.get("mode") == "portfolio":
         draft["position_size_pct"] = percent(draft.get("position_size_pct"))
         draft["effective_annual_rate"] = percent(draft.get("effective_annual_rate"))
+        max_open_positions = draft.get("max_open_positions")
+        if isinstance(max_open_positions, (int, float)) and not isinstance(max_open_positions, bool) and float(max_open_positions).is_integer():
+            draft["max_open_positions"] = int(max_open_positions)
         for item in draft.get("strategies", []):
             strategy(item)
     else:
@@ -1301,7 +1310,7 @@ The user describes a backtest setup, a portfolio, a multi-leg options strategy, 
 
 You can customize:
 1. Mode: "single" (one ticker, one structure) or "portfolio" (the same algorithm applied across multiple tickers/a universe). Default to "single" whenever the user names exactly one ticker and describes one structure on it — do not use "portfolio" just because it technically supports one position; "portfolio" is for when the user actually wants a basket, screened universe, or several named tickers sharing one strategy.
-2. Sizing / Leverage: a portfolio is a universe strategy, not a collection of capital sleeves. Every admitted trade uses one shared position_size_pct of the total portfolio, regardless of ticker; entries wait once simultaneous exposure reaches the leveraged gross cap. A portfolio can also set leverage (1x minimum, no ceiling — warn the user that high leverage risks a full wipeout) and effective_annual_rate (borrowing EAR); the backtest compounds that EAR into a daily financing charge on gross exposure above portfolio equity. For a single position, use risk sizing (sizingPct).
+2. Sizing / Position Limit / Leverage: a portfolio is a universe strategy, not a collection of capital sleeves. Every admitted trade uses one shared position_size_pct of the total portfolio, regardless of ticker. max_open_positions independently caps how many positions may be open at once. Entries wait when either that count or the leveraged gross-exposure cap is reached. A portfolio can also set leverage (1x minimum, no ceiling — warn the user that high leverage risks a full wipeout) and effective_annual_rate (borrowing EAR); the backtest compounds that EAR into a daily financing charge on gross exposure above portfolio equity. For a single position, use risk sizing (sizingPct).
 3. Underlyings: tickers (e.g. AAPL, SPY, SVXY).
 4. Instrument Type: Shares (underlying), options (call/put), or combo options (multi-leg, e.g. selling straddles/strangles/condors/spreads).
 5. Expiry DTE: Days to expiration, in CALENDAR days (not trading-day bars — see the maxHoldBars note under OPTION/COMBO RISK SEMANTICS).
@@ -1321,8 +1330,8 @@ COGNITIVE TASK:
 - Continue asking only for genuinely missing material decisions. Once the user has answered the relevant questions, summarize the choices in one short confirmation question before drafting.
 - Output a complete configuration DRAFT only after the user explicitly confirms the summary, says to proceed, or explicitly asks you to choose the remaining defaults. Do not silently assume material risk, horizon, or trade-expression choices.
 - Answer direct questions about the proposed setup rather than repeating a prior confirmation prompt. If the user asks to see, list, or tell them all parameters or the full setup, provide a detailed plain-English review of every selected parameter (universe, trade expression and legs, DTE, sizing, each entry and exit rule, and risk control). This is inspection only, never permission to create a DRAFT. Only create a DRAFT after the user explicitly says they are ready, asks to proceed, or otherwise gives an unambiguous build instruction.
-- For a portfolio draft, set one root-level position_size_pct and return exactly one shared strategy in strategies. Do not assign weights to tickers or divide capital across the universe: each ticker is simply eligible to receive that shared algorithm, and each admitted trade uses position_size_pct of total portfolio value.
-- Never multiply position_size_pct by the number of eligible tickers, ask the user to reduce it because of universe size, or describe the ticker universe as combined allocation. With a 10% trade size, the engine admits at most 10 concurrent trades and queues later signals; 60 eligible symbols do not mean 600% exposure.
+- For a portfolio draft, set one root-level position_size_pct, one whole-number max_open_positions, and return exactly one shared strategy in strategies. Do not assign weights to tickers or divide capital across the universe: each ticker is simply eligible to receive that shared algorithm, and each admitted trade uses position_size_pct of total portfolio value.
+- Never multiply position_size_pct by the number of eligible tickers, ask the user to reduce it because of universe size, or describe the ticker universe as combined allocation. A 10% trade size with max_open_positions 5 admits no more than five concurrent trades even though gross exposure could permit ten; 60 eligible symbols do not mean 600% exposure.
 - All percentage fields use percentage points, never fractions: position_size_pct 1 means 1% (not 0.01), IV Rank 80 means 80% (not 0.8), and a 10% price drop is -10 (not -0.1).
 - When relevant to the user's risk appetite, ask one focused question about leverage and effective annual borrowing rate (EAR) before drafting. If the user does not want leverage, set leverage to 1 and effective_annual_rate to 0. Never imply leverage is free: state that interest is charged on borrowed gross exposure.
 - OPTION/COMBO RISK SEMANTICS: stopLossPct and takeProfitPct are evaluated against the modeled position's P&L relative to its entry premium basis. They are not underlying-price conditions. A user's plain-English "profit target," "take profit," "close at N% profit," or "max profit" language for an option/combo ALWAYS means this premium-based threshold — put it ONLY in risk.takeProfitPct (same for a stated stop-loss -> risk.stopLossPct). NEVER invent a sell-rule condition to represent a profit/loss/time value: not PCT_CHANGE, not OPT_HV (realized volatility), not any other indicator — none of them measure the position's own P&L, and re-purposing a stated percentage or day-count as an unrelated indicator's threshold or period (e.g. turning "50% profit, 14 DTE" into an OPT_HV condition thresholded at 50 with period 14) is always wrong, not just a stylistic mismatch. If the user's exit is fully described by a profit target, stop-loss, and/or a hold-time limit, the sell rule block MUST stay EMPTY ({"logic":"OR","groups":[]}) — the position then closes only on those risk controls or option/combo expiration. Only add a real sell-rule condition when the user explicitly describes a genuine market/signal-based exit (e.g., "exit when IV Rank drops below 30," "exit on a trend reversal") distinct from the profit/loss/time controls. maxHoldBars: 0 means no time-based exit; the option/combo must then close only on a real sell rule, a P&L risk control, or expiration and settlement at DTE.
@@ -1387,6 +1396,7 @@ Every response must be valid JSON in exactly one of these shapes:
   
   // IF mode is "portfolio":
   "position_size_pct": number,  // one shared % of the total portfolio per admitted trade
+  "max_open_positions": number, // whole-number cap on simultaneous open positions, 1-1000
   "leverage": number,           // gross-notional multiplier, minimum 1x (no ceiling); 1 = no leverage
   "effective_annual_rate": number, // borrowing EAR in percentage points, e.g. 8.5
   "positions": [
@@ -1420,7 +1430,7 @@ Group = {"logic": "AND"|"OR", "conditions": [Condition, ...]}
 RuleBlock = {"logic": "AND"|"OR", "groups": [Group, ...]}
 StrategyRisk = {"sizingPct": number, "stopLossPct": number, "takeProfitPct": number, "trailingStopPct": number, "maxHoldBars": number}  // maxHoldBars is a trading-day BAR count, not calendar days — see the BARS ARE NOT CALENDAR DAYS note above
 
-For portfolio drafts, StrategyRisk.sizingPct is ignored by execution; use root-level position_size_pct as the sole trade-size control.
+For portfolio drafts, StrategyRisk.sizingPct is ignored by execution; use root-level position_size_pct as the sole trade-size control and max_open_positions as the independent concurrent-position cap.
 IndicatorRef = {"type": "PRICE"|"RSI"|"SMA"|"EMA"|"MACD_LINE"|"MACD_SIGNAL"|"BB_UPPER"|"BB_MID"|"BB_LOWER"|"ATR"|"MOMENTUM"|"PCT_CHANGE"|"OPT_HV"|"OPT_IVRANK", "period"?: number, "fast"?: number, "slow"?: number, "signal_period"?: number, "std"?: number, "ticker"?: string, "timeframe"?: string}
 
 MONEYNESS RULES:
@@ -4383,6 +4393,7 @@ def _section_evidence_profile(section: dict, clip: ReportClipIn | None) -> dict:
     )
     return {
         "dense": dense,
+        "visualType": "chart" if chart else data_type,
         "hasVisual": bool(chart) or data_type in {"chart", "table", "kpi"},
         "figureCount": len(section.get("keyFigures") or []),
         "wordCount": len(str(section.get("analysis", "")).split()),
@@ -4458,12 +4469,12 @@ def _apply_section_layout_architecture(
         figures = profile["figureCount"]
         preset_locked = False
 
-        if profile["dense"]:
+        if profile["dense"] and profile["visualType"] == "table":
             layout = "full-width"
         elif not profile["hasVisual"]:
             layout = "metric-rail" if figures >= 2 else "full-width"
         elif preset == "visual-first":
-            layout = "evidence-band" if band_index % 2 == 0 else "full-width"
+            layout = "evidence-band"
             band_index += 1
             preset_locked = True
         elif preset == "data-dense":
@@ -4474,8 +4485,10 @@ def _apply_section_layout_architecture(
                 layout = "evidence-band"
             preset_locked = True
         elif preset == "narrative":
-            layout = "analysis-first" if figures < 3 else "full-width"
+            layout = "analysis-first"
             preset_locked = True
+        elif profile["dense"]:
+            layout = "full-width"
         elif role == "valuation" and figures >= 2:
             layout = "evidence-band"
         elif role in {"risk", "catalyst"}:

@@ -1262,7 +1262,7 @@ def _setup_sections(n=2):
 def test_layout_preset_outranks_the_models_per_section_intent():
     """The preset is an explicit user instruction; 'design: visual' is an inference."""
     for preset, expected in [
-        ("visual-first", ["evidence-band", "full-width"]),
+        ("visual-first", ["evidence-band", "evidence-band"]),
         ("data-dense", ["metric-rail-left", "metric-rail"]),
         ("narrative", ["analysis-first", "analysis-first"]),
     ]:
@@ -1288,6 +1288,22 @@ def test_layout_preset_never_overrides_the_renderer_safety_rules():
     }
     _apply_section_layout_architecture([section], [clip], "visual-first")
     assert section["layout"] in {"full-width", "metric-rail"}
+
+
+def test_data_dense_preset_remains_visible_for_dense_charts():
+    clip = ReportClipIn(id="rolling", dataType="chart", title="Rolling beta time series")
+    section = {
+        "clipId": "rolling", "heading": "Risk", "analysis": "Rolling beta remains elevated.",
+        "keyFigures": [
+            {"label": "Latest beta", "value": "2.98"},
+            {"label": "Range", "value": "2.3 to 5.1"},
+        ],
+        "chart": None, "design": "visual",
+    }
+
+    _apply_section_layout_architecture([section], [clip], "data-dense")
+
+    assert section["layout"] == "metric-rail-left"
 
 
 def test_report_type_guidance_reaches_the_prompt_and_unknown_types_are_ignored():

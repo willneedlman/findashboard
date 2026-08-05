@@ -967,6 +967,7 @@ class PortfolioBacktestRequest(BaseModel):
     initial_capital: float = 10_000
     position_size:   float = 10           # % of the whole portfolio for every admitted trade
     max_exposure:    float = 100          # cap on simultaneous gross allocation
+    max_open_positions: int | None = None # independent cap on simultaneous admitted tickers
     leverage:        float = 1            # gross-notional multiplier, 1x = unlevered
     effective_annual_rate: float = 0      # EAR charged on borrowed notional
 
@@ -978,6 +979,8 @@ class PortfolioBacktestRequest(BaseModel):
             raise ValueError("Trade size must be between 1% and 100% of the portfolio")
         if not 0 < self.max_exposure <= 100:
             raise ValueError("Maximum exposure must be greater than 0% and no more than 100%")
+        if self.max_open_positions is not None and not 1 <= self.max_open_positions <= 1000:
+            raise ValueError("Maximum open positions must be between 1 and 1000")
         if self.leverage < 1:
             raise ValueError("Leverage must be at least 1x")
         if not 0 <= self.effective_annual_rate <= 100:
@@ -1001,6 +1004,18 @@ class PortfolioBacktestRequest(BaseModel):
 # doesn't spin up unbounded threads; cache.py's own yfinance BoundedSemaphore(2)
 # still gates actual concurrent yfinance calls beneath this regardless of count.
 _PORTFOLIO_FETCH_WORKERS = 8
+
+
+def _portfolio_entry_capacity(
+    open_count: int,
+    open_exposure: float,
+    candidate_size: float,
+    exposure_cap: float,
+    max_open_positions: int | None,
+) -> tuple[bool, bool]:
+    position_limit_reached = max_open_positions is not None and open_count >= max_open_positions
+    exposure_limit_reached = open_exposure + candidate_size > exposure_cap
+    return not position_limit_reached and not exposure_limit_reached, position_limit_reached
 
 
 @router.post("/portfolio-backtest")
@@ -1078,6 +1093,7 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
     all_dates = sorted({date for _, buy, _, _ in candidates for date in buy.index})
     controlled = [pd.Series(0.0, index=close.index) for _, _, _, close in candidates]
     active: set[int] = set()
+    position_limit_blocked_entries = 0
     # Admission runs on the RAW per-bar entry/exit conditions now (not a
     # latched single-position reconstruction — see _fetch_one above): a
     # flat ticker is admitted on any bar its own entry rule is freshly true
@@ -1113,7 +1129,13 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
             if i in active or i in just_released or date not in buy.index or not buy.loc[date]:
                 continue
             open_exposure = sum(trade_size(candidates[active_i][0]) for active_i in active)
-            if open_exposure + trade_size(candidates[i][0]) > req.max_exposure * req.leverage:
+            has_capacity, position_limit_reached = _portfolio_entry_capacity(
+                len(active), open_exposure, trade_size(candidates[i][0]),
+                req.max_exposure * req.leverage, req.max_open_positions,
+            )
+            if not has_capacity:
+                if position_limit_reached:
+                    position_limit_blocked_entries += 1
                 continue
             active.add(i)
             entry_bar[i] = bar_idx
@@ -1284,6 +1306,8 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
             "initial_capital": round(req.initial_capital, 2), "final_capital": round(float(port_eq.iloc[-1]), 2),
             "total_pnl": round(float(port_eq.iloc[-1]) - req.initial_capital, 2),
             "interest_paid": round(total_interest, 2), "leverage": req.leverage, "effective_annual_rate": req.effective_annual_rate,
+            "max_open_positions": req.max_open_positions,
+            "position_limit_blocked_entries": position_limit_blocked_entries,
             "blown_up_at": blown_up_at.strftime(_cfmt) if blown_up_at is not None else None,
         },
         "timeframe": tf,

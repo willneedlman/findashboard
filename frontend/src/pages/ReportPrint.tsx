@@ -679,6 +679,7 @@ export default function ReportPrint() {
                           keyFigures={performanceFigures}
                           index={i}
                           layout={s.layout}
+                          layoutPreset={renderScope?.layoutPreset}
                           projectClips={allClips}
                           visual={assigned?.visual}
                           showKeyFigures={whatHappened || whyHappened ? true : assigned?.showKeyFigures}

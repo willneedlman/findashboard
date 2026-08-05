@@ -47,6 +47,7 @@ export type AlgoMonteCarloHandoff = {
   timeframe: string
   strategy: CustomStrategyDef
   tradeSizePct: number
+  maxOpenPositions?: number
   leverage: number
   effectiveAnnualRate: number
   positions: Array<Pick<PortfolioPos, 'ticker' | 'instMode' | 'optType' | 'otmPct' | 'dte' | 'comboLegs' | 'comboDte' | 'side' | 'tradeSize'>>
@@ -77,6 +78,7 @@ export type AlgoOptionsMonteCarloHandoff = {
   deltaExit?: number
   gammaExit?: number
   positionSizePct: number
+  maxOpenPositions?: number
   leverage: number
   effectiveAnnualRate: number
   strategyName?: string
@@ -231,7 +233,7 @@ interface BacktestResult {
   in_position?: boolean[]
   metrics: {
     total_return: number; ann_return: number; max_drawdown: number; sharpe: number
-    num_trades: number; win_rate: number; initial_capital: number; final_capital: number; total_pnl: number; interest_paid?: number; leverage?: number; effective_annual_rate?: number; blown_up_at?: string | null
+    num_trades: number; win_rate: number; initial_capital: number; final_capital: number; total_pnl: number; interest_paid?: number; leverage?: number; effective_annual_rate?: number; max_open_positions?: number | null; position_limit_blocked_entries?: number; blown_up_at?: string | null
   }
   trades: BacktestTrade[]
   instrument?: { kind: string; type?: string; moneyness?: number; dte: number; iv: number; direction?: string; modeled: boolean; legs?: ComboLeg[] }
@@ -349,8 +351,23 @@ function PinnedTradePanel({ pt, onClose }: { pt: MarkerPoint; onClose: () => voi
 }
 
 const PF_KEY = 'fdb_algo_portfolio'
+const PF_SETTINGS_KEY = 'fdb_algo_portfolio_settings'
 const AI_CHAT_KEY = 'fdb_algo_strategy_ai_chat'
 const rid = () => Math.random().toString(36).slice(2, 8)
+
+function loadPortfolioSettings() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PF_SETTINGS_KEY) || '{}')
+    return {
+      tradeSize: Math.min(100, Math.max(1, Number(parsed.tradeSize) || 10)),
+      maxOpenPositions: Math.min(1000, Math.max(1, Math.round(Number(parsed.maxOpenPositions) || 10))),
+      leverage: Math.max(1, Number(parsed.leverage) || 1),
+      effectiveAnnualRate: Math.min(100, Math.max(0, Number(parsed.effectiveAnnualRate) || 0)),
+    }
+  } catch {
+    return { tradeSize: 10, maxOpenPositions: 10, leverage: 1, effectiveAnnualRate: 0 }
+  }
+}
 
 // Surface the backend's real reason (FastAPI `detail`) instead of axios's generic
 // "Request failed with status code NNN".
@@ -783,6 +800,7 @@ function StrategyControlsPanel({
   mode, setMode, positions, saved, addPosition, clearPositions,
   patchPosition, removePosition, patchComboLeg, addComboLegToPosition, removeComboLegFromPosition, applyInstrumentToAll,
   portfolioTradeSize, setPortfolioTradeSize,
+  portfolioMaxOpenPositions, setPortfolioMaxOpenPositions,
   portfolioLeverage, setPortfolioLeverage, effectiveAnnualRate, setEffectiveAnnualRate,
   cloningId, setCloningId, cloneInput, setCloneInput, cloneToTickers, pmBooks,
   savedScreens, loadingScreenFor, runSavedScreen,
@@ -805,6 +823,7 @@ function StrategyControlsPanel({
   positions: PortfolioPos[]; saved: CustomStrategyDef[]; addPosition: () => void; clearPositions: () => void
   patchPosition: (id: string, patch: Partial<PortfolioPos>) => void
   portfolioTradeSize: number; setPortfolioTradeSize: (value: number) => void
+  portfolioMaxOpenPositions: number; setPortfolioMaxOpenPositions: (value: number) => void
   portfolioLeverage: number; setPortfolioLeverage: (value: number) => void
   effectiveAnnualRate: number; setEffectiveAnnualRate: (value: number) => void
   removePosition: (id: string) => void
@@ -902,6 +921,13 @@ function StrategyControlsPanel({
             style={{ ...INPUT, width: 46, textAlign: 'center', color: 'var(--theme-primary, #c9a84c)', fontWeight: 700, padding: '3px 4px' }} />
           <span>%</span>
         </div>}
+        {mode === 'portfolio' && <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, fontFamily: 'var(--theme-mono)', color: 'var(--theme-secondary, #8099b0)' }}>
+          <span>Max open</span>
+          <NumInput value={portfolioMaxOpenPositions} min={1} max={1000}
+            onCommit={v => setPortfolioMaxOpenPositions(Math.round(v))}
+            title="Maximum number of positions that may be open at the same time. This works alongside the gross-exposure limit; whichever limit is reached first blocks the next entry."
+            style={{ ...INPUT, width: 46, textAlign: 'center', color: 'var(--theme-primary, #c9a84c)', fontWeight: 700, padding: '3px 4px' }} />
+        </div>}
         {(mode === 'portfolio' || activeDef) && <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, fontFamily: 'var(--theme-mono)', color: 'var(--theme-secondary, #8099b0)' }}>
           <span>Leverage</span>
           <NumInput value={mode === 'portfolio' ? portfolioLeverage : singleRisk.leverage} min={1}
@@ -993,7 +1019,7 @@ function StrategyControlsPanel({
             </div>
           )}
           {mode === 'portfolio' && runPortfolio.isError && <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: 'var(--theme-sans)', padding: '4px 10px' }}>{errMsg(runPortfolio.error, 'Backtest failed')}</div>}
-          {mode === 'portfolio' && <div style={{ fontSize: 8, color: 'var(--theme-secondary, #8099b0)', fontFamily: 'var(--theme-mono)', lineHeight: '12px', padding: '4px 10px' }}>One algorithm is applied to every symbol. The master size is {portfolioTradeSize}% of total portfolio; each position can optionally override it. New entries wait when combined open exposure reaches 100%.</div>}
+          {mode === 'portfolio' && <div style={{ fontSize: 8, color: 'var(--theme-secondary, #8099b0)', fontFamily: 'var(--theme-mono)', lineHeight: '12px', padding: '4px 10px' }}>One algorithm is applied to every symbol. The master size is {portfolioTradeSize}% of total portfolio; each position can optionally override it. New entries wait when {portfolioMaxOpenPositions} positions are already open or combined exposure reaches 100%.</div>}
           {mode === 'portfolio' && sendPortfolioToPaper.isError && <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: 'var(--theme-sans)', padding: '4px 10px' }}>{errMsg(sendPortfolioToPaper.error, 'Import failed')}</div>}
           {mode === 'portfolio' && sendPortfolioToPaper.isSuccess && <div style={{ fontSize: 9, color: 'var(--theme-positive)', fontFamily: 'var(--theme-sans)', padding: '4px 10px' }}>Created {sendPortfolioToPaper.data?.created} job{sendPortfolioToPaper.data?.created === 1 ? '' : 's'} · enable in Paper Trading</div>}
           {mode === 'single' && isError && <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: 'var(--theme-sans)', padding: '4px 10px' }}>{errMsg(error, 'Backtest failed')}</div>}
@@ -1153,9 +1179,11 @@ export function AlgoStrategyBuilderContent() {
   // clears itself immediately rather than persisting like the MC handoff.
   const [screenerHandoff] = useState<ScreenerAlgoHandoff | null>(consumeScreenerAlgoHandoff)
   const [mode, setMode] = useState<'single' | 'portfolio'>(screenerHandoff ? 'portfolio' : 'single')
-  const [portfolioTradeSize, setPortfolioTradeSize] = useState(10)
-  const [portfolioLeverage, setPortfolioLeverage] = useState(1)
-  const [effectiveAnnualRate, setEffectiveAnnualRate] = useState(0)
+  const [initialPortfolioSettings] = useState(loadPortfolioSettings)
+  const [portfolioTradeSize, setPortfolioTradeSize] = useState(initialPortfolioSettings.tradeSize)
+  const [portfolioMaxOpenPositions, setPortfolioMaxOpenPositions] = useState(initialPortfolioSettings.maxOpenPositions)
+  const [portfolioLeverage, setPortfolioLeverage] = useState(initialPortfolioSettings.leverage)
+  const [effectiveAnnualRate, setEffectiveAnnualRate] = useState(initialPortfolioSettings.effectiveAnnualRate)
   const [positions, setPositions] = useState<PortfolioPos[]>(() => {
     let loaded: PortfolioPos[]
     try {
@@ -1190,6 +1218,14 @@ export function AlgoStrategyBuilderContent() {
     const t = setTimeout(() => localStorage.setItem(PF_KEY, JSON.stringify(positions)), 400)
     return () => clearTimeout(t)
   }, [positions])
+  useEffect(() => {
+    localStorage.setItem(PF_SETTINGS_KEY, JSON.stringify({
+      tradeSize: portfolioTradeSize,
+      maxOpenPositions: portfolioMaxOpenPositions,
+      leverage: portfolioLeverage,
+      effectiveAnnualRate,
+    }))
+  }, [portfolioTradeSize, portfolioMaxOpenPositions, portfolioLeverage, effectiveAnnualRate])
   useEffect(() => {
     localStorage.setItem(AI_CHAT_KEY, JSON.stringify(aiMessages.slice(-80)))
   }, [aiMessages])
@@ -1346,6 +1382,7 @@ export function AlgoStrategyBuilderContent() {
         deltaExit: r.deltaExit || undefined,
         gammaExit: r.gammaExit || undefined,
         positionSizePct: portfolioTradeSize,
+        maxOpenPositions: portfolioMaxOpenPositions,
         leverage: portfolioLeverage,
         effectiveAnnualRate,
         strategyName: activeDef.name,
@@ -1364,6 +1401,7 @@ export function AlgoStrategyBuilderContent() {
       timeframe,
       strategy: activeDef,
       tradeSizePct: portfolioTradeSize,
+      maxOpenPositions: portfolioMaxOpenPositions,
       leverage: portfolioLeverage,
       effectiveAnnualRate,
       positions: positions.map(({ ticker, instMode, optType, otmPct, dte, comboLegs, comboDte, side, tradeSize }) => ({ ticker, instMode, optType, otmPct, dte, comboLegs, comboDte, side, tradeSize })),
@@ -1479,6 +1517,7 @@ export function AlgoStrategyBuilderContent() {
     } else {
       setMode('portfolio')
       if (draft.position_size_pct !== undefined) setPortfolioTradeSize(Math.min(100, Math.max(1, draft.position_size_pct)))
+      if (draft.max_open_positions !== undefined) setPortfolioMaxOpenPositions(Math.min(1000, Math.max(1, Math.round(draft.max_open_positions))))
       if (draft.leverage !== undefined) setPortfolioLeverage(Math.max(1, draft.leverage))
       if (draft.effective_annual_rate !== undefined) setEffectiveAnnualRate(Math.min(100, Math.max(0, draft.effective_annual_rate)))
       if (draft.strategies?.[0]?.name) setActiveName(draft.strategies[0].name)
@@ -1573,7 +1612,7 @@ export function AlgoStrategyBuilderContent() {
     mutationFn: async () => {
       if (positions.length === 0) throw new Error('Add at least one position.')
       const { data } = await axios.post('/api/strategy/portfolio-backtest', {
-        positions: positions.map(posToPayload), start, end: end || undefined, timeframe, initial_capital: 10000, position_size: portfolioTradeSize, leverage: portfolioLeverage, effective_annual_rate: effectiveAnnualRate,
+        positions: positions.map(posToPayload), start, end: end || undefined, timeframe, initial_capital: 10000, position_size: portfolioTradeSize, max_open_positions: portfolioMaxOpenPositions, leverage: portfolioLeverage, effective_annual_rate: effectiveAnnualRate,
       })
       return data
     },
@@ -1644,7 +1683,7 @@ export function AlgoStrategyBuilderContent() {
     }
     pieces.push(textClip(TAB, 'Run Spec',
       mode === 'portfolio'
-        ? `Portfolio backtest · ${start} → ${end || 'latest'} · tf=${timeframe} · size=${portfolioTradeSize} · lev=${portfolioLeverage}`
+        ? `Portfolio backtest · ${start} → ${end || 'latest'} · tf=${timeframe} · size=${portfolioTradeSize} · max open=${portfolioMaxOpenPositions} · lev=${portfolioLeverage}`
         : `Single ${side} ${instMode} ${ticker.toUpperCase()} · strategy=${activeName || '—'} · ${start} → ${end || 'latest'} · tf=${timeframe}`))
     return pieces
   }, { disabled: !mR, sourceTab: TAB })
@@ -1681,6 +1720,9 @@ export function AlgoStrategyBuilderContent() {
     const financingSummary = leverage > 1
       ? ` Leverage ${leverage}x, ${(mR.effective_annual_rate ?? 0).toFixed(2)}% borrowing EAR, interest paid ${(mR.interest_paid ?? 0).toFixed(2)}.`
       : ' Unlevered (1x).'
+    const positionLimitSummary = mode === 'portfolio'
+      ? ` Maximum ${mR.max_open_positions ?? portfolioMaxOpenPositions} simultaneous positions; ${mR.position_limit_blocked_entries ?? 0} entry signals were deferred by that limit.`
+      : ''
     // Portfolio mode's positions each carry a `strategy` field, but it's stale —
     // posToPayload actually runs every position against the one shared
     // activeName strategy — so the review has to target that, not whatever
@@ -1691,7 +1733,7 @@ export function AlgoStrategyBuilderContent() {
       : ''
     setAiPrompt({
       id: rid(),
-      content: `BACKTEST REVIEW\nSetup: ${traded}.\nWindow: ${R?.span?.start ?? start} to ${R?.span?.end ?? (end || 'latest')}; ${R?.bars ?? 0} bars.\nOutcomes: total return ${mR.total_return.toFixed(2)}%, annualized return ${mR.ann_return.toFixed(2)}%, max drawdown ${mR.max_drawdown.toFixed(2)}%, Sharpe ${mR.sharpe.toFixed(2)}, ${mR.num_trades} trades, win rate ${mR.win_rate.toFixed(1)}%, P&L ${mR.total_pnl.toFixed(2)}.${financingSummary}${exitSummary ? ` Exit mix: ${exitSummary}.` : ''}${currentRules}\nPlease review these outcomes and help me improve this strategy. Start with the single most important adjustment or clarification.`,
+      content: `BACKTEST REVIEW\nSetup: ${traded}.\nWindow: ${R?.span?.start ?? start} to ${R?.span?.end ?? (end || 'latest')}; ${R?.bars ?? 0} bars.\nOutcomes: total return ${mR.total_return.toFixed(2)}%, annualized return ${mR.ann_return.toFixed(2)}%, max drawdown ${mR.max_drawdown.toFixed(2)}%, Sharpe ${mR.sharpe.toFixed(2)}, ${mR.num_trades} trades, win rate ${mR.win_rate.toFixed(1)}%, P&L ${mR.total_pnl.toFixed(2)}.${financingSummary}${positionLimitSummary}${exitSummary ? ` Exit mix: ${exitSummary}.` : ''}${currentRules}\nPlease review these outcomes and help me improve this strategy. Start with the single most important adjustment or clarification.`,
     })
     setReviewTargetNames(reviewStrategies.map(strategy => strategy.name))
     setEditing(null)
@@ -1861,6 +1903,11 @@ export function AlgoStrategyBuilderContent() {
           {(mR.leverage ?? 1) > 1 && (
             <div style={{ marginTop: 6, fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary, #8099b0)' }}>
               {mR.leverage}x leverage · {(mR.effective_annual_rate ?? 0).toFixed(2)}% borrowing EAR · interest charged: {fmtCap(mR.interest_paid ?? 0)}
+            </div>
+          )}
+          {mode === 'portfolio' && mR.max_open_positions != null && (
+            <div style={{ marginTop: 6, fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary, #8099b0)' }}>
+              Max {mR.max_open_positions} simultaneous positions · {mR.position_limit_blocked_entries ?? 0} entry signals deferred by the position limit
             </div>
           )}
 
@@ -2116,6 +2163,7 @@ export function AlgoStrategyBuilderContent() {
           positions={positions} saved={saved} addPosition={addPosition} clearPositions={clearPositions}
           patchPosition={patchPosition} removePosition={removePosition} patchComboLeg={patchComboLeg}
           portfolioTradeSize={portfolioTradeSize} setPortfolioTradeSize={setPortfolioTradeSize}
+          portfolioMaxOpenPositions={portfolioMaxOpenPositions} setPortfolioMaxOpenPositions={setPortfolioMaxOpenPositions}
           portfolioLeverage={portfolioLeverage} setPortfolioLeverage={setPortfolioLeverage} effectiveAnnualRate={effectiveAnnualRate} setEffectiveAnnualRate={setEffectiveAnnualRate}
           addComboLegToPosition={addComboLegToPosition} removeComboLegFromPosition={removeComboLegFromPosition}
           applyInstrumentToAll={applyInstrumentToAll}
@@ -2199,6 +2247,7 @@ interface AlgoStrategyDraft {
   combo_dte?: number
   strategy?: CustomStrategyDef
   position_size_pct?: number
+  max_open_positions?: number
   leverage?: number
   effective_annual_rate?: number
   positions?: {
