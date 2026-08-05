@@ -18,7 +18,7 @@ const LINKS = [
 
 export default function Footer() {
   return (
-    <footer style={{
+    <footer className="ft-site-footer" style={{
       borderTop: `1px solid ${S.border}`,
       marginTop: 32,
       padding: '18px 0 28px',

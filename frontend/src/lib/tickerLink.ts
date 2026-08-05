@@ -26,6 +26,7 @@ export const TICKER_TOOLS: TickerTool[] = [
   { label: 'Dealer GEX',          short: 'GEX',      route: '/gex' },
   { label: 'Implied Probability', short: 'Prob',     route: '/probability' },
   { label: 'DCF Valuation',       short: 'DCF',      route: '/dcf' },
+  { label: 'Master Valuation',    short: 'Master',   route: '/master-valuation' },
   { label: 'Relative Valuation',  short: 'Rel Val',  route: '/relative-valuation' },
   { label: 'Portfolio Earnings',  short: 'Earnings', route: '/corporate', param: 'tickers' },
 ]

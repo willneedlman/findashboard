@@ -35,6 +35,40 @@ export default function Layout({ children }: LayoutProps) {
   const isToolActive = (route: string) =>
     route.includes('?') ? route === location.pathname + location.search : route === location.pathname
 
+  useEffect(() => {
+    const route = location.pathname + location.search
+    const toolName = ALL_TOOLS.find(tool => tool.route === route || (!tool.route.includes('?') && tool.route === location.pathname))?.title
+      ?? ({
+        '/app': 'home',
+        '/dashboard': 'dashboard',
+        '/portfolio-manager': 'portfolio-manager',
+        '/admin': 'admin',
+        '/settings': 'settings',
+      } as Record<string, string>)[location.pathname]
+      ?? activeHub?.label
+      ?? 'terminal'
+    const filenameTool = toolName
+      .toLowerCase()
+      .replace(/&/g, 'and')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+    const handleBeforePrint = () => {
+      const date = new Date()
+      const localDate = [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-')
+      document.title = `alphatape-${filenameTool}-${localDate}`
+    }
+    const handleAfterPrint = () => {
+      document.title = 'Alphatape | Institutional-style market analytics terminal'
+    }
+
+    window.addEventListener('beforeprint', handleBeforePrint)
+    window.addEventListener('afterprint', handleAfterPrint)
+    return () => {
+      window.removeEventListener('beforeprint', handleBeforePrint)
+      window.removeEventListener('afterprint', handleAfterPrint)
+    }
+  }, [activeHub?.label, location.pathname, location.search])
+
   // Favorites are persisted by route path under ft_nav_favorites (unchanged store).
   const [favorites, setFavorites] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('ft_nav_favorites') ?? '[]') } catch { return [] }
@@ -79,7 +113,7 @@ export default function Layout({ children }: LayoutProps) {
   // ── Mobile ──
   if (isMobile) {
     return (
-      <div className="ft-mobile-shell flex flex-col overflow-hidden">
+      <div className="ft-mobile-shell flex flex-col overflow-hidden" id="ft-root">
         <a href="#main-content" className="skip-link">Skip to content</a>
         <div className="ft-mobile-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, background: 'var(--theme-bg, #060e1c)', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)', position: 'sticky', top: 0, zIndex: 40 }}>
           <Link to="/app" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -166,7 +200,7 @@ export default function Layout({ children }: LayoutProps) {
       <motion.aside
         animate={{ width: collapsed ? 64 : 220 }}
         transition={{ duration: 0.22, ease: 'easeInOut' }}
-        className="flex-shrink-0 flex flex-col overflow-hidden"
+        className="ft-app-nav flex-shrink-0 flex flex-col overflow-hidden"
         style={{ minWidth: 0, background: 'var(--theme-bg, #060e1c)', borderRightWidth: 1, borderRightStyle: 'solid', borderRightColor: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 19%, transparent)' }}
       >
         {/* brand (→ home) + collapse chevron */}
@@ -259,7 +293,7 @@ export default function Layout({ children }: LayoutProps) {
         </div>
       </motion.aside>
 
-      <main id="main-content" className="flex-1 overflow-y-auto" style={{ background: 'var(--theme-bg, #0a1628)' }}>
+      <main id="main-content" className="ft-print-main flex-1 overflow-y-auto" style={{ background: 'var(--theme-bg, #0a1628)' }}>
         {location.pathname === '/dashboard' ? (
           <div style={{ padding: 24 }}>{children}</div>
         ) : location.pathname === '/app' ? (

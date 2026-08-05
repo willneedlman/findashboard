@@ -232,7 +232,13 @@ class DCFRequest(BaseModel):
     capex: Curve = Curve(start_pct=5.0, end_pct=5.0)
     da: Curve = Curve(start_pct=4.0, end_pct=4.0)
     wc: Curve = Curve(start_pct=0.5, end_pct=0.5)
+    fcf_conversion_pct: float = Field(default=100.0, ge=0.0, le=300.0)
     terminal_growth: float = 2.5
+    market_price: float | None = Field(default=None, gt=0)
+    sensitivity_growth_low: float | None = None
+    sensitivity_growth_high: float | None = None
+    sensitivity_margin_low: float | None = None
+    sensitivity_margin_high: float | None = None
 
     # WACC: pass `wacc` directly to override, or leave it unset to build one
     # from CAPM cost of equity + after-tax cost of debt, weighted by D/E.
@@ -251,6 +257,14 @@ class DCFRequest(BaseModel):
         total_years = sum(s.years for s in self.stages)
         if total_years > MAX_HORIZON:
             raise ValueError(f"Total projection horizon ({total_years}y) exceeds the {MAX_HORIZON}-year cap")
+        for label, low, high in (
+            ("growth sensitivity", self.sensitivity_growth_low, self.sensitivity_growth_high),
+            ("margin sensitivity", self.sensitivity_margin_low, self.sensitivity_margin_high),
+        ):
+            if (low is None) != (high is None):
+                raise ValueError(f"Both {label} bounds are required")
+            if low is not None and high is not None and low >= high:
+                raise ValueError(f"{label} low must be below high")
         return self
 
 
@@ -312,9 +326,33 @@ def _stage_schedule(stages: list[Stage]) -> list[float]:
     return out
 
 
+def _schedule_cagr(stages: list[Stage]) -> float:
+    schedule = _stage_schedule(stages)
+    if not schedule:
+        return 0.0
+    factor = 1.0
+    for growth in schedule:
+        factor *= max(0.001, 1 + growth / 100)
+    return (factor ** (1 / len(schedule)) - 1) * 100
+
+
+def _stages_for_cagr(stages: list[Stage], target_cagr: float) -> list[Stage]:
+    """Shift the full growth schedule while preserving its stage-to-stage shape."""
+    lo, hi = -100.0, 200.0
+    for _ in range(48):
+        delta = (lo + hi) / 2
+        shifted = [Stage(years=stage.years, growth=max(-95.0, stage.growth + delta)) for stage in stages]
+        if _schedule_cagr(shifted) < target_cagr:
+            lo = delta
+        else:
+            hi = delta
+    delta = (lo + hi) / 2
+    return [Stage(years=stage.years, growth=max(-95.0, stage.growth + delta)) for stage in stages]
+
+
 def _run_dcf(revenue: float, op_margin: float, target_margin: float, shares: float, net_debt: float,
              tax_rate: float, stages: list[Stage], capex: Curve, da: Curve, wc: Curve,
-             terminal_growth: float, wacc: float) -> dict:
+             terminal_growth: float, wacc: float, fcf_conversion_pct: float = 100.0) -> dict:
     """Core projection, factored out so the tornado sensitivity below can
     re-run it cheaply (in-process, no HTTP round-trip) with one driver flexed
     at a time."""
@@ -336,7 +374,8 @@ def _run_dcf(revenue: float, op_margin: float, target_margin: float, shares: flo
         da_amt = rev * (da_pct / 100)
         capex_amt = rev * (capex_pct / 100)
         wc_amt = rev * (wc_pct / 100)
-        fcf = nopat + da_amt - capex_amt - wc_amt
+        base_fcf = nopat + da_amt - capex_amt - wc_amt
+        fcf = base_fcf * (fcf_conversion_pct / 100)
         pv = fcf / ((1 + wacc / 100) ** y)
 
         fcfs.append({
@@ -372,7 +411,8 @@ def dcf_value(req: DCFRequest):
         raise HTTPException(400, "WACC must exceed terminal growth for a finite valuation")
 
     result = _run_dcf(req.revenue, req.op_margin, req.target_margin, req.shares, req.net_debt,
-                      req.tax_rate, req.stages, req.capex, req.da, req.wc, req.terminal_growth, wacc)
+                      req.tax_rate, req.stages, req.capex, req.da, req.wc, req.terminal_growth, wacc,
+                      req.fcf_conversion_pct)
 
     # One-way sensitivity (tornado): flex each key assumption low/high while
     # everything else holds at base, re-running the same projection in-process.
@@ -382,19 +422,24 @@ def dcf_value(req: DCFRequest):
             req.shares, req.net_debt, overrides.get("tax_rate", req.tax_rate),
             overrides.get("stages", req.stages), overrides.get("capex", req.capex), req.da, req.wc,
             overrides.get("terminal_growth", req.terminal_growth), overrides.get("wacc", wacc),
+            overrides.get("fcf_conversion_pct", req.fcf_conversion_pct),
         )["intrinsic_per_share"]
 
     stage1_growth = req.stages[0].growth
     def _stage1_flexed(g: float) -> list[Stage]:
         return [Stage(years=req.stages[0].years, growth=g), *req.stages[1:]]
 
+    discount_gap = max(wacc - req.terminal_growth, 0.01)
+    wacc_delta = min(1.5, discount_gap * 0.45)
+    terminal_delta = min(1.0, discount_gap * 0.45)
     drivers = [
-        ("WACC", "%", 1.5, wacc, lambda x: ips_with(wacc=x)),
-        ("Terminal growth", "%", 1.0, req.terminal_growth, lambda x: ips_with(terminal_growth=x)),
+        ("WACC", "%", wacc_delta, wacc, lambda x: ips_with(wacc=x)),
+        ("Terminal growth", "%", terminal_delta, req.terminal_growth, lambda x: ips_with(terminal_growth=x)),
         ("Target margin", "%", 4.0, req.target_margin, lambda x: ips_with(target_margin=x)),
         ("Yr 1 growth", "%", 4.0, stage1_growth, lambda x: ips_with(stages=_stage1_flexed(x))),
         ("Tax rate", "%", 3.0, req.tax_rate, lambda x: ips_with(tax_rate=x)),
         ("CapEx % rev", "%", 1.5, req.capex.start_pct, lambda x: ips_with(capex=Curve(start_pct=x, end_pct=req.capex.end_pct))),
+        ("FCF conversion", "%", 10.0, req.fcf_conversion_pct, lambda x: ips_with(fcf_conversion_pct=max(0, x))),
     ]
     tornado = []
     for label, unit, d, base, calc in drivers:
@@ -405,9 +450,126 @@ def dcf_value(req: DCFRequest):
         })
     tornado.sort(key=lambda t: abs(t["hi"] - t["lo"]), reverse=True)
 
+    base_cagr = _schedule_cagr(req.stages)
+
+    def _five_point_range(base: float, offsets: tuple[float, ...], low: float | None, high: float | None) -> list[float]:
+        if low is None or high is None:
+            return [base + offset for offset in offsets]
+        return [low + (high - low) * index / 4 for index in range(5)]
+
+    driver_specs = {
+        "revenue_cagr": {
+            "label": "Revenue CAGR",
+            "values": _five_point_range(base_cagr, (-4, -2, 0, 2, 4), req.sensitivity_growth_low, req.sensitivity_growth_high),
+            "base": base_cagr,
+        },
+        "target_margin": {
+            "label": "Target margin",
+            "values": _five_point_range(req.target_margin, (-6, -3, 0, 3, 6), req.sensitivity_margin_low, req.sensitivity_margin_high),
+            "base": req.target_margin,
+        },
+        "wacc": {
+            "label": "WACC", "values": [wacc + d for d in (-2, -1, 0, 1, 2)], "base": wacc,
+        },
+        "terminal_growth": {
+            "label": "Terminal growth", "values": [req.terminal_growth + d for d in (-1, -0.5, 0, 0.5, 1)], "base": req.terminal_growth,
+        },
+        "fcf_conversion": {
+            "label": "FCF conversion", "values": [req.fcf_conversion_pct + d for d in (-20, -10, 0, 10, 20)], "base": req.fcf_conversion_pct,
+        },
+    }
+
+    def matrix_value(first_key: str, first_value: float, second_key: str, second_value: float):
+        values = {first_key: first_value, second_key: second_value}
+        cell_wacc = values.get("wacc", wacc)
+        cell_terminal_growth = values.get("terminal_growth", req.terminal_growth)
+        if cell_wacc <= cell_terminal_growth:
+            return None
+        cell_stages = req.stages
+        if "revenue_cagr" in values and abs(values["revenue_cagr"] - base_cagr) >= 0.011:
+            cell_stages = _stages_for_cagr(req.stages, values["revenue_cagr"])
+        return _run_dcf(
+            req.revenue, req.op_margin, values.get("target_margin", req.target_margin), req.shares,
+            req.net_debt, req.tax_rate, cell_stages, req.capex, req.da, req.wc,
+            cell_terminal_growth, cell_wacc, values.get("fcf_conversion", req.fcf_conversion_pct),
+        )["intrinsic_per_share"]
+
+    matrix_pairs = [
+        ("growth_margin", "Growth × margin", "target_margin", "revenue_cagr"),
+        ("wacc_terminal", "WACC × terminal growth", "wacc", "terminal_growth"),
+        ("growth_wacc", "Growth × WACC", "wacc", "revenue_cagr"),
+        ("margin_wacc", "Margin × WACC", "wacc", "target_margin"),
+        ("growth_conversion", "Growth × cash conversion", "fcf_conversion", "revenue_cagr"),
+    ]
+    sensitivity_tables = []
+    for table_id, label, row_key, column_key in matrix_pairs:
+        row_spec, column_spec = driver_specs[row_key], driver_specs[column_key]
+        row_values = [round(v, 2) for v in row_spec["values"]]
+        column_values = [round(v, 2) for v in column_spec["values"]]
+        sensitivity_tables.append({
+            "id": table_id,
+            "label": label,
+            "row_driver": {"key": row_key, "label": row_spec["label"], "values": row_values, "base": round(row_spec["base"], 2)},
+            "column_driver": {"key": column_key, "label": column_spec["label"], "values": column_values, "base": round(column_spec["base"], 2)},
+            "values": [
+                [matrix_value(row_key, row_value, column_key, column_value) for column_value in column_values]
+                for row_value in row_values
+            ],
+        })
+
     result["wacc_build"] = wacc_build
     result["tornado"] = tornado
     result["tornado_base"] = result["intrinsic_per_share"]
+    result["sensitivity_tables"] = sensitivity_tables
+    result["modeled_revenue_cagr"] = round(base_cagr, 2)
+    result["fcf_conversion_pct"] = round(req.fcf_conversion_pct, 2)
+
+    if req.market_price:
+        from scipy.optimize import brentq
+
+        def price_at_cagr(cagr: float) -> float:
+            shifted = _stages_for_cagr(req.stages, cagr)
+            return _run_dcf(
+                req.revenue, req.op_margin, req.target_margin, req.shares, req.net_debt,
+                req.tax_rate, shifted, req.capex, req.da, req.wc, req.terminal_growth, wacc,
+                req.fcf_conversion_pct,
+            )["intrinsic_per_share"]
+
+        def price_at_margin(margin: float) -> float:
+            return _run_dcf(
+                req.revenue, req.op_margin, margin, req.shares, req.net_debt,
+                req.tax_rate, req.stages, req.capex, req.da, req.wc, req.terminal_growth, wacc,
+                req.fcf_conversion_pct,
+            )["intrinsic_per_share"]
+
+        def solve(fn, low: float, high: float):
+            try:
+                if (fn(low) - req.market_price) * (fn(high) - req.market_price) <= 0:
+                    return brentq(lambda value: fn(value) - req.market_price, low, high, xtol=1e-3, maxiter=200)
+            except Exception:
+                return None
+            return None
+
+        implied_cagr = solve(price_at_cagr, -50.0, 150.0)
+        implied_margin = solve(price_at_margin, -50.0, 100.0)
+        implied_terminal_revenue = None
+        if implied_cagr is not None:
+            implied_run = _run_dcf(
+                req.revenue, req.op_margin, req.target_margin, req.shares, req.net_debt,
+                req.tax_rate, _stages_for_cagr(req.stages, implied_cagr), req.capex, req.da, req.wc,
+                req.terminal_growth, wacc, req.fcf_conversion_pct,
+            )
+            implied_terminal_revenue = implied_run["fcfs"][-1]["revenue"]
+
+        result["market_implied"] = {
+            "market_price": round(req.market_price, 2),
+            "implied_revenue_cagr": round(implied_cagr, 2) if implied_cagr is not None else None,
+            "modeled_revenue_cagr": round(base_cagr, 2),
+            "cagr_gap": round(implied_cagr - base_cagr, 2) if implied_cagr is not None else None,
+            "implied_target_margin": round(implied_margin, 2) if implied_margin is not None else None,
+            "implied_terminal_revenue": implied_terminal_revenue,
+            "valuation_gap_pct": round((req.market_price / max(result["intrinsic_per_share"], 0.01) - 1) * 100, 1),
+        }
     return result
 
 

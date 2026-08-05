@@ -17,7 +17,7 @@ interface PageWrapperProps {
 
 export default function PageWrapper({ children, title }: PageWrapperProps) {
   return (
-    <motion.div variants={variants} initial="initial" animate="animate" exit="exit">
+    <motion.div className="ft-print-page" variants={variants} initial="initial" animate="animate" exit="exit">
       {title && <PageHeader title={title} />}
       {children}
     </motion.div>

@@ -24,7 +24,7 @@ from routers import (
     sentiment, trading,
     filings, lob, regression, screener,
     paper_scheduler, paper_strategies, paper,
-    iv_tracker, valuation, analytics,
+    iv_tracker, valuation, master_valuation, analytics,
     earnings, ipo, leaderboard, etf, fx,
     maritime, snapshots, credit, housing,
     portfolio_optimizer, macro_events,
@@ -135,6 +135,7 @@ app.add_middleware(RateLimitMiddleware)
 _PUBLIC_API_TTL = {
     "/api/rates":       600,
     "/api/dcf":         600,
+    "/api/master-valuation": 600,
     "/api/corporate":   600,
     "/api/bond":        300,
     "/api/correlation": 300,
@@ -204,6 +205,7 @@ app.include_router(fx.router,                prefix="/api/fx",                ta
 app.include_router(correlation.router,       prefix="/api/correlation",       tags=["correlation"])
 app.include_router(portfolio_optimizer.router, prefix="/api/portfolio-opt",    tags=["portfolio-opt"])
 app.include_router(dcf.router,               prefix="/api/dcf",               tags=["dcf"])
+app.include_router(master_valuation.router,  prefix="/api/master-valuation",  tags=["master-valuation"])
 app.include_router(factset.router,           prefix="/api/factset",           tags=["factset"])
 app.include_router(users.router,             prefix="/api/users",             tags=["users"])
 app.include_router(analytics.router,         prefix="/api/analytics",         tags=["analytics"])

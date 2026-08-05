@@ -20,8 +20,8 @@ export default function SidebarLayout({
 
   if (isMobile) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div className="ft-panel">
+      <div className="ft-tool-layout" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="ft-panel ft-tool-sidebar">
           <button
             onClick={() => setOpen(o => !o)}
             style={{
@@ -43,16 +43,16 @@ export default function SidebarLayout({
           </button>
           {open && <div style={{ padding: 14 }}>{sidebar}</div>}
         </div>
-        <div style={{ minWidth: 0 }}>{children}</div>
+        <div className="ft-tool-content" style={{ minWidth: 0 }}>{children}</div>
       </div>
     )
   }
 
   // Desktop: sidebar flush against content, separated by a single border
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0, border: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', boxShadow: '0 1px 4px rgba(0,0,0,0.35)' }}>
+    <div className="ft-tool-layout" style={{ display: 'flex', alignItems: 'flex-start', gap: 0, border: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', boxShadow: '0 1px 4px rgba(0,0,0,0.35)' }}>
       {/* Sidebar */}
-      <div style={{
+      <div className="ft-tool-sidebar" style={{
         width: sidebarWidth,
         flexShrink: 0,
         background: 'color-mix(in srgb, var(--theme-surface, #0d1826) 100%, black 8%)',
@@ -88,7 +88,7 @@ export default function SidebarLayout({
       </div>
 
       {/* Main content — use page bg so panels inside have positive contrast */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12, padding: 16, background: 'var(--theme-bg, #101c2e)' }}>
+      <div className="ft-tool-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12, padding: 16, background: 'var(--theme-bg, #101c2e)' }}>
         {children}
       </div>
     </div>

@@ -718,6 +718,98 @@ def _statements_first(ticker: str) -> tuple[list, dict, dict]:
     return get_income(ticker, 2), get_balance(ticker), get_cashflow(ticker)
 
 
+def get_dcf_statement_context(ticker: str) -> dict:
+    """Compact, citation-ready statement evidence for the DCF AI prompt.
+
+    The most recent reported SEC quarter is preferred for income-statement
+    trends. Balance-sheet and cash-flow evidence uses the latest annual filing
+    because those normalized series are more complete across issuers.
+    """
+    sym = ticker.strip().upper()
+    income, balance, cashflow = _statements_first(sym)
+    latest = income[0] if income else {}
+    prior = income[1] if len(income) > 1 else {}
+    annual_latest = latest
+    source = "FMP financial statements"
+    period = str(latest.get("date") or latest.get("calendarYear") or "latest annual filing")
+    comparison = str(prior.get("date") or prior.get("calendarYear") or "prior annual filing")
+
+    try:
+        import sec_fundamentals
+        quarters = sec_fundamentals.get_quarterly_income(sym, 8)
+        if quarters:
+            latest_q = quarters[0]
+            comparable = next(
+                (row for row in quarters[1:]
+                 if row.get("period") == latest_q.get("period")
+                 and row.get("fiscalYear") == latest_q.get("fiscalYear", 0) - 1),
+                None,
+            )
+            if comparable:
+                latest, prior = latest_q, comparable
+                source = "SEC EDGAR 10-Q"
+                period = f"{latest_q.get('period', 'quarter')} ended {latest_q.get('date', '')}".strip()
+                comparison = f"{comparable.get('period', 'quarter')} ended {comparable.get('date', '')}".strip()
+            elif sec_fundamentals.statements_available(sym):
+                source = "SEC EDGAR annual filing"
+    except Exception:
+        pass
+
+    def millions(value):
+        return round(float(value) / 1e6, 1) if value is not None else None
+
+    def margin(row):
+        revenue = row.get("revenue") or 0
+        operating_income = row.get("operatingIncome")
+        return round(operating_income / revenue * 100, 1) if revenue and operating_income is not None else None
+
+    current_revenue = latest.get("revenue")
+    prior_revenue = prior.get("revenue")
+    growth = (
+        round((current_revenue / prior_revenue - 1) * 100, 1)
+        if current_revenue and prior_revenue else None
+    )
+    total_debt = balance.get("totalDebt")
+    cash = balance.get("cashAndCashEquivalents")
+    net_debt = balance.get("netDebt")
+    if net_debt is None and (total_debt is not None or cash is not None):
+        net_debt = (total_debt or 0) - (cash or 0)
+    annual_revenue = annual_latest.get("revenue") or 0
+    free_cash_flow = cashflow.get("freeCashFlow")
+
+    return {
+        "ticker": sym,
+        "source": source,
+        "period": period,
+        "comparison_period": comparison,
+        "annual_period": str(annual_latest.get("date") or annual_latest.get("calendarYear") or "latest annual filing"),
+        "income": {
+            "revenue_m": millions(current_revenue),
+            "prior_revenue_m": millions(prior_revenue),
+            "revenue_growth_pct": growth,
+            "operating_income_m": millions(latest.get("operatingIncome")),
+            "operating_margin_pct": margin(latest),
+            "prior_operating_margin_pct": margin(prior),
+            "net_income_m": millions(latest.get("netIncome")),
+        },
+        "balance_sheet": {
+            "cash_m": millions(cash),
+            "total_debt_m": millions(total_debt),
+            "net_debt_m": millions(net_debt),
+            "equity_m": millions(balance.get("totalStockholdersEquity")),
+        },
+        "cash_flow": {
+            "operating_cash_flow_m": millions(cashflow.get("operatingCashFlow")),
+            "capital_expenditure_m": millions(cashflow.get("capitalExpenditure")),
+            "free_cash_flow_m": millions(cashflow.get("freeCashFlow")),
+        },
+        "derived": {
+            "net_debt_to_annual_revenue_pct": round(net_debt / annual_revenue * 100, 1) if net_debt is not None and annual_revenue else None,
+            "free_cash_flow_margin_pct": round(free_cash_flow / annual_revenue * 100, 1) if free_cash_flow is not None and annual_revenue else None,
+        },
+    }
+
+
 def get_dcf_fundamentals(ticker: str) -> dict:
     """
     Fetches profile + statements + estimates in parallel (~200ms). Statements come

@@ -8,7 +8,7 @@ import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
 import ScreenshotPortfolioImport from '../components/ScreenshotPortfolioImport'
 import { usePortfolio } from '../contexts/PortfolioContext'
 import { FUTURES, FUTURES_BY_GROUP, futuresSpec } from '../lib/futures'
-import { normalizeTicker } from '../lib/pmImport'
+import { normalizeTicker, notifyPortfolioContextChanged } from '../lib/pmImport'
 import useIsMobile from '../hooks/useIsMobile'
 
 
@@ -196,6 +196,8 @@ export default function PortfolioManager() {
   const [pm, setPm] = useState<PMState>(loadPortfolios)
   const portfolios = pm.portfolios
   const active = portfolios.find(p => p.id === pm.activeId) ?? portfolios[0]
+  const validOverviewIds = (pm.overviewIds ?? []).filter(id => portfolios.some(p => p.id === id))
+  const overviewIds = validOverviewIds.length ? validOverviewIds : [active.id]
 
   const holdings = active.holdings
   const options = active.options
@@ -252,12 +254,25 @@ export default function PortfolioManager() {
   const switchPortfolio = (id: string) => { clearEdits(); setPm(s => ({ ...s, activeId: id })) }
   const renamePortfolio = (id: string, name: string) => setPm(s => ({ ...s, portfolios: s.portfolios.map(p => p.id === id ? { ...p, name } : p) }))
   const deletePortfolio = (id: string) => { clearEdits(); setPm(s => { const rest = s.portfolios.filter(p => p.id !== id); if (!rest.length) return s; const activeId = s.activeId === id ? rest[0].id : s.activeId; return { ...s, portfolios: rest, activeId, overviewIds: (s.overviewIds ?? []).filter(x => rest.some(p => p.id === x)) } }) }
+  const toggleOverviewPortfolio = (id: string) => setPm(s => {
+    const valid = (s.overviewIds ?? []).filter(candidate => s.portfolios.some(p => p.id === candidate))
+    const selected = new Set(valid.length ? valid : [s.activeId])
+    if (selected.has(id)) {
+      if (selected.size > 1) selected.delete(id)
+    } else selected.add(id)
+    return { ...s, overviewIds: s.portfolios.filter(p => selected.has(p.id)).map(p => p.id) }
+  })
+  const selectAllForOverview = () => setPm(s => ({
+    ...s,
+    overviewIds: overviewIds.length === s.portfolios.length ? [s.activeId] : s.portfolios.map(p => p.id),
+  }))
   const [renaming, setRenaming] = useState<string | null>(null)
 
   const mountRef = useRef(false)
   useEffect(() => {
     localStorage.setItem(PORTFOLIOS_KEY, JSON.stringify(pm))
     if (!mountRef.current) { mountRef.current = true; return }
+    notifyPortfolioContextChanged()
     setDirty(true)
   }, [pm])
 
@@ -672,6 +687,17 @@ export default function PortfolioManager() {
               style={{ background: 'none', border: `1px solid ${T.border}`, color: T.muted, cursor: 'pointer', fontFamily: T.label, fontSize: 9, fontWeight: 700, padding: '6px 9px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Delete</button>
           )}
           <button onClick={addPortfolio} style={{ background: 'none', border: `1px solid ${T.gold}`, color: T.gold, cursor: 'pointer', fontFamily: T.label, fontSize: 9, fontWeight: 700, padding: '6px 10px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>+ New Portfolio</button>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'flex-end', gap: 6, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginRight: 2 }}>
+              <span style={{ ...lbl, fontSize: 8.5 }}>Overview output</span>
+              <span style={{ fontFamily: T.mono, fontSize: 8.5, color: T.muted }}>Feeds dashboards and analysis tools</span>
+            </div>
+            {portfolios.map(p => {
+              const selected = overviewIds.includes(p.id)
+              return <button key={p.id} type="button" aria-pressed={selected} onClick={() => toggleOverviewPortfolio(p.id)} title="Include this portfolio in the shared Overview output" style={{ height: 29, padding: '0 9px', background: selected ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' : 'transparent', border: `1px solid ${selected ? T.gold : T.border}`, color: selected ? T.gold : T.muted, cursor: 'pointer', fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, whiteSpace: 'nowrap' }}>{p.name}</button>
+            })}
+            {portfolios.length > 1 && <button type="button" onClick={selectAllForOverview} style={{ height: 29, padding: '0 9px', background: 'transparent', border: `1px solid ${T.border}`, color: T.muted, cursor: 'pointer', fontFamily: T.label, fontSize: 8.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{overviewIds.length === portfolios.length ? 'Active only' : 'All'}</button>}
+          </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : '260px 1fr', gap: isMobile ? 16 : 24, alignItems: 'start' }}>

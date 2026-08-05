@@ -9,6 +9,7 @@ import logging
 import re
 import sys, os
 import threading
+from datetime import datetime, timezone
 from statistics import median as _median
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -26,12 +27,16 @@ from routers.screener import (
     run_screen,
 )
 from disk_cache import disk_get, disk_set
+import fmp
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _ai_screen_cache: TTLCache = TTLCache(maxsize=500, ttl=14400)
 _ai_screen_lock = threading.Lock()
+_dcf_ai_lock = threading.Lock()
+_DCF_AI_CACHE_VERSION = "v2"
+_DCF_AI_CACHE_TTL = 90 * 86400
 
 
 # ── 1. DCF assumption suggester ───────────────────────────────────────────────
@@ -44,34 +49,92 @@ class DCFAssumptionsRequest(BaseModel):
     beta: float = 1.0
     sector: str = ""
     wacc: float = 10.0
+    tax_rate: float = 21.0
+    regenerate: bool = False
 
-_DCF_SYSTEM = """You are a financial analyst. Suggest realistic 10-year DCF model assumptions from the provided fundamentals. Consider the sector, growth stage, and competitive position.
+_DCF_SYSTEM = """You are a rigorous equity-research analyst. Build a 10-year DCF assumption set and a concise operating thesis using only the supplied financial-statement evidence and model context. Never invent a filing figure, company event, competitive claim, catalyst, management intention, or use of cash. Treat reported facts and forward assumptions as separate categories. Evidence bullets must be neutral factual comparisons, not interpretations. Do not characterize cash, debt, leverage, margins, or growth as high, low, strong, weak, significant, or burdensome without a supplied ratio and explicit comparison that supports the adjective. A positive net-debt figure means debt exceeds cash, but does not by itself establish financial stress. Do not claim debt-servicing risk when free cash flow is positive and net debt is below 50% of annual revenue. If evidence is missing, say so plainly. This is a model thesis, not personalized investment advice.
 Respond ONLY with valid JSON (no markdown):
 {
   "rev_growth_1": <yr 1-3 annual growth %, float>,
   "rev_growth_2": <yr 4-7 annual growth %, float>,
   "rev_growth_3": <yr 8-10 annual growth %, float>,
   "target_margin": <yr 10 operating margin %, float>,
+  "tax_rate": <normalized forecast tax rate %, float>,
   "wacc": <suggested WACC %, float>,
   "terminal_growth": <terminal growth rate %, float, typically 2-3>,
   "rationale": {
     "growth": "one sentence on growth trajectory",
     "margin": "one sentence on margin expansion thesis",
     "wacc": "one sentence on discount rate reasoning"
+  },
+  "thesis": {
+    "stance": "constructive, balanced, or cautious",
+    "summary": "2-3 sentence valuation thesis connecting reported performance to the proposed assumptions",
+    "evidence": ["3 concise, quantified observations from the supplied statement"],
+    "risks": ["2-3 risks that would invalidate the assumptions"],
+    "watch_items": ["2-3 financial metrics to monitor in the next filing"]
   }
 }"""
 
 @router.post("/dcf-assumptions")
 def dcf_assumptions(req: DCFAssumptionsRequest):
-    prompt = f"""Fundamentals for {req.ticker}:
+    try:
+        statement = fmp.get_dcf_statement_context(req.ticker)
+    except Exception:
+        logger.warning("statement context failed for DCF AI %s", req.ticker, exc_info=True)
+        statement = {
+            "ticker": req.ticker.upper(), "source": "unavailable", "period": "unavailable",
+            "comparison_period": "unavailable", "income": {}, "balance_sheet": {}, "cash_flow": {},
+        }
+    statement_fingerprint = hashlib.sha256(
+        json.dumps(statement, sort_keys=True, separators=(",", ":"), default=str).encode()
+    ).hexdigest()[:20]
+    cache_key = f"ai:dcf-assumptions:{_DCF_AI_CACHE_VERSION}:{req.ticker.strip().upper()}:{statement_fingerprint}"
+
+    def cached_result():
+        cached = disk_get(cache_key)
+        if not isinstance(cached, dict) or not cached.get("thesis"):
+            return None
+        result = dict(cached)
+        meta = dict(result.get("cache_meta") or {})
+        meta["cached"] = True
+        result["cache_meta"] = meta
+        return result
+
+    if not req.regenerate:
+        cached = cached_result()
+        if cached is not None:
+            return cached
+
+    with _dcf_ai_lock:
+        if not req.regenerate:
+            cached = cached_result()
+            if cached is not None:
+                return cached
+
+        prompt = f"""Current model context for {req.ticker}:
 - TTM Revenue: ${req.revenue:,.0f}M
 - Current Operating Margin: {req.op_margin:.1f}%
 - Recent Revenue Growth: {req.rev_growth:.1f}%
 - Beta: {req.beta:.2f}
 - Sector: {req.sector or "unknown"}
-- Current WACC estimate: {req.wacc:.1f}%"""
-    raw = groq_complete(prompt, max_tokens=450, model=MODEL_FAST, system=_DCF_SYSTEM)
-    return parse_json(raw)
+- Current WACC estimate: {req.wacc:.1f}%
+- Current forecast tax rate: {req.tax_rate:.1f}%
+
+Latest available financial-statement evidence (amounts in $M):
+{json.dumps(statement, indent=2)}
+
+Ground every thesis claim in this evidence. The income section is from the named recent period; balance-sheet and cash-flow fields are the latest available annual normalized figures and must not be described as belonging to that quarter. Explain how the reported growth, margin, cash generation, and balance-sheet position support or challenge each proposed assumption. Name the statement period in the summary. Evidence bullets must quote only supplied figures. Risks and watch items may describe forward scenarios, but must not claim that an event has occurred."""
+        raw = groq_complete(prompt, max_tokens=950, model=MODEL_SMART, system=_DCF_SYSTEM)
+        result = parse_json(raw)
+        result["statement_context"] = statement
+        result["cache_meta"] = {
+            "cached": False,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "statement_fingerprint": statement_fingerprint,
+        }
+        disk_set(cache_key, result, ttl=_DCF_AI_CACHE_TTL)
+        return result
 
 
 # ── 2. Screener natural-language parser ───────────────────────────────────────

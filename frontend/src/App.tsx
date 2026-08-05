@@ -63,6 +63,7 @@ const CorporateHub       = lazyWithReload(() => import('./pages/CorporateHub'))
 const EarningsCalendar   = lazyWithReload(() => import('./pages/EarningsCalendar'))
 const IpoCalendar        = lazyWithReload(() => import('./pages/IpoCalendar'))
 const DCFValuation       = lazyWithReload(() => import('./pages/DCFValuation'))
+const MasterValuation    = lazyWithReload(() => import('./pages/MasterValuation'))
 const DividendDiscount   = lazyWithReload(() => import('./pages/DividendDiscount'))
 const SOTP               = lazyWithReload(() => import('./pages/SOTP'))
 const Multiples          = lazyWithReload(() => import('./pages/Multiples'))
@@ -283,13 +284,14 @@ export default function App() {
               <Route path="/portfolio"        element={<Navigate to="/backtest" replace />} />
               <Route path="/portfolio-skills" element={<Navigate to="/backtest" replace />} />
               {/* Valuation tools — now standalone (legacy /valuation hub dismantled) */}
+              <Route path="/master-valuation" element={<MasterValuation />} />
               <Route path="/dcf"         element={<DCFValuation />} />
               <Route path="/dcf-pro"     element={<Navigate to="/dcf" replace />} />
               <Route path="/ddm"         element={<DividendDiscount />} />
               <Route path="/sotp"        element={<SOTP />} />
               <Route path="/multiples"   element={<Multiples />} />
               <Route path="/reverse-dcf" element={<ReverseDCF />} />
-              <Route path="/valuation"   element={<Navigate to="/dcf" replace />} />
+              <Route path="/valuation"   element={<RedirectWithSearch to="/master-valuation" />} />
               <Route path="/probability" element={<ImpliedProbability />} />
               <Route path="/skew"       element={<SkewTool />} />
               <Route path="/fed"        element={<FedRates />} />
