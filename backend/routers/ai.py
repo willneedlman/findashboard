@@ -2179,7 +2179,7 @@ EQUITY-RESEARCH EDITORIAL STANDARD
 Write for an investor deciding what to do, not for a reader learning the topic.
 1. The headline states the conclusion and the tension in plain English. Never use a generic title such as "Valuation Analysis" or "Company Overview".
 2. Open with the call, what changed, and the two facts that matter most. Put background later.
-3. Section headings are conclusions, not topics. Use "Margins Hold Despite Slower Growth", not "Margins".
+3. Section headings must use the selected template's exact labels. Put the conclusion in the opening sentence instead of renaming a required section.
 4. Start every section with its takeaway. Then explain the mechanism, the evidence, and the caveat. Use short paragraphs and remove scene-setting filler.
 5. Label figures with their period and unit. Distinguish actual results, estimates, consensus, targets, and spot price. State the valuation method, forecast year, and multiple whenever the clips provide them.
 6. Use keyFigures as the compact evidence rail. Do not repeat every keyFigure in the adjacent prose. Prose explains why the numbers matter.
@@ -2418,8 +2418,9 @@ def _report_system_prompt(mode: str, length_key: str, must_include: str,
         "════════════════════════════════════════\n"
         f"SELECTED TEMPLATE — {template['id']}\n"
         "════════════════════════════════════════\n"
-        "Return exactly these sections, in this order. Set templateSection to the exact key shown. "
-        "Headings may state a sharper evidence-backed conclusion, but the section purpose cannot change.\n"
+        "Return exactly these sections, in this order. Set templateSection to the exact key shown and "
+        "use the exact selected-template label as the heading. Put the evidence-backed conclusion in analysis, "
+        "not in a renamed heading.\n"
         f"{template_rows}"
     )
     return (
@@ -4237,6 +4238,7 @@ def _build_sections(raw_sections, valid_ids: set[str], contract: dict | None = N
         expected = [item["key"] for item in contract["sections"]]
         ordered: list[dict] = []
         remaining = list(sections)
+        contract_by_key = {item["key"]: item for item in contract["sections"]}
         for section_key in expected:
             match = next((section for section in remaining if section.get("templateSection") == section_key), None)
             if match is None and remaining:
@@ -4244,6 +4246,7 @@ def _build_sections(raw_sections, valid_ids: set[str], contract: dict | None = N
             if match is None:
                 continue
             match["templateSection"] = section_key
+            match["heading"] = contract_by_key[section_key]["label"]
             ordered.append(match)
             remaining.remove(match)
         sections = ordered
@@ -4570,7 +4573,7 @@ Rules:
 - Each section must advance the thesis with distinct evidence, ordered so the argument builds top-down.
 - Use this order when supported: what changed and the call, operating or financial drivers, valuation, catalysts, then risks. Background belongs last and should be omitted when the reader can understand the call without it.
 - Require every section and chart to directly advance the central investment thesis. Omit secondary or low-relevance analyses (such as routine DCF sensitivity) unless they provide a critical decision-making insight for the central thesis.
-- Every heading must state a finding or tension, not merely name a topic. Use "Margins Hold Despite Slower Growth", not "Revenue Trajectory & Margins".
+- Every analysis block must open with the finding or tension. The heading itself must be the exact label from templateContract.
 - ONE section per comparative theme. In a multi-subject comparison every section compares all subjects together (e.g. a single "Valuation Gap" section covering both names). NEVER split a theme into one section per subject.
 - Each section names the single most relevant chart family, or "none".
 - Use ONLY evidence present in the clips. Do not invent sections the data cannot support.
@@ -4612,18 +4615,13 @@ def _generate_outline(payload: dict) -> dict | None:
     """Step 1 — draft a thesis-first section outline. Returns None on any failure
     so the pipeline falls back to a single unplanned draft."""
     if payload.get("reportType") == "portfolio-review":
-        forward_heading = (
-            "What Could Happen Next: Stress, Valuation, and Dated Catalysts"
-            if payload.get("hasPortfolioValuation")
-            else "What Could Happen Next: Stress and Dated Catalysts"
-        )
         return {
             "thesis": "Assess the book through measured performance, concentration, and decision-relevant risk.",
             "sections": [
-                {"templateSection": "what-happened", "heading": "What Happened: Return and Risk Versus SPY", "argues": "Compare portfolio and SPY period return, active return, volatility, and maximum drawdown using matching dates and methods.", "chartHint": "performance"},
-                {"templateSection": "why-it-happened", "heading": "Why It Happened: Market Sensitivity and Name-Specific Risk", "argues": "Separate measured market sensitivity, factor coefficients, and holding concentration from unsupported active-return attribution.", "chartHint": "risk"},
-                {"templateSection": "what-could-happen-next", "heading": forward_heading, "argues": "Show beta-only market stress, any supplied compact valuation evidence, and only catalysts with actual supplied dates.", "chartHint": "scenario"},
-                {"templateSection": "what-action-follows", "heading": "What Action Follows: Evidence Before Reallocation", "argues": "Recommend no allocation change unless a proposed portfolio and quantified before-and-after risk and return evidence are supplied.", "chartHint": "none"},
+                {"templateSection": "what-happened", "heading": "What Happened", "argues": "Compare portfolio and SPY period return, active return, volatility, and maximum drawdown using matching dates and methods.", "chartHint": "performance"},
+                {"templateSection": "why-it-happened", "heading": "Why It Happened", "argues": "Separate measured market sensitivity, factor coefficients, and holding concentration from unsupported active-return attribution.", "chartHint": "risk"},
+                {"templateSection": "what-could-happen-next", "heading": "What Could Happen Next", "argues": "Show beta-only market stress, any supplied compact valuation evidence, and only catalysts with actual supplied dates.", "chartHint": "scenario"},
+                {"templateSection": "what-action-follows", "heading": "What Action Follows", "argues": "Recommend no allocation change unless a proposed portfolio and quantified before-and-after risk and return evidence are supplied.", "chartHint": "none"},
             ],
         }
     try:
@@ -4654,7 +4652,7 @@ def _generate_outline(payload: dict) -> dict | None:
             section = section or {}
             sections.append({
                 "templateSection": required["key"],
-                "heading": _title_case(str(section.get("heading", "")).strip()) or required["label"],
+                "heading": required["label"],
                 "argues": str(section.get("argues", "")).strip() or required["purpose"],
                 "chartHint": str(section.get("chartHint", "")).strip().lower() or "none",
             })

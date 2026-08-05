@@ -19,6 +19,31 @@ from validation import validate_ticker
 router = APIRouter()
 
 
+def _options_expirations(sym: str) -> list[str]:
+    if tradier.available():
+        try:
+            expirations = tradier.get_expirations(sym)
+            if expirations:
+                return expirations
+        except Exception as exc:
+            logger.warning("Tradier expirations failed for %s; using Yahoo fallback: %s", sym, exc)
+    return options_data.get_expirations(sym)
+
+
+def _options_chain(sym: str, expiry: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    if tradier.available():
+        try:
+            raw = tradier.get_options_chain(sym, expiry, greeks=True)
+            calls = pd.DataFrame(raw.get("calls", []))
+            puts = pd.DataFrame(raw.get("puts", []))
+            if not calls.empty or not puts.empty:
+                return calls, puts
+        except Exception as exc:
+            logger.warning("Tradier chain failed for %s %s; using Yahoo fallback: %s", sym, expiry, exc)
+    chain = options_data.get_chain(sym, expiry)
+    return chain.calls, chain.puts
+
+
 def _implied_vol(ticker: str) -> float:
     try:
         hist = get_history(ticker, period="3mo")
@@ -319,7 +344,7 @@ def skew_surface(ticker: str):
         S0   = float(hist["Close"].dropna().iloc[-1]) if not hist.empty else None
         if not S0:
             raise HTTPException(404, "No spot price")
-        expirations = tradier.get_expirations(sym) if tradier.available() else options_data.get_expirations(sym)
+        expirations = _options_expirations(sym)
         if not expirations:
             raise HTTPException(404, "No options data")
     except HTTPException:
@@ -361,13 +386,7 @@ def skew_surface(ticker: str):
     for exp in future:
         T = max((pd.to_datetime(exp) - today).days / 365.25, 1 / 365)
         try:
-            if tradier.available():
-                raw = tradier.get_options_chain(sym, exp, greeks=True)
-                call_rows = pd.DataFrame(raw["calls"])
-                put_rows = pd.DataFrame(raw["puts"])
-            else:
-                ch = options_data.get_chain(sym, exp)
-                call_rows, put_rows = ch.calls, ch.puts
+            call_rows, put_rows = _options_chain(sym, exp)
         except Exception:
             continue
 

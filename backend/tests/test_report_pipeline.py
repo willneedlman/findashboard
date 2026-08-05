@@ -68,7 +68,32 @@ def test_template_validation_rejects_missing_or_reordered_sections():
 
     errors = validate_template_sections(sections, contract)
 
-    assert errors == ["Template sections must be regime-call, market-implications in order"]
+    assert errors == [
+        "Template sections must be regime-call, market-implications in order",
+        "Section 1 heading must be Regime Call",
+        "Section 2 heading must be Market Implications",
+    ]
+
+
+def test_template_validation_rejects_rewritten_section_labels():
+    contract = template_contract("portfolio-review", "medium")
+    sections = [
+        {
+            "templateSection": section["key"],
+            "heading": f"{section['label']}: Model-Written Conclusion",
+            "analysis": "Evidence-backed conclusion.",
+        }
+        for section in contract["sections"]
+    ]
+
+    errors = validate_template_sections(sections, contract)
+
+    assert errors == [
+        "Section 1 heading must be What Happened",
+        "Section 2 heading must be Why It Happened",
+        "Section 3 heading must be What Could Happen Next",
+        "Section 4 heading must be What Action Follows",
+    ]
 
 
 def test_report_generation_blocks_before_phase_three_without_data_bank():

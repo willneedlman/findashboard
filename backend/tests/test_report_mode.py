@@ -597,7 +597,7 @@ def test_report_prompt_hides_renderer_presets_and_includes_only_the_active_mode(
     assert "favored ticker/name" in open_prompt
     assert "the midpoint as '$X'" not in open_prompt
     assert "The headline states the conclusion and the tension" in range_prompt
-    assert "Section headings are conclusions, not topics" in range_prompt
+    assert "Section headings must use the selected template's exact labels" in range_prompt
     assert "{{" not in range_prompt
     assert "{{" not in open_prompt
 

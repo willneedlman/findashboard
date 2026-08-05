@@ -181,6 +181,7 @@ def validate_data_bank(data_bank: ReportDataBankIn, clip_ids: set[str]) -> list[
 
 def validate_template_sections(sections: list[dict], contract: dict) -> list[str]:
     expected = [section["key"] for section in contract["sections"]]
+    expected_labels = [section["label"] for section in contract["sections"]]
     actual = [str(section.get("templateSection", "")) for section in sections]
     errors: list[str] = []
     if actual != expected:
@@ -188,6 +189,8 @@ def validate_template_sections(sections: list[dict], contract: dict) -> list[str
     for index, section in enumerate(sections):
         if not str(section.get("heading", "")).strip():
             errors.append(f"Section {index + 1} is missing a heading")
+        elif index < len(expected_labels) and str(section.get("heading", "")).strip() != expected_labels[index]:
+            errors.append(f"Section {index + 1} heading must be {expected_labels[index]}")
         if not str(section.get("analysis", "")).strip():
             errors.append(f"Section {index + 1} is missing analysis")
     return errors

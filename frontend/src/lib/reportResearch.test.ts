@@ -769,6 +769,71 @@ describe('Report Creator AlphaTape research', () => {
     expect(result.clips.every(clip => clip.origin === 'alphatape')).toBe(true)
   })
 
+  it('keeps delayed global-market observations as usable evidence', async () => {
+    const scope = { ...defaultScope(), evidenceMode: 'alphatape' as const, goal: 'Review the market regime' }
+    const source = {
+      id: 'global-markets' as const,
+      label: 'Global market board',
+      tool: 'Global Markets',
+      route: '/global-markets',
+      reason: 'Test delayed feeds',
+      targets: [],
+    }
+    const result = await collectReportResearch(
+      { ...planReportResearch(scope, emptyPortfolio), sources: [source] },
+      scope,
+      emptyPortfolio,
+      undefined,
+      {
+        get: async () => ({
+          as_of: '2026-08-05T15:30:00Z',
+          sections: [{ name: 'Equities', rows: [{ label: 'S&P 500', price: 6420, change_pct: 0.6, status: 'delayed' }] }],
+        }),
+        post: async () => ({}),
+      },
+    )
+
+    expect(result.failed).toEqual([])
+    expect(result.clips[0]?.payload).toMatchObject({
+      kind: 'table',
+      rows: [['Equities', 'S&P 500', 6420, 0.6, 'delayed']],
+    })
+  })
+
+  it('limits per-ticker request fan-out', async () => {
+    const scope = { ...defaultScope(), evidenceMode: 'alphatape' as const, goal: 'Review portfolio news' }
+    const targets = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL']
+    const source = {
+      id: 'news' as const,
+      label: 'Recent news',
+      tool: 'Mover Radar',
+      route: '/mover-radar',
+      reason: 'Test concurrency',
+      targets,
+    }
+    let active = 0
+    let peak = 0
+    await collectReportResearch(
+      { ...planReportResearch(scope, emptyPortfolio), sources: [source] },
+      scope,
+      emptyPortfolio,
+      undefined,
+      {
+        get: async url => {
+          active += 1
+          peak = Math.max(peak, active)
+          await new Promise(resolve => setTimeout(resolve, 5))
+          active -= 1
+          const ticker = new URL(`https://local${url}`).searchParams.get('ticker')
+          return { news: [{ content: { title: `${ticker} update`, provider: { displayName: 'Wire' }, pubDate: '2026-08-05T12:00:00Z' } }] }
+        },
+        post: async () => ({}),
+      },
+    )
+
+    expect(peak).toBeLessThanOrEqual(2)
+  })
+
   it('collects decision-grade company, bank, analyst, segment, and estimate evidence', async () => {
     const scope = {
       ...defaultScope(),

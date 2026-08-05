@@ -144,9 +144,59 @@ interface ResearchClient {
   post: (url: string, body: unknown) => Promise<unknown>
 }
 
+const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
+
+async function withResearchRetry<T>(request: () => Promise<T>): Promise<T> {
+  let lastError: unknown
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await request()
+    } catch (error) {
+      lastError = error
+      const status = (error as { response?: { status?: number } })?.response?.status
+      const retryable = status == null || status === 408 || status === 429 || status >= 500
+      if (!retryable || attempt === 2) throw error
+      await wait(350 * (2 ** attempt))
+    }
+  }
+  throw lastError
+}
+
 const DEFAULT_CLIENT: ResearchClient = {
-  get: async url => (await axios.get(url)).data,
-  post: async (url, body) => (await axios.post(url, body)).data,
+  get: url => withResearchRetry(async () => (await axios.get(url)).data),
+  post: (url, body) => withResearchRetry(async () => (await axios.post(url, body)).data),
+}
+
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  run: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let cursor = 0
+  const workers = Array.from({ length: Math.min(Math.max(1, limit), items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor
+      cursor += 1
+      results[index] = await run(items[index], index)
+    }
+  })
+  await Promise.all(workers)
+  return results
+}
+
+async function mapSettledWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  run: (item: T, index: number) => Promise<R>,
+): Promise<PromiseSettledResult<R>[]> {
+  return mapWithConcurrency(items, limit, async (item, index) => {
+    try {
+      return { status: 'fulfilled', value: await run(item, index) } as PromiseFulfilledResult<R>
+    } catch (reason) {
+      return { status: 'rejected', reason } as PromiseRejectedResult
+    }
+  })
 }
 
 const SOURCE_META: Record<ReportResearchSourceId, Omit<ReportResearchSource, 'reason' | 'targets'>> = {
@@ -899,7 +949,7 @@ async function perTicker(
   source: ReportResearchSource,
   run: (ticker: string) => Promise<ClipDraft | ClipDraft[] | null>,
 ): Promise<ClipDraft[]> {
-  const settled = await Promise.allSettled(source.targets.map(run))
+  const settled = await mapSettledWithConcurrency(source.targets, 2, run)
   return settled.flatMap(result => {
     if (result.status !== 'fulfilled' || !result.value) return []
     return Array.isArray(result.value) ? result.value : [result.value]
@@ -1714,15 +1764,13 @@ async function runSource(
       const { range, capped } = eventResearchRange(scope)
       const totalDays = inclusiveDays(range)
       const first = validDate(range.start)!
-      const requests: Promise<unknown>[] = []
+      const requests: string[] = []
       for (let offset = 0; offset < totalDays; offset += 14) {
         const start = new Date(first)
         start.setUTCDate(start.getUTCDate() + offset)
-        requests.push(client.get(
-          `/api/earnings/calendar?date=${isoDate(start)}&days=${Math.min(14, totalDays - offset)}`,
-        ))
+        requests.push(`/api/earnings/calendar?date=${isoDate(start)}&days=${Math.min(14, totalDays - offset)}`)
       }
-      const responses = await Promise.all(requests)
+      const responses = await mapWithConcurrency(requests, 2, url => client.get(url))
       const targets = new Set(source.targets)
       const candidateRows = responses.flatMap(data => array(record(data).rows))
         .filter(row => targets.has(normalizeTicker(plain(record(row).symbol))))
@@ -1775,7 +1823,7 @@ async function runSource(
           const row = record(item)
           return [plain(group.name), plain(row.label), finite(row.price), finite(row.change_pct), plain(row.status)]
         })
-      }).filter(row => !/delay|stale|unavailable/i.test(String(row[4]))).slice(0, 40)
+      }).filter(row => row[2] != null && !/unavailable|error|failed/i.test(String(row[4]))).slice(0, 40)
       if (!rows.length) return []
       const clips = [tagClip(tableClip(
         'Global Markets',
@@ -2686,7 +2734,7 @@ export async function collectReportResearch(
   const completed: ReportResearchCompletion[] = []
   const failed: ReportResearchFailure[] = []
 
-  await Promise.all(plan.sources.map(async source => {
+  await mapWithConcurrency(plan.sources, 3, async source => {
     onProgress?.({ sourceId: source.id, status: 'running' })
     try {
       const clips = await runSource(source, scope, portfolio, client)
@@ -2724,7 +2772,7 @@ export async function collectReportResearch(
       failed.push({ sourceId: source.id, label: source.label, message })
       onProgress?.({ sourceId: source.id, status: 'failed', message })
     }
-  }))
+  })
 
   const sourceOrder = new Map(plan.sources.map((source, index) => [source.id, index]))
   completed.sort((a, b) => (sourceOrder.get(a.sourceId) ?? 0) - (sourceOrder.get(b.sourceId) ?? 0))

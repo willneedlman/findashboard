@@ -460,31 +460,21 @@ export default function ReportPrint() {
                   </p>
                 )}
                 {reportTickers.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 10 }}>
+                  <div aria-label="Report companies" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 9, marginTop: 10 }}>
                     {reportTickers.map(ticker => (
-                      <div key={ticker} style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 6,
-                        border: `1px solid ${palette.border}`,
-                        background: 'rgba(255,255,255,0.035)',
-                        padding: '3px 8px 3px 3px',
-                      }}>
+                      <span key={ticker} title={ticker}>
                         <TickerLogo
                           ticker={ticker}
-                          size={22}
+                          size={28}
                           crossOrigin="anonymous"
                           fit="contain"
-                          cornerRadius={4}
-                          padding={1}
+                          cornerRadius="50%"
+                          padding={2}
                           logoBackground="#ffffff"
                           normalizeVisualWeight
+                          showFallbackText={false}
                         />
-                        <span style={{
-                          fontFamily: palette.mono, fontSize: 9, fontWeight: 700,
-                          letterSpacing: '0.08em', color: palette.onMasthead,
-                        }}>
-                          {ticker}
-                        </span>
-                      </div>
+                      </span>
                     ))}
                   </div>
                 )}
@@ -604,8 +594,8 @@ export default function ReportPrint() {
                 <div
                   className="rc-report-sections"
                   style={{
-                    display: 'flex',
-                    flexDirection: 'column',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
                     gap: 16,
                   }}
                 >
@@ -665,10 +655,11 @@ export default function ReportPrint() {
                     return (
                       <section
                         key={sectionKey}
-                        className="rc-section"
-                        data-placement="full"
+                        className={`rc-section${s.placement === 'half' ? ' rc-report-section-half' : ''}`}
+                        data-placement={s.placement ?? 'full'}
                         style={{
                           minWidth: 0,
+                          gridColumn: s.placement === 'half' ? 'span 1' : '1 / -1',
                           borderTop: `1px solid ${palette.border}`,
                           paddingTop: 10,
                         }}
@@ -687,11 +678,11 @@ export default function ReportPrint() {
                           clip={clip}
                           keyFigures={performanceFigures}
                           index={i}
-                          layout="full-width"
+                          layout={s.layout}
                           projectClips={allClips}
                           visual={assigned?.visual}
                           showKeyFigures={whatHappened || whyHappened ? true : assigned?.showKeyFigures}
-                          column={false}
+                          column={s.placement === 'half'}
                           figureNumber={figureNumbers.get(sectionKey)}
                           palette={palette}
                         />

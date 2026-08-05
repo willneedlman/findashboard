@@ -154,29 +154,20 @@ function GeneratedEditor({ project }: { project: ReportProject }) {
         <BlockRevise project={project} field="headline" />
       </div>
       {reportTickers.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+        <div aria-label="Report companies" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 9 }}>
           {reportTickers.map(ticker => (
-            <div key={ticker} style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              border: `1px solid ${T.border}`, background: T.surface,
-              padding: '3px 8px 3px 3px',
-            }}>
+            <span key={ticker} title={ticker}>
               <TickerLogo
                 ticker={ticker}
-                size={22}
+                size={28}
                 fit="contain"
-                cornerRadius={4}
-                padding={1}
+                cornerRadius="50%"
+                padding={2}
                 logoBackground="#ffffff"
                 normalizeVisualWeight
+                showFallbackText={false}
               />
-              <span style={{
-                fontFamily: T.mono, fontSize: 9, fontWeight: 700,
-                letterSpacing: '0.08em', color: T.text,
-              }}>
-                {ticker}
-              </span>
-            </div>
+            </span>
           ))}
         </div>
       )}

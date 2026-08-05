@@ -16,6 +16,7 @@ interface TickerLogoProps {
   padding?: number
   logoBackground?: string
   normalizeVisualWeight?: boolean
+  showFallbackText?: boolean
 }
 
 export default function TickerLogo({
@@ -26,8 +27,9 @@ export default function TickerLogo({
   fit = 'cover',
   cornerRadius = '50%',
   padding = 0,
-  logoBackground = 'var(--theme-surface, #1a2a3d)',
+  logoBackground,
   normalizeVisualWeight = false,
+  showFallbackText = true,
 }: TickerLogoProps) {
   // Try the resolved (name-based logo.dev / finnhub) URL first when present, then
   // the symbol-based CDNs (Parqet, FMP), then a monogram — so both paths together
@@ -47,7 +49,7 @@ export default function TickerLogo({
         width: size,
         height: size,
         borderRadius: cornerRadius,
-        background: tickerColor(ticker),
+        background: logoBackground ?? tickerColor(ticker),
         display: 'grid',
         placeItems: 'center',
         overflow: 'hidden',
@@ -55,9 +57,11 @@ export default function TickerLogo({
         position: 'relative',
       }}
     >
-      <span aria-hidden="true" style={{ color: 'var(--theme-text, #d7e3fc)', fontSize: size * 0.36, fontWeight: 700 }}>
-        {ticker.slice(0, 2).toUpperCase()}
-      </span>
+      {showFallbackText && (
+        <span aria-hidden="true" style={{ color: 'var(--theme-text, #d7e3fc)', fontSize: size * 0.36, fontWeight: 700 }}>
+          {ticker.slice(0, 2).toUpperCase()}
+        </span>
+      )}
       {idx < sources.length && (
       <img
         key={`${ticker}-${idx}`}
