@@ -23,6 +23,28 @@ _CONTEXT_TYPES = frozenset({
 })
 
 
+def _int_param(ind: dict, key: str, default: int) -> int:
+    value = ind.get(key)
+    if value is None or value == "":
+        return default
+    try:
+        parsed = int(float(value))
+    except (TypeError, ValueError, OverflowError):
+        return default
+    return parsed if parsed > 0 else default
+
+
+def _float_param(ind: dict, key: str, default: float) -> float:
+    value = ind.get(key)
+    if value is None or value == "":
+        return default
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+    return parsed if np.isfinite(parsed) and parsed > 0 else default
+
+
 def sma(prices: np.ndarray, period: int) -> np.ndarray:
     n = len(prices)
     result = np.full(n, np.nan)
@@ -216,25 +238,25 @@ def get_indicator(ind: dict, prices: np.ndarray, context: dict | None = None) ->
             return np.full(len(prices), float(val), dtype=float)
         return np.full(len(prices), float("nan"), dtype=float)
     if t == "PRICE":       return prices.astype(float)
-    if t == "OPT_HV":      return realized_vol(prices, int(ind.get("period", 21)))
-    if t == "OPT_IVRANK":  return iv_rank(prices, rank_period=int(ind.get("period", 252)))
-    if t == "RSI":         return rsi(prices, int(ind.get("period", 14)))
-    if t == "SMA":         return sma(prices, int(ind.get("period", 50)))
-    if t == "EMA":         return ema(prices, int(ind.get("period", 20)))
+    if t == "OPT_HV":      return realized_vol(prices, _int_param(ind, "period", 21))
+    if t == "OPT_IVRANK":  return iv_rank(prices, rank_period=_int_param(ind, "period", 252))
+    if t == "RSI":         return rsi(prices, _int_param(ind, "period", 14))
+    if t == "SMA":         return sma(prices, _int_param(ind, "period", 50))
+    if t == "EMA":         return ema(prices, _int_param(ind, "period", 20))
     if t in ("MACD_LINE", "MACD_SIGNAL"):
-        ml, sl, _ = macd(prices, int(ind.get("fast", 12)),
-                         int(ind.get("slow", 26)), int(ind.get("signal_period", 9)))
+        ml, sl, _ = macd(prices, _int_param(ind, "fast", 12),
+                         _int_param(ind, "slow", 26), _int_param(ind, "signal_period", 9))
         return ml if t == "MACD_LINE" else sl
-    if t == "BB_UPPER":    return bollinger(prices, int(ind.get("period", 20)), float(ind.get("std", 2.0)))[0]
-    if t == "BB_MID":      return bollinger(prices, int(ind.get("period", 20)), float(ind.get("std", 2.0)))[1]
-    if t == "BB_LOWER":    return bollinger(prices, int(ind.get("period", 20)), float(ind.get("std", 2.0)))[2]
-    if t == "ATR":         return atr(prices, int(ind.get("period", 14)))
-    if t == "MOMENTUM":    return momentum(prices, int(ind.get("period", 126)))
+    if t == "BB_UPPER":    return bollinger(prices, _int_param(ind, "period", 20), _float_param(ind, "std", 2.0))[0]
+    if t == "BB_MID":      return bollinger(prices, _int_param(ind, "period", 20), _float_param(ind, "std", 2.0))[1]
+    if t == "BB_LOWER":    return bollinger(prices, _int_param(ind, "period", 20), _float_param(ind, "std", 2.0))[2]
+    if t == "ATR":         return atr(prices, _int_param(ind, "period", 14))
+    if t == "MOMENTUM":    return momentum(prices, _int_param(ind, "period", 126))
     # Percent change over N bars, expressed as a percentage (5.0 = +5%), so a
     # rule can compare it to a plain number ("% change 20d > 5").
-    if t == "PCT_CHANGE":  return momentum(prices, int(ind.get("period", 20))) * 100.0
-    if t == "PCT_BELOW_HIGH": return pct_below_high(prices, int(ind.get("period", 20)))
-    if t == "PCT_ABOVE_LOW":  return pct_above_low(prices, int(ind.get("period", 20)))
+    if t == "PCT_CHANGE":  return momentum(prices, _int_param(ind, "period", 20)) * 100.0
+    if t == "PCT_BELOW_HIGH": return pct_below_high(prices, _int_param(ind, "period", 20))
+    if t == "PCT_ABOVE_LOW":  return pct_above_low(prices, _int_param(ind, "period", 20))
     return prices.astype(float)
 
 
@@ -243,15 +265,15 @@ def warmup_bars(ind: dict) -> int:
     t = ind.get("type", "PRICE")
     if t in _CONTEXT_TYPES:                  return 1
     if t == "PRICE":                         return 1
-    if t == "RSI":                           return int(ind.get("period", 14)) + 2
-    if t in ("SMA", "BB_UPPER", "BB_MID", "BB_LOWER"): return int(ind.get("period", 20))
-    if t == "EMA":                           return int(ind.get("period", 20))
+    if t == "RSI":                           return _int_param(ind, "period", 14) + 2
+    if t in ("SMA", "BB_UPPER", "BB_MID", "BB_LOWER"): return _int_param(ind, "period", 20)
+    if t == "EMA":                           return _int_param(ind, "period", 20)
     if t in ("MACD_LINE", "MACD_SIGNAL"):
-        return int(ind.get("slow", 26)) + int(ind.get("signal_period", 9)) + 2
-    if t == "ATR":                           return int(ind.get("period", 14)) + 2
-    if t == "MOMENTUM":                      return int(ind.get("period", 126)) + 1
-    if t == "PCT_CHANGE":                    return int(ind.get("period", 20)) + 1
-    if t in ("PCT_BELOW_HIGH", "PCT_ABOVE_LOW"): return int(ind.get("period", 20))
-    if t == "OPT_HV":                        return int(ind.get("period", 21)) + 2
-    if t == "OPT_IVRANK":                    return 21 + int(ind.get("period", 252))
+        return _int_param(ind, "slow", 26) + _int_param(ind, "signal_period", 9) + 2
+    if t == "ATR":                           return _int_param(ind, "period", 14) + 2
+    if t == "MOMENTUM":                      return _int_param(ind, "period", 126) + 1
+    if t == "PCT_CHANGE":                    return _int_param(ind, "period", 20) + 1
+    if t in ("PCT_BELOW_HIGH", "PCT_ABOVE_LOW"): return _int_param(ind, "period", 20)
+    if t == "OPT_HV":                        return _int_param(ind, "period", 21) + 2
+    if t == "OPT_IVRANK":                    return 21 + _int_param(ind, "period", 252)
     return 30

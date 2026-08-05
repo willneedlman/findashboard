@@ -17,6 +17,8 @@ from routers.algo import (
     _strategy_sim_job,
     _synthetic_hist,
 )
+from routers.strategy import evaluate_custom_rules
+from strategies.indicators import get_indicator, warmup_bars
 
 
 CRASH_RULES = {
@@ -46,6 +48,35 @@ LEGS = [
     {"type": "call", "side": "sell", "moneyness": 1.2, "qty": 1},
     {"type": "put", "side": "sell", "moneyness": 0.8, "qty": 1},
 ]
+
+
+@pytest.mark.parametrize("value", [None, "", "not-a-number", 0, -10])
+def test_null_or_invalid_iv_rank_period_uses_the_default(value):
+    prices = _synthetic_hist(100.0, 400, seed=11)
+    expected = get_indicator({"type": "OPT_IVRANK", "period": 252}, prices)
+    actual = get_indicator({"type": "OPT_IVRANK", "period": value}, prices)
+
+    np.testing.assert_allclose(actual, expected, equal_nan=True)
+    assert warmup_bars({"type": "OPT_IVRANK", "period": value}) == 273
+
+
+def test_algo_builder_rules_accept_a_null_iv_rank_period():
+    prices = _synthetic_hist(100.0, 400, seed=12)
+    rules = {
+        "buy": {"logic": "AND", "conditions": [{
+            "lhs": {"type": "OPT_IVRANK", "period": None},
+            "op": "gte",
+            "rhs_type": "number",
+            "rhs_num": 0,
+        }]},
+        "sell": {"logic": "AND", "conditions": []},
+    }
+
+    buy_signal, sell_signal = evaluate_custom_rules(prices, rules, primary="AAPL", raw=True)
+
+    assert buy_signal.shape == prices.shape
+    assert sell_signal.shape == prices.shape
+    assert bool(buy_signal[-1]) is True
 
 
 def test_normalize_rules_strips_ticker_and_coerces_numbers():
