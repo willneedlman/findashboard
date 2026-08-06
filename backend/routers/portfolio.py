@@ -592,6 +592,8 @@ def monte_carlo(req: MonteCarloRequest):
     equity, margin_called, forced_liquidation, insolvent, max_margin_utilization = _margin_equity_paths(
         gross, L, req.borrow_rate, req.long_maintenance_margin,
     )
+    from .algo import _mc_path_metrics
+    core_metrics = _mc_path_metrics(equity.T)
 
     final = equity[-1, :]
     p5 = float(np.percentile(final, 5))
@@ -631,6 +633,7 @@ def monte_carlo(req: MonteCarloRequest):
         "percentiles": percentiles,
         "var_95": var_95,
         "cvar_95": cvar_95,
+        "core_metrics": core_metrics,
         "pct_wiped": round(float((final <= 0).mean() * 100), 1),
         "pct_margin_called": round(float(margin_called.mean() * 100), 1),
         "pct_forced_liquidation": round(float(forced_liquidation.mean() * 100), 1),

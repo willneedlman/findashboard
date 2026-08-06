@@ -1026,7 +1026,7 @@ def _portfolio_entry_capacity(
 
 @router.post("/portfolio-backtest")
 def portfolio_backtest(req: PortfolioBacktestRequest):
-    from .algo import _floor_equity, _safe_ann_return, _ear_bar_rate
+    from .algo import _annualized_volatility, _ear_bar_rate, _floor_equity, _safe_ann_return, _volatility_drag
     import datetime as _dt
     import numpy as _np
     import alpaca
@@ -1257,6 +1257,8 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
     if blown_up_at is not None:
         max_drawdown = min(max_drawdown, -100.0)
     sharpe = float(daily.mean() / daily.std() * _np.sqrt(bpy)) if daily.std() > 0 else 0.0
+    volatility = _annualized_volatility(daily, bpy)
+    volatility_drag = _volatility_drag(daily, bpy)
     trades_tot = sum(res["metrics"]["num_trades"] for _, res, _ in legs)
     wins_tot = sum(round(res["metrics"]["win_rate"] / 100 * res["metrics"]["num_trades"]) for _, res, _ in legs)
     win_rate = float(wins_tot / trades_tot * 100) if trades_tot else 0.0
@@ -1308,6 +1310,7 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
         "metrics": {
             "total_return": round(total_return, 2), "ann_return": round(ann_return, 2),
             "max_drawdown": round(max_drawdown, 2), "sharpe": round(sharpe, 3),
+            "volatility": volatility, "volatility_drag": volatility_drag,
             "num_trades": trades_tot, "win_rate": round(win_rate, 1),
             "initial_capital": round(req.initial_capital, 2), "final_capital": round(float(port_eq.iloc[-1]), 2),
             "total_pnl": round(float(port_eq.iloc[-1]) - req.initial_capital, 2),

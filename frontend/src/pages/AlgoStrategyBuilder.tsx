@@ -282,7 +282,7 @@ interface BacktestResult {
   equity_curve: { date: string; strategy: number; benchmark: number }[]
   in_position?: boolean[]
   metrics: {
-    total_return: number; ann_return: number; max_drawdown: number; sharpe: number
+    total_return: number; ann_return: number; max_drawdown: number; sharpe: number; volatility: number; volatility_drag: number
     num_trades: number; win_rate: number; initial_capital: number; final_capital: number; total_pnl: number; interest_paid?: number; leverage?: number; effective_annual_rate?: number; max_open_positions?: number | null; position_limit_blocked_entries?: number; blown_up_at?: string | null
   }
   trades: BacktestTrade[]
@@ -606,7 +606,7 @@ function PositionCard({ p, index, tradeSize, strategyName, saved, patchPosition,
           </div>
           <div>
             <div style={{ fontSize: 8, color: 'var(--theme-secondary, #8099b0)', marginBottom: 2 }}>DTE (days)</div>
-            <NumInput value={p.dte} min={1} max={365}
+            <NumInput value={p.dte} min={1}
               onCommit={v => patchPosition(p.id, { dte: Math.round(v) })}
               style={{ ...INPUT, fontSize: 10 }} />
           </div>
@@ -627,7 +627,7 @@ function PositionCard({ p, index, tradeSize, strategyName, saved, patchPosition,
             onRemove={i => removeComboLegFromPosition(p.id, i)} onAdd={() => addComboLegToPosition(p.id)} />
           <div>
             <div style={{ fontSize: 8, color: 'var(--theme-secondary, #8099b0)', marginBottom: 2 }}>DTE (days)</div>
-            <NumInput value={p.comboDte} min={1} max={365}
+            <NumInput value={p.comboDte} min={1}
               onCommit={v => patchPosition(p.id, { comboDte: Math.round(v) })}
               style={{ ...INPUT, fontSize: 10 }} />
           </div>
@@ -795,7 +795,7 @@ function SinglePositionCard({
             </div>
             <div style={{ width: 80 }}>
               <div style={{ fontSize: 8, color: 'var(--theme-secondary, #8099b0)', marginBottom: 2 }}>DTE (days)</div>
-              <NumInput value={dte} min={1} max={365} onCommit={v => setDte(Math.round(v))} style={{ ...INPUT, fontSize: 10, height: 23, padding: '2px 6px' }} />
+              <NumInput value={dte} min={1} onCommit={v => setDte(Math.round(v))} style={{ ...INPUT, fontSize: 10, height: 23, padding: '2px 6px' }} />
             </div>
             <div style={{ fontSize: 8, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', color: side === 'short' ? NEG : POS, marginLeft: 8 }}>
               {side === 'short' ? 'Short' : 'Long'} {otmPct === 0 ? 'ATM' : otmPct > 0 ? `${otmPct}% OTM` : `${-otmPct}% ITM`} {optType} · {dte}d
@@ -819,7 +819,7 @@ function SinglePositionCard({
             </div>
             <div style={{ width: 80 }}>
               <div style={{ fontSize: 8, color: 'var(--theme-secondary, #8099b0)', marginBottom: 2 }}>DTE</div>
-              <NumInput value={comboDte} min={1} max={365} onCommit={v => setComboDte(Math.round(v))} style={{ ...INPUT, fontSize: 10, height: 23, padding: '2px 6px' }} />
+              <NumInput value={comboDte} min={1} onCommit={v => setComboDte(Math.round(v))} style={{ ...INPUT, fontSize: 10, height: 23, padding: '2px 6px' }} />
             </div>
             <div style={{ fontSize: 8, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', color: 'var(--theme-primary, #c9a84c)', marginLeft: 8 }}>
               {comboLegs.length}-leg combo · {comboDte ?? 30}d
@@ -1698,6 +1698,8 @@ export function AlgoStrategyBuilderContent() {
       kpiClip(TAB, `Backtest · ${label}`, [
         { label: 'Total Return', value: `${mR.total_return.toFixed(2)}%` },
         { label: 'Ann. Return', value: `${mR.ann_return.toFixed(2)}%` },
+        { label: 'Volatility', value: `${mR.volatility.toFixed(2)}%` },
+        { label: 'Volatility Drag', value: `${mR.volatility_drag.toFixed(2)}%` },
         { label: 'Max DD', value: `${mR.max_drawdown.toFixed(2)}%` },
         { label: 'Sharpe', value: mR.sharpe.toFixed(2) },
         { label: 'Trades', value: String(mR.num_trades) },
@@ -1786,7 +1788,7 @@ export function AlgoStrategyBuilderContent() {
       : ''
     setAiPrompt({
       id: rid(),
-      content: `BACKTEST REVIEW\nSetup: ${traded}.\nWindow: ${R?.span?.start ?? start} to ${R?.span?.end ?? (end || 'latest')}; ${R?.bars ?? 0} bars.\nOutcomes: total return ${mR.total_return.toFixed(2)}%, annualized return ${mR.ann_return.toFixed(2)}%, max drawdown ${mR.max_drawdown.toFixed(2)}%, Sharpe ${mR.sharpe.toFixed(2)}, ${mR.num_trades} trades, win rate ${mR.win_rate.toFixed(1)}%, P&L ${mR.total_pnl.toFixed(2)}.${financingSummary}${positionLimitSummary}${exitSummary ? ` Exit mix: ${exitSummary}.` : ''}${currentRules}\nPlease review these outcomes and help me improve this strategy. Start with the single most important adjustment or clarification.`,
+      content: `BACKTEST REVIEW\nSetup: ${traded}.\nWindow: ${R?.span?.start ?? start} to ${R?.span?.end ?? (end || 'latest')}; ${R?.bars ?? 0} bars.\nOutcomes: total return ${mR.total_return.toFixed(2)}%, annualized return ${mR.ann_return.toFixed(2)}%, volatility ${mR.volatility.toFixed(2)}%, volatility drag ${mR.volatility_drag.toFixed(2)}%, max drawdown ${mR.max_drawdown.toFixed(2)}%, Sharpe ${mR.sharpe.toFixed(2)}, ${mR.num_trades} trades, win rate ${mR.win_rate.toFixed(1)}%, P&L ${mR.total_pnl.toFixed(2)}.${financingSummary}${positionLimitSummary}${exitSummary ? ` Exit mix: ${exitSummary}.` : ''}${currentRules}\nPlease review these outcomes and help me improve this strategy. Start with the single most important adjustment or clarification.`,
     })
     setReviewTargetNames(reviewStrategies.map(strategy => strategy.name))
     setEditing(null)
@@ -1946,6 +1948,8 @@ export function AlgoStrategyBuilderContent() {
           <div style={STRIP}>
             <KpiCell grow minWidth={150} label="Total Return" value={`${mR.total_return > 0 ? '+' : ''}${mR.total_return.toFixed(2)}%`} valueSize={16} color={mR.total_return >= 0 ? POS : NEG} sub={mode === 'portfolio' ? `${pf?.positions.length ?? 0} positions` : activeDef?.name} />
             <KpiCell grow label="Ann. Return" value={`${mR.ann_return > 0 ? '+' : ''}${mR.ann_return.toFixed(2)}%`} color={mR.ann_return >= 0 ? POS : NEG} />
+            <KpiCell grow label="Volatility" value={`${mR.volatility.toFixed(2)}%`} sub="annualized" />
+            <KpiCell grow label="Volatility Drag" value={`${mR.volatility_drag.toFixed(2)}%`} sub="½ annualized variance" />
             <KpiCell grow label="Max Drawdown" value={`${mR.max_drawdown.toFixed(2)}%`} color={NEG} />
             <KpiCell grow label="Sharpe" value={mR.sharpe.toFixed(3)} color={mR.sharpe >= 1 ? POS : undefined} />
             <KpiCell grow label="Trades" value={String(mR.num_trades)} />

@@ -207,6 +207,63 @@ function pathPercentiles(paths: number[][], day: number) {
   }
 }
 
+type CoreSimulationMetrics = {
+  cagr: number
+  volatility: number
+  volatility_drag: number
+  max_drawdown: number
+  sharpe: number
+}
+
+function corePathMetrics(paths: number[][], periodsPerYear = 252): CoreSimulationMetrics {
+  const values = paths.flatMap(path => {
+    if (path.length < 2 || !Number.isFinite(path[0]) || path[0] <= 0) return []
+    const returns: number[] = []
+    let peak = path[0]
+    let maxDrawdown = 0
+    for (let i = 1; i < path.length; i++) {
+      const previous = path[i - 1]
+      const current = Number.isFinite(path[i]) ? Math.max(0, path[i]) : previous
+      returns.push(previous > 0 ? current / previous - 1 : 0)
+      peak = Math.max(peak, current)
+      if (peak > 0) maxDrawdown = Math.min(maxDrawdown, (current / peak - 1) * 100)
+    }
+    const horizon = path.length - 1
+    const finalValue = Math.max(0, path[path.length - 1])
+    const growth = Math.min(1e6, finalValue / path[0])
+    const annualizedLogGrowth = Math.log(Math.max(growth, 1e-12)) * periodsPerYear / horizon
+    const cagr = finalValue > 0
+      ? (Math.exp(Math.min(Math.log(1e6), Math.max(-50, annualizedLogGrowth))) - 1) * 100
+      : -100
+    const mean = returns.reduce((sum, value) => sum + value, 0) / returns.length
+    const variance = returns.length > 1
+      ? returns.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / (returns.length - 1)
+      : 0
+    const std = Math.sqrt(Math.max(0, variance))
+    const volatility = std * Math.sqrt(periodsPerYear) * 100
+    return [{
+      cagr: Number.isFinite(cagr) ? cagr : -100,
+      volatility,
+      volatility_drag: 0.5 * variance * periodsPerYear * 100,
+      max_drawdown: maxDrawdown,
+      sharpe: std > 1e-12 ? mean / std * Math.sqrt(periodsPerYear) : 0,
+    }]
+  })
+  const median = (key: keyof CoreSimulationMetrics) => {
+    const sorted = values.map(value => value[key]).filter(Number.isFinite).sort((a, b) => a - b)
+    if (!sorted.length) return 0
+    const middle = Math.floor(sorted.length / 2)
+    return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2
+  }
+  return {
+    cagr: median('cagr'),
+    volatility: median('volatility'),
+    volatility_drag: median('volatility_drag'),
+    max_drawdown: median('max_drawdown'),
+    sharpe: median('sharpe'),
+  }
+}
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 type Leg = {
@@ -223,7 +280,7 @@ type Leg = {
 }
 
 type ExactAlgoReplay = {
-  metrics: { total_return: number; ann_return: number; max_drawdown: number; sharpe: number; num_trades: number; win_rate: number; total_pnl: number }
+  metrics: { total_return: number; ann_return: number; max_drawdown: number; sharpe: number; volatility: number; volatility_drag: number; num_trades: number; win_rate: number; total_pnl: number }
   bars?: number
   span?: { start: string; end: string }
 }
@@ -374,11 +431,14 @@ interface ComboMcResult {
   bands_unit?: 'pnl' | 'equity_100'
   strategy_metrics?: {
     ann_return: number
+    volatility: number
+    volatility_drag: number
     max_drawdown: number
     sharpe: number
     win_rate: number
     num_trades: number
   }
+  core_metrics?: CoreSimulationMetrics
   market_regression?: MarketRegression
   diagnostics?: {
     median_trades: number
@@ -666,6 +726,8 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
     if (data.strategy_metrics) {
       pieces.push(kpiClip('Monte Carlo', `Options MC · ${label}`, [
         { label: 'CAGR (Median)', value: fmtPct(data.strategy_metrics.ann_return) },
+        { label: 'Volatility (Median)', value: fmtPct(data.strategy_metrics.volatility) },
+        { label: 'Vol. Drag (Median)', value: fmtPct(data.strategy_metrics.volatility_drag) },
         { label: 'Sharpe', value: fmtNum(data.strategy_metrics.sharpe, 2) },
         { label: 'Max DD', value: fmtPct(data.strategy_metrics.max_drawdown) },
         { label: 'Win Rate', value: fmtPct(data.strategy_metrics.win_rate) },
@@ -680,6 +742,13 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
         { label: 'Max Loss', value: data.max_loss == null ? 'Unlimited' : `$${Math.abs(data.max_loss).toLocaleString(undefined, { maximumFractionDigits: 0 })}` },
         { label: 'P50 P&L', value: `$${fmtNum(data.percentiles.p50, 0)}` },
         { label: 'P5 / P95', value: `$${fmtNum(data.percentiles.p5, 0)} / $${fmtNum(data.percentiles.p95, 0)}` },
+        ...(data.core_metrics ? [
+          { label: 'CAGR (Median)', value: fmtPct(data.core_metrics.cagr) },
+          { label: 'Volatility (Median)', value: fmtPct(data.core_metrics.volatility) },
+          { label: 'Vol. Drag (Median)', value: fmtPct(data.core_metrics.volatility_drag) },
+          { label: 'Sharpe (Median)', value: fmtNum(data.core_metrics.sharpe, 2) },
+          { label: 'Max DD (Median)', value: fmtPct(data.core_metrics.max_drawdown) },
+        ] : []),
       ]))
     }
     if (bandsData.length) {
@@ -1188,6 +1257,8 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
             {data.strategy_metrics ? (
               <div style={STRIP}>
                 <KpiCell grow label="CAGR (Median)" value={fmtPct(data.strategy_metrics.ann_return)} color={(data.strategy_metrics.ann_return ?? 0) >= 0 ? POS : NEG} />
+                <KpiCell grow label="Volatility (Median)" value={fmtPct(data.strategy_metrics.volatility)} sub="annualized across paths" />
+                <KpiCell grow label="Vol. Drag (Median)" value={fmtPct(data.strategy_metrics.volatility_drag)} sub="½ annualized variance" />
                 <KpiCell grow label="Sharpe (Median)" value={fmtNum(data.strategy_metrics.sharpe, 2)} color={(data.strategy_metrics.sharpe ?? 0) >= 1.0 ? POS : 'var(--theme-text)'} />
                 <KpiCell grow label="Max Drawdown (Median)" value={fmtPct(data.strategy_metrics.max_drawdown)} color={NEG} />
                 <KpiCell grow label="Win Rate" value={fmtPct(data.strategy_metrics.win_rate)} color={(data.strategy_metrics.win_rate ?? 0) >= 50 ? POS : NEG}
@@ -1207,6 +1278,11 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
                 <KpiCell grow label={data.has_exit_rule ? 'Max Loss (expiry)' : 'Max Loss'} value={data.is_basket ? 'N/A (basket)' : data.max_loss == null ? 'Unlimited' : `$${Math.abs(data.max_loss).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} color={NEG} />
                 <KpiCell grow label="Breakevens" value={data.is_basket ? 'N/A (basket)' : data.breakevens.length ? data.breakevens.map(b => `$${b.toFixed(0)}`).join(' / ') : '—'} />
                 <KpiCell grow label={data.is_basket ? 'Symbols · DTE' : 'Spot · IV · DTE'} value={data.is_basket ? `${data.tickers?.length ?? 0} tickers · ${data.dte}d` : `$${fmtNum(data.spot, 2)} · ${fmtNum(data.iv, 1)}% · ${data.dte}d`} />
+                {data.core_metrics && <KpiCell grow label="CAGR (Median)" value={fmtPct(data.core_metrics.cagr)} color={data.core_metrics.cagr >= 0 ? POS : NEG} />}
+                {data.core_metrics && <KpiCell grow label="Volatility (Median)" value={fmtPct(data.core_metrics.volatility)} sub="annualized across paths" />}
+                {data.core_metrics && <KpiCell grow label="Vol. Drag (Median)" value={fmtPct(data.core_metrics.volatility_drag)} sub="½ annualized variance" />}
+                {data.core_metrics && <KpiCell grow label="Sharpe (Median)" value={fmtNum(data.core_metrics.sharpe, 2)} color={data.core_metrics.sharpe >= 1 ? POS : undefined} />}
+                {data.core_metrics && <KpiCell grow label="Max Drawdown (Median)" value={fmtPct(data.core_metrics.max_drawdown)} color={NEG} />}
               </div>
             )}
 
@@ -1646,6 +1722,7 @@ export function MonteCarloContent() {
           marginEnabled: Math.max(1, Number(leverage) || 1) > 1,
           varAmt: 100 - p5,
           cvarAmt: 100 - cvarSlice.reduce((sum, value) => sum + value, 0) / cvarSlice.length,
+          coreMetrics: simulation.core_metrics as CoreSimulationMetrics,
           effDrift: simulation.mu * 100,
           probTarget: target === null ? null : terminal.filter(v => v >= target).length / terminal.length * 100,
           targetPrice, model: 'gbm', benchmark, legs: [],
@@ -1898,6 +1975,7 @@ export function MonteCarloContent() {
       const varAmt  = S0 - p5
       const cvarSlice = terminal.slice(0, Math.floor(terminal.length * 0.05))
       const cvarAmt = S0 - cvarSlice.reduce((s, v) => s + v, 0) / (cvarSlice.length || 1)
+      const coreMetrics = corePathMetrics(portfolioPaths)
 
       const min = terminal[0], max = terminal[terminal.length - 1]
       const step = (max - min) / 50
@@ -1916,6 +1994,7 @@ export function MonteCarloContent() {
       return {
         bands, histogram, S0, median, p5, p95, probProfit, probRuin, probMarginCall, probLiquidation,
         medianMaxMarginUtilization, varAmt, cvarAmt, effDrift,
+        coreMetrics,
         probTarget, targetPrice, model,
         dividendMode, medianDividendIncome,
         marginEnabled: requestedLeverage > 1 || signs.some(sign => sign < 0),
@@ -1931,6 +2010,11 @@ export function MonteCarloContent() {
     const pieces: ClipDraft[] = [
       kpiClip('Monte Carlo', 'Portfolio Monte Carlo Snapshot', [
         { label: 'Median Final', value: `$${Number(data.median).toFixed(2)}` },
+        { label: 'CAGR (Median)', value: `${Number(data.coreMetrics.cagr).toFixed(1)}%` },
+        { label: 'Volatility (Median)', value: `${Number(data.coreMetrics.volatility).toFixed(1)}%` },
+        { label: 'Vol. Drag (Median)', value: `${Number(data.coreMetrics.volatility_drag).toFixed(1)}%` },
+        { label: 'Sharpe (Median)', value: Number(data.coreMetrics.sharpe).toFixed(2) },
+        { label: 'Max DD (Median)', value: `${Number(data.coreMetrics.max_drawdown).toFixed(1)}%` },
         { label: 'Prob of Profit', value: `${Number(data.probProfit).toFixed(1)}%` },
         { label: 'P5', value: `$${Number(data.p5).toFixed(2)}` },
         { label: 'P95', value: `$${Number(data.p95).toFixed(2)}` },
@@ -2007,6 +2091,9 @@ export function MonteCarloContent() {
       {exactReplay && (
         <div style={{ ...STRIP, marginTop: 10 }}>
           <KpiCell grow label="Exact Replay Return" value={`${exactReplay.metrics.total_return >= 0 ? '+' : ''}${exactReplay.metrics.total_return.toFixed(2)}%`} color={exactReplay.metrics.total_return >= 0 ? POS : NEG} />
+          <KpiCell grow label="CAGR" value={`${exactReplay.metrics.ann_return >= 0 ? '+' : ''}${exactReplay.metrics.ann_return.toFixed(2)}%`} color={exactReplay.metrics.ann_return >= 0 ? POS : NEG} />
+          <KpiCell grow label="Volatility" value={`${exactReplay.metrics.volatility.toFixed(2)}%`} sub="annualized" />
+          <KpiCell grow label="Volatility Drag" value={`${exactReplay.metrics.volatility_drag.toFixed(2)}%`} sub="½ annualized variance" />
           <KpiCell grow label="P&L" value={`${exactReplay.metrics.total_pnl >= 0 ? '+' : ''}$${exactReplay.metrics.total_pnl.toFixed(2)}`} color={exactReplay.metrics.total_pnl >= 0 ? POS : NEG} />
           <KpiCell grow label="Trades" value={String(exactReplay.metrics.num_trades)} />
           <KpiCell grow label="Sharpe" value={exactReplay.metrics.sharpe.toFixed(3)} />
@@ -2181,6 +2268,11 @@ export function MonteCarloContent() {
                 <KpiCell grow minWidth={150} label="Median Final" value={`$${data.median.toFixed(2)}`} valueSize={16}
                   color={data.median > data.S0 ? POS : NEG}
                   sub={`${data.median > data.S0 ? '+' : ''}${((data.median / data.S0 - 1) * 100).toFixed(1)}% vs start`} subColor={data.median > data.S0 ? POS : NEG} />
+                <KpiCell grow label="CAGR (Median)" value={`${Number(data.coreMetrics.cagr).toFixed(1)}%`} color={data.coreMetrics.cagr >= 0 ? POS : NEG} />
+                <KpiCell grow label="Volatility (Median)" value={`${Number(data.coreMetrics.volatility).toFixed(1)}%`} sub="annualized across paths" />
+                <KpiCell grow label="Vol. Drag (Median)" value={`${Number(data.coreMetrics.volatility_drag).toFixed(1)}%`} sub="½ annualized variance" />
+                <KpiCell grow label="Sharpe (Median)" value={Number(data.coreMetrics.sharpe).toFixed(2)} color={data.coreMetrics.sharpe >= 1 ? POS : undefined} />
+                <KpiCell grow label="Max Drawdown (Median)" value={`${Number(data.coreMetrics.max_drawdown).toFixed(1)}%`} color={NEG} />
                 <KpiCell grow label="Prob of Profit" value={`${data.probProfit.toFixed(1)}%`} color={data.probProfit > 50 ? POS : NEG} />
                 <KpiCell grow label="P5 Outcome" value={`$${data.p5.toFixed(2)}`} />
                 <KpiCell grow label="P95 Outcome" value={`$${data.p95.toFixed(2)}`} />

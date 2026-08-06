@@ -300,6 +300,21 @@ def _ear_growth_factor(effective_annual_rate: float, days, day_count: float = 36
     return np.power(1 + effective_annual_rate / 100.0, days / day_count) - 1
 
 
+def _annualized_volatility(returns: pd.Series, bars_per_year: int) -> float:
+    clean = pd.Series(returns, dtype=float).replace([np.inf, -np.inf], np.nan).dropna()
+    if len(clean) < 2:
+        return 0.0
+    return round(float(clean.std()) * np.sqrt(bars_per_year) * 100, 2)
+
+
+def _volatility_drag(returns: pd.Series, bars_per_year: int) -> float:
+    clean = pd.Series(returns, dtype=float).replace([np.inf, -np.inf], np.nan).dropna()
+    if len(clean) < 2:
+        return 0.0
+    annualized_variance = float(clean.var()) * bars_per_year
+    return round(0.5 * annualized_variance * 100, 2)
+
+
 def _apply_financing_cost(equity: pd.Series, signal: pd.Series, trade_size_pct: float,
                           initial_capital: float, effective_annual_rate: float, bars_per_year: int):
     """Charge daily-compounded interest on whatever notional a leveraged
@@ -334,9 +349,12 @@ def _summarize_equity(equity: pd.Series, initial_capital: float, bars_per_year: 
         max_drawdown = min(max_drawdown, -100.0)
     daily = equity.pct_change()
     sharpe = float(daily.mean() / daily.std() * np.sqrt(bars_per_year)) if daily.std() > 0 else 0.0
+    volatility = _annualized_volatility(daily, bars_per_year)
+    volatility_drag = _volatility_drag(daily, bars_per_year)
     return {
         "total_return": round(total_return, 2), "ann_return": round(ann_return, 2),
         "max_drawdown": round(max_drawdown, 2), "sharpe": round(sharpe, 3),
+        "volatility": volatility, "volatility_drag": volatility_drag,
         "final_capital": round(float(equity.iloc[-1]), 2),
         "total_pnl": round(float(equity.iloc[-1]) - initial_capital, 2),
     }
@@ -490,6 +508,8 @@ def _compute_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, close: pd.
 
     strat_ret = equity_floored.pct_change()
     sharpe = float(strat_ret.mean() / strat_ret.std() * np.sqrt(bars_per_year)) if strat_ret.std() > 0 else 0.0
+    volatility = _annualized_volatility(strat_ret, bars_per_year)
+    volatility_drag = _volatility_drag(strat_ret, bars_per_year)
 
     trades.sort(key=lambda x: x["date"])
     num_trades = total_buys
@@ -513,6 +533,8 @@ def _compute_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, close: pd.
             "ann_return": round(ann_return, 2),
             "max_drawdown": round(max_drawdown, 2),
             "sharpe": round(sharpe, 3),
+            "volatility": volatility,
+            "volatility_drag": volatility_drag,
             "num_trades": num_trades,
             "win_rate": round(win_rate, 1),
             "initial_capital": round(initial_capital, 2),
@@ -738,6 +760,8 @@ def _compute_option_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clo
     if blown_up_at is not None:
         max_drawdown = min(max_drawdown, -100.0)
     sharpe = float(daily.mean() / daily.std() * np.sqrt(bars_per_year)) if daily.std() > 0 else 0.0
+    volatility = _annualized_volatility(daily, bars_per_year)
+    volatility_drag = _volatility_drag(daily, bars_per_year)
 
     win_rate = float(wins / num_trades * 100) if num_trades else 0.0
 
@@ -748,6 +772,7 @@ def _compute_option_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clo
         "metrics": {
             "total_return": round(total_return, 2), "ann_return": round(ann_return, 2),
             "max_drawdown": round(max_drawdown, 2), "sharpe": round(sharpe, 3),
+            "volatility": volatility, "volatility_drag": volatility_drag,
             "num_trades": num_trades, "win_rate": round(win_rate, 1),
             "initial_capital": round(initial_capital, 2), "final_capital": round(float(eq.iloc[-1]), 2),
             "total_pnl": round(float(eq.iloc[-1]) - initial_capital, 2),
@@ -1016,6 +1041,8 @@ def _compute_combo_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clos
     if blown_up_at is not None:
         max_drawdown = min(max_drawdown, -100.0)
     sharpe = float(daily.mean() / daily.std() * np.sqrt(bars_per_year)) if daily.std() > 0 else 0.0
+    volatility = _annualized_volatility(daily, bars_per_year)
+    volatility_drag = _volatility_drag(daily, bars_per_year)
 
     win_rate = float(wins / num_trades * 100) if num_trades else 0.0
 
@@ -1026,6 +1053,7 @@ def _compute_combo_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clos
         "metrics": {
             "total_return": round(total_return, 2), "ann_return": round(ann_return, 2),
             "max_drawdown": round(max_drawdown, 2), "sharpe": round(sharpe, 3),
+            "volatility": volatility, "volatility_drag": volatility_drag,
             "num_trades": num_trades, "win_rate": round(win_rate, 1),
             "initial_capital": round(initial_capital, 2), "final_capital": round(float(eq.iloc[-1]), 2),
             "total_pnl": round(float(eq.iloc[-1]) - initial_capital, 2),
@@ -2206,6 +2234,64 @@ def _mc_finite(x, default: float = 0.0) -> float:
         return default
 
 
+def _mc_path_metrics(equity_paths: np.ndarray, periods_per_year: int = 252) -> dict:
+    equity = np.asarray(equity_paths, dtype=float)
+    if equity.ndim != 2 or equity.shape[1] < 2 or equity.shape[0] == 0:
+        return {"cagr": 0.0, "volatility": 0.0, "volatility_drag": 0.0, "max_drawdown": 0.0, "sharpe": 0.0}
+
+    horizon = equity.shape[1] - 1
+    starts = np.maximum(equity[:, 0], 1e-9)
+    finals = equity[:, -1]
+    growth = np.clip(finals / starts, 0.0, 1e6)
+    annualized_log_growth = np.log(np.maximum(growth, 1e-12)) * periods_per_year / max(horizon, 1)
+    cagrs = np.where(
+        finals > 0,
+        (np.exp(np.clip(annualized_log_growth, -50.0, np.log(1e6))) - 1.0) * 100.0,
+        -100.0,
+    )
+    cagrs = np.where(np.isfinite(cagrs), cagrs, -100.0)
+
+    prior = equity[:, :-1]
+    returns = np.divide(
+        np.diff(equity, axis=1),
+        prior,
+        out=np.zeros_like(prior),
+        where=prior > 0,
+    )
+    returns = np.where(np.isfinite(returns), returns, 0.0)
+    means = np.mean(returns, axis=1)
+    stds = np.std(returns, axis=1, ddof=1 if horizon > 1 else 0)
+    volatilities = stds * np.sqrt(periods_per_year) * 100.0
+    volatility_drags = 0.5 * np.square(stds) * periods_per_year * 100.0
+    sharpes = np.divide(
+        means * np.sqrt(periods_per_year),
+        stds,
+        out=np.zeros_like(means),
+        where=stds > 1e-12,
+    )
+
+    rolling_max = np.maximum.accumulate(equity, axis=1)
+    drawdowns = np.divide(
+        equity - rolling_max,
+        rolling_max,
+        out=np.zeros_like(equity),
+        where=rolling_max > 0,
+    )
+    max_drawdowns = np.min(drawdowns, axis=1) * 100.0
+
+    def median(values: np.ndarray) -> float:
+        finite = values[np.isfinite(values)]
+        return round(float(np.median(finite)), 2) if finite.size else 0.0
+
+    return {
+        "cagr": median(cagrs),
+        "volatility": median(volatilities),
+        "volatility_drag": median(volatility_drags),
+        "max_drawdown": median(max_drawdowns),
+        "sharpe": median(sharpes),
+    }
+
+
 def _market_regression_vs_benchmark(
     equity_paths: np.ndarray,
     horizon_days: int,
@@ -2640,26 +2726,7 @@ def _combo_monte_carlo_impl(req: ComboMonteCarloRequest):
         equity_paths = np.maximum(0.0, req.initial_capital + pnl_path - financing)
 
         final_caps = equity_paths[:, -1]
-        # CAGR — clamp ratio to avoid overflow to inf when leverage explodes a path
-        growth = np.clip(final_caps / max(req.initial_capital, 1e-9), 0.0, 1e6)
-        ann_returns = np.where(
-            final_caps > 0,
-            (np.power(growth, 252.0 / max(horizon_days, 1)) - 1.0) * 100.0,
-            -100.0,
-        )
-        ann_returns = np.where(np.isfinite(ann_returns), ann_returns, -100.0)
-
-        roll_max = np.maximum.accumulate(equity_paths, axis=1)
-        drawdowns = (equity_paths - roll_max) / np.where(roll_max <= 0, 1.0, roll_max)
-        max_drawdowns = np.min(drawdowns, axis=1) * 100.0
-        max_drawdowns = np.where(np.isfinite(max_drawdowns), max_drawdowns, 0.0)
-
-        daily_returns = np.diff(equity_paths, axis=1) / np.where(equity_paths[:, :-1] <= 0, 1.0, equity_paths[:, :-1])
-        daily_returns = np.where(np.isfinite(daily_returns), daily_returns, 0.0)
-        ret_mean = np.mean(daily_returns, axis=1)
-        ret_std = np.std(daily_returns, axis=1)
-        sharpes = np.where(ret_std > 1e-12, ret_mean / ret_std * np.sqrt(252.0), 0.0)
-        sharpes = np.where(np.isfinite(sharpes), sharpes, 0.0)
+        core_metrics = _mc_path_metrics(equity_paths)
 
         all_trades_total = np.zeros(n)
         all_trades_win = np.zeros(n)
@@ -2788,14 +2855,17 @@ def _combo_monte_carlo_impl(req: ComboMonteCarloRequest):
             "pnl_bands": pnl_bands,
             "bands_unit": "equity_100",  # frontend: values already $100-start equity
             "strategy_metrics": {
-                "ann_return": round(_mc_finite(np.median(ann_returns)), 2),
-                "max_drawdown": round(_mc_finite(np.median(max_drawdowns)), 2),
-                "sharpe": round(_mc_finite(np.median(sharpes)), 2),
+                "ann_return": core_metrics["cagr"],
+                "volatility": core_metrics["volatility"],
+                "volatility_drag": core_metrics["volatility_drag"],
+                "max_drawdown": core_metrics["max_drawdown"],
+                "sharpe": core_metrics["sharpe"],
                 # Aggregate across all trades — not median of per-path rates (which
                 # is 0 when a rare IVR+crash signal leaves most paths untraded).
                 "win_rate": round(_mc_finite(win_rate_metric), 1),
                 "num_trades": round(_mc_finite(num_trades_metric), 2),
             },
+            "core_metrics": core_metrics,
             "market_regression": market_reg,
             "diagnostics": {
                 "median_trades": round(_mc_finite(med_trades_when), 1),
@@ -2959,6 +3029,7 @@ def _combo_monte_carlo_impl(req: ComboMonteCarloRequest):
         managed_pnl_path - borrowed_notional * _ear_growth_factor(req.effective_annual_rate, frozen_day),
         -req.initial_capital,
     )
+    core_metrics = _mc_path_metrics(req.initial_capital + managed_pnl_path)
     pct_grid = np.percentile(managed_pnl_path, [5, 25, 50, 75, 95], axis=0)   # (5, dte+1)
     pnl_bands = [
         {"day": d, "p5": round(float(pct_grid[0, d]), 2), "p25": round(float(pct_grid[1, d]), 2),
@@ -2993,6 +3064,7 @@ def _combo_monte_carlo_impl(req: ComboMonteCarloRequest):
         "leverage": req.leverage, "effective_annual_rate": req.effective_annual_rate,
         "interest_paid_p50": round(float(np.median(financing)), 2) if req.effective_annual_rate > 0 else 0.0,
         "pnl_bands": pnl_bands,
+        "core_metrics": core_metrics,
     }
 
 
