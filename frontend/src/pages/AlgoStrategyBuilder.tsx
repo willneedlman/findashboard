@@ -189,7 +189,7 @@ function HeaderNumberControl({ label, value, min, max, unit, title, onCommit }: 
       </span>
       <span style={{
         minHeight: 24, display: 'flex', alignItems: 'center', padding: '0 4px',
-        background: '#fff',
+        background: 'var(--theme-bg, #101c2e)',
         borderBottom: `1px solid ${focused ? 'var(--theme-primary, #c9a84c)' : 'color-mix(in srgb, var(--theme-text, #d7e3fc) 28%, transparent)'}`,
         boxShadow: focused ? 'inset 0 0 0 2px var(--theme-primary, #c9a84c)' : 'none',
         transition: 'border-color 120ms ease, box-shadow 120ms ease',
@@ -199,13 +199,13 @@ function HeaderNumberControl({ label, value, min, max, unit, title, onCommit }: 
             width: 36, height: 23, minHeight: 23, padding: 0, boxSizing: 'border-box',
             appearance: 'textfield', WebkitAppearance: 'none', MozAppearance: 'textfield',
             background: 'transparent', border: 0, outline: 'none',
-            textAlign: 'right', color: '#111827',
+            textAlign: 'right', color: 'var(--theme-text, #d7e3fc)', caretColor: 'var(--theme-primary, #c9a84c)',
             fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700,
             fontVariantNumeric: 'tabular-nums',
           }} />
         {unit && <span style={{
           marginLeft: 3, fontFamily: 'var(--theme-mono)', fontSize: 8.5,
-          color: '#4b5563',
+          color: 'var(--theme-text-muted, #a8b6c8)',
         }}>{unit}</span>}
       </span>
     </label>
