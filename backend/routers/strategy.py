@@ -708,6 +708,7 @@ class CustomBacktestRequest(BaseModel):
     delta_exit: float | None = None  # option/combo only: close once |net delta| reaches this (None = off)
     gamma_exit: float | None = None  # option/combo only: close once |net gamma| reaches this (None = off)
     position_size: float = 100
+    max_open_positions: int | None = None  # cap simultaneous scale-in entries/lots for this ticker
     initial_capital: float = 10_000
     instrument: dict | None = None   # {kind:"option", type:"call"|"put", moneyness, dte} → modeled option P&L
     side: str = "long"               # long|short — drives direction for shares AND options
@@ -730,6 +731,8 @@ class CustomBacktestRequest(BaseModel):
             raise HTTPException(422, f"Unsupported timeframe '{self.timeframe}'. Use one of: {', '.join(_BACKTEST_TF)}.")
         if self.leverage < 1:
             raise ValueError("Leverage must be at least 1x")
+        if self.max_open_positions is not None and not 1 <= self.max_open_positions <= 1000:
+            raise ValueError("Maximum open positions must be between 1 and 1000")
         if not 0 <= self.effective_annual_rate <= 100:
             raise ValueError("Effective annual rate must be between 0% and 100%")
         return self
@@ -832,7 +835,8 @@ def custom_backtest(req: CustomBacktestRequest):
                                  intraday=_is_intraday_tf(tf),
                                  stop_loss=req.stop_loss, take_profit=req.take_profit,
                                  trailing_stop=req.trailing_stop, max_hold_bars=req.max_hold_bars,
-                                 exit_pct=req.exit_pct, delta_exit=req.delta_exit, gamma_exit=req.gamma_exit)
+                                 exit_pct=req.exit_pct, delta_exit=req.delta_exit, gamma_exit=req.gamma_exit,
+                                 max_open_positions=req.max_open_positions)
 
     # Leverage is "free" P&L amplification unless the borrowed portion of
     # notional (beyond 100% of capital) actually costs something — apply the
@@ -887,7 +891,8 @@ def _instrument_metrics(buy_signal, sell_signal, close, instrument, side, ticker
                         stop_loss: float | None = None, take_profit: float | None = None,
                         trailing_stop: float | None = None, max_hold_bars: int | None = None,
                         exit_pct: float = 100.0,
-                        delta_exit: float | None = None, gamma_exit: float | None = None):
+                        delta_exit: float | None = None, gamma_exit: float | None = None,
+                        max_open_positions: int | None = None):
     """Metrics for one position given its raw (buy_signal, sell_signal) + close:
     modeled option P&L for an option instrument (long buys it, short writes
     it), else long/short shares. `side` drives direction for both. Same result
@@ -920,12 +925,13 @@ def _instrument_metrics(buy_signal, sell_signal, close, instrument, side, ticker
         if inst.get("kind") == "combo":
             return _compute_combo_metrics(buy_signal, sell_signal, close, inst, float(iv), position_size, capital, bars_per_year=bars_per_year, intraday=intraday,
                                           stop_loss=stop_loss, take_profit=take_profit, trailing_stop=trailing_stop, max_hold_bars=max_hold_bars, exit_pct=exit_pct,
-                                          delta_exit=delta_exit, gamma_exit=gamma_exit)
+                                          delta_exit=delta_exit, gamma_exit=gamma_exit, max_open_positions=max_open_positions)
         return _compute_option_metrics(buy_signal, sell_signal, close, inst, float(iv), position_size, capital, direction=side, bars_per_year=bars_per_year, intraday=intraday,
                                        stop_loss=stop_loss, take_profit=take_profit, trailing_stop=trailing_stop, max_hold_bars=max_hold_bars, exit_pct=exit_pct,
-                                       delta_exit=delta_exit, gamma_exit=gamma_exit)
+                                       delta_exit=delta_exit, gamma_exit=gamma_exit, max_open_positions=max_open_positions)
     return _compute_metrics(buy_signal, sell_signal, close, position_size, capital, direction=side, bars_per_year=bars_per_year, intraday=intraday,
-                            stop_loss=stop_loss, take_profit=take_profit, trailing_stop=trailing_stop, max_hold_bars=max_hold_bars, exit_pct=exit_pct)
+                            stop_loss=stop_loss, take_profit=take_profit, trailing_stop=trailing_stop, max_hold_bars=max_hold_bars, exit_pct=exit_pct,
+                            max_open_positions=max_open_positions)
 
 
 # ─── Multi-position portfolio backtest ────────────────────────────────────────

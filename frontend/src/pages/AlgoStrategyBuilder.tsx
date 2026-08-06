@@ -149,7 +149,10 @@ export function NumInput({ value, min, max, onCommit, title, style }: {
 
   return (
     <input type="number" step="any" min={min} max={max} title={title} value={text}
-      onFocus={() => { focusedRef.current = true }}
+      onFocus={e => {
+        focusedRef.current = true
+        e.currentTarget.select()
+      }}
       onChange={e => setText(e.target.value)}
       onBlur={() => {
         focusedRef.current = false
@@ -159,6 +162,53 @@ export function NumInput({ value, min, max, onCommit, title, style }: {
         if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
       }}
       style={style ?? _numInputDefaultStyle} />
+  )
+}
+
+function HeaderNumberControl({ label, value, min, max, unit, title, onCommit }: {
+  label: string
+  value: number
+  min: number
+  max?: number
+  unit?: string
+  title: string
+  onCommit: (value: number) => void
+}) {
+  const [focused, setFocused] = useState(false)
+  return (
+    <label title={title} onFocusCapture={() => setFocused(true)} onBlurCapture={() => setFocused(false)} style={{
+      minHeight: 28, display: 'flex', alignItems: 'center', gap: 8, marginRight: 10,
+      whiteSpace: 'nowrap', cursor: 'text',
+    }}>
+      <span style={{
+        fontFamily: 'var(--theme-sans)', fontSize: 8.5, fontWeight: 700,
+        letterSpacing: '0.09em', textTransform: 'uppercase',
+        color: 'var(--theme-text, #d7e3fc)', opacity: 0.76,
+      }}>
+        {label}
+      </span>
+      <span style={{
+        minHeight: 24, display: 'flex', alignItems: 'center', padding: '0 4px',
+        background: '#fff',
+        borderBottom: `1px solid ${focused ? 'var(--theme-primary, #c9a84c)' : 'color-mix(in srgb, var(--theme-text, #d7e3fc) 28%, transparent)'}`,
+        boxShadow: focused ? 'inset 0 0 0 2px var(--theme-primary, #c9a84c)' : 'none',
+        transition: 'border-color 120ms ease, box-shadow 120ms ease',
+      }}>
+        <NumInput value={value} min={min} max={max} onCommit={onCommit} title={title}
+          style={{
+            width: 36, height: 23, minHeight: 23, padding: 0, boxSizing: 'border-box',
+            appearance: 'textfield', WebkitAppearance: 'none', MozAppearance: 'textfield',
+            background: 'transparent', border: 0, outline: 'none',
+            textAlign: 'right', color: '#111827',
+            fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700,
+            fontVariantNumeric: 'tabular-nums',
+          }} />
+        {unit && <span style={{
+          marginLeft: 3, fontFamily: 'var(--theme-mono)', fontSize: 8.5,
+          color: '#4b5563',
+        }}>{unit}</span>}
+      </span>
+    </label>
   )
 }
 
@@ -361,11 +411,11 @@ function loadPortfolioSettings() {
     return {
       tradeSize: Math.min(100, Math.max(1, Number(parsed.tradeSize) || 10)),
       maxOpenPositions: Math.min(1000, Math.max(1, Math.round(Number(parsed.maxOpenPositions) || 10))),
+      singleMaxOpenPositions: Math.min(1000, Math.max(1, Math.round(Number(parsed.singleMaxOpenPositions) || 10))),
       leverage: Math.max(1, Number(parsed.leverage) || 1),
-      effectiveAnnualRate: Math.min(100, Math.max(0, Number(parsed.effectiveAnnualRate) || 0)),
     }
   } catch {
-    return { tradeSize: 10, maxOpenPositions: 10, leverage: 1, effectiveAnnualRate: 0 }
+    return { tradeSize: 10, maxOpenPositions: 10, singleMaxOpenPositions: 10, leverage: 1 }
   }
 }
 
@@ -801,7 +851,8 @@ function StrategyControlsPanel({
   patchPosition, removePosition, patchComboLeg, addComboLegToPosition, removeComboLegFromPosition, applyInstrumentToAll,
   portfolioTradeSize, setPortfolioTradeSize,
   portfolioMaxOpenPositions, setPortfolioMaxOpenPositions,
-  portfolioLeverage, setPortfolioLeverage, effectiveAnnualRate, setEffectiveAnnualRate,
+  singleMaxOpenPositions, setSingleMaxOpenPositions,
+  portfolioLeverage, setPortfolioLeverage,
   cloningId, setCloningId, cloneInput, setCloneInput, cloneToTickers, pmBooks,
   savedScreens, loadingScreenFor, runSavedScreen,
   start, setStart, end, setEnd, timeframe, setTimeframe,
@@ -824,8 +875,8 @@ function StrategyControlsPanel({
   patchPosition: (id: string, patch: Partial<PortfolioPos>) => void
   portfolioTradeSize: number; setPortfolioTradeSize: (value: number) => void
   portfolioMaxOpenPositions: number; setPortfolioMaxOpenPositions: (value: number) => void
+  singleMaxOpenPositions: number; setSingleMaxOpenPositions: (value: number) => void
   portfolioLeverage: number; setPortfolioLeverage: (value: number) => void
-  effectiveAnnualRate: number; setEffectiveAnnualRate: (value: number) => void
   removePosition: (id: string) => void
   patchComboLeg: (posId: string, i: number, patch: Partial<ComboLeg>) => void
   addComboLegToPosition: (posId: string) => void
@@ -880,7 +931,7 @@ function StrategyControlsPanel({
   // Single mode's risk controls edit the active strategy's own saved risk —
   // there's nothing to edit until one is selected.
   const activeDef = saved.find(s => s.name === activeName) ?? null
-  const singleRisk = activeDef?.risk ?? DEFAULT_RISK
+  const singleRisk = activeDef ? { ...DEFAULT_RISK, ...(activeDef.risk ?? {}) } : DEFAULT_RISK
   const headerBtn: React.CSSProperties = {
     display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', fontFamily: 'inherit', fontSize: 9.5, fontWeight: 700,
     letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap',
@@ -890,10 +941,11 @@ function StrategyControlsPanel({
   return (
     <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '8px 10px',
+        display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'nowrap', padding: '8px 10px',
+        overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'thin',
         background: 'var(--theme-surface, #142032)', borderBottom: collapsed ? 'none' : '1px solid var(--theme-border, rgba(255,255,255,0.08))',
       }}>
-        <div style={{ display: 'flex', gap: 4 }}>
+        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
           {(['single', 'portfolio'] as const).map(md => (
             <button key={md} onClick={() => setMode(md)} style={{
               padding: '5px 9px', fontFamily: 'inherit', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
@@ -905,43 +957,39 @@ function StrategyControlsPanel({
         </div>
 
         {mode === 'portfolio' ? (
-          <span style={{ fontSize: 9, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', color: 'var(--theme-secondary, #8099b0)' }}>
+          <span style={{
+            paddingRight: 18, marginRight: 4, borderRight: '1px solid color-mix(in srgb, var(--theme-text, #d7e3fc) 20%, transparent)',
+            fontSize: 9, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', color: 'var(--theme-text, #d7e3fc)', opacity: 0.78,
+          }}>
             {positions.length} symbol{positions.length === 1 ? '' : 's'} · one shared strategy
           </span>
         ) : (
-          <span style={{ fontSize: 9, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', color: 'var(--theme-secondary, #8099b0)' }}>
+          <span style={{
+            paddingRight: 18, marginRight: 4, borderRight: '1px solid color-mix(in srgb, var(--theme-text, #d7e3fc) 20%, transparent)',
+            fontSize: 9, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', color: 'var(--theme-text, #d7e3fc)', opacity: 0.78,
+          }}>
             {ticker.toUpperCase()} · {instMode === 'underlying' ? 'Shares' : instMode === 'option' ? `${optType.toUpperCase()} Option` : 'Combo'}
           </span>
         )}
-        {(mode === 'portfolio' || activeDef) && <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, fontFamily: 'var(--theme-mono)', color: 'var(--theme-secondary, #8099b0)' }}>
-          <span>Trade size</span>
-          <NumInput value={mode === 'portfolio' ? portfolioTradeSize : singleRisk.sizingPct} min={1} max={100}
+        <div style={{ display: 'contents' }}>
+          {(mode === 'portfolio' || activeDef) && <HeaderNumberControl
+            label="Trade size" value={mode === 'portfolio' ? portfolioTradeSize : (singleRisk.sizingPct || 100)} min={1} max={100} unit="%"
             onCommit={v => mode === 'portfolio' ? setPortfolioTradeSize(v) : patchActiveRisk({ sizingPct: v })}
-            title={mode === 'portfolio' ? 'Every admitted trade uses this percentage of the total portfolio' : "This strategy's saved position size — same field as the Risk section in the strategy editor"}
-            style={{ ...INPUT, width: 46, textAlign: 'center', color: 'var(--theme-primary, #c9a84c)', fontWeight: 700, padding: '3px 4px' }} />
-          <span>%</span>
-        </div>}
-        {mode === 'portfolio' && <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, fontFamily: 'var(--theme-mono)', color: 'var(--theme-secondary, #8099b0)' }}>
-          <span>Max open</span>
-          <NumInput value={portfolioMaxOpenPositions} min={1} max={1000}
-            onCommit={v => setPortfolioMaxOpenPositions(Math.round(v))}
-            title="Maximum number of positions that may be open at the same time. This works alongside the gross-exposure limit; whichever limit is reached first blocks the next entry."
-            style={{ ...INPUT, width: 46, textAlign: 'center', color: 'var(--theme-primary, #c9a84c)', fontWeight: 700, padding: '3px 4px' }} />
-        </div>}
-        {(mode === 'portfolio' || activeDef) && <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, fontFamily: 'var(--theme-mono)', color: 'var(--theme-secondary, #8099b0)' }}>
-          <span>Leverage</span>
-          <NumInput value={mode === 'portfolio' ? portfolioLeverage : singleRisk.leverage} min={1}
+            title={mode === 'portfolio' ? 'Every admitted trade uses this percentage of the total portfolio' : "This strategy's saved position size. The same value appears in the strategy editor's Risk section."} />}
+          <HeaderNumberControl
+            label="Max open"
+            value={mode === 'portfolio' ? portfolioMaxOpenPositions : singleMaxOpenPositions} min={1} max={1000}
+            onCommit={v => mode === 'portfolio'
+              ? setPortfolioMaxOpenPositions(Math.round(v))
+              : setSingleMaxOpenPositions(Math.round(v))}
+            title={mode === 'portfolio'
+              ? 'Maximum simultaneous positions across the portfolio. The position limit and gross-exposure limit are both enforced.'
+              : 'Maximum simultaneous entry lots for this position backtest. Additional buy signals wait until an open lot exits.'} />
+          {(mode === 'portfolio' || activeDef) && <HeaderNumberControl
+            label="Leverage" value={mode === 'portfolio' ? portfolioLeverage : singleRisk.leverage} min={1} unit="x"
             onCommit={v => mode === 'portfolio' ? setPortfolioLeverage(v) : patchActiveRisk({ leverage: v })}
-            title="Gross-notional multiplier; 1x is unlevered. No ceiling — high leverage can wipe the account out on a modest adverse move."
-            style={{ ...INPUT, width: 42, textAlign: 'center', color: 'var(--theme-primary, #c9a84c)', fontWeight: 700, padding: '3px 4px' }} />
-          <span>x</span>
-          <span>EAR</span>
-          <NumInput value={mode === 'portfolio' ? effectiveAnnualRate : singleRisk.effectiveAnnualRate} min={0} max={100}
-            onCommit={v => mode === 'portfolio' ? setEffectiveAnnualRate(v) : patchActiveRisk({ effectiveAnnualRate: v })}
-            title="Effective annual borrowing rate, compounded into a daily financing rate"
-            style={{ ...INPUT, width: 46, textAlign: 'center', color: 'var(--theme-primary, #c9a84c)', fontWeight: 700, padding: '3px 4px' }} />
-          <span>%</span>
-        </div>}
+            title="Gross-notional multiplier. 1x is unlevered. High leverage can wipe out the account after a modest adverse move." />}
+        </div>
         <div style={{ flex: 1, minWidth: 8 }} />
         {mode === 'portfolio' ? (
           <button onClick={() => runPortfolio.mutate()} disabled={positions.length === 0 || runPortfolio.isPending} style={{
@@ -1182,8 +1230,8 @@ export function AlgoStrategyBuilderContent() {
   const [initialPortfolioSettings] = useState(loadPortfolioSettings)
   const [portfolioTradeSize, setPortfolioTradeSize] = useState(initialPortfolioSettings.tradeSize)
   const [portfolioMaxOpenPositions, setPortfolioMaxOpenPositions] = useState(initialPortfolioSettings.maxOpenPositions)
+  const [singleMaxOpenPositions, setSingleMaxOpenPositions] = useState(initialPortfolioSettings.singleMaxOpenPositions)
   const [portfolioLeverage, setPortfolioLeverage] = useState(initialPortfolioSettings.leverage)
-  const [effectiveAnnualRate, setEffectiveAnnualRate] = useState(initialPortfolioSettings.effectiveAnnualRate)
   const [positions, setPositions] = useState<PortfolioPos[]>(() => {
     let loaded: PortfolioPos[]
     try {
@@ -1222,10 +1270,10 @@ export function AlgoStrategyBuilderContent() {
     localStorage.setItem(PF_SETTINGS_KEY, JSON.stringify({
       tradeSize: portfolioTradeSize,
       maxOpenPositions: portfolioMaxOpenPositions,
+      singleMaxOpenPositions,
       leverage: portfolioLeverage,
-      effectiveAnnualRate,
     }))
-  }, [portfolioTradeSize, portfolioMaxOpenPositions, portfolioLeverage, effectiveAnnualRate])
+  }, [portfolioTradeSize, portfolioMaxOpenPositions, singleMaxOpenPositions, portfolioLeverage])
   useEffect(() => {
     localStorage.setItem(AI_CHAT_KEY, JSON.stringify(aiMessages.slice(-80)))
   }, [aiMessages])
@@ -1337,13 +1385,11 @@ export function AlgoStrategyBuilderContent() {
   }
 
   const activeDef = saved.find(s => s.name === activeName) ?? null
+  const activeStrategyRisk = activeDef ? { ...DEFAULT_RISK, ...(activeDef.risk ?? {}) } : DEFAULT_RISK
   const refresh = () => setSaved(loadCustomStrategies())
-  // Single mode's Trade Size/Leverage/EAR live on the strategy definition
-  // itself (risk.sizingPct/.leverage/.effectiveAnnualRate), not a run-level
-  // override like portfolio mode's — so editing the header here writes
-  // straight through to the saved strategy, the same fields the strategy
-  // editor modal's Risk section shows, and any other tool that imports this
-  // strategy (Monte Carlo, Paper Trading) picks up the change too.
+  // Strategy financing has one source of truth. Borrowing EAR is edited only
+  // in the strategy's Risk section and follows that strategy into every run
+  // and handoff instead of maintaining a second toolbar override.
   const patchActiveRisk = (patch: Partial<StrategyRisk>) => {
     if (!activeDef) return
     saveCustomStrategy({ ...activeDef, risk: { ...(activeDef.risk ?? DEFAULT_RISK), ...patch } })
@@ -1367,7 +1413,7 @@ export function AlgoStrategyBuilderContent() {
       const legs: ComboLeg[] = template.instMode === 'option'
         ? [singleOptionLeg(template.optType, template.side, template.otmPct)]
         : (template.comboLegs?.length ? template.comboLegs : legsToCombo(PRESETS['Short Straddle']))
-      const r = activeDef.risk ?? DEFAULT_RISK
+      const r = activeStrategyRisk
       const handoff: AlgoOptionsMonteCarloHandoff = {
         version: 1,
         createdAt: new Date().toISOString(),
@@ -1384,7 +1430,7 @@ export function AlgoStrategyBuilderContent() {
         positionSizePct: portfolioTradeSize,
         maxOpenPositions: portfolioMaxOpenPositions,
         leverage: portfolioLeverage,
-        effectiveAnnualRate,
+        effectiveAnnualRate: r.effectiveAnnualRate || 0,
         strategyName: activeDef.name,
         strategyRules: { buy: activeDef.buy, sell: activeDef.sell },
       }
@@ -1403,7 +1449,7 @@ export function AlgoStrategyBuilderContent() {
       tradeSizePct: portfolioTradeSize,
       maxOpenPositions: portfolioMaxOpenPositions,
       leverage: portfolioLeverage,
-      effectiveAnnualRate,
+      effectiveAnnualRate: activeStrategyRisk.effectiveAnnualRate || 0,
       positions: positions.map(({ ticker, instMode, optType, otmPct, dte, comboLegs, comboDte, side, tradeSize }) => ({ ticker, instMode, optType, otmPct, dte, comboLegs, comboDte, side, tradeSize })),
     }
     localStorage.removeItem(ALGO_MC_OPTIONS_HANDOFF_KEY)
@@ -1426,6 +1472,7 @@ export function AlgoStrategyBuilderContent() {
         start, end: end || undefined, timeframe,
         strategy: activeDef,
         tradeSizePct: r.sizingPct || 100,
+        maxOpenPositions: singleMaxOpenPositions,
         leverage: r.leverage || 1,
         effectiveAnnualRate: r.effectiveAnnualRate || 0,
         positions: [{ ticker, instMode, optType, otmPct, dte, comboLegs, comboDte, side, tradeSize: undefined }],
@@ -1448,6 +1495,7 @@ export function AlgoStrategyBuilderContent() {
         deltaExit: r.deltaExit || undefined,
         gammaExit: r.gammaExit || undefined,
         positionSizePct: r.sizingPct || 100,
+        maxOpenPositions: singleMaxOpenPositions,
         leverage: r.leverage || 1,
         effectiveAnnualRate: r.effectiveAnnualRate || 0,
         strategyName: activeDef?.name || undefined,
@@ -1487,13 +1535,19 @@ export function AlgoStrategyBuilderContent() {
     }
 
     const toSave: CustomStrategyDef[] = []
+    const draftedBorrowRate = draft.effective_annual_rate === undefined
+      ? undefined
+      : Math.min(100, Math.max(0, draft.effective_annual_rate))
     const revisedStrategy = draft.mode === 'single' && draft.strategy && reviewTargetNames[0]
       ? { ...draft.strategy, name: reviewTargetNames[0] }
       : draft.strategy
     if (draft.mode === 'single' && draft.strategy) {
       toSave.push(revisedStrategy!)
     } else if (draft.mode === 'portfolio' && draft.strategies) {
-      toSave.push(...draft.strategies)
+      toSave.push(...draft.strategies.map(strategy => draftedBorrowRate === undefined ? strategy : {
+        ...strategy,
+        risk: { ...DEFAULT_RISK, ...(strategy.risk ?? {}), effectiveAnnualRate: draftedBorrowRate },
+      }))
     }
 
     if (toSave.length > 0) {
@@ -1511,6 +1565,7 @@ export function AlgoStrategyBuilderContent() {
       if (draft.dte !== undefined) setDte(draft.dte)
       if (draft.combo_legs) setComboLegs(draft.combo_legs)
       if (draft.combo_dte !== undefined) setComboDte(draft.combo_dte)
+      if (draft.max_open_positions !== undefined) setSingleMaxOpenPositions(Math.min(1000, Math.max(1, Math.round(draft.max_open_positions))))
       if (revisedStrategy?.name) {
         setActiveName(revisedStrategy.name)
       }
@@ -1519,7 +1574,6 @@ export function AlgoStrategyBuilderContent() {
       if (draft.position_size_pct !== undefined) setPortfolioTradeSize(Math.min(100, Math.max(1, draft.position_size_pct)))
       if (draft.max_open_positions !== undefined) setPortfolioMaxOpenPositions(Math.min(1000, Math.max(1, Math.round(draft.max_open_positions))))
       if (draft.leverage !== undefined) setPortfolioLeverage(Math.max(1, draft.leverage))
-      if (draft.effective_annual_rate !== undefined) setEffectiveAnnualRate(Math.min(100, Math.max(0, draft.effective_annual_rate)))
       if (draft.strategies?.[0]?.name) setActiveName(draft.strategies[0].name)
       const loaded: PortfolioPos[] = (draft.positions ?? []).map(pos => {
         const matching = loadCustomStrategies().find(s => s.name === pos.strategy_name)
@@ -1572,6 +1626,7 @@ export function AlgoStrategyBuilderContent() {
         ticker, start, end: end || undefined, side, timeframe,
         rules: { buy: rules.buy, sell: rules.sell },
         position_size: r.sizingPct || 100,
+        max_open_positions: singleMaxOpenPositions,
         stop_loss: r.stopLossPct || undefined,
         take_profit: r.takeProfitPct || undefined,
         trailing_stop: r.trailingStopPct || undefined,
@@ -1612,7 +1667,7 @@ export function AlgoStrategyBuilderContent() {
     mutationFn: async () => {
       if (positions.length === 0) throw new Error('Add at least one position.')
       const { data } = await axios.post('/api/strategy/portfolio-backtest', {
-        positions: positions.map(posToPayload), start, end: end || undefined, timeframe, initial_capital: 10000, position_size: portfolioTradeSize, max_open_positions: portfolioMaxOpenPositions, leverage: portfolioLeverage, effective_annual_rate: effectiveAnnualRate,
+        positions: positions.map(posToPayload), start, end: end || undefined, timeframe, initial_capital: 10000, position_size: portfolioTradeSize, max_open_positions: portfolioMaxOpenPositions, leverage: portfolioLeverage, effective_annual_rate: activeStrategyRisk.effectiveAnnualRate || 0,
       })
       return data
     },
@@ -1684,7 +1739,7 @@ export function AlgoStrategyBuilderContent() {
     pieces.push(textClip(TAB, 'Run Spec',
       mode === 'portfolio'
         ? `Portfolio backtest · ${start} → ${end || 'latest'} · tf=${timeframe} · size=${portfolioTradeSize} · max open=${portfolioMaxOpenPositions} · lev=${portfolioLeverage}`
-        : `Single ${side} ${instMode} ${ticker.toUpperCase()} · strategy=${activeName || '—'} · ${start} → ${end || 'latest'} · tf=${timeframe}`))
+        : `Single ${side} ${instMode} ${ticker.toUpperCase()} · strategy=${activeName || '—'} · ${start} → ${end || 'latest'} · tf=${timeframe} · max open=${singleMaxOpenPositions}`))
     return pieces
   }, { disabled: !mR, sourceTab: TAB })
 
@@ -1720,9 +1775,7 @@ export function AlgoStrategyBuilderContent() {
     const financingSummary = leverage > 1
       ? ` Leverage ${leverage}x, ${(mR.effective_annual_rate ?? 0).toFixed(2)}% borrowing EAR, interest paid ${(mR.interest_paid ?? 0).toFixed(2)}.`
       : ' Unlevered (1x).'
-    const positionLimitSummary = mode === 'portfolio'
-      ? ` Maximum ${mR.max_open_positions ?? portfolioMaxOpenPositions} simultaneous positions; ${mR.position_limit_blocked_entries ?? 0} entry signals were deferred by that limit.`
-      : ''
+    const positionLimitSummary = ` Maximum ${mR.max_open_positions ?? (mode === 'portfolio' ? portfolioMaxOpenPositions : singleMaxOpenPositions)} simultaneous ${mode === 'portfolio' ? 'positions' : 'entry lots'}; ${mR.position_limit_blocked_entries ?? 0} entry signals were deferred by that limit.`
     // Portfolio mode's positions each carry a `strategy` field, but it's stale —
     // posToPayload actually runs every position against the one shared
     // activeName strategy — so the review has to target that, not whatever
@@ -1905,9 +1958,9 @@ export function AlgoStrategyBuilderContent() {
               {mR.leverage}x leverage · {(mR.effective_annual_rate ?? 0).toFixed(2)}% borrowing EAR · interest charged: {fmtCap(mR.interest_paid ?? 0)}
             </div>
           )}
-          {mode === 'portfolio' && mR.max_open_positions != null && (
+          {mR.max_open_positions != null && (
             <div style={{ marginTop: 6, fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary, #8099b0)' }}>
-              Max {mR.max_open_positions} simultaneous positions · {mR.position_limit_blocked_entries ?? 0} entry signals deferred by the position limit
+              Max {mR.max_open_positions} simultaneous {mode === 'portfolio' ? 'positions' : 'entry lots'} · {mR.position_limit_blocked_entries ?? 0} entry signals deferred by the position limit
             </div>
           )}
 
@@ -2164,7 +2217,8 @@ export function AlgoStrategyBuilderContent() {
           patchPosition={patchPosition} removePosition={removePosition} patchComboLeg={patchComboLeg}
           portfolioTradeSize={portfolioTradeSize} setPortfolioTradeSize={setPortfolioTradeSize}
           portfolioMaxOpenPositions={portfolioMaxOpenPositions} setPortfolioMaxOpenPositions={setPortfolioMaxOpenPositions}
-          portfolioLeverage={portfolioLeverage} setPortfolioLeverage={setPortfolioLeverage} effectiveAnnualRate={effectiveAnnualRate} setEffectiveAnnualRate={setEffectiveAnnualRate}
+          singleMaxOpenPositions={singleMaxOpenPositions} setSingleMaxOpenPositions={setSingleMaxOpenPositions}
+          portfolioLeverage={portfolioLeverage} setPortfolioLeverage={setPortfolioLeverage}
           addComboLegToPosition={addComboLegToPosition} removeComboLegFromPosition={removeComboLegFromPosition}
           applyInstrumentToAll={applyInstrumentToAll}
           cloningId={cloningId} setCloningId={setCloningId} cloneInput={cloneInput} setCloneInput={setCloneInput}

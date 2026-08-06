@@ -347,7 +347,7 @@ def _compute_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, close: pd.
                      direction: str = "long", bars_per_year: int = 252, intraday: bool = False,
                      stop_loss: float | None = None, take_profit: float | None = None,
                      trailing_stop: float | None = None, max_hold_bars: int | None = None,
-                     exit_pct: float = 100.0):
+                     exit_pct: float = 100.0, max_open_positions: int | None = None):
     """Shares are fungible — a share bought at $80 and one bought at $100
     aren't distinguishable positions the way two options with different
     strikes are, and P&L doesn't depend on which one a later sale is
@@ -390,6 +390,7 @@ def _compute_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, close: pd.
     trades: list[dict] = []
     total_buys = 0
     wins = 0
+    position_limit_blocked_entries = 0
 
     for i in range(1, n):
         price = px[i]
@@ -440,7 +441,10 @@ def _compute_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, close: pd.
                     shares, cost_basis, entry_i, peak_price = 0.0, 0.0, None, 0.0
                     cycle_buys, cycle_cost_total, cycle_proceeds_total, cycle_peak_cost = 0, 0.0, 0.0, 0.0
 
-        if buy_signal[i] and cash > 0.01:
+        position_limit_reached = max_open_positions is not None and cycle_buys >= max_open_positions
+        if buy_signal[i] and cash > 0.01 and position_limit_reached:
+            position_limit_blocked_entries += 1
+        if buy_signal[i] and cash > 0.01 and not position_limit_reached:
             invest = cash * alloc
             if invest > 0:
                 new_shares = invest / price
@@ -514,6 +518,8 @@ def _compute_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, close: pd.
             "initial_capital": round(initial_capital, 2),
             "final_capital": round(final_capital, 2),
             "total_pnl": round(total_pnl, 2),
+            "max_open_positions": max_open_positions,
+            "position_limit_blocked_entries": position_limit_blocked_entries,
             "blown_up_at": blown_up_at.strftime(_dfmt) if blown_up_at is not None else None,
         },
         "trades": trades,
@@ -530,7 +536,8 @@ def _compute_option_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clo
                             stop_loss: float | None = None, take_profit: float | None = None,
                             trailing_stop: float | None = None, max_hold_bars: int | None = None,
                             exit_pct: float = 100.0,
-                            delta_exit: float | None = None, gamma_exit: float | None = None):
+                            delta_exit: float | None = None, gamma_exit: float | None = None,
+                            max_open_positions: int | None = None):
     """Modeled single-option backtest, multi-lot: every bar the buy signal
     fires, ANOTHER fresh Black-Scholes-priced call/put (strike = moneyness ×
     spot at that bar, fixed DTE) opens sized off currently-available cash —
@@ -585,6 +592,7 @@ def _compute_option_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clo
     num_trades = 0
     wins = 0
     in_position = np.empty(n, dtype=bool)
+    position_limit_blocked_entries = 0
 
     def _val(lot: dict, i: int) -> float:
         remaining_days = max(0, (lot["expiry_at"] - idx[i]).total_seconds() / 86_400)
@@ -680,7 +688,10 @@ def _compute_option_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clo
                         remaining_lots.append(lot)
                 lots = remaining_lots
 
-        if buy_signal[i] and cash > 0.01:
+        position_limit_reached = max_open_positions is not None and len(lots) >= max_open_positions
+        if buy_signal[i] and cash > 0.01 and position_limit_reached:
+            position_limit_blocked_entries += 1
+        if buy_signal[i] and cash > 0.01 and not position_limit_reached:
             strike = round(px[i] * moneyness, 2)
             entry_val = max(float(bs_price(px[i], strike, dte, r, iv, otype)), 0.01)
             invest = cash * alloc
@@ -740,6 +751,8 @@ def _compute_option_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clo
             "num_trades": num_trades, "win_rate": round(win_rate, 1),
             "initial_capital": round(initial_capital, 2), "final_capital": round(float(eq.iloc[-1]), 2),
             "total_pnl": round(float(eq.iloc[-1]) - initial_capital, 2),
+            "max_open_positions": max_open_positions,
+            "position_limit_blocked_entries": position_limit_blocked_entries,
             "blown_up_at": blown_up_at.strftime(_dfmt) if blown_up_at is not None else None,
         },
         "trades": trades,
@@ -754,7 +767,8 @@ def _compute_combo_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clos
                            stop_loss: float | None = None, take_profit: float | None = None,
                            trailing_stop: float | None = None, max_hold_bars: int | None = None,
                            exit_pct: float = 100.0,
-                           delta_exit: float | None = None, gamma_exit: float | None = None):
+                           delta_exit: float | None = None, gamma_exit: float | None = None,
+                           max_open_positions: int | None = None):
     """Modeled multi-leg option combo backtest (straddle/strangle/spread/condor/
     butterfly/etc — same leg shape as the Options Strategy Builder's PRESETS
     table: {type, side, moneyness, qty}), multi-lot: every bar the buy signal
@@ -824,6 +838,7 @@ def _compute_combo_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clos
     num_trades = 0
     wins = 0
     in_position = np.empty(n, dtype=bool)
+    position_limit_blocked_entries = 0
 
     def _leg_val(leg: dict, lot: dict, i: int) -> float:
         remaining_days = max(0, (lot["expiry_at"] - idx[i]).total_seconds() / 86_400)
@@ -932,7 +947,10 @@ def _compute_combo_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clos
                         remaining_lots.append(lot)
                 lots = remaining_lots
 
-        if buy_signal[i] and cash > 0.01:
+        position_limit_reached = max_open_positions is not None and len(lots) >= max_open_positions
+        if buy_signal[i] and cash > 0.01 and position_limit_reached:
+            position_limit_blocked_entries += 1
+        if buy_signal[i] and cash > 0.01 and not position_limit_reached:
             unscaled: list[dict] = []
             base_notional = 0.0
             for lc in legs_cfg:
@@ -1011,6 +1029,8 @@ def _compute_combo_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clos
             "num_trades": num_trades, "win_rate": round(win_rate, 1),
             "initial_capital": round(initial_capital, 2), "final_capital": round(float(eq.iloc[-1]), 2),
             "total_pnl": round(float(eq.iloc[-1]) - initial_capital, 2),
+            "max_open_positions": max_open_positions,
+            "position_limit_blocked_entries": position_limit_blocked_entries,
             "blown_up_at": blown_up_at.strftime(_dfmt) if blown_up_at is not None else None,
         },
         "trades": trades,
