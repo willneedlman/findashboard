@@ -18,6 +18,7 @@ export type Holding = {
 
 export type ConfigMode = 'backtester' | 'montecarlo'
 export type DividendMode = 'reinvest' | 'cash' | 'exclude'
+export type BenchmarkSource = 'ticker' | 'crsp'
 
 interface RiskField { val: string; set: (v: string) => void }
 
@@ -29,13 +30,9 @@ interface Props {
   holdings: Holding[]
   onHoldingsChange: (next: Holding[]) => void
 
-  // Survivorship-bias-free mode (WRDS CRSP data/crsp.db): replaces the typed
-  // holdings with the S&P 500 constituents as they actually stood on the
-  // window's start date, correctly carrying delisted names' realized outcome
-  // through instead of silently dropping them like the live yfinance path.
-  crspMode?: boolean; onCrspModeChange?: (v: boolean) => void
-
   benchmark: string; setBenchmark: (v: string) => void
+  benchmarkSource?: BenchmarkSource; setBenchmarkSource?: (v: BenchmarkSource) => void
+  showCrspWindow?: boolean
   leverage: string; setLeverage: (v: string) => void
   borrowRate: string; setBorrowRate: (v: string) => void
 
@@ -266,10 +263,11 @@ export default function ConfigHeader(p: Props) {
   const eyebrow = isBT ? 'Portfolio Controls' : 'Simulation Parameters'
   const leftLabel = isBT ? 'Holdings · Strategy' : 'Portfolio Legs · Strategy'
   const runLabel = isBT ? 'Run Portfolio Engine' : 'Run Simulation'
-  const holdingsSummary = p.crspMode ? 'S&P 500 (CRSP)' : `${p.holdings.length} holdings`
+  const holdingsSummary = `${p.holdings.length} holdings`
+  const benchmarkLabel = p.benchmarkSource === 'crsp' ? 'CRSP S&P 500 PIT' : p.benchmark
   const summary = isBT
-    ? `${holdingsSummary} · ${(p.start || '').slice(0, 4)}-${(p.end || '').slice(0, 4)} · ${p.leverage || 1}x · bench ${p.benchmark}`
-    : `${holdingsSummary} · ${p.horizon}d horizon · ${p.nSims} sims · bench ${p.benchmark}`
+    ? `${holdingsSummary} · ${(p.start || '').slice(0, 4)}-${(p.end || '').slice(0, 4)} · ${p.leverage || 1}x · bench ${benchmarkLabel}`
+    : `${holdingsSummary} · ${p.horizon}d horizon · ${p.nSims} sims · bench ${benchmarkLabel}`
 
   const riskFields: { label: string; f: RiskField; ph: string }[] = [
     { label: 'Stop-Loss %', f: p.sl, ph: 'off' },
@@ -299,7 +297,7 @@ export default function ConfigHeader(p: Props) {
         </button>
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          {(p.overflow || p.onCrspModeChange) && (
+          {p.overflow && (
             <div style={{ position: 'relative' }}>
               <button onClick={() => setMenuOpen(o => !o)} aria-label="Import and export"
                 style={{ display: 'flex', background: 'none', border: `1px solid ${T.border}`, color: T.sec, cursor: 'pointer', padding: 5 }}>
@@ -307,20 +305,6 @@ export default function ConfigHeader(p: Props) {
               </button>
               {menuOpen && (
                 <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 200, width: 230, background: T.bg, border: `1px solid ${T.border}`, boxShadow: '0 10px 30px rgba(0,0,0,0.8)', padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {p.onCrspModeChange && (
-                    <button type="button" onClick={() => p.onCrspModeChange!(!p.crspMode)}
-                      title="Use the S&P 500 constituents as they actually stood on the start date (WRDS CRSP), instead of typed tickers — correctly includes names later delisted or acquired."
-                      style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-                        background: 'none', border: 'none', color: p.crspMode ? T.primary : T.sec,
-                        cursor: 'pointer', fontFamily: T.mono, fontSize: 10, letterSpacing: '0.03em',
-                        textAlign: 'left', padding: '2px 0', paddingBottom: p.overflow ? 8 : 0,
-                        borderBottom: p.overflow ? `1px solid ${T.border}` : 'none',
-                      }}>
-                      <span>Survivorship-bias-free (CRSP)</span>
-                      <span style={{ fontSize: 9, fontWeight: 700, opacity: p.crspMode ? 1 : 0.5 }}>{p.crspMode ? 'ON' : 'OFF'}</span>
-                    </button>
-                  )}
                   {p.overflow}
                 </div>
               )}
@@ -351,32 +335,23 @@ export default function ConfigHeader(p: Props) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
               <span style={SECTION}>{leftLabel}</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                {p.crspMode && <span style={{ fontFamily: T.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', color: T.primary, textTransform: 'uppercase' }}>CRSP mode</span>}
-                {!p.crspMode && <span style={{ fontFamily: T.mono, fontSize: 10, color: T.faint }}>{p.holdings.length} {noun}{p.holdings.length === 1 ? '' : 's'}</span>}
+                <span style={{ fontFamily: T.mono, fontSize: 10, color: T.faint }}>{p.holdings.length} {noun}{p.holdings.length === 1 ? '' : 's'}</span>
               </div>
             </div>
-            {p.crspMode ? (
-              <div style={{ padding: '14px 12px', border: `1px dashed ${T.border}`, color: T.sec, fontFamily: T.sans, fontSize: 11, lineHeight: 1.5 }}>
-                Holdings are ignored in this mode — the {isBT ? 'backtest' : 'simulation'} runs the actual S&amp;P 500
-                constituent list as of the Start date below (WRDS CRSP), including names later delisted or acquired,
-                with their realized outcome carried through instead of silently dropped.
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(166px, 1fr))', gap: 8 }}>
-                {p.holdings.map((h, i) => (
-                  <HoldingCard key={i} holding={h} index={i} maxWeight={maxWeight} tickerListId={p.tickerListId}
-                    hideDrift={p.mode === 'backtester'} allowCombo={isBT} allowShort={!isBT}
-                    onChange={patch => updateHolding(i, patch)}
-                    onRemove={() => p.onHoldingsChange(p.holdings.filter((_, j) => j !== i))} />
-                ))}
-                <button onClick={() => p.onHoldingsChange([...p.holdings, { ticker: '', weight: 0, strategy: STRATEGIES[0], stratParams: {} as StrategyParams }])}
-                  onMouseEnter={e => (e.currentTarget.style.borderColor = T.primary, e.currentTarget.style.color = T.primary)}
-                  onMouseLeave={e => (e.currentTarget.style.borderColor = T.border, e.currentTarget.style.color = T.sec)}
-                  style={{ minHeight: 96, background: 'none', border: `1px dashed ${T.border}`, color: T.sec, cursor: 'pointer', fontFamily: T.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                  + Add {noun}
-                </button>
-              </div>
-            )}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(166px, 1fr))', gap: 8 }}>
+              {p.holdings.map((h, i) => (
+                <HoldingCard key={i} holding={h} index={i} maxWeight={maxWeight} tickerListId={p.tickerListId}
+                  hideDrift={p.mode === 'backtester'} allowCombo={isBT} allowShort={!isBT}
+                  onChange={patch => updateHolding(i, patch)}
+                  onRemove={() => p.onHoldingsChange(p.holdings.filter((_, j) => j !== i))} />
+              ))}
+              <button onClick={() => p.onHoldingsChange([...p.holdings, { ticker: '', weight: 0, strategy: STRATEGIES[0], stratParams: {} as StrategyParams }])}
+                onMouseEnter={e => (e.currentTarget.style.borderColor = T.primary, e.currentTarget.style.color = T.primary)}
+                onMouseLeave={e => (e.currentTarget.style.borderColor = T.border, e.currentTarget.style.color = T.sec)}
+                style={{ minHeight: 96, background: 'none', border: `1px dashed ${T.border}`, color: T.sec, cursor: 'pointer', fontFamily: T.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                + Add {noun}
+              </button>
+            </div>
           </div>
 
           {/* Window / parameters + risk */}
@@ -388,23 +363,38 @@ export default function ConfigHeader(p: Props) {
                   <>
                     <Field label="Start"><input type="date" value={p.start} onChange={e => p.setStart?.(e.target.value)} onFocus={focusOn} onBlur={focusOff} style={{ ...inputBase, colorScheme: 'var(--theme-color-scheme, dark)' as React.CSSProperties['colorScheme'] } as React.CSSProperties} /></Field>
                     <Field label="End"><input type="date" value={p.end} onChange={e => p.setEnd?.(e.target.value)} onFocus={focusOn} onBlur={focusOff} style={{ ...inputBase, colorScheme: 'var(--theme-color-scheme, dark)' as React.CSSProperties['colorScheme'] } as React.CSSProperties} /></Field>
+                    <Field label="Benchmark Source">
+                      <select value={p.benchmarkSource ?? 'ticker'} onChange={e => p.setBenchmarkSource?.(e.target.value as BenchmarkSource)} style={{ ...inputBase, cursor: 'pointer' }}>
+                        <option value="ticker">Ticker / ETF</option>
+                        <option value="crsp">CRSP S&amp;P 500 PIT</option>
+                      </select>
+                    </Field>
+                    {p.benchmarkSource === 'crsp'
+                      ? <Field label="Benchmark"><input value="CRSP S&P 500 PIT" disabled style={{ ...inputBase, opacity: 0.72 }} /></Field>
+                      : <Field label="Benchmark Ticker"><input value={p.benchmark} onChange={e => p.setBenchmark(e.target.value.toUpperCase())} onFocus={focusOn} onBlur={focusOff} style={inputBase} /></Field>}
                     <Field label="Leverage (x)"><NumberInput value={p.leverage} onChange={p.setLeverage} step={0.25} min={1} /></Field>
-                    {(Number(p.leverage) || 1) > 1
-                      ? <Field label="Borrow Rate %"><NumberInput value={p.borrowRate} onChange={p.setBorrowRate} step={0.5} min={0} /></Field>
-                      : <Field label="Benchmark"><input value={p.benchmark} onChange={e => p.setBenchmark(e.target.value.toUpperCase())} onFocus={focusOn} onBlur={focusOff} style={inputBase} /></Field>}
+                    {(Number(p.leverage) || 1) > 1 && <Field label="Borrow Rate %"><NumberInput value={p.borrowRate} onChange={p.setBorrowRate} step={0.5} min={0} /></Field>}
                     {p.paramExtra && <div style={{ gridColumn: '1 / -1' }}>{p.paramExtra}</div>}
                   </>
                 ) : (
                   <>
                     <Field label="Horizon (days)"><NumberInput value={p.horizon ?? 0} onChange={v => p.setHorizon?.(+v)} step={1} min={1} /></Field>
                     <Field label="Simulations"><NumberInput value={p.nSims ?? 0} onChange={v => p.setNSims?.(+v)} step={1} min={1} /></Field>
-                    {p.crspMode && (
+                    <Field label="Benchmark Source">
+                      <select value={p.benchmarkSource ?? 'ticker'} onChange={e => p.setBenchmarkSource?.(e.target.value as BenchmarkSource)} style={{ ...inputBase, cursor: 'pointer' }}>
+                        <option value="ticker">Ticker / ETF</option>
+                        <option value="crsp">CRSP S&amp;P 500 PIT</option>
+                      </select>
+                    </Field>
+                    {p.benchmarkSource === 'crsp'
+                      ? <Field label="Benchmark"><input value="CRSP S&P 500 PIT" disabled style={{ ...inputBase, opacity: 0.72 }} /></Field>
+                      : <Field label="Benchmark Ticker"><input value={p.benchmark} onChange={e => p.setBenchmark(e.target.value.toUpperCase())} onFocus={focusOn} onBlur={focusOff} style={inputBase} /></Field>}
+                    {p.showCrspWindow && (
                       <>
-                        <Field label="CRSP Calibration Start"><input type="date" value={p.start} onChange={e => p.setStart?.(e.target.value)} onFocus={focusOn} onBlur={focusOff} style={{ ...inputBase, colorScheme: 'var(--theme-color-scheme, dark)' as React.CSSProperties['colorScheme'] } as React.CSSProperties} /></Field>
-                        <Field label="CRSP Calibration End"><input type="date" value={p.end} onChange={e => p.setEnd?.(e.target.value)} onFocus={focusOn} onBlur={focusOff} style={{ ...inputBase, colorScheme: 'var(--theme-color-scheme, dark)' as React.CSSProperties['colorScheme'] } as React.CSSProperties} /></Field>
+                        <Field label="CRSP History Start"><input type="date" value={p.start} onChange={e => p.setStart?.(e.target.value)} onFocus={focusOn} onBlur={focusOff} style={{ ...inputBase, colorScheme: 'var(--theme-color-scheme, dark)' as React.CSSProperties['colorScheme'] } as React.CSSProperties} /></Field>
+                        <Field label="CRSP History End"><input type="date" value={p.end} onChange={e => p.setEnd?.(e.target.value)} onFocus={focusOn} onBlur={focusOff} style={{ ...inputBase, colorScheme: 'var(--theme-color-scheme, dark)' as React.CSSProperties['colorScheme'] } as React.CSSProperties} /></Field>
                       </>
                     )}
-                    <Field label="Benchmark"><input value={p.benchmark} onChange={e => p.setBenchmark(e.target.value.toUpperCase())} onFocus={focusOn} onBlur={focusOff} style={inputBase} /></Field>
                     <Field label="Leverage (x)"><NumberInput value={p.leverage} onChange={p.setLeverage} step={0.25} min={1} /></Field>
                     {((Number(p.leverage) || 1) > 1 || hasShort) && (
                       <Field label="Financing / Short Fee %"><NumberInput value={p.borrowRate} onChange={p.setBorrowRate} step={0.5} min={0} /></Field>
@@ -416,12 +406,6 @@ export default function ConfigHeader(p: Props) {
                   </>
                 )}
               </div>
-              {isBT && (Number(p.leverage) || 1) > 1 && (
-                // Borrow Rate took the 4th cell above, so Benchmark drops below.
-                <div style={{ marginTop: 8 }}>
-                  <Field label="Benchmark"><input value={p.benchmark} onChange={e => p.setBenchmark(e.target.value.toUpperCase())} onFocus={focusOn} onBlur={focusOff} style={inputBase} /></Field>
-                </div>
-              )}
             </div>
 
             <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -445,11 +429,10 @@ export default function ConfigHeader(p: Props) {
                 ))}
                 <div style={{ gridColumn: 'span 2' }}>
                   <Field label="Dividend Treatment">
-                    <select value={p.crspMode ? 'embedded' : p.dividendMode} disabled={p.crspMode}
+                    <select value={p.dividendMode}
                       onChange={e => p.setDividendMode(e.target.value as DividendMode)}
-                      title={p.crspMode ? 'CRSP total returns already embed distributions' : 'Reinvest distributions, hold them as cash, or exclude them from modeled returns'}
-                      style={{ ...paramInput, cursor: p.crspMode ? 'not-allowed' : 'pointer', opacity: p.crspMode ? 0.6 : 1 }}>
-                      {p.crspMode && <option value="embedded">Embedded in CRSP returns</option>}
+                      title="Reinvest distributions, hold them as cash, or exclude them from modeled returns"
+                      style={{ ...paramInput, cursor: 'pointer' }}>
                       <option value="reinvest">Reinvest payments</option>
                       <option value="cash">Pay to cash</option>
                       <option value="exclude">Exclude dividends</option>

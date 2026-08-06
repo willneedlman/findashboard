@@ -21,7 +21,7 @@ import PortfolioIO, { type PortfolioAsset } from '../../components/PortfolioIO'
 import PMImportPicker from '../../components/PMImportPicker'
 import { CASH_SYMBOL, type ImportResult } from '../../lib/pmImport'
 import { usePortfolio } from '../../contexts/PortfolioContext'
-import ConfigHeader, { RebalanceSelect, type DividendMode, type RebalanceFreq } from '../../components/portfolio/ConfigHeader'
+import ConfigHeader, { RebalanceSelect, type BenchmarkSource, type DividendMode, type RebalanceFreq } from '../../components/portfolio/ConfigHeader'
 import HelpTip from '../../components/HelpTip'
 import { TAB_BAR, TAB_BASE, type Tab, type Asset, makeAsset, PORT_DEFAULTS, PORT_INPUT, PORT_LABEL, PORT_TICK, ALGO_STRATEGIES, ALGO_DEFAULT_PARAMS, ALGO_PARAM_LABELS, ALGO_INPUT, ALGO_LABEL, ALGO_TICK, ALGO_SECTION_DIVIDER, type BacktestResult, type SignalResult } from './shared'
 import { PRESETS } from '../strategy-builder/shared'
@@ -90,6 +90,7 @@ export function PortfolioTab() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const [assets, setAssets] = useState<Asset[]>(initialAssets)
   const [benchmark, setBenchmark] = useState('SPY')
+  const [benchmarkSource, setBenchmarkSource] = useState<BenchmarkSource>('ticker')
   const [collapsed, setCollapsed] = useState(false)
   const [start, setStart] = useState('2020-01-01')
   const [end, setEnd] = useState(() => new Date().toISOString().split('T')[0])
@@ -103,20 +104,9 @@ export function PortfolioTab() {
   const [leverage,   setLeverage]   = useState('1')
   const [borrowRate, setBorrowRate] = useState('0')
   const [rebalance,  setRebalance]  = useState<RebalanceFreq>('none')
-  const [crspMode,   setCrspMode]   = useState(false)
 
   const { mutate, data, isPending } = useMutation({
     mutationFn: async () => {
-      if (crspMode) {
-        const { data: bt } = await axios.post('/api/portfolio/backtest', {
-          crsp_mode: true, benchmark, start, end,
-          dividend_mode: dividendMode,
-          leverage: Math.max(1, Number(leverage) || 1),
-          borrow_rate: Math.max(0, Number(borrowRate) || 0),
-        })
-        return { ...bt, strategyResult: null }
-      }
-
       const totalWeight = assets.reduce((s, a) => s + a.weight, 0) || 100
       const weights = assets.map(a => a.weight / totalWeight * 100)
 
@@ -124,7 +114,7 @@ export function PortfolioTab() {
         axios.post('/api/portfolio/backtest', {
           tickers: assets.map(a => a.ticker),
           weights,
-          benchmark, start, end,
+          benchmark, benchmark_source: benchmarkSource, start, end,
           leverage: Math.max(1, Number(leverage) || 1),
           borrow_rate: Math.max(0, Number(borrowRate) || 0),
           rebalance,
@@ -331,6 +321,7 @@ export function PortfolioTab() {
 
   const updateAsset = (i: number, patch: Partial<Asset>) =>
     setAssets(prev => prev.map((a, idx) => idx === i ? { ...a, ...patch } : a))
+  const benchmarkLabel = data?.benchmark_label ?? benchmark
 
   useReportCapture(() => {
     if (!data?.metrics) return null
@@ -341,7 +332,7 @@ export function PortfolioTab() {
     const pieces: ClipDraft[] = [
       kpiClip('Portfolio Backtester', 'Portfolio Backtest Snapshot', [
         { label: 'Portfolio CAGR', value: `${m.port_cagr}%` },
-        { label: `${benchmark} CAGR`, value: `${m.bench_cagr}%` },
+        { label: `${benchmarkLabel} CAGR`, value: `${m.bench_cagr}%` },
         { label: 'Sharpe', value: String(m.port_sharpe) },
         { label: 'Ann. Vol', value: `${m.port_vol}%` },
         { label: 'Max Drawdown', value: `${m.max_drawdown}%` },
@@ -365,7 +356,7 @@ export function PortfolioTab() {
       const sampled = curve.filter((_, i) => i % step === 0 || i === curve.length - 1)
       const series = [
         { key: 'portfolio', label: 'Portfolio' },
-        { key: 'benchmark', label: benchmark },
+        { key: 'benchmark', label: benchmarkLabel },
         ...(data.strategyResult ? [{ key: 'strategy', label: 'Strategy' }] : []),
       ]
       pieces.push(chartClip(
@@ -393,8 +384,8 @@ export function PortfolioTab() {
         onToggleCollapse={() => setCollapsed(c => !c)}
         holdings={assets}
         onHoldingsChange={setAssets}
-        crspMode={crspMode} onCrspModeChange={setCrspMode}
         benchmark={benchmark} setBenchmark={setBenchmark}
+        benchmarkSource={benchmarkSource} setBenchmarkSource={setBenchmarkSource}
         leverage={leverage} setLeverage={setLeverage}
         borrowRate={borrowRate} setBorrowRate={setBorrowRate}
         sl={{ val: slPct, set: setSlPct }}
@@ -449,17 +440,17 @@ export function PortfolioTab() {
 
         {data && (
           <>
-            {data.crsp_mode && (
+            {data.benchmark_source === 'crsp' && (
               <div style={{
                 background: 'var(--theme-bg, #101c2e)',
                 border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
                 borderLeft: '4px solid var(--theme-primary, #c9a84c)',
                 padding: '8px 14px', fontFamily: 'var(--theme-mono)', fontSize: 11, lineHeight: 1.5,
               }}>
-                <span style={{ color: 'var(--theme-primary, #c9a84c)', fontWeight: 700 }}>SURVIVORSHIP-BIAS-FREE (CRSP)</span>
+                <span style={{ color: 'var(--theme-primary, #c9a84c)', fontWeight: 700 }}>BENCHMARK · CRSP S&amp;P 500 PIT</span>
                 <span style={{ color: 'var(--theme-secondary, #99907e)', marginLeft: 8 }}>
-                  {data.constituent_count} S&amp;P 500 constituents as of {start}
-                  {data.delistings?.length > 0 && `, ${data.delistings.length} delisted/acquired during the window and carried through`}. Dividend distributions are embedded in CRSP total returns.
+                  Your {assets.length}-holding portfolio remains unchanged. The comparison series uses {data.constituent_count} S&amp;P 500 constituents as of {start}
+                  {data.delistings?.length > 0 && `, including ${data.delistings.length} names later delisted or acquired`}.
                 </span>
               </div>
             )}
@@ -507,8 +498,8 @@ export function PortfolioTab() {
                 <div style={STRIP}>
                   <KpiCell grow minWidth={155} label="Portfolio CAGR" value={`${m.port_cagr}%`} valueSize={16}
                     color={m.port_cagr >= 0 ? POS : NEG}
-                    sub={`${vsBench > 0 ? '+' : ''}${vsBench.toFixed(2)}% vs ${benchmark}`} subColor={vsBench > 0 ? POS : NEG} />
-                  <KpiCell grow label={`${benchmark} CAGR`} value={`${m.bench_cagr}%`} />
+                    sub={`${vsBench > 0 ? '+' : ''}${vsBench.toFixed(2)}% vs ${benchmarkLabel}`} subColor={vsBench > 0 ? POS : NEG} />
+                  <KpiCell grow label={`${benchmarkLabel} CAGR`} value={`${m.bench_cagr}%`} />
                   <KpiCell grow label="Sharpe" value={String(m.port_sharpe)} color={m.port_sharpe >= 1 ? POS : undefined} />
                   <KpiCell grow label="Ann. Vol" value={`${m.port_vol}%`} />
                   <KpiCell grow label="Max Drawdown" value={`${m.max_drawdown}%`} color={NEG} />
@@ -533,7 +524,7 @@ export function PortfolioTab() {
                   <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} />
                   <Legend wrapperStyle={{ fontSize: 10 }} />
                   <Line type="monotone" dataKey="portfolio" name="Portfolio" stroke={cc.c2} strokeWidth={2.5} dot={false} />
-                  <Line type="monotone" dataKey="benchmark" name={benchmark} stroke={cc.primary} strokeWidth={2} strokeDasharray="5 3" dot={false} />
+                  <Line type="monotone" dataKey="benchmark" name={benchmarkLabel} stroke={cc.primary} strokeWidth={2} strokeDasharray="5 3" dot={false} />
                   {data.strategyResult && (
                     <Line type="monotone" dataKey="strategy" name="Strategy Overlay"
                       stroke={cc.gain} strokeWidth={2} strokeDasharray="4 2" dot={false} />
@@ -553,7 +544,7 @@ export function PortfolioTab() {
                   </BarChart>
                 </ResponsiveContainer>
               </PortChartPanel>
-              <PortChartPanel label={`Rolling 60D Beta vs ${benchmark}`} height={208}>
+              <PortChartPanel label={`Rolling 60D Beta vs ${benchmarkLabel}`} height={208}>
                 <ResponsiveContainer width="100%" height={180}>
                   <LineChart data={data.rolling_beta}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
@@ -576,15 +567,15 @@ export function PortfolioTab() {
                 <>
                   {reg.observations >= 3 && (
                     <div style={{ ...STRIP, flexWrap: 'wrap' }}>
-                      <KpiCell grow minWidth={135} label="Market Corr. (r)" value={reg.correlation.toFixed(3)} color={Math.abs(reg.correlation) < 0.35 ? POS : undefined} sub={`daily returns vs ${benchmark}`} />
+                      <KpiCell grow minWidth={135} label="Market Corr. (r)" value={reg.correlation.toFixed(3)} color={Math.abs(reg.correlation) < 0.35 ? POS : undefined} sub={`daily returns vs ${benchmarkLabel}`} />
                       <KpiCell grow label="R²" value={reg.rSquared.toFixed(3)} sub="market explained" />
                       <KpiCell grow label="Beta" value={reg.beta.toFixed(3)} sub={`p ${formatPValue(reg.betaPValue)}`} />
                       <KpiCell grow label="Daily Alpha" value={`${reg.alpha >= 0 ? '+' : ''}${(reg.alpha * 100).toFixed(3)}%`} color={reg.alpha >= 0 ? POS : NEG} sub={`p ${formatPValue(reg.alphaPValue)}`} />
                       <KpiCell grow label="Observations" value={String(reg.observations)} sub="daily return pairs" />
                     </div>
                   )}
-                  <PortChartPanel label={`Regression — ${data.strategyResult ? 'Strategy' : 'Portfolio'} vs ${benchmark} Daily Returns`} height={330}>
-                    <ReturnsScatter x={reg.x} y={reg.y} line={reg.line} xLabel={benchmark} yLabel={yLabel} height={280} />
+                  <PortChartPanel label={`Regression — ${data.strategyResult ? 'Strategy' : 'Portfolio'} vs ${benchmarkLabel} Daily Returns`} height={330}>
+                    <ReturnsScatter x={reg.x} y={reg.y} line={reg.line} xLabel={benchmarkLabel} yLabel={yLabel} height={280} />
                     <div style={{ fontSize: 9, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', textAlign: 'center', marginTop: 6 }}>
                       OLS line · two-sided p-values test beta and alpha against zero
                     </div>

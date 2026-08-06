@@ -47,6 +47,28 @@ def test_backtest_dividend_modes_post_and_report_payments(monkeypatch):
     assert exclude["dividend_total_pct"] == 2.0
 
 
+def test_crsp_is_a_benchmark_and_does_not_replace_holdings(monkeypatch):
+    _patch(monkeypatch)
+    index = _action_frame().index[1:]
+    monkeypatch.setattr(
+        pf,
+        "_crsp_pit_returns",
+        lambda start, end: (pd.Series([0.01, -0.02, 0.03], index=index), [{"ticker": "OLD"}], 500),
+    )
+
+    out = pf.backtest(pf.BacktestRequest(
+        tickers=["AAPL"], weights=[1.0], benchmark_source="crsp",
+        start="2025-01-02", end="2025-01-10", dividend_mode="cash",
+    ))
+
+    assert out["benchmark_source"] == "crsp"
+    assert out["benchmark_label"] == "CRSP S&P 500 PIT"
+    assert "AAPL" in out["per_ticker_returns"]
+    assert out["dividend_total_pct"] == 2.0
+    assert out["constituent_count"] == 500
+    assert out["delistings"] == [{"ticker": "OLD"}]
+
+
 def test_monte_carlo_reports_mode_yield_and_dividend_income(monkeypatch):
     _patch(monkeypatch)
     out = pf.monte_carlo(pf.MonteCarloRequest(

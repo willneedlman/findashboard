@@ -25,7 +25,7 @@ import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
 import UniversePicker from '../components/UniversePicker'
 import { CASH_SYMBOL } from '../lib/pmImport'
 import { screenerFilterToApi } from '../lib/format'
-import ConfigHeader, { Field, NumberInput, paramInput, RebalanceSelect, type DividendMode, type RebalanceFreq } from '../components/portfolio/ConfigHeader'
+import ConfigHeader, { Field, NumberInput, paramInput, RebalanceSelect, type BenchmarkSource, type DividendMode, type RebalanceFreq } from '../components/portfolio/ConfigHeader'
 import { usePortfolio, type PortfolioHolding } from '../contexts/PortfolioContext'
 import { PRESETS, PRESET_DESC, PRESET_GROUPS } from './strategy-builder/shared'
 import { ALGO_STRATEGIES, ALGO_DEFAULT_PARAMS, ALGO_PARAM_LABELS } from './portfolio-backtester/shared'
@@ -1541,6 +1541,7 @@ export function MonteCarloContent() {
   const [nSims, setNSims] = useState(500)
   const [model, setModel] = useState<SimModel>('gbm')
   const [benchmark, setBenchmark] = useState('SPY')
+  const [benchmarkSource, setBenchmarkSource] = useState<BenchmarkSource>('ticker')
   const [targetPrice, setTargetPrice] = useState(0)
   const [fetching, setFetching] = useState(false)
   const [slPct, setSlPct] = useState('')
@@ -1555,10 +1556,7 @@ export function MonteCarloContent() {
   const [shortMaintenance, setShortMaintenance] = useState('30')
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [rebalance, setRebalance] = useState<RebalanceFreq>('none')
-  const [crspMode, setCrspMode] = useState(false)
-  // CRSP mode estimates drift/vol from an actual historical window (point-in-time
-  // S&P 500 membership as of `start`) rather than simulating forward from today,
-  // so it needs a date range the normal per-leg GBM/bootstrap flow doesn't.
+  const [crspCalibration, setCrspCalibration] = useState(false)
   const [crspStart, setCrspStart] = useState('2015-01-01')
   const [crspEnd, setCrspEnd] = useState(() => new Date().toISOString().split('T')[0])
 
@@ -1663,81 +1661,11 @@ export function MonteCarloContent() {
     mutationFn: async () => {
       _seed = 42 * (horizon + nSims + legs.length)
 
-      if (crspMode) {
-        const [{ data: simulation }, benchResult] = await Promise.all([
-          axios.post('/api/portfolio/montecarlo', {
-            crsp_mode: true,
-            start: crspStart,
-            end: crspEnd,
-            n_sims: Math.min(nSims, 1000),
-            horizon_days: horizon,
-            leverage: Math.max(1, Number(leverage) || 1),
-            borrow_rate: Math.max(0, Number(borrowRate) || 0),
-            long_maintenance_margin: Math.min(200, Math.max(1, Number(longMaintenance) || 25)) / 100,
-            short_maintenance_margin: Math.min(200, Math.max(1, Number(shortMaintenance) || 30)) / 100,
-            dividend_mode: dividendMode,
-          }),
-          axios.get(`/api/market/history?ticker=${benchmark}&start=2020-01-01`)
-            .then(r => r.data)
-            .catch(() => null),
-        ])
-
-        // The API returns its chart sample time-major; transpose to the path-major
-        // shape used by the shared percentile helpers below.
-        const sampledPaths = (simulation.sample_paths?.[0] ?? []).map((_: number, i: number) =>
-          simulation.sample_paths.map((row: number[]) => row[i] * 100)
-        )
-        const terminal = (simulation.histogram as number[]).map(v => v * 100).sort((a, b) => a - b)
-        const benchVol = benchResult?.metrics?.ann_volatility ?? 15
-        const benchDrift = benchResult?.metrics
-          ? (() => {
-              const years = Math.max(new Date().getFullYear() - 2020, 1)
-              return (Math.pow(1 + benchResult.metrics.total_return / 100, 1 / years) - 1) * 100
-            })()
-          : 8
-        const benchPaths = runGBM(100, benchDrift / 100, benchVol / 100, horizon, 100)
-        const bands = Array.from({ length: horizon + 1 }, (_, day) => ({
-          day,
-          ...pathPercentiles(sampledPaths, day),
-          bench_p50: pathPercentiles(benchPaths, day).p50,
-        }))
-        const min = terminal[0], max = terminal[terminal.length - 1]
-        const step = Math.max((max - min) / 50, 1)
-        const histogram = Array.from({ length: 50 }, (_, i) => {
-          const lo = min + i * step, hi = lo + step
-          return { price: +lo.toFixed(0), count: terminal.filter(v => v >= lo && (i === 49 ? v <= hi : v < hi)).length }
-        })
-        const p5 = terminal[Math.floor(terminal.length * 0.05)]
-        const cvarSlice = terminal.slice(0, Math.max(1, Math.floor(terminal.length * 0.05)))
-        const target = targetPrice > 0 ? targetPrice : null
-        return {
-          bands, histogram, S0: 100,
-          median: terminal[Math.floor(terminal.length * 0.5)], p5,
-          p95: terminal[Math.floor(terminal.length * 0.95)],
-          probProfit: terminal.filter(v => v > 100).length / terminal.length * 100,
-          probRuin: simulation.pct_wiped,
-          probMarginCall: simulation.pct_margin_called,
-          probLiquidation: simulation.pct_forced_liquidation,
-          medianMaxMarginUtilization: simulation.median_max_margin_utilization,
-          marginEnabled: Math.max(1, Number(leverage) || 1) > 1,
-          varAmt: 100 - p5,
-          cvarAmt: 100 - cvarSlice.reduce((sum, value) => sum + value, 0) / cvarSlice.length,
-          coreMetrics: simulation.core_metrics as CoreSimulationMetrics,
-          effDrift: simulation.mu * 100,
-          probTarget: target === null ? null : terminal.filter(v => v >= target).length / terminal.length * 100,
-          targetPrice, model: 'gbm', benchmark, legs: [],
-          crsp_mode: true,
-          dividendMode: simulation.dividend_mode,
-          medianDividendIncome: simulation.median_dividend_income_pct,
-          constituent_count: simulation.constituent_count,
-          delistings: simulation.delistings ?? [],
-        }
-      }
       const totalWeight = legs.reduce((s, l) => s + l.weight, 0) || 100
       const dividendSymbols = legs.filter(l => l.ticker && l.ticker !== CASH_SYMBOL).map(l => l.ticker)
+      const needsCrsp = benchmarkSource === 'crsp' || crspCalibration
 
-      // Fire strategy signals + benchmark fetch in parallel
-      const [legAdjs, benchResult, dividendSnapshot] = await Promise.all([
+      const [legAdjs, benchResult, dividendSnapshot, crspSimulation] = await Promise.all([
         Promise.all(
           legs.map(async (leg) => {
             if (leg.strategy === STRATEGIES[0]) return { stratAdj: 0, stratLabel: '', stratDetail: '', stratChartData: [], stratBuyCount: 0, stratSellCount: 0 }
@@ -1788,26 +1716,49 @@ export function MonteCarloContent() {
             } catch { return { stratAdj: 0, stratLabel: '', stratDetail: '', stratChartData: [], stratBuyCount: 0, stratSellCount: 0 } }
           })
         ),
-        axios.get(`/api/market/history?ticker=${benchmark}&start=2020-01-01`)
-          .then(r => r.data)
-          .catch(() => null),
+        benchmarkSource === 'ticker'
+          ? axios.get(`/api/market/history?ticker=${benchmark}&start=2020-01-01`).then(r => r.data).catch(() => null)
+          : Promise.resolve(null),
         dividendSymbols.length
           ? axios.get(`/api/market/dividends?tickers=${encodeURIComponent(dividendSymbols.join(','))}`)
               .then(r => r.data as Record<string, { dividend_yield?: number }>)
               .catch(() => ({} as Record<string, { dividend_yield?: number }>))
           : Promise.resolve({} as Record<string, { dividend_yield?: number }>),
+        needsCrsp
+          ? axios.post('/api/portfolio/montecarlo', {
+              crsp_mode: true,
+              start: crspStart,
+              end: crspEnd,
+              n_sims: Math.min(nSims, 1000),
+              horizon_days: horizon,
+              leverage: 1,
+              borrow_rate: 0,
+              dividend_mode: 'reinvest',
+            }).then(r => r.data)
+          : Promise.resolve(null),
       ])
 
       const dividendYields = legs.map(l => l.ticker === CASH_SYMBOL ? 0 : Math.max(0, Number(dividendSnapshot[l.ticker]?.dividend_yield ?? l.dividendYield) || 0))
 
-      const benchVol   = benchResult?.metrics?.ann_volatility ?? 15
-      const benchDrift = benchResult?.metrics
+      const crspDrift = Number(crspSimulation?.mu ?? 0) * 100
+      const crspVol = Number(crspSimulation?.sigma ?? 0) * 100
+      const benchVol = benchmarkSource === 'crsp' ? crspVol : (benchResult?.metrics?.ann_volatility ?? 15)
+      const benchDrift = benchmarkSource === 'crsp' ? crspDrift : benchResult?.metrics
         ? (() => {
             const years = Math.max(new Date().getFullYear() - 2020, 1)
             const cagr  = (Math.pow(1 + benchResult.metrics.total_return / 100, 1 / years) - 1) * 100
             return Math.max(-150, Math.min(150, cagr))
           })()
         : 8
+
+      const calibrationActive = crspCalibration && model !== 'bootstrap' && crspSimulation != null
+      const nonCashWeight = legs.reduce((sum, leg) => sum + (leg.ticker === CASH_SYMBOL ? 0 : Math.max(0, leg.weight)), 0) || 1
+      const baseDrift = legs.reduce((sum, leg) => sum + (leg.ticker === CASH_SYMBOL ? 0 : Math.max(0, leg.weight) * leg.drift), 0) / nonCashWeight
+      const baseVol = legs.reduce((sum, leg) => sum + (leg.ticker === CASH_SYMBOL ? 0 : Math.max(0, leg.weight) * leg.vol), 0) / nonCashWeight
+      const driftShift = calibrationActive ? crspDrift - baseDrift : 0
+      const volScale = calibrationActive && baseVol > 0 ? Math.max(0.25, Math.min(4, crspVol / baseVol)) : 1
+      const calibratedDrifts = legs.map(leg => leg.ticker === CASH_SYMBOL ? leg.drift : leg.drift + driftShift)
+      const calibratedVols = legs.map(leg => leg.ticker === CASH_SYMBOL ? leg.vol : leg.vol * volScale)
 
       const n = Math.min(nSims, 500)
 
@@ -1855,7 +1806,7 @@ export function MonteCarloContent() {
       const allPaths: number[][][] = new Array(legs.length)
       if (model === 'bootstrap' && aligned.length) {
         const targetMeans = alignedIdx.map((i, p) => {
-          const mu = (legs[i].drift + legAdjs[i].stratAdj) / 100
+          const mu = (calibratedDrifts[i] + legAdjs[i].stratAdj) / 100
           const em = aligned[p].reduce((a, b) => a + b, 0) / aligned[p].length
           const ev = aligned[p].reduce((a, x) => a + (x - em) * (x - em), 0) / aligned[p].length
           return mu / 252 - 0.5 * ev   // = (mu - 0.5 σ²) dt with empirical σ
@@ -1863,8 +1814,8 @@ export function MonteCarloContent() {
         const sharedPaths = runBootstrapShared(aligned, targetMeans, horizon, n, BLOCK_SIZE)
         alignedIdx.forEach((i, p) => { allPaths[i] = sharedPaths[p] })
       } else if (model !== 'bootstrap' && aligned.length >= 2) {
-        const mus    = alignedIdx.map(i => (legs[i].drift + legAdjs[i].stratAdj) / 100)
-        const sigmas = alignedIdx.map(i => legs[i].vol / 100)
+        const mus    = alignedIdx.map(i => (calibratedDrifts[i] + legAdjs[i].stratAdj) / 100)
+        const sigmas = alignedIdx.map(i => calibratedVols[i] / 100)
         const chol   = cholesky(correlationMatrix(aligned))
         const corrPaths = runDiffusionCorrelated(mus, sigmas, chol, horizon, n, model === 't')
         alignedIdx.forEach((i, p) => { allPaths[i] = corrPaths[p] })
@@ -1874,8 +1825,8 @@ export function MonteCarloContent() {
       // simulate independently. A bootstrap leg with no history falls back to GBM.
       legs.forEach((leg, i) => {
         if (allPaths[i]) return
-        const mu    = (leg.drift + legAdjs[i].stratAdj) / 100
-        const sigma = leg.vol / 100
+        const mu    = (calibratedDrifts[i] + legAdjs[i].stratAdj) / 100
+        const sigma = calibratedVols[i] / 100
         if (model === 't') allPaths[i] = runDiffusion(1.0, mu, sigma, horizon, n, () => tRandom(T_DF))
         else allPaths[i] = runGBM(1.0, mu, sigma, horizon, n)
       })
@@ -1955,7 +1906,14 @@ export function MonteCarloContent() {
       const medianMaxMarginUtilization = marginUtils[Math.floor(marginUtils.length * 0.5)] ?? 0
       const portfolioPaths = applyRiskControls(simulated.map(s => s.path)).map(p => p.map(v => v * 100))
 
-      const benchPaths = runGBM(100, benchDrift / 100, benchVol / 100, horizon, 100)
+      const crspBenchmarkPaths = benchmarkSource === 'crsp'
+        ? (crspSimulation?.sample_paths?.[0] ?? []).map((_: number, i: number) =>
+            crspSimulation.sample_paths.map((row: number[]) => row[i] * 100)
+          )
+        : []
+      const benchPaths = crspBenchmarkPaths.length
+        ? crspBenchmarkPaths
+        : runGBM(100, benchDrift / 100, benchVol / 100, horizon, 100)
 
       // Percentile bands
       const bands = Array.from({ length: horizon + 1 }, (_, day) => ({
@@ -1985,7 +1943,7 @@ export function MonteCarloContent() {
       })
 
       const effDrift = legs.reduce((s, l, i) =>
-        s + signs[i] * (l.weight / totalWeight) * (l.drift + legAdjs[i].stratAdj + (dividendMode === 'exclude' ? 0 : dividendYields[i])), 0)
+        s + signs[i] * (l.weight / totalWeight) * (calibratedDrifts[i] + legAdjs[i].stratAdj + (dividendMode === 'exclude' ? 0 : dividendYields[i])), 0)
 
       const probTarget = targetPrice > 0
         ? terminal.filter(v => v >= targetPrice).length / terminal.length * 100
@@ -1999,8 +1957,24 @@ export function MonteCarloContent() {
         dividendMode, medianDividendIncome,
         marginEnabled: requestedLeverage > 1 || signs.some(sign => sign < 0),
         bootstrapReady: model !== 'bootstrap' || legs.every((l, i) => l.ticker === CASH_SYMBOL || alignedIdx.includes(i)),
-        benchmark, legs: legs.map((l, i) => ({ ...l, ...legAdjs[i], dividendYield: dividendYields[i] })),
-        crsp_mode: false,
+        benchmark: benchmarkSource === 'crsp' ? 'CRSP S&P 500 PIT' : benchmark,
+        benchmarkSource,
+        legs: legs.map((l, i) => ({
+          ...l,
+          ...legAdjs[i],
+          dividendYield: dividendYields[i],
+          modeledDrift: calibratedDrifts[i],
+          modeledVol: calibratedVols[i],
+        })),
+        crspCalibration: calibrationActive,
+        crspContext: crspSimulation ? {
+          constituentCount: crspSimulation.constituent_count,
+          delistings: crspSimulation.delistings ?? [],
+          drift: crspDrift,
+          volatility: crspVol,
+          start: crspStart,
+          end: crspEnd,
+        } : null,
       }
     },
   })
@@ -2033,8 +2007,8 @@ export function MonteCarloContent() {
         'Monte Carlo',
         'Portfolio Legs',
         ['Ticker', 'Side', 'Weight %', 'Vol %', 'Price Drift %', 'Dividend Yield %'],
-        data.legs.slice(0, 20).map((l: { ticker: string; side?: string; weight: number; vol?: number; drift?: number; dividendYield?: number }) => [
-          l.ticker, l.side ?? 'long', l.weight, l.vol ?? null, l.drift ?? null, l.dividendYield ?? null,
+        data.legs.slice(0, 20).map((l: { ticker: string; side?: string; weight: number; vol?: number; drift?: number; modeledVol?: number; modeledDrift?: number; dividendYield?: number }) => [
+          l.ticker, l.side ?? 'long', l.weight, l.modeledVol ?? l.vol ?? null, l.modeledDrift ?? l.drift ?? null, l.dividendYield ?? null,
         ]),
       ))
     }
@@ -2116,8 +2090,9 @@ export function MonteCarloContent() {
           }
           return { ...makeLeg(h.ticker, h.weight), ...h } as Leg
         }))}
-        crspMode={crspMode} onCrspModeChange={setCrspMode}
         benchmark={benchmark} setBenchmark={setBenchmark}
+        benchmarkSource={benchmarkSource} setBenchmarkSource={setBenchmarkSource}
+        showCrspWindow={benchmarkSource === 'crsp' || crspCalibration}
         leverage={leverage} setLeverage={setLeverage}
         borrowRate={borrowRate} setBorrowRate={setBorrowRate}
         sl={{ val: slPct, set: setSlPct }}
@@ -2138,8 +2113,11 @@ export function MonteCarloContent() {
         paramExtra={
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <Field label="Simulation Model">
-              <select value={crspMode ? 'gbm' : model} disabled={crspMode} onChange={e => setModel(e.target.value as SimModel)}
-                style={{ ...paramInput, cursor: crspMode ? 'not-allowed' : 'pointer', opacity: crspMode ? 0.65 : 1 }}>
+              <select value={model} onChange={e => {
+                const next = e.target.value as SimModel
+                setModel(next)
+                if (next === 'bootstrap') setCrspCalibration(false)
+              }} style={{ ...paramInput, cursor: 'pointer' }}>
                 {(Object.keys(MODEL_LABELS) as SimModel[]).map(m => (
                   <option key={m} value={m}>{MODEL_LABELS[m]}</option>
                 ))}
@@ -2169,6 +2147,18 @@ export function MonteCarloContent() {
                   <div style={{ gridColumn: '1 / -1', color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', fontFamily: 'var(--theme-sans)', fontSize: 9, lineHeight: 1.45 }}>
                     Maintenance is applied to current marked exposure. Broker house requirements can be higher; set these fields to match the account being modeled.
                   </div>
+                  <button type="button" disabled={model === 'bootstrap'} onClick={() => setCrspCalibration(active => !active)}
+                    title={model === 'bootstrap' ? 'Bootstrap already uses realized historical returns' : 'Shift the selected holdings’ modeled drift and volatility to the CRSP point-in-time S&P 500 regime while preserving their relative differences'}
+                    style={{
+                      gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                      padding: '7px 9px', background: crspCalibration ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)' : 'transparent',
+                      border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', cursor: model === 'bootstrap' ? 'not-allowed' : 'pointer',
+                      color: crspCalibration ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)', opacity: model === 'bootstrap' ? 0.55 : 1,
+                      fontFamily: 'var(--theme-mono)', fontSize: 9, textAlign: 'left',
+                    }}>
+                    <span><strong>CRSP regime calibration</strong><br /><span style={{ opacity: 0.72 }}>Apply PIT market drift and volatility without replacing holdings</span></span>
+                    <span style={{ fontWeight: 700 }}>{crspCalibration ? 'ON' : 'OFF'}</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -2218,22 +2208,25 @@ export function MonteCarloContent() {
 
           {data && (
             <>
-              {data.crsp_mode && (
+              {data.crspContext && (
                 <div style={{
                   background: 'var(--theme-bg, #101c2e)',
                   border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
                   borderLeft: '4px solid var(--theme-primary, #c9a84c)',
                   padding: '8px 14px', fontFamily: 'var(--theme-mono)', fontSize: 11, lineHeight: 1.5,
                 }}>
-                  <span style={{ color: 'var(--theme-primary, #c9a84c)', fontWeight: 700 }}>SURVIVORSHIP-BIAS-FREE (CRSP)</span>
+                  <span style={{ color: 'var(--theme-primary, #c9a84c)', fontWeight: 700 }}>
+                    {data.benchmarkSource === 'crsp' ? 'BENCHMARK · CRSP S&P 500 PIT' : 'CALIBRATION · CRSP REGIME'}
+                  </span>
                   <span style={{ color: 'var(--theme-secondary, #99907e)', marginLeft: 8 }}>
-                    GBM calibration uses {data.constituent_count} S&amp;P 500 constituents as of {crspStart}
-                    {data.delistings?.length > 0 && `, including ${data.delistings.length} delisted/acquired names carried through the return history`}. Dividend distributions are embedded in CRSP total returns.
+                    Your {data.legs.length}-holding portfolio remains unchanged. CRSP uses {data.crspContext.constituentCount} S&amp;P 500 constituents as of {data.crspContext.start}
+                    {data.crspContext.delistings?.length > 0 && `, including ${data.crspContext.delistings.length} names later delisted or acquired`}.
+                    {data.crspCalibration && ` Portfolio assumptions are shifted to ${Number(data.crspContext.drift).toFixed(1)}% drift and ${Number(data.crspContext.volatility).toFixed(1)}% volatility at the aggregate regime level.`}
                   </span>
                 </div>
               )}
               {/* Portfolio composition */}
-              {!data.crsp_mode && <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '8px 12px', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '8px 12px', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                 {data.legs.map((l: any, i: number) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)' }}>{l.ticker}</span>
@@ -2241,7 +2234,7 @@ export function MonteCarloContent() {
                     <span style={{ fontSize: 10, color: 'var(--theme-primary, #c9a84c)' }}>{l.weight}%</span>
                     {l.fetched && (
                       <span style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.06em' }}>
-                        ${l.spot.toLocaleString()} · σ {l.vol}% · div {Number(l.dividendYield || 0).toFixed(2)}%
+                        ${l.spot.toLocaleString()} · σ {Number(l.modeledVol ?? l.vol).toFixed(1)}% · div {Number(l.dividendYield || 0).toFixed(2)}%
                       </span>
                     )}
                     {l.strategy !== STRATEGIES[0] && (
@@ -2261,7 +2254,7 @@ export function MonteCarloContent() {
                     {MODEL_LABELS[data.model as SimModel]}
                   </span>
                 </span>
-              </div>}
+              </div>
 
               {/* Answer-first outcome strip */}
               <div style={STRIP}>
@@ -2280,7 +2273,7 @@ export function MonteCarloContent() {
                 <KpiCell grow label="CVaR 95%" value={`$${data.cvarAmt.toFixed(2)}`} color={NEG} />
                 <KpiCell grow label="Eff. Drift" value={`${data.effDrift.toFixed(1)}%`} />
                 {data.medianDividendIncome != null && <KpiCell grow label="Median Dividends" value={`$${Number(data.medianDividendIncome).toFixed(2)}`} color={Number(data.medianDividendIncome) >= 0 ? POS : NEG}
-                  sub={data.dividendMode === 'cash' ? 'paid to cash' : data.dividendMode === 'exclude' ? 'observed, excluded' : data.dividendMode === 'embedded' ? 'embedded in CRSP returns' : 'reinvested'} />}
+                  sub={data.dividendMode === 'cash' ? 'paid to cash' : data.dividendMode === 'exclude' ? 'observed, excluded' : 'reinvested'} />}
                 {data.probTarget !== null && <KpiCell grow label={`Prob ≥ $${data.targetPrice}`} value={`${data.probTarget.toFixed(1)}%`} color={data.probTarget > 50 ? POS : undefined} />}
                 {data.marginEnabled && data.probMarginCall != null && <KpiCell grow label="Margin Call Odds" value={`${Number(data.probMarginCall).toFixed(1)}%`} color={data.probMarginCall > 0 ? NEG : POS} sub="maintenance breached" />}
                 {data.marginEnabled && data.probLiquidation != null && <KpiCell grow label="Forced Liquidation" value={`${Number(data.probLiquidation).toFixed(1)}%`} color={data.probLiquidation > 0 ? NEG : POS} sub="positions sold / covered" />}

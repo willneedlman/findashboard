@@ -117,9 +117,7 @@ def _series_metrics(
 
 class BacktestRequest(BaseModel):
     # Generous cap so an AGGREGATED book (several portfolios merged for the
-    # homescreen Overview) validates alongside a CASH sleeve leg. min_length=0 so
-    # crsp_mode (which ignores tickers/weights entirely — the S&P 500 point-in-time
-    # universe stands in for them) can send empty lists.
+    # homescreen Overview) validates alongside a CASH sleeve leg.
     tickers: list[str] = Field(default_factory=list, max_length=60)
     weights: list[float] = Field(default_factory=list, max_length=60)
     benchmark: str = "SPY"
@@ -134,18 +132,10 @@ class BacktestRequest(BaseModel):
     # "none" = buy and hold, "daily" = constant weights (the old behavior).
     rebalance: str = "none"
     dividend_mode: Literal["reinvest", "cash", "exclude"] = "reinvest"
-    # Survivorship-bias-free mode: ignores tickers/weights/leverage-per-name and
-    # instead buys the S&P 500 constituents as they actually stood on `start`
-    # (WRDS CRSP data/crsp.db), correctly carrying delisted names' realized
-    # outcome through the return series instead of silently dropping them.
-    crsp_mode: bool = False
+    benchmark_source: Literal["ticker", "crsp"] = "ticker"
 
     @model_validator(mode='after')
     def _validate(self):
-        if self.crsp_mode:
-            self.benchmark = validate_ticker(self.benchmark)
-            validate_date(self.start); validate_date(self.end)
-            return self
         eq_t, eq_w = [], []
         for t, w in zip(self.tickers, self.weights):
             if t.strip().upper() == CASH_SYMBOL:
@@ -156,7 +146,8 @@ class BacktestRequest(BaseModel):
         self.weights = eq_w
         if not self.tickers and self.cash_weight <= 0:
             raise HTTPException(400, "No holdings provided")
-        self.benchmark = validate_ticker(self.benchmark)
+        if self.benchmark_source == "ticker":
+            self.benchmark = validate_ticker(self.benchmark)
         validate_date(self.start); validate_date(self.end)
         if self.rebalance not in _REBAL_FREQS:
             raise HTTPException(400, f"rebalance must be one of {sorted(_REBAL_FREQS)}")
@@ -267,94 +258,71 @@ def _crsp_pit_returns(start: str, end: str) -> tuple[pd.Series, list[dict], int]
     return port, delistings, len(members)
 
 
-def _crsp_backtest_series(req: BacktestRequest) -> tuple[pd.Series, pd.Series, list[dict], int]:
-    """CRSP point-in-time portfolio + the live benchmark (a real, currently-
-    tradable index fund — not something CRSP needs to correct)."""
-    port, delistings, constituent_count = _crsp_pit_returns(req.start, req.end)
-
-    try:
-        dl = get_download((req.benchmark,), req.start, req.end)
-        braw = dl["Close"] if isinstance(dl.columns, pd.MultiIndex) and "Close" in dl.columns.get_level_values(0) else dl
-        if isinstance(braw, pd.Series):
-            braw = braw.to_frame(req.benchmark)
-        if braw.index.tz is not None:
-            braw.index = braw.index.tz_convert(None)
-    except Exception:
-        logger.exception("internal error"); raise HTTPException(500, "Internal server error")
-    bench = braw[req.benchmark].dropna().pct_change().dropna()
-
-    common = port.index.intersection(bench.index)
-    port, bench = port.loc[common], bench.loc[common]
-    if port.empty:
-        raise HTTPException(404, "No overlapping data between CRSP universe and benchmark")
-    return port, bench, delistings, constituent_count
-
-
 @router.post("/backtest")
 def backtest(req: BacktestRequest):
     dividend_payments: list[dict] = []
     dividend_total_pct: float | None = None
     benchmark_dividend_total_pct: float | None = None
-    if req.crsp_mode:
-        port, bench, delistings, constituent_count = _crsp_backtest_series(req)
-    else:
-        eq_w = np.array(req.weights, dtype=float) if req.tickers else np.array([])
+    delistings, constituent_count = [], 0
+    eq_w = np.array(req.weights, dtype=float) if req.tickers else np.array([])
 
-        all_tickers = list(dict.fromkeys(req.tickers + [req.benchmark]))
-        try:
-            dl = get_download(
-                tuple(sorted(all_tickers)), req.start, req.end, req.interval,
-                auto_adjust=False, actions=True,
-            )
-            raw = _download_field(dl, "Close", all_tickers)
-            dividends = _download_field(dl, "Dividends", all_tickers).fillna(0.0)
-            if raw.index.tz is not None:
-                raw.index = raw.index.tz_convert(None)
-            if dividends.index.tz is not None:
-                dividends.index = dividends.index.tz_convert(None)
-        except Exception:
-            logger.exception("internal error"); raise HTTPException(500, "Internal server error")
-
-        # Drop names with no fetched data at all (bad / newly listed / delisted
-        # symbol). Without this, a single all-NaN column makes the row-wise dropna
-        # below collapse the whole overlapping window to empty — exactly why a wide
-        # aggregated book charted "No performance data". The rest of the book still
-        # charts, and the surviving equity weights renormalize.
-        raw = raw[[c for c in raw.columns if raw[c].notna().any()]]
-        if req.benchmark not in raw.columns:
-            raise HTTPException(404, "No benchmark price data for the selected window")
-        kept_idx = [i for i, t in enumerate(req.tickers) if t in raw.columns]
-        req.tickers = [req.tickers[i] for i in kept_idx]
-        eq_w = eq_w[kept_idx] if len(eq_w) else eq_w
-        if not req.tickers and req.cash_weight <= 0:
-            raise HTTPException(404, "No price data for the provided holdings")
-
-        # Normalize equity + cash weights together so a cash sleeve dilutes exposure.
-        total_w = float(eq_w.sum()) + req.cash_weight
-        if total_w <= 0:
-            total_w = 1.0
-
-        raw = raw.dropna()
-        if raw.empty:
-            raise HTTPException(404, "No overlapping data")
-
-        dividends = dividends.reindex(index=raw.index, columns=raw.columns).fillna(0.0)
-        daily = raw.pct_change().dropna()
-        dividend_returns = dividends.div(raw.shift(1)).reindex(daily.index).fillna(0.0)
-        cash_daily = (1 + _get_risk_free_rate()) ** (1 / 252) - 1   # zero-vol cash sleeve
-        mask = _rebalance_mask(daily.index, req.rebalance)
-        eq_target = eq_w / total_w if len(eq_w) else np.array([])
-        cash_target = req.cash_weight / total_w
-        port_values, paid = _walk_portfolio_with_dividends(
-            (1 + daily[req.tickers]).to_numpy(),
-            dividend_returns[req.tickers].to_numpy(),
-            eq_target,
-            cash_target,
-            cash_daily,
-            mask,
-            req.dividend_mode,
+    benchmark_tickers = [req.benchmark] if req.benchmark_source == "ticker" else []
+    all_tickers = list(dict.fromkeys(req.tickers + benchmark_tickers))
+    try:
+        dl = get_download(
+            tuple(sorted(all_tickers)), req.start, req.end, req.interval,
+            auto_adjust=False, actions=True,
         )
-        port = pd.Series(port_values, index=daily.index)
+        raw = _download_field(dl, "Close", all_tickers)
+        dividends = _download_field(dl, "Dividends", all_tickers).fillna(0.0)
+        if raw.index.tz is not None:
+            raw.index = raw.index.tz_convert(None)
+        if dividends.index.tz is not None:
+            dividends.index = dividends.index.tz_convert(None)
+    except Exception:
+        logger.exception("internal error"); raise HTTPException(500, "Internal server error")
+
+    # Drop names with no fetched data at all (bad / newly listed / delisted
+    # symbol). Without this, a single all-NaN column makes the row-wise dropna
+    # below collapse the whole overlapping window to empty — exactly why a wide
+    # aggregated book charted "No performance data". The rest of the book still
+    # charts, and the surviving equity weights renormalize.
+    raw = raw[[c for c in raw.columns if raw[c].notna().any()]]
+    if req.benchmark_source == "ticker" and req.benchmark not in raw.columns:
+        raise HTTPException(404, "No benchmark price data for the selected window")
+    kept_idx = [i for i, t in enumerate(req.tickers) if t in raw.columns]
+    req.tickers = [req.tickers[i] for i in kept_idx]
+    eq_w = eq_w[kept_idx] if len(eq_w) else eq_w
+    if not req.tickers and req.cash_weight <= 0:
+        raise HTTPException(404, "No price data for the provided holdings")
+
+    # Normalize equity + cash weights together so a cash sleeve dilutes exposure.
+    total_w = float(eq_w.sum()) + req.cash_weight
+    if total_w <= 0:
+        total_w = 1.0
+
+    raw = raw.dropna()
+    if raw.empty:
+        raise HTTPException(404, "No overlapping data")
+
+    dividends = dividends.reindex(index=raw.index, columns=raw.columns).fillna(0.0)
+    daily = raw.pct_change().dropna()
+    dividend_returns = dividends.div(raw.shift(1)).reindex(daily.index).fillna(0.0)
+    cash_daily = (1 + _get_risk_free_rate()) ** (1 / 252) - 1
+    mask = _rebalance_mask(daily.index, req.rebalance)
+    eq_target = eq_w / total_w if len(eq_w) else np.array([])
+    cash_target = req.cash_weight / total_w
+    port_values, paid = _walk_portfolio_with_dividends(
+        (1 + daily[req.tickers]).to_numpy(),
+        dividend_returns[req.tickers].to_numpy(),
+        eq_target,
+        cash_target,
+        cash_daily,
+        mask,
+        req.dividend_mode,
+    )
+    port = pd.Series(port_values, index=daily.index)
+    if req.benchmark_source == "ticker":
         bench_values, bench_paid = _walk_portfolio_with_dividends(
             (1 + daily[[req.benchmark]]).to_numpy(),
             dividend_returns[[req.benchmark]].to_numpy(),
@@ -362,14 +330,20 @@ def backtest(req: BacktestRequest):
             np.zeros(len(daily), dtype=bool), req.dividend_mode,
         )
         bench = pd.Series(bench_values, index=daily.index)
-        cumulative_paid = np.cumsum(paid) * 100
-        dividend_payments = [
-            {"date": str(d.date()), "value": round(float(v) * 100, 6), "cumulative": round(float(c), 6)}
-            for d, v, c in zip(daily.index, paid, cumulative_paid) if v > 0
-        ]
-        dividend_total_pct = round(float(paid.sum()) * 100, 4)
         benchmark_dividend_total_pct = round(float(bench_paid.sum()) * 100, 4)
-        delistings, constituent_count = [], 0
+    else:
+        bench, delistings, constituent_count = _crsp_pit_returns(req.start, req.end)
+        common = port.index.intersection(bench.index)
+        port, bench = port.loc[common], bench.loc[common]
+        if port.empty:
+            raise HTTPException(404, "No overlapping data between the portfolio and CRSP benchmark")
+
+    cumulative_paid = np.cumsum(paid) * 100
+    dividend_payments = [
+        {"date": str(d.date()), "value": round(float(v) * 100, 6), "cumulative": round(float(c), 6)}
+        for d, v, c in zip(daily.index, paid, cumulative_paid) if v > 0
+    ]
+    dividend_total_pct = round(float(paid.sum()) * 100, 4)
 
     cum_gross = (1 + port).cumprod()
     equity, liquidated = _lever_equity(cum_gross, req.leverage, req.borrow_rate)
@@ -377,12 +351,10 @@ def backtest(req: BacktestRequest):
     cum_bench = (1 + bench).cumprod() * 100
 
     rf = _get_risk_free_rate()
-    return_method = (
-        "CRSP total returns with embedded distributions"
-        if req.crsp_mode else f"unadjusted close plus explicit dividends ({req.dividend_mode})"
-    )
+    return_method = f"unadjusted close plus explicit dividends ({req.dividend_mode})"
     m = _series_metrics(equity, bench, rf, return_method)
-    bench_m = _series_metrics((1 + bench).cumprod(), bench, rf, return_method)
+    benchmark_method = "CRSP total returns with embedded distributions" if req.benchmark_source == "crsp" else return_method
+    bench_m = _series_metrics((1 + bench).cumprod(), bench, rf, benchmark_method)
 
     lev_ret = equity.pct_change().replace([np.inf, -np.inf], np.nan).dropna()
     window = 60
@@ -402,7 +374,7 @@ def backtest(req: BacktestRequest):
         "leverage": req.leverage,
         "borrow_rate": req.borrow_rate,
         "rebalance": req.rebalance,
-        "dividend_mode": "embedded" if req.crsp_mode else req.dividend_mode,
+        "dividend_mode": req.dividend_mode,
         "dividend_total_pct": dividend_total_pct,
         "benchmark_dividend_total_pct": benchmark_dividend_total_pct,
         "dividend_payments": dividend_payments,
@@ -414,19 +386,18 @@ def backtest(req: BacktestRequest):
         ],
         "daily_returns": [{"date": str(d.date()), "value": round(float(v) * 100, 4)} for d, v in lev_ret.items()],
         "rolling_beta": [{"date": str(d.date()), "value": round(float(v), 4)} for d, v in rolling_beta.dropna().items()],
-        # per_ticker_returns is only meaningful (and small) for an explicit few-name
-        # book — a 500-constituent CRSP universe reports delistings/count instead.
-        "per_ticker_returns": {} if req.crsp_mode else {
+        "per_ticker_returns": {
             ticker: [{"date": str(d.date()), "value": round(float(v) * 100, 6)} for d, v in (
                 daily[ticker] + (dividend_returns[ticker] if req.dividend_mode == "reinvest" else 0)
             ).items()]
             for ticker in req.tickers
         },
-        "per_ticker_dividends": {} if req.crsp_mode else {
+        "per_ticker_dividends": {
             ticker: [{"date": str(d.date()), "value": round(float(v) * 100, 6)} for d, v in dividend_returns[ticker].items() if v > 0]
             for ticker in req.tickers
         },
-        "crsp_mode": req.crsp_mode,
+        "benchmark_source": req.benchmark_source,
+        "benchmark_label": "CRSP S&P 500 PIT" if req.benchmark_source == "crsp" else req.benchmark,
         "constituent_count": constituent_count,
         "delistings": delistings,
     }
@@ -482,8 +453,8 @@ def _margin_equity_paths(
 
 
 class MonteCarloRequest(BaseModel):
-    # min_length=0 so crsp_mode (which ignores tickers/weights — the S&P 500
-    # point-in-time universe stands in for them) can send an empty list.
+    # Empty holdings are accepted only for internal CRSP benchmark/calibration
+    # simulations. User-facing portfolio simulations always validate holdings.
     tickers: list[str] = Field(default_factory=list, max_length=20)
     weights: list[float] | None = None
     start: str = "2020-01-01"
@@ -499,10 +470,8 @@ class MonteCarloRequest(BaseModel):
     model: Literal["gbm", "student_t", "bootstrap"] = "gbm"
     t_degrees_freedom: float = Field(default=5.0, ge=2.1, le=30.0)
     bootstrap_block_days: int = Field(default=5, ge=1, le=63)
-    # Survivorship-bias-free mode: estimates the GBM drift/vol from the S&P 500's
-    # actual point-in-time constituent history (WRDS CRSP) instead of a typed
-    # basket — a delisted name's realized wipeout or buyout premium is embedded
-    # in the historical return series and correctly fattens the risk estimate.
+    # Internal CRSP benchmark/calibration request. The UI keeps the user's
+    # holdings as the subject and consumes this simulation as comparison context.
     crsp_mode: bool = False
 
     @model_validator(mode='after')
