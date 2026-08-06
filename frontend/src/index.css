@@ -1285,7 +1285,7 @@ textarea.ft-control {
   border-bottom: 1px solid var(--theme-border, rgba(255,255,255,0.08));
 }
 .vol-rank-cell {
-  padding: 20px 22px;
+  padding: 16px 22px;
   background: var(--theme-surface, #0d1826);
   border-right: 1px solid var(--theme-border, rgba(255,255,255,0.08));
 }
@@ -1301,7 +1301,7 @@ textarea.ft-control {
   position: relative;
   display: flex;
   height: 8px;
-  margin: 18px 0 7px;
+  margin: 13px 0 7px;
 }
 .vol-zone-gauge > span:nth-child(1),
 .vol-zone-gauge > span:nth-child(2) { flex: 33; }
@@ -1330,7 +1330,7 @@ textarea.ft-control {
 .vol-verdict-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .vol-verdict-metric {
   min-width: 0;
-  padding: 20px 22px;
+  padding: 16px 22px;
   border-right: 1px solid var(--theme-border, rgba(255,255,255,0.08));
 }
 .vol-verdict-metric:last-child { border-right: 0; }
