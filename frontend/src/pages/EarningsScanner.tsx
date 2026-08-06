@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback, Fragment } from 'react'
 import axios from 'axios'
-import { Star } from 'lucide-react'
+import { Calendar, Star } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import { calendarMismatchDate, hasReportedFigures, sourceHasGapAt } from './earningsCalendarStatus'
 import EmptyState from '../components/EmptyState'
@@ -30,10 +30,69 @@ const C = {
   dim: 'color-mix(in srgb, var(--theme-secondary, #5e768f) 62%, var(--theme-bg, #101c2e))',
   pos: 'var(--theme-positive, #22c55e)', neg: 'var(--theme-negative, #ef4444)', warn: '#f59e0b', blue: 'var(--theme-tertiary, #60a5fa)',
   mono: 'var(--theme-mono)', sans: 'var(--theme-sans)',
+  // Hairline between table rows — lighter than the panel border so 500+ rows
+  // read as a field rather than a grid.
+  borderFaint: 'var(--theme-border-faint, rgba(255,255,255,0.05))',
+  // Recessed ground for inputs, segmented controls and the meta strip. Routed
+  // through --theme-hover so it inverts sensibly on light presets instead of
+  // stamping a fixed black wash over them.
+  inset: 'var(--theme-hover, rgba(0,0,0,0.18))',
 }
 const gold = (pct: number) => `color-mix(in srgb, var(--theme-primary, #c9a84c) ${pct}%, transparent)`
 
 const LABEL: React.CSSProperties = { fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.muted, display: 'block' }
+
+// ─── toolbar primitives ─────────────────────────────────────────────────────
+
+function GroupLabel({ children, htmlFor, title }: { children: React.ReactNode; htmlFor?: string; title?: string }) {
+  return (
+    <label htmlFor={htmlFor} title={title} style={{
+      fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
+      textTransform: 'uppercase', color: C.muted, marginRight: 10, whiteSpace: 'nowrap',
+    }}>{children}</label>
+  )
+}
+
+function Divider() {
+  return <span aria-hidden style={{ width: 1, height: 24, background: C.border, margin: '0 16px', flexShrink: 0 }} />
+}
+
+function Segmented({ items, value, onPick }: {
+  items: { key: string; label: string; title?: string }[]
+  value: string
+  onPick: (key: string) => void
+}) {
+  return (
+    <div style={{ display: 'flex', border: `1px solid ${C.border}`, background: C.inset }}>
+      {items.map((it, i) => {
+        const on = it.key === value
+        return (
+          <button key={it.key} onClick={() => onPick(it.key)} aria-pressed={on} title={it.title}
+            style={{
+              background: on ? C.gold : 'transparent', color: on ? C.header : C.muted,
+              border: 'none', borderRight: i < items.length - 1 ? `1px solid ${C.border}` : 'none',
+              cursor: 'pointer', fontFamily: C.sans, fontSize: 10, fontWeight: 700,
+              letterSpacing: '0.06em', textTransform: 'uppercase', padding: '7px 12px', whiteSpace: 'nowrap',
+            }}>{it.label}</button>
+        )
+      })}
+    </div>
+  )
+}
+
+const Sep = () => <span aria-hidden style={{ color: C.dim, fontFamily: C.sans, fontSize: 11 }}>·</span>
+
+function Stat({ n, word, strong, color }: { n: number; word: string; strong?: boolean; color?: string }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 5 }}>
+      <span style={{
+        fontFamily: C.mono, fontSize: 12, fontWeight: strong ? 700 : 400,
+        color: color ?? C.text, fontVariantNumeric: 'tabular-nums',
+      }}>{n}</span>
+      <span style={{ fontFamily: C.sans, fontSize: 11, color: C.muted }}>{word}</span>
+    </span>
+  )
+}
 
 interface Row {
   symbol: string; date: string; hour: string; quarter: number | null; year: number | null
@@ -89,7 +148,7 @@ interface MetricVal { value: string; yoy?: string | null; prior?: string | null;
 interface ReportedMetric { name: string; actual: string; estimate?: string | null; variance?: string | null; variance_pct?: string | null; yoy?: string | null }
 interface Metrics { eps?: MetricVal; revenue?: MetricVal; rev_yoy?: MetricVal; gross_margin?: MetricVal; reported_vs_consensus?: ReportedMetric[] }
 interface Segment { name: string; value: number }
-interface Filing { form: string; date: string; url: string }
+interface Filing { form: string; date: string; url: string; accession?: string; items?: string }
 interface SummaryResult {
   ticker: string; id?: string; company?: string; period?: string; form?: string; filed?: string; url?: string
   metrics?: Metrics | null; segments?: Segment[] | null; reaction?: { date: string; pct: number } | null
@@ -779,13 +838,18 @@ export function EarningsScannerContent() {
 
   // ---- per-row AI filing summary (the old Earnings Summarizer, streamed)
   const [summaries, setSummaries] = useState<Record<string, SummaryState>>({})
-  const fetchSummary = useCallback(async (ticker: string) => {
+  // filingDate targets one past filing; omitted, the backend keeps its default
+  // of the most recent one.
+  const fetchSummary = useCallback(async (ticker: string, filingDate?: string) => {
     setSummaries(prev => ({ ...prev, [ticker]: { stage: 'Queued', pct: 0, result: null, error: null } }))
     try {
       const response = await fetch('/api/filings/summarise-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tickers: [ticker], include_10q: true, include_10k: false, transcript_limit: 1 }),
+        body: JSON.stringify({
+          tickers: [ticker], include_10q: true, include_10k: false, transcript_limit: 1,
+          ...(filingDate ? { filing_date: filingDate } : {}),
+        }),
       })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const reader = response.body?.getReader()
@@ -819,6 +883,49 @@ export function EarningsScannerContent() {
       setSummaries(prev => ({ ...prev, [ticker]: { stage: 'Failed', pct: 100, result: null, error: 'Could not reach the summarizer. Try again.' } }))
     }
   }, [])
+
+  // ---- row-level popovers. Both are single-open across every date group, so
+  // they live here rather than inside a GroupBody.
+  const [hoverSym, setHoverSym] = useState<string | null>(null)
+  const hoverTimer = useRef<number | null>(null)
+  const [filingsFor, setFilingsFor] = useState<string | null>(null)
+  const [filings, setFilings] = useState<Record<string, Filing[] | 'loading' | 'error'>>({})
+  // Which filing each ticker's summary should read, set from the archive or the
+  // track record. Keyed by symbol so it survives collapsing the row.
+  const [aiTargets, setAiTargets] = useState<Record<string, AiTarget | null>>({})
+
+  const clearHoverTimer = () => {
+    if (hoverTimer.current != null) { window.clearTimeout(hoverTimer.current); hoverTimer.current = null }
+  }
+  useEffect(() => clearHoverTimer, [])
+
+  // 400ms dwell: brushing across the table on the way somewhere else should not
+  // flash a card on every row it passes.
+  const onHoverSym = useCallback((sym: string | null) => {
+    clearHoverTimer()
+    if (sym == null) { setHoverSym(null); return }
+    hoverTimer.current = window.setTimeout(() => setHoverSym(sym), 400)
+  }, [])
+
+  const openFilings = useCallback((sym: string) => {
+    clearHoverTimer(); setHoverSym(null)
+    setFilingsFor(cur => (cur === sym ? null : sym))
+    setFilings(prev => {
+      if (prev[sym] && prev[sym] !== 'error') return prev
+      axios.get(`/api/filings/filings/${sym}`)
+        .then(r => setFilings(p => ({ ...p, [sym]: r.data.filings ?? [] })))
+        .catch(() => setFilings(p => ({ ...p, [sym]: 'error' })))
+      return { ...prev, [sym]: 'loading' }
+    })
+  }, [])
+
+  // Escape closes the archive, matching TickerLink / ColumnFilterMenu.
+  useEffect(() => {
+    if (!filingsFor) return
+    const onKey = (ev: KeyboardEvent) => { if (ev.key === 'Escape') setFilingsFor(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [filingsFor])
 
   const onToggleWatch = useCallback((sym: string) => { setWatchlist(toggleWatchlist(sym)) }, [])
   const addWatch = useCallback((syms: string[]) => {
@@ -923,132 +1030,136 @@ export function EarningsScannerContent() {
         @media (prefers-reduced-motion: reduce) { .ec-spinner { animation: none; } }
       `}</style>
 
-      {/* Controls */}
-      <div style={{
-        background: C.header, border: `1px solid ${C.border}`, padding: '14px 16px',
-        display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 16, marginBottom: 14,
-      }}>
-        <div>
-          <label style={{ ...LABEL, marginBottom: 5 }}>Scope</label>
-          <div style={{ display: 'flex', border: `1px solid ${C.border}` }}>
-            {SCOPES.map(s => (
-              <button
-                key={s.key}
-                onClick={() => setScope(s.key)}
-                aria-pressed={scope === s.key}
-                title={s.key === 'holdings' ? 'Only names in your Portfolio Manager book'
-                  : s.key === 'watchlist' ? 'Only names on your watchlist'
-                  : s.key === 'covered' ? 'Only names with a published consensus estimate'
-                  : 'Every name reporting in this window'}
-                style={{
-                  background: scope === s.key ? C.gold : 'transparent',
-                  color: scope === s.key ? C.header : C.muted,
-                  border: 'none', borderRight: `1px solid ${C.border}`, cursor: 'pointer',
-                  fontFamily: C.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
-                  textTransform: 'uppercase', padding: '8px 12px', whiteSpace: 'nowrap',
-                }}>{s.label}</button>
-            ))}
-          </div>
-        </div>
+      {/* Controls — one toolbar line, parameter groups separated by hairlines,
+          with the run counts on a meta strip inside the same panel. */}
+      <div style={{ background: C.header, border: `1px solid ${C.border}`, marginBottom: 14 }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', flexWrap: 'wrap', rowGap: 8,
+          padding: '0 14px', minHeight: 48,
+        }}>
+          <GroupLabel>Scope</GroupLabel>
+          <Segmented
+            items={SCOPES.map(s => ({
+              key: s.key, label: s.label,
+              title: s.key === 'holdings' ? 'Only names in your Portfolio Manager book'
+                : s.key === 'watchlist' ? 'Only names on your watchlist'
+                : s.key === 'covered' ? 'Only names with a published consensus estimate'
+                : 'Every name reporting in this window',
+            }))}
+            value={scope}
+            onPick={k => setScope(k as Scope)}
+          />
 
-        {isBookScope(scope) ? (
-          <div>
-            <label style={{ ...LABEL, marginBottom: 5 }}>Horizon</label>
-            <div style={{ display: 'flex', border: `1px solid ${C.border}` }}>
-              {HORIZONS.map(h => (
-                <button key={h.key} onClick={() => setHorizonKey(h.key)}
+          <Divider />
+
+          {isBookScope(scope) ? (
+            <>
+              <GroupLabel>Horizon</GroupLabel>
+              <Segmented
+                items={HORIZONS.map(h => ({ key: h.key, label: h.label }))}
+                value={horizonKey}
+                onPick={k => setHorizonKey(k as HorizonKey)}
+              />
+            </>
+          ) : (
+            <>
+              <GroupLabel htmlFor="ec-date">Date</GroupLabel>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, border: `1px solid ${C.border}`, background: C.inset, padding: '0 10px' }}>
+                <input id="ec-date" type="date" value={date} onChange={e => setDate(e.target.value || today())}
                   style={{
-                    background: horizonKey === h.key ? C.gold : 'transparent',
-                    color: horizonKey === h.key ? C.header : C.muted,
-                    border: 'none', borderRight: `1px solid ${C.border}`, cursor: 'pointer',
-                    fontFamily: C.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
-                    textTransform: 'uppercase', padding: '8px 12px', whiteSpace: 'nowrap',
-                  }}>{h.label}</button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <>
-            <div>
-              <label htmlFor="ec-date" style={{ ...LABEL, marginBottom: 5 }}>Date</label>
-              <input id="ec-date" type="date" value={date} onChange={e => setDate(e.target.value || today())}
-                style={{
-                  background: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.mono,
-                  fontSize: 13, padding: '7px 10px',
-                  colorScheme: 'var(--theme-color-scheme, dark)' as React.CSSProperties['colorScheme'],
-                }} />
-            </div>
-            <div>
-              <label style={{ ...LABEL, marginBottom: 5 }}>Window</label>
-              <div style={{ display: 'flex', border: `1px solid ${C.border}` }}>
-                {WINDOWS.map(w => (
-                  <button
-                    key={w.days}
-                    onClick={() => {
-                      // Re-anchor to local today when picking a relative window so a
-                      // stale date-picker value (e.g. last Monday) cannot exclude
-                      // names that report later this week / next week.
-                      setDate(today())
-                      setDays(w.days)
-                    }}
-                    style={{
-                      background: days === w.days ? C.gold : 'transparent',
-                      color: days === w.days ? C.header : C.muted,
-                      border: 'none', borderRight: `1px solid ${C.border}`, cursor: 'pointer',
-                      fontFamily: C.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
-                      textTransform: 'uppercase', padding: '8px 12px',
-                    }}>{w.label}</button>
-                ))}
+                    background: 'transparent', border: 'none', color: C.text, fontFamily: C.mono,
+                    fontSize: 12.5, fontVariantNumeric: 'tabular-nums', padding: '6px 0', outline: 'none',
+                    colorScheme: 'var(--theme-color-scheme, dark)' as React.CSSProperties['colorScheme'],
+                  }} />
+                <Calendar size={12} style={{ color: C.dim, flexShrink: 0 }} aria-hidden />
               </div>
-            </div>
-          </>
-        )}
 
-        <div title="Filtered results are matched against a curated list of ~1,000 major US names, IPOs, and large ADRs — a name outside that list won't appear while a cap filter is set, even if it would qualify.">
-          <label htmlFor="ec-mincap" style={{ ...LABEL, marginBottom: 5 }}>Market Cap ≥</label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, border: `1px solid ${C.border}`, background: C.bg, padding: '0 10px' }}>
+              <Divider />
+
+              <GroupLabel>Window</GroupLabel>
+              <Segmented
+                items={WINDOWS.map(w => ({ key: String(w.days), label: w.label }))}
+                value={String(days)}
+                onPick={k => {
+                  // Re-anchor to local today when picking a relative window so a
+                  // stale date-picker value (e.g. last Monday) cannot exclude
+                  // names that report later this week / next week.
+                  setDate(today())
+                  setDays(Number(k))
+                }}
+              />
+            </>
+          )}
+
+          <Divider />
+
+          <GroupLabel htmlFor="ec-mincap"
+            title="Filtered results are matched against a curated list of ~1,000 major US names, IPOs, and large ADRs — a name outside that list won't appear while a cap filter is set, even if it would qualify.">
+            Cap ≥
+          </GroupLabel>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, border: `1px solid ${C.border}`, background: C.inset, padding: '0 10px' }}>
             <span style={{ fontFamily: C.mono, fontSize: 12, color: C.muted }}>$</span>
             <input id="ec-mincap" type="number" min={0} step="1" value={minCapStr} onChange={e => setMinCapStr(e.target.value)}
               placeholder="0" style={{
                 background: 'transparent', border: 'none', color: C.text, fontFamily: C.mono,
-                fontSize: 13, padding: '7px 0', width: 64, outline: 'none',
+                fontSize: 12.5, fontVariantNumeric: 'tabular-nums', padding: '6px 0', width: 54, outline: 'none',
               }} />
             <span style={{ fontFamily: C.mono, fontSize: 12, color: C.muted }}>B</span>
           </div>
-        </div>
 
-        {!isBookScope(scope) && (
-          <div style={{ alignSelf: 'flex-end' }}>
-            <button
-              type="button"
-              onClick={loadCalendar}
-              disabled={loading}
-              title="Screen the universe for the parameters above"
-              style={{
-                background: C.gold, border: 'none', color: C.header, cursor: loading ? 'default' : 'pointer',
-                fontFamily: C.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-                padding: '9px 18px', whiteSpace: 'nowrap', opacity: loading ? 0.6 : 1,
-              }}
-            >{loading ? 'SCANNING…' : 'SCAN'}</button>
+          <div style={{ flex: 1, minWidth: 12 }} />
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={() => setBriefOpen(v => !v)} aria-expanded={briefOpen} style={{
+              background: briefOpen ? gold(14) : 'transparent',
+              border: `1px solid ${briefOpen ? C.gold : C.border}`, color: briefOpen ? C.gold : C.muted,
+              cursor: 'pointer', fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
+              textTransform: 'uppercase', padding: '8px 12px', whiteSpace: 'nowrap',
+            }}>Desk brief</button>
+            {/* Book scopes read the book rather than screening, so there is nothing to run. */}
+            {!isBookScope(scope) && (
+              <button type="button" onClick={loadCalendar} disabled={loading}
+                title="Screen the universe for the parameters above"
+                style={{
+                  background: C.gold, border: 'none', color: C.header, cursor: loading ? 'default' : 'pointer',
+                  fontFamily: C.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+                  padding: '9px 20px', whiteSpace: 'nowrap', opacity: loading ? 0.6 : 1,
+                }}>{loading ? 'Scanning…' : 'Scan'}</button>
+            )}
           </div>
-        )}
-
-        <div style={{ flex: 1 }} />
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => setBriefOpen(v => !v)} aria-expanded={briefOpen} style={{
-            background: briefOpen ? gold(14) : 'transparent',
-            border: `1px solid ${briefOpen ? C.gold : C.border}`, color: briefOpen ? C.gold : C.muted,
-            cursor: 'pointer', fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
-            textTransform: 'uppercase', padding: '8px 12px', whiteSpace: 'nowrap',
-          }}>Desk brief</button>
-          {anyFilter && (
-            <button onClick={clearFilters} style={{
-              background: 'transparent', border: `1px solid ${C.border}`, color: C.muted, cursor: 'pointer',
-              fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-              padding: '8px 12px', whiteSpace: 'nowrap',
-            }}>Clear filters</button>
-          )}
         </div>
+
+        {/* Meta strip — what the current run actually returned. */}
+        {(ready && !error && visible.length > 0) || anyFilter ? (
+          <div style={{
+            display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap',
+            padding: '9px 14px', borderTop: `1px solid ${C.borderFaint}`, background: C.inset,
+          }}>
+            {ready && !error && visible.length > 0 && (
+              <span style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+                <Stat n={visible.length} word={isBookScope(scope) ? 'on the agenda' : 'reporting'} strong />
+                {!isBookScope(scope) && <><Sep /><Stat n={covered} word="with estimates" /></>}
+                {showPosCol && <><Sep /><Stat n={visible.filter(r => posMap.has(r.symbol)).length} word="held" color={C.gold} /></>}
+                <Sep />
+                <span style={{ fontFamily: C.sans, fontSize: 11, color: C.muted }}>
+                  {sort
+                    ? <>sorted by <span style={{ color: C.text }}>{sort.key}</span> {sort.dir === 'asc' ? '↑' : '↓'}</>
+                    : isBookScope(scope)
+                      ? <>next {HORIZONS.find(h => h.key === horizonKey)?.label.toLowerCase()}</>
+                      : <>{fmtDate(date)}{days > 1 ? ` → ${fmtDate(rangeTo || grouped[grouped.length - 1]?.[0] || date)}` : ''}</>}
+                </span>
+              </span>
+            )}
+            <div style={{ flex: 1, minWidth: 8 }} />
+            {anyFilter && (
+              <button onClick={clearFilters} style={{
+                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
+                textTransform: 'uppercase', color: C.dim, whiteSpace: 'nowrap',
+              }}>Clear filters</button>
+            )}
+          </div>
+        ) : null}
       </div>
 
       {/* Watchlist management — chips live with the scope that uses them */}
@@ -1126,20 +1237,6 @@ export function EarningsScannerContent() {
         </div>
       )}
 
-      {/* Summary line */}
-      {started && !loading && !error && ready && visible.length > 0 && (
-        <div style={{ fontFamily: C.sans, fontSize: 11, color: C.muted, marginBottom: 10 }}>
-          <span style={{ color: C.text, fontWeight: 700 }}>{visible.length}</span> {isBookScope(scope) ? 'on the agenda' : 'reporting'}
-          {!isBookScope(scope) && <>{' · '}<span style={{ color: C.text }}>{covered}</span> with estimates</>}
-          {showPosCol && <>{' · '}<span style={{ color: C.gold }}>{visible.filter(r => posMap.has(r.symbol)).length}</span> held</>}
-          {sort
-            ? <>{' · sorted by '}<span style={{ color: C.text }}>{sort.key}</span> {sort.dir === 'asc' ? '↑' : '↓'}</>
-            : isBookScope(scope)
-              ? <>{' · next '}{HORIZONS.find(h => h.key === horizonKey)?.label.toLowerCase()}</>
-              : <>{' · '}{fmtDate(date)}{days > 1 ? ` → ${fmtDate(rangeTo || grouped[grouped.length - 1]?.[0] || date)}` : ''}</>}
-        </div>
-      )}
-
       {bookEmpty && (
         <EmptyState
           title={scope === 'holdings' ? 'No Holdings' : 'Empty Watchlist'}
@@ -1197,7 +1294,17 @@ export function EarningsScannerContent() {
                   expanded={expanded} onToggleExpand={k => setExpanded(cur => (cur === k ? null : k))}
                   onToggleWatch={onToggleWatch}
                   summaries={summaries} onFetchSummary={fetchSummary}
-                  registerRow={registerRow} />
+                  registerRow={registerRow}
+                  pop={{
+                    hoverSym, onHover: onHoverSym, filingsFor, onOpenFilings: openFilings, filings,
+                    onPickFiling: (sym, f, rowKey) => {
+                      setAiTargets(p => ({ ...p, [sym]: { form: f.form, period: f.date.slice(0, 7), filed: f.date } }))
+                      setFilingsFor(null)
+                      setExpanded(rowKey)   // so the AI band showing the new source is on screen
+                    },
+                  }}
+                  aiTargets={aiTargets}
+                  onSetAiTarget={(sym, t) => setAiTargets(p => ({ ...p, [sym]: t }))} />
               ))}
             </tbody>
           </table>
@@ -1332,14 +1439,17 @@ interface GroupBodyProps {
   positionValue: (tk: string) => { value: number | null; pnl: number | null; pnlPct: number | null }
   expanded: string | null; onToggleExpand: (key: string) => void
   onToggleWatch: (sym: string) => void
-  summaries: Record<string, SummaryState>; onFetchSummary: (tk: string) => void
+  summaries: Record<string, SummaryState>; onFetchSummary: (tk: string, filingDate?: string) => void
+  pop: PopoverBus
+  aiTargets: Record<string, AiTarget | null>
+  onSetAiTarget: (sym: string, t: AiTarget | null) => void
   registerRow: (el: HTMLTableRowElement | null, symbol: string) => void
 }
 
 function GroupBody({
   gdate, grows, enriched, book, colCount, isMobile, showHeader, showBookCols, showPosCol,
   watch, posMap, positionValue, expanded, onToggleExpand, onToggleWatch,
-  summaries, onFetchSummary, registerRow,
+  summaries, onFetchSummary, registerRow, pop, aiTargets, onSetAiTarget,
 }: GroupBodyProps) {
   const todayIso = today()
   return (
@@ -1387,9 +1497,14 @@ function GroupBody({
                 borderBottom: `1px solid ${C.border}`, cursor: 'pointer',
                 background: isOpen ? gold(6) : held ? gold(3) : undefined,
               }}>
-              <td style={{ padding: '10px 14px' }}>
+              <td style={{ padding: '10px 14px', position: 'relative' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-                  <TickerLogo ticker={r.symbol} size={22} />
+                  <span
+                    onMouseEnter={() => pop.onHover(r.symbol)}
+                    onMouseLeave={() => pop.onHover(null)}
+                    style={{ display: 'flex', flexShrink: 0 }}>
+                    <TickerLogo ticker={r.symbol} size={22} />
+                  </span>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontFamily: C.mono, fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <TickerLink ticker={r.symbol} />
@@ -1412,13 +1527,36 @@ function GroupBody({
                       </button>
                     </div>
                     {!isMobile && (
-                      <div style={{
-                        fontFamily: C.sans, fontSize: 9, color: C.muted, whiteSpace: 'nowrap',
-                        overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200,
-                      }}>{pending ? (b?.name ?? '') : (e?.companyName || b?.name || '—')}</div>
+                      // The name line opens the filings archive. TickerLink keeps
+                      // its own click (the global ticker drawer), so the two
+                      // affordances don't fight over the same target.
+                      <button
+                        onClick={ev => { ev.stopPropagation(); pop.onOpenFilings(r.symbol) }}
+                        onMouseEnter={() => pop.onHover(r.symbol)}
+                        onMouseLeave={() => pop.onHover(null)}
+                        title={`Past filings for ${r.symbol}`}
+                        style={{
+                          display: 'block', background: 'none', border: 'none', padding: 0, textAlign: 'left',
+                          cursor: 'pointer', fontFamily: C.sans, fontSize: 9,
+                          color: pop.filingsFor === r.symbol ? C.gold : C.muted, whiteSpace: 'nowrap',
+                          overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200,
+                          transition: 'color 0.12s',
+                        }}>{pending ? (b?.name ?? '') : (e?.companyName || b?.name || '—')}</button>
                     )}
                   </div>
                 </div>
+
+                {pop.filingsFor === r.symbol && (
+                  <FilingsArchive
+                    symbol={r.symbol}
+                    filings={pop.filings[r.symbol]}
+                    onClose={() => pop.onOpenFilings(r.symbol)}
+                    onPick={f => pop.onPickFiling(r.symbol, f, key)}
+                  />
+                )}
+                {pop.hoverSym === r.symbol && pop.filingsFor !== r.symbol && (
+                  <HoverPreview symbol={r.symbol} e={e} b={b} />
+                )}
               </td>
               {!isMobile && (
                 <td style={{ ...cell, color: C.dim }}>
@@ -1496,7 +1634,10 @@ function GroupBody({
                 <td colSpan={colCount} style={{ padding: 0, background: C.header, borderBottom: `1px solid ${C.border}` }}>
                   <RowDetail row={r} e={e} b={b} position={posMap.get(r.symbol) ?? null} pos={pos}
                     isMobile={isMobile}
-                    summary={summaries[r.symbol] ?? null} onFetchSummary={() => onFetchSummary(r.symbol)} />
+                    summary={summaries[r.symbol] ?? null}
+                    onFetchSummary={(filingDate?: string) => onFetchSummary(r.symbol, filingDate)}
+                    aiTarget={aiTargets[r.symbol] ?? null}
+                    setAiTarget={t => onSetAiTarget(r.symbol, t)} />
                 </td>
               </tr>
             )}
@@ -1504,6 +1645,122 @@ function GroupBody({
         )
       })}
     </>
+  )
+}
+
+const popShell: React.CSSProperties = {
+  position: 'absolute', top: 'calc(100% - 4px)', left: 38, zIndex: 30,
+  background: C.header, border: `1px solid ${gold(34)}`, boxShadow: '0 14px 34px rgba(0,0,0,0.5)',
+}
+
+/** What each form is, so the archive reads as history rather than filing codes. */
+const FORM_PURPOSE: Record<string, string> = {
+  '10-Q': 'Quarterly report', '10-K': 'Annual report', '8-K': 'Material event',
+  'DEF 14A': 'Proxy statement', '4': 'Insider transaction',
+}
+
+function FilingsArchive({ symbol, filings, onClose, onPick }: {
+  symbol: string
+  filings: Filing[] | 'loading' | 'error' | undefined
+  onClose: () => void
+  onPick: (f: Filing) => void
+}) {
+  const [form, setForm] = useState('All')
+  const list = Array.isArray(filings) ? filings : []
+  const forms = ['All', ...Array.from(new Set(list.map(f => f.form)))]
+  const shown = form === 'All' ? list : list.filter(f => f.form === form)
+
+  return (
+    <div onClick={ev => ev.stopPropagation()} style={{ ...popShell, width: 272 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 12px', background: gold(6), borderBottom: `1px solid ${gold(16)}` }}>
+        <span style={{ ...LABEL, fontSize: 8.5, color: C.gold, display: 'inline' }}>{symbol} filings</span>
+        <button onClick={onClose} style={ghostBtn}>Close</button>
+      </div>
+
+      {list.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '8px 10px', borderBottom: `1px solid ${C.borderFaint}` }}>
+          {forms.map(f => (
+            <button key={f} onClick={() => setForm(f)} style={{
+              fontFamily: C.sans, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.08em',
+              textTransform: 'uppercase', padding: '4px 8px', border: 'none', cursor: 'pointer',
+              background: form === f ? C.gold : C.inset, color: form === f ? C.header : C.muted,
+            }}>{f}</button>
+          ))}
+        </div>
+      )}
+
+      <div style={{ maxHeight: 252, overflowY: 'auto' }}>
+        {filings === 'loading' && <div style={popNote}>Loading filings…</div>}
+        {filings === 'error' && <div style={{ ...popNote, color: C.warn }}>Could not reach SEC EDGAR.</div>}
+        {Array.isArray(filings) && shown.length === 0 && <div style={popNote}>No filings of this type.</div>}
+        {shown.map((f, i) => (
+          <button key={`${f.accession ?? f.date}-${i}`} onClick={() => onPick(f)} style={{
+            display: 'flex', width: '100%', alignItems: 'baseline', justifyContent: 'space-between', gap: 10,
+            padding: '7px 12px', border: 'none', borderBottom: `1px solid ${C.borderFaint}`,
+            background: 'transparent', cursor: 'pointer', textAlign: 'left',
+          }}>
+            <span style={{ minWidth: 0 }}>
+              <span style={{ display: 'block', fontFamily: C.mono, fontSize: 11.5, fontWeight: 700, color: C.text }}>
+                {f.form} · {f.date.slice(0, 7)}
+              </span>
+              <span style={{ display: 'block', fontFamily: C.sans, fontSize: 8.5, color: C.dim, marginTop: 2 }}>
+                {FORM_PURPOSE[f.form] ?? 'Filing'}
+              </span>
+            </span>
+            <span style={{ fontFamily: C.sans, fontSize: 9, color: C.dim, whiteSpace: 'nowrap' }}>{fmtDate(f.date)}</span>
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, padding: '8px 12px', borderTop: `1px solid ${C.border}`, background: C.inset }}>
+        <span style={{ fontFamily: C.sans, fontSize: 9, color: C.dim }}>Any filing can be the summarizer's source.</span>
+        {Array.isArray(filings) && (
+          <span style={{ fontFamily: C.mono, fontSize: 9, color: C.muted, whiteSpace: 'nowrap' }}>{shown.length} of {list.length}</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const popNote: React.CSSProperties = { padding: '12px', fontFamily: C.sans, fontSize: 10.5, color: C.muted }
+
+/** Dwell-triggered peek at a row. pointer-events:none so it never eats the click. */
+function HoverPreview({ symbol, e, b }: { symbol: string; e?: Enriched; b?: BookInfo }) {
+  const cells: { label: string; value: string; color?: string }[] = [
+    { label: 'Implied move', value: e?.impliedMove != null ? `${e.impliedMove.toFixed(1)}%` : '—', color: e?.impliedMove != null ? C.gold : C.dim },
+    { label: 'Hist. move', value: b?.detail?.histAvgMovePct != null ? `±${b.detail.histAvgMovePct.toFixed(1)}%` : '—' },
+    { label: 'Beat rate', value: b?.detail?.beatRatePct != null ? `${b.detail.beatRatePct}%` : '—', color: b?.detail?.beatRatePct != null ? C.pos : C.dim },
+    { label: 'Fwd P/E', value: b?.pe != null ? `${b.pe.toFixed(2)}x` : '—' },
+  ]
+  return (
+    <div style={{ ...popShell, width: 308, zIndex: 20, pointerEvents: 'none' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '10px 12px', background: C.inset, borderBottom: `1px solid ${C.border}` }}>
+        <TickerLogo ticker={symbol} size={20} />
+        <span style={{ minWidth: 0 }}>
+          <span style={{ display: 'block', fontFamily: C.mono, fontSize: 12.5, fontWeight: 700, color: C.gold }}>{symbol}</span>
+          <span style={{ display: 'block', fontFamily: C.sans, fontSize: 9.5, color: C.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {e?.sector || e?.companyName || b?.name || '—'}
+          </span>
+        </span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, background: C.border }}>
+        {cells.map(c => (
+          <div key={c.label} style={{ background: C.header, padding: '9px 12px' }}>
+            <div style={{ ...LABEL, fontSize: 8, display: 'block', marginBottom: 4 }}>{c.label}</div>
+            <div style={{ fontFamily: C.mono, fontSize: 14, fontWeight: 700, color: c.color ?? C.text }}>{c.value}</div>
+          </div>
+        ))}
+      </div>
+      {b && b.sparkline.length > 1 && (
+        <div style={{ padding: '10px 12px 12px' }}>
+          <div style={{ ...LABEL, fontSize: 8, marginBottom: 6 }}>Recent price</div>
+          <Sparkline data={b.sparkline} positive={(b.pctChange ?? 0) >= 0} />
+        </div>
+      )}
+      <div style={{ padding: '0 12px 11px', fontFamily: C.sans, fontSize: 9.5, color: C.dim, lineHeight: 1.4 }}>
+        Click the company name for past filings · click the row for the full report.
+      </div>
+    </div>
   )
 }
 
@@ -1518,39 +1775,72 @@ function DetailRow({ label, value, color }: { label: string; value: React.ReactN
 
 interface HistoryReport { date: string; estimate: number | null; actual: number | null; surprisePct: number | null }
 
+/** The filing the AI summary should read, chosen from the archive or the track record. */
+interface AiTarget { form: string; period: string; filed: string }
+
+/** Row-level popover wiring, owned by the page so only one is ever open. */
+interface PopoverBus {
+  hoverSym: string | null
+  onHover: (sym: string | null) => void
+  filingsFor: string | null
+  onOpenFilings: (sym: string) => void
+  filings: Record<string, Filing[] | 'loading' | 'error'>
+  onPickFiling: (sym: string, f: Filing, rowKey: string) => void
+}
+
 // Estimate-vs-actual EPS bars for the last n reports, oldest first — two bars
 // per report (muted estimate, colored actual) sharing one scale so a beat/miss
 // pattern reads at a glance instead of one column of surprise% figures.
-function EstActualBars({ reports }: { reports: HistoryReport[] }) {
+function EstActualBars({ reports, picked, onPick }: {
+  reports: HistoryReport[]
+  picked?: number | null
+  onPick?: (index: number) => void
+}) {
   const BAR_H = 100
   const maxAbs = Math.max(0.01, ...reports.flatMap(r => [r.estimate, r.actual].filter((v): v is number => v != null).map(Math.abs)))
   const barHeight = (v: number | null) => v == null ? 0 : Math.max(4, Math.round(Math.abs(v) / maxAbs * BAR_H))
   const valueLabel: React.CSSProperties = { fontFamily: C.mono, fontSize: 9.5, marginBottom: 5, whiteSpace: 'nowrap' }
+  // Bars and their quarter label live in ONE column so the whole quarter is a
+  // single hit target, rather than a bar row sitting above an unrelated label row.
   return (
     <div>
-      <div style={{ display: 'flex', gap: 14, alignItems: 'flex-end', height: BAR_H + 22, padding: '2px 2px 0' }}>
-        {reports.map(r => (
-          <div key={r.date} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', gap: 9, alignItems: 'flex-end', height: BAR_H + 22 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
-                <span style={{ ...valueLabel, color: C.muted }}>{fmtEps(r.estimate)}</span>
-                <div title={`Estimate ${fmtEps(r.estimate)}`} style={{ width: 16, height: barHeight(r.estimate), background: C.muted, opacity: 0.5, borderRadius: '2px 2px 0 0' }} />
+      <div style={{ display: 'flex', gap: 14, alignItems: 'flex-end' }}>
+        {reports.map((r, i) => {
+          const on = picked === i
+          const clickable = !!onPick
+          return (
+            <div
+              key={r.date}
+              onClick={clickable ? () => onPick!(i) : undefined}
+              role={clickable ? 'button' : undefined}
+              tabIndex={clickable ? 0 : undefined}
+              aria-pressed={clickable ? on : undefined}
+              onKeyDown={clickable ? ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onPick!(i) } } : undefined}
+              style={{
+                flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center',
+                cursor: clickable ? 'pointer' : 'default', padding: '2px 2px 0',
+                background: on ? gold(7) : 'transparent',
+                borderBottom: `2px solid ${on ? gold(45) : 'transparent'}`,
+                transition: 'background 0.12s, border-color 0.12s',
+              }}>
+              <div style={{ display: 'flex', gap: 9, alignItems: 'flex-end', height: BAR_H + 22 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                  <span style={{ ...valueLabel, color: C.muted }}>{fmtEps(r.estimate)}</span>
+                  <div title={`Estimate ${fmtEps(r.estimate)}`} style={{ width: 16, height: barHeight(r.estimate), background: C.muted, opacity: 0.5, borderRadius: '2px 2px 0 0' }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                  <span style={{ ...valueLabel, color: C.gold }}>{fmtEps(r.actual)}</span>
+                  <div title={`Actual ${fmtEps(r.actual)}`} style={{ width: 16, height: barHeight(r.actual), borderRadius: '2px 2px 0 0', background: C.gold }} />
+                </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
-                <span style={{ ...valueLabel, color: C.gold }}>{fmtEps(r.actual)}</span>
-                <div title={`Actual ${fmtEps(r.actual)}`} style={{ width: 16, height: barHeight(r.actual), borderRadius: '2px 2px 0 0', background: C.gold }} />
-              </div>
+              <div style={{
+                width: '100%', textAlign: 'center', fontFamily: C.sans, fontSize: 10,
+                color: on ? C.gold : C.muted, margin: '6px 0 4px',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>{fmtQuarterLabel(r.date)}</div>
             </div>
-          </div>
-        ))}
-      </div>
-      <div style={{ display: 'flex', gap: 14 }}>
-        {reports.map(r => (
-          <div key={r.date} style={{
-            flex: 1, minWidth: 0, textAlign: 'center', fontFamily: C.sans, fontSize: 10, color: C.muted,
-            marginTop: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          }}>{fmtQuarterLabel(r.date)}</div>
-        ))}
+          )
+        })}
       </div>
       <div style={{ display: 'flex', gap: 14, marginTop: 12, fontFamily: C.sans, fontSize: 9.5, color: C.muted }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
@@ -1615,16 +1905,20 @@ function insiderDetail90d(txs: InsiderTx[] | null): { text: string; color: strin
   }
 }
 
-function RowDetail({ row, e, b, position, pos, isMobile, summary, onFetchSummary }: {
+function RowDetail({ row, e, b, position, pos, isMobile, summary, onFetchSummary, aiTarget, setAiTarget }: {
   row: Row; e?: Enriched; b?: BookInfo
   position: Position | null
   pos: { value: number | null; pnl: number | null; pnlPct: number | null }
   isMobile: boolean
-  summary: SummaryState | null; onFetchSummary: () => void
+  summary: SummaryState | null; onFetchSummary: (filingDate?: string) => void
+  // Which filing the summarizer reads. Held per-symbol by the page so picking
+  // from the filings archive survives collapsing and reopening the row.
+  aiTarget: AiTarget | null; setAiTarget: (t: AiTarget | null) => void
 }) {
   const [history, setHistory] = useState<HistoryReport[] | null>(null)
   const [historyLoading, setHistoryLoading] = useState(true)
   const [showTrades, setShowTrades] = useState(false)
+  const [barPick, setBarPick] = useState<number | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -1644,147 +1938,268 @@ function RowDetail({ row, e, b, position, pos, isMobile, summary, onFetchSummary
   const ins = insiderDetail90d(b?.insider ?? null)
   const dte = daysUntil(row.date)
 
+  const notReportedExplainer = () => {
+    if (e?.priorReportDate === row.date || sourceHasGapAt(e, row.date, today())) {
+      return 'This company has reported. Yahoo has not published the EPS figures yet, usually within a day.'
+    }
+    const mismatch = calendarMismatchDate(e, row.date, today())
+    if (mismatch) {
+      return mismatch < row.date
+        ? `This calendar date doesn't match the confirmed report — yfinance shows it already reported on ${fmtDate(mismatch)}${e?.surprisePct != null ? ` (${fmtPct(e.surprisePct)} surprise)` : ''}.`
+        : `This calendar date doesn't match the confirmed report — yfinance shows the next report on ${fmtDate(mismatch)}.`
+    }
+    if (row.date < today()) {
+      return e?.priorReportDate
+        ? `No confirmed figures for this date yet. The ticker's last confirmed report was ${fmtDate(e.priorReportDate)}${e.surprisePct != null ? ` (${fmtPct(e.surprisePct)} surprise)` : ''}.`
+        : 'No confirmed figures for this date yet.'
+    }
+    return e?.priorReportDate
+      ? `Not yet reported. Last report was ${fmtDate(e.priorReportDate)}${e.surprisePct != null ? ` (${fmtPct(e.surprisePct)} surprise)` : ''}.`
+      : 'No report history available for this ticker.'
+  }
+
+  const held = position && position.shares > 0
+  const picked = barPick != null && history ? history[barPick] : null
+
   return (
-    <div style={{ padding: isMobile ? '14px 14px 18px' : '16px 18px 20px', display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+    <div style={{ padding: isMobile ? '14px 14px 18px' : '16px 18px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-        {/* Report + book context */}
-        <div style={{ width: isMobile ? '100%' : 300, flexShrink: 0 }}>
-          <span style={{ ...LABEL, color: C.gold, marginBottom: 8 }}>The Report</span>
-          <DetailRow label={fmtFullDate(row.date)} value={
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-              {dte != null && <span style={{ color: C.gold }}>{dte >= 0 ? `in ${dte}d` : `${Math.abs(dte)}d ago`}</span>}
-              <HourChip hour={row.hour} />
-            </span>
-          } />
-          <DetailRow label="EPS Estimate" value={
-            <>
-              {fmtEps(row.epsEstimate ?? det?.epsEst ?? null)}
-              {det?.epsPriorYear != null && <span style={{ fontWeight: 400, color: C.dim }}> vs {fmtEps(det.epsPriorYear)} yr</span>}
-            </>
-          } />
-          {det?.revEst != null && <DetailRow label="Revenue Estimate" value={fmtRev(det.revEst)} />}
-          <DetailRow label="Implied Move" value={e?.impliedMove != null ? `${e.impliedMove.toFixed(1)}%` : '—'} color={C.gold} />
-          {(det?.histAvgMovePct != null || det?.beatRatePct != null) && (
-            <DetailRow label="Hist. Move · Beat Rate" value={
-              <>
-                {det?.histAvgMovePct != null ? `±${det.histAvgMovePct.toFixed(1)}%` : '—'}
-                {det?.beatRatePct != null && <span style={{ color: C.pos }}> · {det.beatRatePct}% beat</span>}
-              </>
-            } />
-          )}
+      {/* THE REPORT — the expanded row is as wide as the table, so this reads
+          across rather than down a 300px column. */}
+      <div>
+        <span style={sectionLabel}>The Report</span>
+        <Band cols={isMobile ? 2 : 6}>
+          <BandCell label="Report date" sub={dte != null ? (dte >= 0 ? `in ${dte}d` : `${Math.abs(dte)}d ago`) : undefined} subColor={C.gold}
+            after={<HourChip hour={row.hour} />}>
+            {fmtFullDate(row.date)}
+          </BandCell>
+          <BandCell label="EPS estimate" sub={det?.epsPriorYear != null ? `vs ${fmtEps(det.epsPriorYear)} yr ago` : undefined}>
+            {fmtEps(row.epsEstimate ?? det?.epsEst ?? null)}
+          </BandCell>
+          <BandCell label="Revenue estimate" sub={det?.revEst != null ? 'consensus' : undefined}>
+            {fmtRev(det?.revEst ?? null)}
+          </BandCell>
+          <BandCell label="Implied move" color={e?.impliedMove != null ? C.gold : C.dim}
+            sub={e?.impliedMove == null ? 'no chain spanning' : e?.impliedMoveExpiry ? `by ${e.impliedMoveExpiry}` : undefined}>
+            {e?.impliedMove != null ? `${e.impliedMove.toFixed(1)}%` : '—'}
+          </BandCell>
+          <BandCell label="Hist. move" sub={det?.histAvgMovePct != null ? 'last reports' : undefined}>
+            {det?.histAvgMovePct != null ? `±${det.histAvgMovePct.toFixed(1)}%` : '—'}
+          </BandCell>
           {reported ? (
-            <>
-              <DetailRow label="Result" value={<BeatMissBadge surprisePct={e!.surprisePct} />} />
-              <DetailRow label="1-Day Reaction" value={fmtPct(e!.reactionPct)} color={pctColor(e!.reactionPct)} />
-              <DetailRow label="Move Since Report" value={fmtPct(e!.runSincePct)} color={pctColor(e!.runSincePct)} />
-            </>
+            <BandCell label="Result" sub={e?.reactionPct != null ? `${fmtPct(e.reactionPct)} 1-day` : undefined}
+              subColor={pctColor(e?.reactionPct)}>
+              <BeatMissBadge surprisePct={e!.surprisePct} />
+            </BandCell>
           ) : (
-            <div style={{ fontFamily: C.sans, fontSize: 11, color: C.muted, padding: '10px 0', lineHeight: 1.55 }}>
-              {(() => {
-                if (e?.priorReportDate === row.date || sourceHasGapAt(e, row.date, today())) {
-                  return 'This company has reported. Yahoo has not published the EPS figures yet, usually within a day.'
-                }
-                const mismatch = calendarMismatchDate(e, row.date, today())
-                if (mismatch) {
-                  return mismatch < row.date
-                    ? `This calendar date doesn't match the confirmed report — yfinance shows it already reported on ${fmtDate(mismatch)}${e?.surprisePct != null ? ` (${fmtPct(e.surprisePct)} surprise)` : ''}.`
-                    : `This calendar date doesn't match the confirmed report — yfinance shows the next report on ${fmtDate(mismatch)}.`
-                }
-                if (row.date < today()) {
-                  return e?.priorReportDate
-                    ? `No confirmed figures for this date yet. The ticker's last confirmed report was ${fmtDate(e.priorReportDate)}${e.surprisePct != null ? ` (${fmtPct(e.surprisePct)} surprise)` : ''}.`
-                    : 'No confirmed figures for this date yet.'
-                }
-                return e?.priorReportDate
-                  ? `Not yet reported. Last report was ${fmtDate(e.priorReportDate)}${e.surprisePct != null ? ` (${fmtPct(e.surprisePct)} surprise)` : ''}.`
-                  : 'No report history available for this ticker.'
-              })()}
-            </div>
+            <BandCell label="Beat rate" color={det?.beatRatePct != null ? C.pos : C.dim}
+              sub={det?.beatRatePct != null ? 'beat consensus' : undefined}>
+              {det?.beatRatePct != null ? `${det.beatRatePct}%` : '—'}
+            </BandCell>
           )}
+        </Band>
+        {reported ? (
+          <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginTop: 9, fontFamily: C.sans, fontSize: 11, color: C.muted }}>
+            <span>Move since report <span style={{ fontFamily: C.mono, color: pctColor(e?.runSincePct) }}>{fmtPct(e?.runSincePct)}</span></span>
+          </div>
+        ) : (
+          <div style={{ fontFamily: C.sans, fontSize: 11, color: C.muted, lineHeight: 1.55, marginTop: 9 }}>
+            {notReportedExplainer()}
+          </div>
+        )}
+      </div>
 
-          {b && (
-            <>
-              <span style={{ ...LABEL, color: C.gold, margin: '16px 0 8px' }}>Positioning</span>
-              {b.consensus && (
-                <DetailRow label="Analyst Consensus" value={b.consensus} color={CONSENSUS_COLOR[b.consensus] ?? C.text} />
-              )}
-              <DetailRow label="Forward P/E" value={b.pe != null ? `${b.pe.toFixed(2)}x` : '—'} />
-              <DetailRow label="Short % of Float" value={b.shortPct != null ? `${b.shortPct.toFixed(1)}%` : '—'} />
-              <DetailRow label="1-Day Move" value={b.pctChange != null ? fmtPct(b.pctChange) : '—'} color={pctColor(b.pctChange)} />
-              {position && position.shares > 0 && (
-                <>
-                  <DetailRow label="Your Position" value={`${position.shares.toLocaleString()} sh`} />
-                  <DetailRow label="Market Value" value={pos.value != null ? fmtMoney(pos.value) : '—'} />
-                  <DetailRow label="Unrealized P&L"
-                    value={pos.pnl != null ? `${fmtMoney(pos.pnl)} (${fmtPct(pos.pnlPct)})` : '—'}
-                    color={pctColor(pos.pnlPct)} />
-                </>
-              )}
-              <div style={{ paddingTop: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 }}>
-                  <span style={{ ...LABEL, display: 'inline' }}>52-Week Range</span>
-                  <span style={{ fontFamily: C.mono, fontWeight: 700, fontSize: 9, color: C.muted }}>{wkPos != null ? `${wkPos}% of range` : '—'}</span>
-                </div>
-                <div style={{ position: 'relative', height: 5, background: 'color-mix(in srgb, var(--theme-text, #d7e3fc) 11%, transparent)' }}>
-                  {wkPos != null && <span style={{ position: 'absolute', top: -2, left: `${wkPos}%`, width: 2, height: 9, background: C.gold }} />}
-                </div>
+      {/* POSITIONING */}
+      {b && (
+        <div>
+          <span style={sectionLabel}>Positioning</span>
+          <Band cols={isMobile ? 2 : 4}>
+            <BandCell label="Analyst consensus" size={14.5} color={b.consensus ? CONSENSUS_COLOR[b.consensus] ?? C.text : C.dim}>
+              {b.consensus ?? '—'}
+            </BandCell>
+            <BandCell label="Forward P/E" size={14.5}>{b.pe != null ? `${b.pe.toFixed(2)}x` : '—'}</BandCell>
+            <BandCell label="Short % of float" size={14.5}>{b.shortPct != null ? `${b.shortPct.toFixed(1)}%` : '—'}</BandCell>
+            <BandCell label="1-day move" size={14.5} color={pctColor(b.pctChange)}>
+              {b.pctChange != null ? fmtPct(b.pctChange) : '—'}
+            </BandCell>
+            <BandCell label="Your position" size={14.5} color={held ? C.text : C.dim}>
+              {held ? `${position!.shares.toLocaleString()} sh` : '—'}
+            </BandCell>
+            <BandCell label="Market value" size={14.5} color={pos.value != null ? C.text : C.dim}>
+              {pos.value != null ? fmtMoney(pos.value) : '—'}
+            </BandCell>
+            <BandCell label="Unrealized P&L" size={14.5} color={pos.pnl != null ? pctColor(pos.pnlPct) : C.dim}
+              sub={pos.pnlPct != null ? fmtPct(pos.pnlPct) : undefined} subColor={pctColor(pos.pnlPct)}>
+              {pos.pnl != null ? fmtMoney(pos.pnl) : '—'}
+            </BandCell>
+            <BandCell label="Cost basis" size={14.5} color={held && position!.avgCost ? C.text : C.dim}>
+              {held && position!.avgCost ? fmtMoney(position!.avgCost) : '—'}
+            </BandCell>
+
+            <BandCell label="52-week range" span={2} plain
+              headerRight={<span style={{ fontFamily: C.mono, fontWeight: 700, fontSize: 9, color: C.muted }}>{wkPos != null ? `${wkPos}% of range` : '—'}</span>}>
+              <div style={{ position: 'relative', height: 5, marginTop: 4, background: 'color-mix(in srgb, var(--theme-text, #d7e3fc) 11%, transparent)' }}>
+                {wkPos != null && <span style={{ position: 'absolute', top: -2, left: `${wkPos}%`, width: 2, height: 9, background: C.gold }} />}
               </div>
-              <div style={{ paddingTop: 14 }}>
-                <span style={{ ...LABEL, marginBottom: 4 }}>Insider 90d</span>
-                <span style={{ fontFamily: C.sans, fontSize: 11, color: ins.color }}>{ins.text}</span>
-                {(b.insider?.length ?? 0) > 0 && (
-                  <button onClick={() => setShowTrades(v => !v)} style={{
-                    display: 'block', marginTop: 6, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
-                    fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-                    color: showTrades ? C.gold : C.muted,
-                  }}>{showTrades ? 'Hide trades' : 'View trades'}</button>
-                )}
-                {showTrades && b.insider && b.insider.length > 0 && <InsiderTable txs={b.insider} />}
-              </div>
-            </>
-          )}
+            </BandCell>
+            <BandCell label="Insider 90d" span={2} plain>
+              <span style={{ fontFamily: C.sans, fontSize: 11, color: ins.color }}>{ins.text}</span>
+              {(b.insider?.length ?? 0) > 0 && (
+                <button onClick={() => setShowTrades(v => !v)} style={{
+                  marginLeft: 10, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+                  fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+                  color: showTrades ? C.gold : C.muted,
+                }}>{showTrades ? 'Hide trades' : 'View trades'}</button>
+              )}
+            </BandCell>
+          </Band>
+          {showTrades && b.insider && b.insider.length > 0 && <InsiderTable txs={b.insider} />}
         </div>
+      )}
 
-        {/* Track record */}
-        <div style={{ flex: '1 1 300px', minWidth: 260 }}>
-          <span style={{ ...LABEL, color: C.gold, marginBottom: 10 }}>Last 5 Reports · Est vs Actual</span>
+      {/* Track record · price · wire */}
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'stretch' }}>
+        <div style={{ ...panel, flex: '1.6 1 320px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
+            <span style={{ ...LABEL, display: 'inline' }}>Last 5 reports · est vs actual</span>
+            {history && history.length > 0 && (
+              <span style={{ fontFamily: C.sans, fontSize: 9, color: C.dim }}>click a quarter to summarize it</span>
+            )}
+          </div>
           {historyLoading ? (
             <div style={{ height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <span style={shimmer} />
             </div>
           ) : history && history.length ? (
-            <EstActualBars reports={history} />
+            <EstActualBars reports={history} picked={barPick} onPick={i => setBarPick(p => (p === i ? null : i))} />
           ) : (
             <div style={{ fontFamily: C.sans, fontSize: 11, color: C.muted, padding: '8px 0' }}>No report history available.</div>
           )}
-          {b && b.sparkline.length > 1 && (
-            <div style={{ marginTop: 16 }}>
-              <span style={{ ...LABEL, marginBottom: 6 }}>Recent Price</span>
-              <Sparkline data={b.sparkline} positive={(b.pctChange ?? 0) >= 0} />
+          {/* In flow, not floated — an absolute popover here covered Positioning. */}
+          {picked && (
+            <div style={{ marginTop: 12, border: `1px solid ${gold(34)}`, background: gold(5) }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, padding: '7px 12px', borderBottom: `1px solid ${gold(16)}` }}>
+                <span style={{ fontFamily: C.mono, fontSize: 11.5, fontWeight: 700, color: C.gold }}>
+                  {fmtQuarterLabel(picked.date)} · reported {fmtDate(picked.date)}
+                </span>
+                <button onClick={() => setBarPick(null)} style={ghostBtn}>Close</button>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap', padding: '10px 12px' }}>
+                <Pair label="Estimate" value={fmtEps(picked.estimate)} />
+                <Pair label="Actual" value={fmtEps(picked.actual)} />
+                <Pair label="Surprise" value={picked.surprisePct != null ? fmtPct(picked.surprisePct) : '—'}
+                  color={picked.surprisePct == null ? C.text : picked.surprisePct >= 0 ? C.pos : C.neg} />
+                <button
+                  onClick={() => { setAiTarget({ form: '10-Q', period: fmtQuarterLabel(picked.date), filed: picked.date }); setBarPick(null) }}
+                  style={{ ...goldBtn, marginLeft: 'auto' }}>Summarize with AI</button>
+              </div>
             </div>
           )}
         </div>
 
-        {/* Wire */}
-        {b && b.news.length > 0 && (
-          <div style={{ flex: '1 1 240px', minWidth: 220 }}>
-            <span style={{ ...LABEL, color: C.gold, marginBottom: 10 }}>{row.symbol} Wire</span>
-            {b.news.map((n, i) => (
-              <div key={i} style={{ marginBottom: 10 }}>
-                <a href={safeUrl(n.link)} target="_blank" rel="noopener noreferrer"
-                  style={{ display: 'block', fontFamily: C.sans, fontWeight: 600, fontSize: 11.5, lineHeight: 1.35, color: C.gold, textDecoration: 'none' }}>
-                  {n.title}
-                </a>
-                <div style={{ fontFamily: C.sans, fontSize: 9.5, color: C.dim, marginTop: 2 }}>Source: {n.publisher}</div>
-              </div>
-            ))}
+        <div style={{ ...panel, flex: '1 1 200px', display: 'flex', flexDirection: 'column' }}>
+          <span style={{ ...LABEL, marginBottom: 10 }}>Recent price</span>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+            {b && b.sparkline.length > 1
+              ? <Sparkline data={b.sparkline} positive={(b.pctChange ?? 0) >= 0} />
+              : <span style={{ fontFamily: C.sans, fontSize: 11, color: C.dim }}>No recent price series.</span>}
           </div>
-        )}
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, borderTop: `1px solid ${C.borderFaint}`, marginTop: 10, paddingTop: 9 }}>
+            <span style={{ ...LABEL, display: 'inline' }}>1-day move</span>
+            <span style={{ fontFamily: C.mono, fontSize: 13, fontWeight: 700, color: pctColor(b?.pctChange) }}>
+              {b?.pctChange != null ? fmtPct(b.pctChange) : '—'}
+            </span>
+          </div>
+        </div>
+
+        <div style={{ ...panel, flex: '1.3 1 240px' }}>
+          <span style={{ ...LABEL, marginBottom: 10 }}>{row.symbol} wire</span>
+          {b && b.news.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+              {b.news.map((n, i) => (
+                <div key={i}>
+                  <a href={safeUrl(n.link)} target="_blank" rel="noopener noreferrer"
+                    style={{ display: 'block', fontFamily: C.sans, fontWeight: 600, fontSize: 11.5, lineHeight: 1.35, color: C.gold, textDecoration: 'none' }}>
+                    {n.title}
+                  </a>
+                  <div style={{ fontFamily: C.sans, fontSize: 9.5, color: C.dim, marginTop: 2 }}>Source: {n.publisher}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <span style={{ fontFamily: C.sans, fontSize: 11, color: C.dim }}>No wire items for this name.</span>
+          )}
+        </div>
       </div>
 
       {/* The deep dive: the AI filing summary for this one name */}
-      <SummarySection ticker={row.symbol} state={summary} onFetch={onFetchSummary} />
+      <SummarySection ticker={row.symbol} state={summary} aiTarget={aiTarget}
+        onFetch={() => onFetchSummary(aiTarget?.filed)} onClearTarget={() => setAiTarget(null)} />
+    </div>
+  )
+}
+
+const sectionLabel: React.CSSProperties = { ...LABEL, color: C.gold, marginBottom: 8 }
+const panel: React.CSSProperties = {
+  border: `1px solid ${C.border}`, background: C.bg, padding: '12px 14px 14px', minWidth: 0,
+}
+const ghostBtn: React.CSSProperties = {
+  background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+  fontFamily: C.sans, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.1em',
+  textTransform: 'uppercase', color: C.dim,
+}
+const goldBtn: React.CSSProperties = {
+  background: C.gold, border: 'none', color: C.header, cursor: 'pointer',
+  fontFamily: C.sans, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.1em',
+  textTransform: 'uppercase', padding: '7px 14px', whiteSpace: 'nowrap',
+}
+
+function Pair({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 7 }}>
+      <span style={{ fontFamily: C.sans, fontSize: 11, color: C.muted }}>{label}</span>
+      <span style={{ fontFamily: C.mono, fontSize: 11, fontWeight: 700, color: color ?? C.text }}>{value}</span>
+    </span>
+  )
+}
+
+// The 1px grid gap over a border-coloured ground IS the cell divider — one rule
+// instead of per-cell borders that double up at the seams.
+function Band({ cols, children }: { cols: number; children: React.ReactNode }) {
+  return (
+    <div style={{
+      display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+      gap: 1, background: C.border, border: `1px solid ${C.border}`,
+    }}>{children}</div>
+  )
+}
+
+function BandCell({ label, children, sub, subColor, color, span, size, plain, after, headerRight }: {
+  label: string; children: React.ReactNode
+  sub?: string; subColor?: string; color?: string; span?: number; size?: number
+  plain?: boolean   // free-form body (a bar, a sentence) instead of a big number
+  after?: React.ReactNode
+  headerRight?: React.ReactNode
+}) {
+  return (
+    <div style={{
+      gridColumn: span ? `span ${span}` : undefined,
+      background: C.bg, padding: '11px 14px 13px', minWidth: 0,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 7 }}>
+        <span style={{ ...LABEL, fontSize: 8.5, display: 'inline' }}>{label}</span>
+        {headerRight}
+      </div>
+      {plain ? children : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <span style={{
+            fontFamily: C.mono, fontSize: size ?? 16, fontWeight: 700, color: color ?? C.text,
+            fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>{children}</span>
+          {after}
+        </div>
+      )}
+      {sub && <div style={{ fontFamily: C.mono, fontSize: 11, color: subColor ?? C.dim, marginTop: 7 }}>{sub}</div>}
     </div>
   )
 }
@@ -1887,7 +2302,10 @@ function Pill({ label, color = C.muted }: { label: string; color?: string }) {
   return <span style={{ fontFamily: C.sans, fontSize: 9, color, background: `color-mix(in srgb, ${color} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${color} 30%, transparent)`, padding: '2px 7px', whiteSpace: 'nowrap' }}>{label}</span>
 }
 
-function SummarySection({ ticker, state, onFetch }: { ticker: string; state: SummaryState | null; onFetch: () => void }) {
+function SummarySection({ ticker, state, onFetch, aiTarget, onClearTarget }: {
+  ticker: string; state: SummaryState | null; onFetch: () => void
+  aiTarget?: AiTarget | null; onClearTarget?: () => void
+}) {
   const [filings, setFilings] = useState<Filing[] | null>(null)
   const [loadingFilings, setLoadingFilings] = useState(false)
   const [filingsErr, setFilingsErr] = useState<string | null>(null)
@@ -1935,6 +2353,21 @@ function SummarySection({ ticker, state, onFetch }: { ticker: string; state: Sum
             padding: '6px 12px',
           }}>Re-run</button>
         )}
+        {/* Which filing FETCH SUMMARY will actually read. */}
+        <span style={{
+          display: 'inline-flex', alignItems: 'baseline', gap: 8,
+          border: `1px solid ${gold(34)}`, background: gold(6), padding: '6px 11px',
+        }}>
+          <span style={{ ...LABEL, fontSize: 8, display: 'inline' }}>Source</span>
+          <span style={{ fontFamily: C.mono, fontSize: 11, fontWeight: 700, color: C.gold }}>
+            {aiTarget
+              ? `${aiTarget.form} · ${aiTarget.period} · filed ${fmtDate(aiTarget.filed)}`
+              : 'Latest 10-Q'}
+          </span>
+          {aiTarget && onClearTarget && (
+            <button onClick={onClearTarget} style={ghostBtn} title="Back to the latest 10-Q">Reset</button>
+          )}
+        </span>
       </div>
 
       {!state && (

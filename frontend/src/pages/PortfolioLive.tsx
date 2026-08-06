@@ -47,7 +47,7 @@ const RANGES: { key: Range; label: string }[] = [
 ]
 const INTRADAY_RANGES: Range[] = ['1h', '1d']
 
-type SortKey = 'value' | 'pnl' | 'weight'
+type SortKey = 'ticker' | 'price' | 'pct1d' | 'shares' | 'value' | 'pnl' | 'weight'
 
 interface QuoteRow {
   current_price: number | null
@@ -320,11 +320,10 @@ export function PortfolioLiveContent({ view, onView }: { view?: string; onView?:
   // Per-row intraday shapes. One batched call for the whole book, fired only
   // once a row is actually expanded, then cached — there is no per-symbol
   // intraday endpoint and N single fetches would be far worse.
-  const anySparkOpen = symbols.some(s => openSparks[s])
   const sparkQ = useQuery<{ series: Record<string, number | string | null>[]; tickers: string[] }>({
     queryKey: ['pl-sparks', symbolKey],
     queryFn: () => axios.get(`/api/market/compare?tickers=${encodeURIComponent(symbolKey)}&period=1d&normalize=price`).then(r => r.data),
-    enabled: anySparkOpen && symbols.length > 0,
+    enabled: symbols.length > 0,
     staleTime: 5 * 60_000,
     retry: false,
   })
@@ -384,10 +383,30 @@ export function PortfolioLiveContent({ view, onView }: { view?: string; onView?:
       ...r,
       weight: r.value != null && totalForWeights > 0 ? (r.value / totalForWeights) * 100 : null,
     }))
-    const val = (r: Row) => sort.key === 'value' ? (r.value ?? -1)
-      : sort.key === 'pnl' ? (r.dayPnl ?? -Infinity)
-        : (r.weight ?? -1)
-    return withWeight.sort((a, b) => sort.dir === 'desc' ? val(b) - val(a) : val(a) - val(b))
+    // Every column sorts. Nulls sink to the bottom either way rather than
+    // sorting as -1, which would rank an unpriced name above a real loss.
+    const val = (r: Row): number | string | null => {
+      switch (sort.key) {
+        case 'ticker': return r.ticker
+        case 'price':  return r.price
+        case 'pct1d':  return r.pct1d
+        case 'shares': return r.shares
+        case 'pnl':    return r.dayPnl
+        case 'weight': return r.weight ?? null
+        default:       return r.value
+      }
+    }
+    const mult = sort.dir === 'desc' ? -1 : 1
+    return withWeight.sort((a, b) => {
+      const av = val(a), bv = val(b)
+      if (av == null && bv == null) return 0
+      if (av == null) return 1
+      if (bv == null) return -1
+      if (typeof av === 'string' || typeof bv === 'string') {
+        return String(av).localeCompare(String(bv)) * mult
+      }
+      return (av - bv) * mult
+    })
   }, [baseRows, totalForWeights, sort])
 
   const curve = curveQ.data
@@ -471,7 +490,7 @@ export function PortfolioLiveContent({ view, onView }: { view?: string; onView?:
       <PositionsTable
         rows={rows} flash={flash} sort={sort} onSort={setSort}
         openSparks={openSparks}
-        onToggleSpark={sym => setOpenSparks(p => ({ ...p, [sym]: !p[sym] }))}
+        onToggleSpark={sym => setOpenSparks(p => ({ ...p, [sym]: p[sym] === false }))}
         sparks={sparkBySymbol} sparksLoading={sparkQ.isLoading}
       />
 
@@ -1012,11 +1031,11 @@ function PositionsTable({ rows, flash, sort, onSort, openSparks, onToggleSpark, 
           <table style={{ width: '100%', borderCollapse: 'collapse', background: T.surface, minWidth: 720 }}>
             <thead>
               <tr>
-                <th style={{ ...th, textAlign: 'left' }}>Position</th>
+                <th style={{ ...th, textAlign: 'left' }}>{sortable('ticker', 'Position')}</th>
                 <th style={{ ...th, textAlign: 'center', width: 108 }}>Intraday</th>
-                <th style={{ ...th, textAlign: 'right' }}>Last</th>
-                <th style={{ ...th, textAlign: 'right' }}>1D</th>
-                <th style={{ ...th, textAlign: 'right' }}>Shares</th>
+                <th style={{ ...th, textAlign: 'right' }}>{sortable('price', 'Last')}</th>
+                <th style={{ ...th, textAlign: 'right' }}>{sortable('pct1d', '1D')}</th>
+                <th style={{ ...th, textAlign: 'right' }}>{sortable('shares', 'Shares')}</th>
                 <th style={{ ...th, textAlign: 'right' }}>{sortable('value', 'Value')}</th>
                 <th style={{ ...th, textAlign: 'right' }}>{sortable('pnl', 'Day P&L')}</th>
                 <th style={{ ...th, textAlign: 'right', width: 160 }}>{sortable('weight', 'Weight')}</th>
@@ -1026,7 +1045,9 @@ function PositionsTable({ rows, flash, sort, onSort, openSparks, onToggleSpark, 
               {rows.map(r => {
                 const tick = flash[r.ticker]
                 const tickColor = tick === 'up' ? T.pos : tick === 'down' ? T.neg : null
-                const open = !!openSparks[r.ticker]
+                // Shown by default; the toggle collapses rather than reveals, so
+                // the column carries its shape without a click per row.
+                const open = openSparks[r.ticker] !== false
                 const pts = sparks[r.ticker]
                 return (
                   <tr key={r.ticker} style={{

@@ -72,7 +72,12 @@ def _get_cik(ticker: str) -> str | None:
     return _cik_by_ticker.get(upper)
 
 
-def _get_recent_filings(ticker: str, form_types: list[str]) -> list[dict]:
+def _get_recent_filings(
+    ticker: str,
+    form_types: list[str],
+    limit: int = 12,
+    per_form: int | None = None,
+) -> list[dict]:
     cik = _get_cik(ticker)
     if not cik:
         return []
@@ -89,15 +94,21 @@ def _get_recent_filings(ticker: str, form_types: list[str]) -> list[dict]:
         primary_docs = filings.get("primaryDocument", [])
         items_col = filings.get("items", [])
         results = []
+        seen_per_form: dict[str, int] = {}
         for idx, (form, date, acc, doc) in enumerate(zip(forms, dates, accessions, primary_docs)):
             if form in form_types:
+                # per_form keeps one high-frequency type (Form 4 insider filings
+                # land weekly) from crowding out everything else in the archive.
+                if per_form is not None and seen_per_form.get(form, 0) >= per_form:
+                    continue
+                seen_per_form[form] = seen_per_form.get(form, 0) + 1
                 acc_clean = acc.replace("-", "")
                 url = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{acc_clean}/{doc}"
                 items = items_col[idx] if idx < len(items_col) else ""
                 results.append({"form": form, "date": date, "url": url, "accession": acc, "items": items})
                 # Scan deep enough to capture a 10-K even amid the more frequent
                 # 10-Qs (a 10-K can be 3+ filings back).
-                if len(results) >= 12:
+                if len(results) >= limit:
                     break
         return results
     except Exception as e:
@@ -520,6 +531,10 @@ class SummariseRequest(BaseModel):
     include_10q:   bool = True
     include_10k:   bool = False
     transcript_limit: int = Field(default=1, ge=1, le=4)
+    # Filing date (YYYY-MM-DD) to summarise instead of the most recent one, so
+    # the caller can point the summary at a specific past filing. Ignored when
+    # the date matches nothing, which falls back to the default newest-first.
+    filing_date:   str | None = None
 
 class FilingsRequest(BaseModel):
     ticker: str
@@ -557,7 +572,12 @@ def get_transcripts(ticker: str, limit: int = 3):
 @router.get("/filings/{ticker}")
 def get_sec_filings(ticker: str):
     sym = validate_ticker(ticker)
-    filings = _get_recent_filings(sym, ["10-K", "10-Q", "8-K"])
+    # The archive is browsable history, not just the summarizer's candidates, so
+    # it carries proxies and insider forms too — capped per form so the weekly
+    # Form 4s can't bury the quarterlies.
+    filings = _get_recent_filings(
+        sym, ["10-K", "10-Q", "8-K", "DEF 14A", "4"], limit=40, per_form=8,
+    )
     return {"ticker": sym, "filings": filings}
 
 
@@ -1058,7 +1078,14 @@ def _summarise_one_streaming(ticker: str, req: SummariseRequest, queue: list):
     n = max(1, min(req.transcript_limit, 4))
 
     queue.append(_sse({"type": "progress", "ticker": ticker, "stage": "Finding filings…", "pct": 8}))
-    filings = _get_recent_filings(ticker, [form])[:n]
+    filings = _get_recent_filings(ticker, [form], limit=40, per_form=20)
+    if req.filing_date:
+        # Targeted: summarise the one filing the caller picked. Falls through to
+        # the newest-first default when that date isn't in this form's history.
+        picked = [f for f in filings if f.get("date") == req.filing_date]
+        filings = picked[:1] if picked else filings[:n]
+    else:
+        filings = filings[:n]
     if not filings:
         queue.append(_sse({"type": "result", "ticker": ticker, "data": {
             "ticker": ticker, "error": f"No {form} filings found on SEC EDGAR for {ticker}."}}))

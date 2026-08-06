@@ -68,6 +68,7 @@ const SOTP               = lazyWithReload(() => import('./pages/SOTP'))
 const Multiples          = lazyWithReload(() => import('./pages/Multiples'))
 const ReverseDCF         = lazyWithReload(() => import('./pages/ReverseDCF'))
 const OptionsChainScanner = lazyWithReload(() => import('./pages/OptionsChainScanner'))
+const OptionsDeskDemo    = lazyWithReload(() => import('./pages/OptionsDeskDemo'))
 const RegressionAnalysis = lazyWithReload(() => import('./pages/RegressionAnalysis'))
 const CorrelationAnalysis = lazyWithReload(() => import('./pages/CorrelationAnalysis'))
 const PortfolioBacktester = lazyWithReload(() => import('./pages/PortfolioBacktester'))
@@ -301,6 +302,8 @@ export default function App() {
               {/* Portfolio Earnings is now the book scope of the fused Earnings tool. */}
               <Route path="/corporate"  element={<RedirectWithSearch to="/earnings" />} />
               <Route path="/chain"      element={<OptionsChainScanner />} />
+              {/* Evaluating a Chain Scanner + Options Flow merge; both originals stay. */}
+              <Route path="/options-desk-demo" element={<OptionsDeskDemo />} />
               <Route path="/correlation" element={<CorrelationAnalysis />} />
               <Route path="/strategy"   element={<StrategyBuilder />} />
               <Route path="/algo-strategy" element={<AlgoStrategyBuilder />} />
