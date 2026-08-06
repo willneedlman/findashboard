@@ -405,14 +405,17 @@ def skew_surface(ticker: str):
                 return float(brentq(lambda s: fn(K, s) - mid, 1e-4, 5.0, maxiter=80))
             except Exception:
                 return None
-        def _smile_side(df, is_put):
+        def _smile_side(df, is_put, otm_only: bool = True):
             cols = ["strike", "bid", "ask", "lastPrice"]
             if "impliedVolatility" in df.columns:
                 cols.append("impliedVolatility")
             d = df[cols].copy().dropna(subset=["strike"])
             d["mid"] = np.where(d["bid"] > 0, (d["bid"] + d["ask"]) / 2,
                                 np.where(d["ask"] > 0.05, d["ask"] * 0.95, d["lastPrice"].fillna(0)))
-            side = d[d["strike"] < S0] if is_put else d[d["strike"] >= S0]
+            if otm_only:
+                side = d[d["strike"] < S0] if is_put else d[d["strike"] >= S0]
+            else:
+                side = d
             side = side[(side["strike"] > S0 * 0.6) & (side["strike"] < S0 * 1.6) & (side["mid"] >= 0.05)]
             if side.empty:
                 return side.assign(iv=[])[["strike", "iv"]]
@@ -427,8 +430,15 @@ def skew_surface(ticker: str):
                 side["iv"] = side.apply(lambda row: _solve(row["strike"], row["mid"], is_put), axis=1)
             return side.dropna(subset=["iv"])[["strike", "iv"]]
 
-        calls = _smile_side(call_rows, is_put=False)
-        puts  = _smile_side(put_rows, is_put=True)
+        # Solve each side across the FULL strike range once, then derive the
+        # composite from it. The Volatility tool's CALL/PUT toggle needs per-side
+        # curves, and computing them separately would repeat the IV solving.
+        calls_full = _smile_side(call_rows, is_put=False, otm_only=False)
+        puts_full  = _smile_side(put_rows, is_put=True, otm_only=False)
+        # Composite smile: OTM only (puts below spot, calls at/above) — the standard
+        # construction, since OTM quotes are the tightest on each side.
+        calls = calls_full[calls_full["strike"] >= S0]
+        puts  = puts_full[puts_full["strike"] < S0]
         smile = pd.concat([puts, calls]).sort_values("strike").drop_duplicates("strike")
         smile = smile[(smile["strike"] > S0 * 0.5) & (smile["strike"] < S0 * 1.8)]
         if len(smile) < 4:
@@ -463,11 +473,23 @@ def skew_surface(ticker: str):
             {"moneyness": round(float(np.exp(x) - 1) * 100, 2), "iv": round(max(_fit(float(x)), 0.01) * 100, 2)}
             for x in mm
         ]
+        # Raw per-side points for the CALL/PUT surface toggle. Not fitted: a
+        # quadratic through ITM-only quotes extrapolates badly, so the UI plots
+        # these as-is and labels them noisier than the composite.
+        def _side_points(frame):
+            return [
+                {"moneyness": round((float(k) / S0 - 1) * 100, 2), "iv": round(float(v) * 100, 2)}
+                for k, v in zip(frame["strike"], frame["iv"])
+                if float(v) > 0
+            ]
+
         term.append({
             "expiry": exp, "dte": int((pd.to_datetime(exp) - today).days),
             "atm_iv": round(atm_iv * 100, 2), "_atm_raw": atm_iv * 100,
             "rr_25": round(rr, 2), "bf_25": round(bf, 2),
             "smile": smile_pts,
+            "call_points": _side_points(calls_full.sort_values("strike")),
+            "put_points": _side_points(puts_full.sort_values("strike")),
         })
         if front_smile is None:
             front_smile = smile_pts

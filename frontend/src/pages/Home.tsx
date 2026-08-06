@@ -901,7 +901,7 @@ export default function Home() {
                     </div>
                   )}
 
-                  <ThisWeek holdings={holdingTickers} onOpen={() => navigate('/earnings-calendar')} />
+                  <ThisWeek holdings={holdingTickers} onOpen={() => navigate('/earnings')} />
                 </div>
 
                 {/* Column 3 — 24-hour dial */}

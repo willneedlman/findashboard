@@ -8,8 +8,9 @@ import PageWrapper from '../components/PageWrapper'
 import EmptyState from '../components/EmptyState'
 import Provenance from '../components/Provenance'
 import { KpiCell } from '../components/mmCockpit'
-import { Lock, RefreshCw, Unlock, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, Lock, RefreshCw, Unlock, X } from 'lucide-react'
 import PMImportPicker from '../components/PMImportPicker'
+import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
 import { type ImportResult } from '../lib/pmImport'
 
 const GOLD = 'var(--theme-primary, #c9a84c)'
@@ -37,6 +38,23 @@ const RISK_PRESETS: { key: string; label: string; A: number }[] = [
 ]
 const PERIODS: { key: string; label: string }[] = [
   { key: '1d', label: '1D' }, { key: '1w', label: '1W' }, { key: '1m', label: '1M' }, { key: '1y', label: '1Y' }, { key: '5y', label: '5Y' },
+]
+
+// The four solved allocations. Each is a proposal you can ADOPT into the sliders —
+// that bridge is the whole point of fusing the optimizer into the builder: it
+// suggests weights, you deploy them.
+const CANDIDATES: { key: string; label: string; blurb: string }[] = [
+  { key: 'max_sharpe', label: 'Max Sharpe', blurb: 'best risk-adjusted return (tangency)' },
+  { key: 'min_variance', label: 'Min Variance', blurb: 'lowest possible volatility' },
+  { key: 'risk_parity', label: 'Risk Parity', blurb: 'equal risk from every holding' },
+  { key: 'equal_weight', label: 'Equal Weight', blurb: '1/N naive baseline' },
+]
+type ConstraintMode = 'long_only' | 'unconstrained' | 'concentrated' | 'custom'
+const CONSTRAINTS: { key: ConstraintMode; label: string; tip: string }[] = [
+  { key: 'long_only', label: 'Long-only', tip: 'Every weight between 0% and 100%' },
+  { key: 'unconstrained', label: 'Shorts OK', tip: 'Weights may go negative (-100% to 100%)' },
+  { key: 'concentrated', label: '±10%', tip: 'Each position capped near ±10%' },
+  { key: 'custom', label: 'Custom', tip: 'Set your own min/max per holding below' },
 ]
 const PM_PORTFOLIOS_KEY = 'pm-portfolios-v2'
 const genId = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now() + Math.random())
@@ -111,7 +129,7 @@ function PriceTip({ active, payload, label, period }: { active?: boolean; payloa
   )
 }
 
-export function PortfolioBuilderContent() {
+export function PortfolioAllocatorContent() {
   const [tickers, setTickers] = useState<string[]>(['AAPL', 'MSFT', 'NVDA', 'TLT', 'GLD'])
   const [tickerDraft, setTickerDraft] = useState('')
   const [cashAmount, setCashAmount] = useState('100000')
@@ -128,6 +146,20 @@ export function PortfolioBuilderContent() {
   // committed (and cleared) on blur/Enter.
   const [cashDraft, setCashDraft] = useState<Record<string, string>>({})
   const [sharesDraft, setSharesDraft] = useState<Record<string, string>>({})
+  // Model controls, fused in from the optimizer. Builder used to hardcode CAPM /
+  // 3Y / 10% because it "was about sizing an allocation, not choosing a return
+  // model" — now both live in one tool, so the knobs are exposed but tucked into a
+  // disclosure so the default path stays as simple as it was.
+  const [modelOpen, setModelOpen] = useState(false)
+  const [lookback, setLookback] = useState(3)
+  const [returnModel, setReturnModel] = useState<'historical' | 'capm'>('capm')
+  const [marketReturn, setMarketReturn] = useState('10')
+  const [constraintMode, setConstraintMode] = useState<ConstraintMode>('long_only')
+  const [customBounds, setCustomBounds] = useState<Record<string, [number, number]>>({})
+  const [selectedCandidate, setSelectedCandidate] = useState('max_sharpe')
+  const [series, setSeries] = useState({ frontier: true, cal: true, indifference: true, holdings: true, portfolios: true })
+  const [asset, setAsset] = useState<AssetRow | null>(null)
+  const [applyMsg, setApplyMsg] = useState('')
   const navigate = useNavigate()
   const riskAversion = RISK_PRESETS.find(p => p.key === riskPreset)?.A ?? 45
 
@@ -167,6 +199,16 @@ export function PortfolioBuilderContent() {
     // leftover cash here rather than being silently dropped.
     if (result.totalValue > 0) setCashAmount(String(Math.round(result.totalValue)))
     setImportMsg(`Loaded "${name}" — ${legs.length} holdings.`)
+  }
+  // Full CSV/JSON import screen, fused in from the optimizer.
+  const importAssets = (imported: PortfolioAsset[]) => {
+    const valid = imported.filter(a => a.ticker)
+    if (valid.length < 2) { setImportMsg('Need 2+ holdings to build a portfolio.'); return }
+    skipNextLevelRef.current = true
+    setTickers(valid.map(a => a.ticker.toUpperCase()))
+    setWeights(Object.fromEntries(valid.map(a => [a.ticker.toUpperCase(), Number(a.weight) || 0])))
+    setLocked({})
+    setImportMsg(`Imported ${valid.length} holdings.`)
   }
   const removeTicker = (sym: string) => {
     setTickers(t => t.filter(x => x !== sym))
@@ -272,7 +314,7 @@ export function PortfolioBuilderContent() {
     let state: { portfolios: { id: string; name: string }[]; activeId: string } | null = null
     try { state = JSON.parse(localStorage.getItem(PM_PORTFOLIOS_KEY) ?? 'null') } catch { state = null }
     const id = genId()
-    const name = `Portfolio Builder — ${new Date().toLocaleDateString()}`
+    const name = `Portfolio Allocator — ${new Date().toLocaleDateString()}`
     const newPortfolio = { id, name, holdings, options: [], futures: [], cash: [] }
     const next = state?.portfolios?.length
       ? { portfolios: [...state.portfolios, newPortfolio], activeId: id }
@@ -281,26 +323,53 @@ export function PortfolioBuilderContent() {
     navigate('/portfolio-manager')
   }
 
-  // Always CAPM, fixed 3Y estimation window and 10% expected market return —
-  // this tool is about sizing an allocation, not choosing a return model.
   const { mutate, data, isPending, isError, error } = useMutation<OptResult>({
     mutationFn: async () => (await axios.post('/api/portfolio-opt/optimize', {
-      tickers, start: startFor(3), end: new Date().toISOString().slice(0, 10),
-      risk_free_rate: parseFloat(rf) || 0, constraint_mode: 'long_only',
-      risk_aversion: riskAversion, return_model: 'capm', market_return: 10,
+      tickers, start: startFor(lookback), end: new Date().toISOString().slice(0, 10),
+      risk_free_rate: parseFloat(rf) || 0, constraint_mode: constraintMode,
+      custom_bounds: constraintMode === 'custom'
+        ? Object.fromEntries(tickers.map(t => { const [lo, hi] = customBounds[t] ?? [0, 100]; return [t, [lo / 100, hi / 100]] }))
+        : undefined,
+      risk_aversion: riskAversion,
+      return_model: returnModel, market_return: parseFloat(marketReturn) || 10,
       weights: hasWeights ? weights : undefined,
     })).data,
   })
   const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
 
-  // Auto re-solve whenever the ticker SET changes (add/remove/rename); rf and
-  // risk tolerance recompute the CAL client-side instantly and don't need a
-  // re-fetch, so they're deliberately left out of this dependency list — the
-  // Recalculate button next to rf covers that case explicitly.
+  // Auto re-solve on the ticker SET, and on any MODEL input that changes the solve
+  // (window, return model, constraints). Risk tolerance and rf recompute the CAL
+  // client-side instantly, so they stay out of this list — the refresh button next
+  // to rf covers a deliberate re-solve.
   useEffect(() => {
     if (tickers.length >= 2) mutate()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tickers.join(',')])
+  }, [tickers.join(','), lookback, returnModel, constraintMode])
+
+  // Adopt a solved allocation into the sliders. This is the fusion point: the
+  // optimizer proposes, the builder deploys. Locked tickers keep their weight, so
+  // the proposal is renormalized across whatever is still free to move.
+  const applyCandidate = (key: string) => {
+    const port = data?.portfolios?.[key]
+    if (!port?.weights?.length) return
+    const lockedSum = tickers.filter(t => locked[t]).reduce((s, t) => s + (weights[t] || 0), 0)
+    const room = Math.max(0, 100 - lockedSum)
+    const proposal = port.weights.filter(w => !locked[w.ticker])
+    const proposalSum = proposal.reduce((s, w) => s + w.weight, 0)
+    skipNextLevelRef.current = true
+    setWeights(w => {
+      const next = { ...w }
+      proposal.forEach(row => {
+        next[row.ticker] = proposalSum > 0 ? +((row.weight / proposalSum) * room).toFixed(3) : 0
+      })
+      return next
+    })
+    setSelectedCandidate(key)
+    const label = CANDIDATES.find(c => c.key === key)?.label ?? key
+    setApplyMsg(lockedSum > 0
+      ? `Applied ${label} across the ${room.toFixed(0)}% not held by locked tickers.`
+      : `Applied ${label} to the sliders.`)
+  }
 
   // Instant client-side score of the CURRENT slider weights against the
   // covariance matrix the backend already returned — recomputes on every
@@ -324,10 +393,23 @@ export function PortfolioBuilderContent() {
   }, [data, weights])
 
   const currentScatter = useMemo(() => clientCurrent ? [{ ...clientCurrent, label: 'Your Portfolio', key: 'current' }] : [], [clientCurrent])
-  const portScatter = useMemo(() => data ? [
-    { ...data.portfolios.max_sharpe, label: 'Max Sharpe', key: 'max_sharpe' },
-    { ...data.portfolios.min_variance, label: 'Min Variance', key: 'min_variance' },
-  ] : [], [data])
+  const portScatter = useMemo(() => data
+    ? CANDIDATES.filter(c => data.portfolios?.[c.key])
+        .map(c => ({ ...data.portfolios[c.key], label: c.label, key: c.key }))
+    : [], [data])
+
+  // Risk contribution per holding, from whichever candidate is selected — the
+  // optimizer's per-holding risk view, shown inline on the allocation rows.
+  const riskByTicker = useMemo(() => {
+    const port = data?.portfolios?.[selectedCandidate]
+    if (!port?.weights?.length) return {} as Record<string, { weight: number; risk: number }>
+    return Object.fromEntries(port.weights.map(w => [w.ticker, { weight: w.weight, risk: w.risk_contribution }]))
+  }, [data, selectedCandidate])
+
+  const assetByTicker = useMemo(
+    () => Object.fromEntries((data?.assets ?? []).map(a => [a.ticker, a])),
+    [data],
+  )
 
   const maxFrontierVol = useMemo(() => data?.frontier.length ? Math.max(...data.frontier.map(f => f.vol)) : 20, [data])
   const capitalAllocation = useMemo(() => {
@@ -393,10 +475,10 @@ export function PortfolioBuilderContent() {
   }, [chartSeries, chartBase])
 
   return (
-    <PageWrapper title="Portfolio Builder">
-      <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 12, minHeight: 'calc(100vh - 160px)' }}>
+    <>
+      <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8, minHeight: 'calc(100vh - 160px)' }}>
         {/* Parameters bar */}
-        <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderTop: `2px solid ${GOLD}`, display: 'flex', alignItems: 'flex-end', gap: 18, padding: '12px 16px', flexWrap: 'wrap' }}>
+        <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderTop: `2px solid ${GOLD}`, display: 'flex', alignItems: 'flex-end', gap: 12, padding: '9px 12px', flexWrap: 'wrap' }}>
           <div>
             <label style={lbl}>Cash to deploy</label>
             <input type="number" min={0} step="1000" value={cashAmount} onChange={e => setCashAmount(e.target.value)} style={{ ...inp, width: 140 }} />
@@ -429,13 +511,108 @@ export function PortfolioBuilderContent() {
           {exportMsg && <div style={{ width: '100%', fontFamily: MONO, fontSize: 9, color: NEG }}>{exportMsg}</div>}
           {data?.dropped && data.dropped.length > 0 && <div style={{ width: '100%', fontFamily: MONO, fontSize: 9, color: NEG }}>dropped (too little history): {data.dropped.join(', ')}</div>}
           {isError && <div style={{ width: '100%', fontFamily: MONO, fontSize: 9, color: NEG }}>{errMsg ?? 'Could not solve the frontier for this ticker set'}</div>}
+
+          {/* Model assumptions — collapsed by default so the simple path stays simple. */}
+          <div style={{ width: '100%', borderTop: `1px solid ${BORDER}`, paddingTop: 7 }}>
+            <button onClick={() => setModelOpen(o => !o)} aria-expanded={modelOpen}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: modelOpen ? GOLD : SEC, fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: 0 }}>
+              {modelOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              Model assumptions
+              <span style={{ fontFamily: MONO, letterSpacing: 0, textTransform: 'none', fontWeight: 400, color: FAINT }}>
+                {returnModel === 'capm' ? 'CAPM' : 'Historical'} · {lookback}Y · {CONSTRAINTS.find(c => c.key === constraintMode)?.label}
+              </span>
+            </button>
+            {modelOpen && (
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
+                <div>
+                  <label style={lbl} htmlFor="alloc-return-model">Expected return</label>
+                  <select id="alloc-return-model" value={returnModel} onChange={e => setReturnModel(e.target.value as 'historical' | 'capm')}
+                    title="CAPM builds forward returns from beta and the market premium. Historical uses realized means, which are noisier."
+                    style={{ ...inp, width: 150, cursor: 'pointer' }}>
+                    <option value="capm">CAPM (forward)</option>
+                    <option value="historical">Historical mean</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={lbl} htmlFor="alloc-lookback">Estimation window</label>
+                  <select id="alloc-lookback" value={lookback} onChange={e => setLookback(parseInt(e.target.value, 10))}
+                    title="How much history the covariance and returns are estimated from"
+                    style={{ ...inp, width: 110, cursor: 'pointer' }}>
+                    {[1, 2, 3, 5, 10].map(y => <option key={y} value={y}>{y} year{y > 1 ? 's' : ''}</option>)}
+                  </select>
+                </div>
+                {returnModel === 'capm' && (
+                  <div>
+                    <label style={lbl} htmlFor="alloc-market-return">Market return %</label>
+                    <input id="alloc-market-return" type="number" step="0.5" value={marketReturn} onChange={e => setMarketReturn(e.target.value)}
+                      title="Expected total return on the market, used by CAPM" style={{ ...inp, width: 100 }} />
+                  </div>
+                )}
+                <div>
+                  <label style={lbl}>Position constraints</label>
+                  <div style={{ display: 'flex', border: `1px solid ${BORDER}` }}>
+                    {CONSTRAINTS.map((c, i) => (
+                      <button key={c.key} onClick={() => setConstraintMode(c.key)} title={c.tip}
+                        style={{ background: constraintMode === c.key ? `color-mix(in srgb, ${GOLD} 16%, transparent)` : 'transparent', border: 'none', borderRight: i < CONSTRAINTS.length - 1 ? `1px solid ${BORDER}` : 'none', cursor: 'pointer', color: constraintMode === c.key ? GOLD : SEC, fontFamily: MONO, fontSize: 9.5, fontWeight: 700, padding: '7px 10px', whiteSpace: 'nowrap' }}>{c.label}</button>
+                    ))}
+                  </div>
+                </div>
+                {constraintMode === 'custom' && (
+                  <div style={{ width: '100%', fontFamily: SANS, fontSize: 9, color: FAINT }}>
+                    Set each holding's min and max on its allocation tile below.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
+        {/* Solved allocations — click APPLY to adopt one into the sliders. */}
+        {data && portScatter.length > 0 && (
+          <div style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 10px', borderBottom: `1px solid ${BORDER}` }}>
+              <span style={{ fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD }}>
+                Solved Allocations <span style={{ color: FAINT, fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>· apply one, then fine-tune the sliders</span>
+              </span>
+              {applyMsg && <span style={{ fontFamily: MONO, fontSize: 9, color: POS }}>{applyMsg}</span>}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap' }}>
+              {CANDIDATES.filter(c => data.portfolios?.[c.key]).map((c, i, arr) => {
+                const p = data.portfolios[c.key]
+                const isSel = selectedCandidate === c.key
+                return (
+                  <div key={c.key} style={{
+                    flex: '1 1 190px', minWidth: 180, padding: '8px 10px',
+                    borderRight: i < arr.length - 1 ? `1px solid ${BORDER}` : 'none',
+                    background: isSel ? `color-mix(in srgb, ${GOLD} 8%, transparent)` : 'transparent',
+                  }}>
+                    <button onClick={() => setSelectedCandidate(c.key)} title={`${c.blurb} — show its per-holding risk on the tiles`}
+                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+                      <div style={{ fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: isSel ? GOLD : TEXT }}>{c.label}</div>
+                      <div style={{ fontFamily: SANS, fontSize: 9, color: FAINT, marginTop: 2, lineHeight: 1.3 }}>{c.blurb}</div>
+                    </button>
+                    <div style={{ display: 'flex', gap: 10, marginTop: 6, fontFamily: MONO, fontSize: 10 }}>
+                      <span style={{ color: p.return >= 0 ? POS : NEG }}>{p.return >= 0 ? '+' : ''}{p.return.toFixed(1)}%</span>
+                      <span style={{ color: SEC }}>vol {p.vol.toFixed(1)}%</span>
+                      <span style={{ color: GOLD }}>SR {p.sharpe.toFixed(2)}</span>
+                    </div>
+                    <button onClick={() => applyCandidate(c.key)}
+                      title={`Set the sliders to ${c.label}'s weights`}
+                      style={{ marginTop: 6, width: '100%', background: 'transparent', border: `1px solid ${GOLD}`, color: GOLD, fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '5px 8px', cursor: 'pointer' }}>
+                      Apply
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Body: ticker column + charts */}
-        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           {/* Left: tickers + sliders */}
-          <div style={{ width: 300, flexShrink: 0, background: SURFACE, border: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '10px 12px', borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD }}>
+          <div style={{ width: 288, flexShrink: 0, background: SURFACE, border: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '7px 10px', borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD }}>
               <span>Tickers <span style={{ color: FAINT }}>{tickers.length}</span></span>
               {tickers.length > 0 && (() => {
                 const allLocked = tickers.every(t => locked[t])
@@ -448,16 +625,32 @@ export function PortfolioBuilderContent() {
                 )
               })()}
             </div>
-            <div style={{ padding: 10, display: 'flex', gap: 6 }}>
-              <input value={tickerDraft} onChange={e => setTickerDraft(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTicker()}
-                placeholder="Add ticker…" style={{ ...inp, textTransform: 'uppercase' }} />
-              <button onClick={addTicker} style={{ background: GOLD, border: `1px solid ${GOLD}`, color: 'var(--theme-bg)', fontFamily: SANS, fontSize: 10, fontWeight: 700, padding: '0 12px', cursor: 'pointer' }}>Add</button>
+            {/* Portfolio source — the book, a file, or typed by hand. The
+                Portfolio Manager picker leads because an existing book is the
+                common case; it stays visible (disabled) when none is saved so
+                the connection is discoverable rather than silently absent. */}
+            <div style={{ padding: '8px 8px 6px', borderBottom: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <label style={{ ...lbl, marginBottom: 0 }}>Portfolio source</label>
+              <PMImportPicker onImport={loadFromPM} emptyLabel="No saved books in Portfolio Manager"
+                style={{ ...inp, appearance: 'none', cursor: 'pointer' }} />
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                <PortfolioIO mode="portfolio" name="allocator"
+                  assets={tickers.map(t => ({ ticker: t, weight: weights[t] || 0 }))}
+                  onImportAssets={importAssets} />
+                <button onClick={() => navigate('/portfolio-manager')}
+                  title="Open Portfolio Manager to build or edit a book"
+                  style={{ background: 'none', border: `1px solid ${BORDER}`, color: SEC, fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 8px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  Manage book
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: 5 }}>
+                <input value={tickerDraft} onChange={e => setTickerDraft(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTicker()}
+                  placeholder="Add ticker…" aria-label="Add a ticker by hand" style={{ ...inp, textTransform: 'uppercase' }} />
+                <button onClick={addTicker} style={{ background: GOLD, border: `1px solid ${GOLD}`, color: 'var(--theme-bg)', fontFamily: SANS, fontSize: 10, fontWeight: 700, padding: '0 11px', cursor: 'pointer' }}>Add</button>
+              </div>
+              {importMsg && <div style={{ fontSize: 9, color: importMsg.startsWith('Loaded') || importMsg.startsWith('Imported') ? POS : NEG, fontFamily: SANS, lineHeight: 1.4 }}>{importMsg}</div>}
             </div>
-            <div style={{ padding: '0 10px 10px' }}>
-              <PMImportPicker onImport={loadFromPM} style={{ ...inp, appearance: 'none', cursor: 'pointer' }} />
-              {importMsg && <div style={{ fontSize: 9, color: importMsg.startsWith('Loaded') ? POS : NEG, fontFamily: SANS, marginTop: 5, lineHeight: 1.4 }}>{importMsg}</div>}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 10px 10px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 8 }}>
               {tickers.map((t, i) => {
                 const isLocked = !!locked[t]
                 const row = shareRows[i]
@@ -465,8 +658,8 @@ export function PortfolioBuilderContent() {
                 const lockedSumOther = tickers.filter(x => x !== t && locked[x]).reduce((s, x) => s + (weights[x] || 0), 0)
                 const sliderMax = Math.max(0, 100 - lockedSumOther)
                 return (
-                  <div key={i} style={{ background: 'color-mix(in srgb, var(--theme-surface, #0d1826) 100%, #000 8%)', border: `1px solid ${isChartSel ? GOLD : BORDER}`, padding: '8px 9px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <div key={i} style={{ background: 'color-mix(in srgb, var(--theme-surface, #0d1826) 100%, #000 8%)', border: `1px solid ${isChartSel ? GOLD : BORDER}`, padding: '6px 8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
                       <button onClick={() => setChartTicker(t)} title={`Show ${t} on the price chart`} aria-pressed={isChartSel}
                         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', flex: 1, fontFamily: MONO, fontSize: 12, fontWeight: 700, color: isChartSel ? GOLD : TEXT }}>{t}</button>
                       <button onClick={() => toggleLock(t)} aria-label={isLocked ? `Unlock ${t}` : `Lock ${t}`} title={isLocked ? 'Locked — excluded from auto-rebalance. Click to unlock.' : 'Lock to exclude this ticker from auto-rebalance'} style={{ background: 'none', border: 'none', color: isLocked ? GOLD : FAINT, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>{isLocked ? <Lock size={13} /> : <Unlock size={13} />}</button>
@@ -478,7 +671,7 @@ export function PortfolioBuilderContent() {
                         style={{ flex: 1, accentColor: GOLD, opacity: isLocked ? 0.5 : 1 }} aria-label={`${t} weight`} />
                       <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: GOLD, width: 40, textAlign: 'right' }}>{(weights[t] || 0).toFixed(0)}%</span>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
                         <span style={{ fontFamily: MONO, fontSize: 10, color: FAINT }}>$</span>
                         <input type="number" min={0} step="100" disabled={isLocked || cashNum <= 0}
@@ -504,10 +697,47 @@ export function PortfolioBuilderContent() {
                         <span style={{ fontFamily: MONO, fontSize: 10, color: FAINT }}>sh</span>
                       </div>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5, fontFamily: MONO, fontSize: 9, color: FAINT }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontFamily: MONO, fontSize: 9, color: FAINT }}>
                       <span>{row?.price != null ? `$${row.price.toFixed(2)}` : '…'}</span>
                       <span style={{ color: TEXT }}>{fmtShares(row?.shares ?? 0)} sh · ${(row?.dollarActual ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                     </div>
+
+                    {/* Optimizer read-outs, inline on the row rather than a second screen:
+                        what the solver wanted here, and where this name's risk comes from. */}
+                    {(riskByTicker[t] || assetByTicker[t]) && (
+                      <div style={{ marginTop: 5, paddingTop: 4, borderTop: `1px solid ${BORDER}`, display: 'flex', justifyContent: 'space-between', gap: 6, fontFamily: MONO, fontSize: 9 }}>
+                        {riskByTicker[t] && (
+                          <span style={{ color: FAINT }} title={`${CANDIDATES.find(c => c.key === selectedCandidate)?.label} wants ${riskByTicker[t].weight.toFixed(1)}% here, contributing ${riskByTicker[t].risk.toFixed(1)}% of portfolio risk`}>
+                            opt <span style={{ color: GOLD }}>{riskByTicker[t].weight.toFixed(0)}%</span>
+                            {' · risk '}<span style={{ color: TEXT }}>{riskByTicker[t].risk.toFixed(0)}%</span>
+                          </span>
+                        )}
+                        {assetByTicker[t] && (
+                          <span style={{ color: FAINT }} title="This holding's own expected return, volatility and beta over the estimation window">
+                            {assetByTicker[t].vol.toFixed(0)}% vol
+                            {assetByTicker[t].beta != null && ` · β${assetByTicker[t].beta!.toFixed(2)}`}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Per-name solver bounds, only when custom constraints are on. */}
+                    {constraintMode === 'custom' && (
+                      <div style={{ marginTop: 5, display: 'flex', alignItems: 'center', gap: 5, fontFamily: MONO, fontSize: 9, color: FAINT }}>
+                        <span>min</span>
+                        <input type="number" step="5" aria-label={`${t} minimum weight`}
+                          value={customBounds[t]?.[0] ?? 0}
+                          onChange={e => setCustomBounds(b => ({ ...b, [t]: [parseFloat(e.target.value) || 0, b[t]?.[1] ?? 100] }))}
+                          style={{ ...inp, width: 0, flex: 1, padding: '3px 5px', fontSize: 9.5 }} />
+                        <span>max</span>
+                        <input type="number" step="5" aria-label={`${t} maximum weight`}
+                          value={customBounds[t]?.[1] ?? 100}
+                          onChange={e => setCustomBounds(b => ({ ...b, [t]: [b[t]?.[0] ?? 0, parseFloat(e.target.value) || 0] }))}
+                          style={{ ...inp, width: 0, flex: 1, padding: '3px 5px', fontSize: 9.5 }} />
+                        <button onClick={() => mutate()} title="Re-solve with these bounds"
+                          style={{ background: 'none', border: `1px solid ${BORDER}`, color: SEC, cursor: 'pointer', padding: '2px 4px', display: 'flex', alignItems: 'center' }}><RefreshCw size={10} /></button>
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -516,9 +746,9 @@ export function PortfolioBuilderContent() {
           </div>
 
           {/* Right: price chart + frontier */}
-          <div style={{ flex: '1 1 560px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ flex: '1 1 560px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', borderBottom: `1px solid ${BORDER}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 10px', borderBottom: `1px solid ${BORDER}` }}>
                 <span style={{ fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD }}>{chartTicker ?? 'Selected Ticker'} <span style={{ color: FAINT, fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>· click a tile to switch</span></span>
                 <div style={{ display: 'flex', border: `1px solid ${BORDER}` }}>
                   {PERIODS.map((p, i) => (
@@ -526,9 +756,9 @@ export function PortfolioBuilderContent() {
                   ))}
                 </div>
               </div>
-              <div style={{ padding: '10px 8px 4px' }}>
-                {tickers.length === 0 ? <div style={{ height: 220, display: 'grid', placeItems: 'center', color: FAINT, fontFamily: SANS, fontSize: 11 }}>Add tickers to see performance.</div> : (
-                  <ResponsiveContainer width="100%" height={220}>
+              <div style={{ padding: '6px 6px 0' }}>
+                {tickers.length === 0 ? <div style={{ height: 200, display: 'grid', placeItems: 'center', color: FAINT, fontFamily: SANS, fontSize: 11 }}>Add tickers to see performance.</div> : (
+                  <ResponsiveContainer width="100%" height={200}>
                     <LineChart data={chartSeries} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
                       <CartesianGrid stroke="rgba(255,255,255,0.05)" />
                       <XAxis dataKey="date" tick={{ fontFamily: MONO, fontSize: 9, fill: SEC }} tickLine={false} axisLine={{ stroke: BORDER }}
@@ -547,7 +777,7 @@ export function PortfolioBuilderContent() {
                     </LineChart>
                   </ResponsiveContainer>
                 )}
-                <div style={{ display: 'flex', gap: 12, padding: '4px 10px 8px', fontFamily: MONO, fontSize: 9, flexWrap: 'wrap', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 12, padding: '2px 8px 6px', fontFamily: MONO, fontSize: 9, flexWrap: 'wrap', alignItems: 'center' }}>
                   {chartTicker && (() => {
                     const chg = cmp?.meta?.[chartTicker]?.change_pct
                     return <span style={{ color: chg != null && chg >= 0 ? POS : NEG, fontSize: 11, fontWeight: 700 }}>{chartTicker} {chg != null ? `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%` : '—'}</span>
@@ -558,8 +788,17 @@ export function PortfolioBuilderContent() {
             </div>
 
             <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, flex: 1 }}>
-              <div style={{ padding: '6px 12px', borderBottom: `1px solid ${BORDER}`, fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD }}>Efficient Frontier</div>
-              {!data && !isPending && <div style={{ height: 300, display: 'grid' }}><EmptyState title="Portfolio Builder" hint="Add 2+ tickers to see the efficient frontier and where your allocation sits on it." /></div>}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '5px 10px', borderBottom: `1px solid ${BORDER}`, flexWrap: 'wrap' }}>
+                <span style={{ fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD }}>Efficient Frontier</span>
+                <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                  {([['frontier', 'Frontier'], ['cal', 'CAL'], ['indifference', 'Utility'], ['holdings', 'Holdings'], ['portfolios', 'Solutions']] as [keyof typeof series, string][]).map(([k, label]) => (
+                    <button key={k} onClick={() => setSeries(s => ({ ...s, [k]: !s[k] }))} aria-pressed={series[k]}
+                      title={`Show or hide ${label.toLowerCase()} on the chart`}
+                      style={{ background: series[k] ? `color-mix(in srgb, ${GOLD} 16%, transparent)` : 'transparent', border: `1px solid ${BORDER}`, cursor: 'pointer', color: series[k] ? GOLD : SEC, fontFamily: MONO, fontSize: 9, fontWeight: 700, padding: '3px 7px' }}>{label}</button>
+                  ))}
+                </div>
+              </div>
+              {!data && !isPending && <div style={{ height: 300, display: 'grid' }}><EmptyState title="Portfolio Allocator" hint="Add 2+ tickers to solve the frontier and see where your allocation sits on it." /></div>}
               {isPending && <div style={{ height: 300, display: 'grid' }}><EmptyState title="Solving…" hint="Fetching aligned history and the efficient frontier." variant="loading" /></div>}
               {data && (
                 <>
@@ -568,7 +807,7 @@ export function PortfolioBuilderContent() {
                     <KpiCell grow align="top" label="Your Volatility" value={clientCurrent ? `${clientCurrent.vol.toFixed(1)}%` : '—'} valueSize={18} sub="annualized" />
                     <KpiCell grow align="top" label="Your Sharpe" value={clientCurrent ? clientCurrent.sharpe.toFixed(2) : '—'} valueSize={18} color={clientCurrent && clientCurrent.sharpe >= 1 ? POS : GOLD} sub={`rf ${data.risk_free_rate}%`} />
                   </div>
-                  <div style={{ padding: '10px 8px 4px' }}>
+                  <div style={{ padding: '6px 6px 0' }}>
                     <ResponsiveContainer width="100%" height={300}>
                       <ScatterChart margin={{ top: 8, right: 12, bottom: 24, left: 4 }}>
                         <CartesianGrid stroke="rgba(255,255,255,0.05)" />
@@ -576,24 +815,39 @@ export function PortfolioBuilderContent() {
                         <YAxis type="number" dataKey="return" name="Return" domain={yDom} allowDataOverflow tick={{ fontFamily: MONO, fontSize: 9, fill: SEC }} tickLine={false} axisLine={{ stroke: BORDER }} width={40} tickFormatter={(v: number) => `${v.toFixed(0)}%`} label={{ value: 'Return', angle: -90, position: 'insideLeft', fontFamily: SANS, fontSize: 9, fill: FAINT }} />
                         <ZAxis range={[60, 60]} />
                         <Tooltip cursor={CROSSHAIR_CURSOR} content={<FrontierTip />} />
-                        <Scatter isAnimationActive={false} name="Frontier" data={data.frontier} line={{ stroke: GOLD, strokeWidth: 1.5 }} fill="transparent" />
-                        {capitalAllocation && <Scatter isAnimationActive={false} name="Capital Allocation Line" data={capitalAllocation.calLine} line={{ stroke: GOLD, strokeWidth: 1.5, strokeDasharray: '5 3' }} fill="transparent" />}
-                        {capitalAllocation && <Scatter isAnimationActive={false} name="Indifference Curve" data={capitalAllocation.indifferenceCurve} line={{ stroke: GOLD, strokeWidth: 1.2, strokeDasharray: '2 3' }} fill="transparent" />}
-                        <Scatter isAnimationActive={false} name="Assets" data={data.assets} fill="var(--theme-bg, #101c2e)" stroke={GOLD} strokeWidth={2} shape="circle" />
-                        <Scatter isAnimationActive={false} name="Portfolios" data={portScatter} fill="var(--theme-bg, #101c2e)" stroke={GOLD} strokeWidth={2} shape="diamond" />
-                        {currentScatter.length > 0 && <Scatter isAnimationActive={false} name="Your Portfolio" data={currentScatter} fill="var(--theme-bg, #101c2e)" stroke={GOLD} strokeWidth={2} shape="star" />}
+                        {series.frontier && <Scatter isAnimationActive={false} name="Frontier" data={data.frontier} line={{ stroke: GOLD, strokeWidth: 1.5 }} fill="transparent" />}
+                        {series.cal && capitalAllocation && <Scatter isAnimationActive={false} name="Capital Allocation Line" data={capitalAllocation.calLine} line={{ stroke: GOLD, strokeWidth: 1.5, strokeDasharray: '5 3' }} fill="transparent" />}
+                        {series.indifference && capitalAllocation && <Scatter isAnimationActive={false} name="Indifference Curve" data={capitalAllocation.indifferenceCurve} line={{ stroke: GOLD, strokeWidth: 1.2, strokeDasharray: '2 3' }} fill="transparent" />}
+                        {series.holdings && <Scatter isAnimationActive={false} name="Assets" data={data.assets} fill="var(--theme-bg, #101c2e)" stroke={GOLD} strokeWidth={2} shape="circle"
+                          onClick={(p: unknown) => setAsset((p as { payload?: AssetRow })?.payload ?? null)} cursor="pointer" />}
+                        {series.portfolios && <Scatter isAnimationActive={false} name="Portfolios" data={portScatter} fill="var(--theme-bg, #101c2e)" stroke={GOLD} strokeWidth={2} shape="diamond" />}
+                        {currentScatter.length > 0 && <Scatter isAnimationActive={false} name="Your Allocation" data={currentScatter} fill="var(--theme-bg, #101c2e)" stroke={GOLD} strokeWidth={2} shape="star" />}
                       </ScatterChart>
                     </ResponsiveContainer>
-                    <div style={{ display: 'flex', gap: 10, padding: '4px 10px 8px', fontFamily: SANS, fontSize: 9, color: FAINT, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: 10, padding: '2px 8px 6px', fontFamily: SANS, fontSize: 9, color: FAINT, flexWrap: 'wrap' }}>
                       <span><span style={{ color: GOLD }}>─</span> frontier</span>
                       <span><span style={{ color: GOLD }}>- -</span> capital allocation line</span>
                       <span><span style={{ color: GOLD }}>··</span> indifference curve</span>
-                      <span><span style={{ color: GOLD }}>●</span> assets</span>
-                      <span><span style={{ color: GOLD }}>◆</span> max sharpe / min variance</span>
-                      {currentScatter.length > 0 && <span><span style={{ color: GOLD }}>★</span> your portfolio</span>}
+                      <span><span style={{ color: GOLD }}>●</span> holdings (click for detail)</span>
+                      <span><span style={{ color: GOLD }}>◆</span> solved allocations</span>
+                      {currentScatter.length > 0 && <span><span style={{ color: GOLD }}>★</span> your allocation</span>}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px 10px', borderTop: `1px solid ${BORDER}`, flexWrap: 'wrap' }}>
-                      <span style={{ fontFamily: MONO, fontSize: 10, color: FAINT }}>{data.days} days · {data.span.start} → {data.span.end}</span>
+                    {asset && (
+                      <div style={{ margin: '0 8px 8px', border: `1px solid ${GOLD}`, background: 'var(--theme-bg)', padding: '7px 10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <span style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, color: GOLD }}>{asset.ticker}</span>
+                          <button onClick={() => setAsset(null)} aria-label="Close holding detail" style={{ background: 'none', border: 'none', color: FAINT, cursor: 'pointer', padding: 0, display: 'flex' }}><X size={13} /></button>
+                        </div>
+                        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontFamily: MONO, fontSize: 10 }}>
+                          <span style={{ color: FAINT }}>return <span style={{ color: asset.return >= 0 ? POS : NEG }}>{asset.return >= 0 ? '+' : ''}{asset.return.toFixed(1)}%</span></span>
+                          <span style={{ color: FAINT }}>vol <span style={{ color: TEXT }}>{asset.vol.toFixed(1)}%</span></span>
+                          {asset.beta != null && <span style={{ color: FAINT }}>beta <span style={{ color: TEXT }}>{asset.beta.toFixed(2)}</span></span>}
+                          {asset.total_return != null && <span style={{ color: FAINT }}>window <span style={{ color: TEXT }}>{asset.total_return >= 0 ? '+' : ''}{asset.total_return.toFixed(1)}%</span></span>}
+                        </div>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px 8px', borderTop: `1px solid ${BORDER}`, flexWrap: 'wrap' }}>
+                      <span style={{ fontFamily: MONO, fontSize: 10, color: FAINT }}>{data.days} days · {data.span.start} → {data.span.end} · {returnModel === 'capm' ? 'CAPM' : 'historical'} returns</span>
                       <Provenance kind="live" source="yfinance · daily" />
                     </div>
                   </div>
@@ -603,10 +857,10 @@ export function PortfolioBuilderContent() {
           </div>
         </div>
       </div>
-    </PageWrapper>
+    </>
   )
 }
 
-export default function PortfolioBuilder() {
-  return <PortfolioBuilderContent />
+export default function PortfolioAllocator() {
+  return <PageWrapper title="Portfolio Allocator"><PortfolioAllocatorContent /></PageWrapper>
 }

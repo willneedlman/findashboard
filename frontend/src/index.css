@@ -897,6 +897,24 @@ textarea:focus:not(:focus-visible) {
   .mm-widen-btn { width: 26px !important; height: 26px !important; }
 }
 
+/* Portfolio Live "Session Board": live-dot pulse + the seamless ticker tape.
+   The tape renders its item list twice, so translating -50% loops invisibly. */
+@keyframes ftPulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--theme-positive, #22c55e) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 9px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+@keyframes ftTape {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.ft-live-dot { animation: ftPulse 2s ease-out infinite; }
+.ft-tape-track { animation: ftTape 55s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  /* Stop the tape outright rather than letting it crawl. */
+  .ft-live-dot, .ft-tape-track { animation: none !important; }
+}
+
 /* Screener Screen Library rail collapse/expand */
 .ft-rail { transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1); }
 .ft-screen-row:hover { background: color-mix(in srgb, var(--theme-primary, #c9a84c) 5%, transparent) !important; }

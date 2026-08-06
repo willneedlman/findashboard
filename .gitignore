@@ -4,7 +4,7 @@ __pycache__/
 backend/.env
 nohup.out
 .streamlit/secrets.toml
-frontend/node_modules/
+node_modules/
 *.pyc
 .DS_Store
 backend/users.db

@@ -1127,3 +1127,267 @@ def stress_test(req: StressRequest):
         "holdings": [{"ticker": t, "weight": round(weights[t] * 100, 1)} for t in tickers],
         "results":  results,
     }
+
+
+# ── Live intraday book value ──────────────────────────────────────────────────
+# Powers the Portfolio Live cockpit's value curve. 5-minute bars: 78 points per
+# session keeps the payload small while still reading as a continuous line.
+_LIVE_TF = "5m"
+_LIVE_LOOKBACK_DAYS = 6      # enough to reach the last session across a long weekend
+
+# Bar granularity per chart range, chosen so every window lands at roughly 60-250
+# points: dense enough to read as a line, light enough to keep the payload small.
+# The extra lookback days absorb weekends and holidays so a window is never short.
+_LIVE_RANGE_TF = {
+    "1h":  ("1m",  2),
+    "1d":  ("5m",  _LIVE_LOOKBACK_DAYS),
+    "1w":  ("30m", 10),
+    "1m":  ("1h",  35),
+    "3m":  ("1d",  100),
+    "ytd": ("1d",  None),     # resolved against Jan 1 at request time
+    "1y":  ("1d",  375),
+}
+LiveRange = Literal["1h", "1d", "1w", "1m", "3m", "ytd", "1y"]
+
+
+# Exact window the user asked to SEE, as opposed to the padded fetch lookback
+# above. Slicing on the padded start showed 10 days for a "1W" request.
+_LIVE_RANGE_WINDOW_DAYS = {"1w": 7, "1m": 30, "3m": 91, "1y": 365}
+
+
+def _live_range_start(rng: str) -> tuple[str, str]:
+    """(timeframe, ISO fetch-start date) for a chart range. The fetch start is
+    padded past the display window so weekends and holidays cannot short it."""
+    tf, days = _LIVE_RANGE_TF[rng]
+    today = _pd_today()
+    if days is None:                      # YTD
+        start = pd.Timestamp(year=today.year, month=1, day=1, tz="UTC")
+        # A January YTD window would otherwise be too thin to plot.
+        start = min(start, today - pd.Timedelta(days=10))
+    else:
+        start = today - pd.Timedelta(days=days)
+    return tf, start.date().isoformat()
+
+
+def _live_window_cutoff(rng: str) -> "pd.Timestamp | None":
+    """Earliest timestamp to DISPLAY for a range, or None to keep everything."""
+    today = _pd_today()
+    if rng == "ytd":
+        return min(pd.Timestamp(year=today.year, month=1, day=1, tz="UTC"),
+                   today - pd.Timedelta(days=10))
+    days = _LIVE_RANGE_WINDOW_DAYS.get(rng)
+    return today - pd.Timedelta(days=days) if days else None
+
+
+class LiveValueHolding(BaseModel):
+    ticker: str
+    shares: float
+
+
+class LiveValueRequest(BaseModel):
+    holdings: list[LiveValueHolding] = Field(default_factory=list, max_length=60)
+    cash: float = 0.0
+    range: LiveRange = "1d"
+
+    @model_validator(mode="after")
+    def _validate(self):
+        merged: dict[str, float] = {}
+        for h in self.holdings:
+            sym = h.ticker.strip().upper().replace(".", "-").replace("/", "-")
+            if not sym or sym == CASH_SYMBOL:
+                continue
+            merged[sym] = merged.get(sym, 0.0) + float(h.shares)
+        symbols = validate_tickers(list(merged), max_count=60) if merged else []
+        self.holdings = [LiveValueHolding(ticker=s, shares=merged[s]) for s in symbols if merged[s]]
+        if not self.holdings and self.cash <= 0:
+            raise HTTPException(400, "No holdings provided")
+        return self
+
+
+def _live_intraday_closes(symbols: list[str], start: str, tf: str = _LIVE_TF) -> tuple[pd.DataFrame, str]:
+    """Close frame (UTC index, one column per symbol) plus a source label.
+
+    Alpaca serves every US equity in ONE batched request; anything it does not
+    cover (futures, FX, crypto, or no keys at all) falls back to a single batched
+    yfinance download rather than a per-symbol fan-out.
+    """
+    import alpaca
+    series: dict[str, pd.Series] = {}
+    used_alpaca = False
+    equities = [s for s in symbols if alpaca.is_equity(s)]
+    if equities and alpaca.available():
+        for sym, rows in alpaca.bars_multi(tuple(equities), tf, start).items():
+            if not rows:
+                continue
+            idx = pd.to_datetime([r["t"] for r in rows], utc=True)
+            col = pd.Series([float(r["c"]) for r in rows], index=idx).dropna()
+            if not col.empty:
+                series[sym] = col
+                used_alpaca = True
+    missing = [s for s in symbols if s not in series]
+    if missing:
+        end = (_pd_today() + pd.Timedelta(days=1)).date().isoformat()
+        try:
+            dl = get_download(tuple(sorted(missing)), start, end, tf, cache_ttl=60)
+            frame = _download_field(dl, "Close", missing)
+            # cache.get_download calls tz_localize(None), which drops the zone but
+            # keeps the wall-clock — and yfinance stamps US intraday bars in
+            # exchange time. So a naive index here is ET, not UTC; localizing it to
+            # UTC would shift every bar by 4-5h and break the ET session grouping.
+            if frame.index.tz is None:
+                frame.index = frame.index.tz_localize("America/New_York")
+            frame.index = frame.index.tz_convert("UTC")
+            for sym in missing:
+                if sym in frame.columns:
+                    col = frame[sym].dropna()
+                    if not col.empty:
+                        series[sym] = col
+        except Exception:
+            logger.exception("live intraday fallback download failed")
+    if not series:
+        return pd.DataFrame(), "none"
+    out = pd.DataFrame(series).sort_index()
+    both = used_alpaca and any(s in out.columns for s in missing)
+    return out, "mixed" if both else ("alpaca" if used_alpaca else "yfinance")
+
+
+def _pd_today():
+    return pd.Timestamp.now(tz="UTC")
+
+
+@router.post("/live-value")
+def live_value(req: LiveValueRequest):
+    """Intraday mark-to-market curve for a book — the Portfolio Live value chart.
+
+    Plots the most recent session present in the data rather than "today", so the
+    chart still shows the last close on weekends, holidays, and before the open
+    instead of going blank.
+    """
+    import datetime as _dt
+    import market_hours
+    symbols = [h.ticker for h in req.holdings]
+    shares = {h.ticker: h.shares for h in req.holdings}
+    cash = round(float(req.cash), 2)
+    session = market_hours.session_label()
+    as_of = _dt.datetime.now(_dt.timezone.utc).isoformat()
+
+    tf, start = _live_range_start(req.range)
+
+    if not symbols:            # cash-only book: a flat line is the honest answer
+        return {
+            "points": [], "value": cash, "prior_value": cash,
+            "change_abs": 0.0, "change_pct": 0.0, "cash": cash,
+            "session": session, "as_of": as_of, "interval": tf, "range": req.range,
+            "priced": [], "unpriced": [], "source": "none", "session_date": None,
+        }
+
+    closes, source = _live_intraday_closes(symbols, start, tf)
+    if closes.empty:
+        raise HTTPException(404, "No price data available for these holdings")
+
+    # Carry each name's last print forward across the WHOLE window BEFORE slicing to
+    # the visible range. A thinly covered holding can be absent from the newest bars
+    # entirely (a vendor gap, not a halt); filling first marks it at its last known
+    # price, whereas filling after the slice leaves it all-NaN and the dropna below
+    # would then wipe every row and take the whole curve down with it.
+    closes = closes.sort_index().ffill()
+
+    et_days = closes.index.tz_convert("America/New_York").normalize()
+    session_date = et_days.max()
+    if req.range == "1d":
+        # One intraday curve: the newest session present in the data, not "today",
+        # so weekends, holidays and pre-open still render the last close.
+        closes = closes[et_days == session_date]
+    elif req.range == "1h":
+        closes = closes[closes.index >= closes.index.max() - pd.Timedelta(hours=1)]
+    else:
+        cutoff = _live_window_cutoff(req.range)
+        if cutoff is not None:
+            closes = closes[closes.index >= cutoff]
+    if closes.empty:
+        raise HTTPException(404, "No price data in this range for these holdings")
+
+    # "Priced" has to be judged INSIDE the visible window — a column can exist
+    # because the name traded earlier yet carry nothing usable here.
+    priced = [s for s in symbols if s in closes.columns and closes[s].notna().any()]
+    unpriced = [s for s in symbols if s not in priced]
+
+    # Drop leading rows where a holding has still not printed at all, otherwise the
+    # total steps up as names come online rather than tracking the book.
+    marks = closes[priced].dropna(how="any")
+    if marks.empty:
+        raise HTTPException(404, "No overlapping price data across holdings")
+    weights = pd.Series({s: shares[s] for s in priced}, dtype=float)
+    curve = marks.mul(weights, axis=1).sum(axis=1) + cash
+
+    if req.range == "1d":
+        prior_value = _live_prior_value(priced, shares, session_date, cash, marks.iloc[0])
+    else:
+        # Over a multi-day window the gain the user means is the change across what
+        # they are looking at, so the first plotted point is the baseline. Using a
+        # prior daily close here would measure a day move against a year of chart.
+        prior_value = float(curve.iloc[0])
+    latest = float(curve.iloc[-1])
+    change_abs = round(latest - prior_value, 2) if prior_value else None
+    change_pct = round((latest / prior_value - 1) * 100, 3) if prior_value else None
+
+    return {
+        "points": [
+            {"t": ts.isoformat(), "value": round(float(v), 2)}
+            for ts, v in curve.items()
+        ],
+        "value": round(latest, 2),
+        "prior_value": round(prior_value, 2) if prior_value else None,
+        "change_abs": change_abs,
+        "change_pct": change_pct,
+        "cash": cash,
+        "range": req.range,
+        "session": session,
+        "session_date": session_date.date().isoformat(),
+        "as_of": as_of,
+        "interval": tf,
+        "priced": priced,
+        "unpriced": unpriced,
+        "source": source,
+    }
+
+
+def _live_prior_value(
+    priced: list[str], shares: dict[str, float], session_date, cash: float, opening
+) -> float:
+    """Book value at the close BEFORE the plotted session — the day-change baseline.
+
+    Returns 0.0 when no prior close exists at all, which callers read as "no
+    baseline" and render without a day-change figure rather than inventing one.
+
+    The baseline must cover exactly the same holdings as the curve, or the day
+    change compares an N-name book against an (N-1)-name yesterday. So a name with
+    no prior close falls back to its own first mark of this session, contributing
+    zero to the day change instead of voiding the baseline for the whole book.
+    """
+    end = (_pd_today() + pd.Timedelta(days=1)).date().isoformat()
+    start = (session_date - pd.Timedelta(days=12)).date().isoformat()
+    try:
+        dl = get_download(tuple(sorted(priced)), start, end, "1d", cache_ttl=300)
+        daily = _download_field(dl, "Close", priced)
+    except Exception:
+        logger.exception("live prior-close download failed")
+        return 0.0
+    if daily.empty:
+        return 0.0
+    if daily.index.tz is not None:
+        daily.index = daily.index.tz_convert(None)
+    cutoff = session_date.tz_localize(None).normalize()
+    before = daily[daily.index.normalize() < cutoff]
+    if before.empty:
+        return 0.0
+    closes = before.ffill().iloc[-1]
+    total = 0.0
+    for sym in priced:
+        mark = closes.get(sym)
+        if mark is None or pd.isna(mark):
+            mark = opening.get(sym)
+        if mark is None or pd.isna(mark):
+            return 0.0
+        total += float(mark) * shares[sym]
+    return total + cash

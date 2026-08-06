@@ -59,8 +59,7 @@ const CusipLookup        = lazyWithReload(() => import('./pages/CusipLookup'))
 const NAVTracker         = lazyWithReload(() => import('./pages/NAVTracker'))
 const ImpliedProbability = lazyWithReload(() => import('./pages/ImpliedProbability'))
 const FedRates           = lazyWithReload(() => import('./pages/FedRates'))
-const CorporateHub       = lazyWithReload(() => import('./pages/CorporateHub'))
-const EarningsCalendar   = lazyWithReload(() => import('./pages/EarningsCalendar'))
+const EarningsScanner    = lazyWithReload(() => import('./pages/EarningsScanner'))
 const IpoCalendar        = lazyWithReload(() => import('./pages/IpoCalendar'))
 const DCFValuation       = lazyWithReload(() => import('./pages/DCFValuation'))
 const MasterValuation    = lazyWithReload(() => import('./pages/MasterValuation'))
@@ -73,8 +72,7 @@ const RegressionAnalysis = lazyWithReload(() => import('./pages/RegressionAnalys
 const CorrelationAnalysis = lazyWithReload(() => import('./pages/CorrelationAnalysis'))
 const PortfolioBacktester = lazyWithReload(() => import('./pages/PortfolioBacktester'))
 const MonteCarlo         = lazyWithReload(() => import('./pages/MonteCarlo'))
-const PortfolioOptimizer = lazyWithReload(() => import('./pages/PortfolioOptimizer'))
-const PortfolioBuilder   = lazyWithReload(() => import('./pages/PortfolioBuilder'))
+const PortfolioAllocator = lazyWithReload(() => import('./pages/PortfolioAllocator'))
 const FactorDecomposition = lazyWithReload(() => import('./pages/FactorDecomposition'))
 const PairsTrader = lazyWithReload(() => import('./pages/PairsTrader'))
 const PortfolioCompare   = lazyWithReload(() => import('./pages/PortfolioCompare'))
@@ -90,8 +88,7 @@ const RiskDisclosure     = lazyWithReload(() => import('./pages/legal/RiskDisclo
 const DataSources        = lazyWithReload(() => import('./pages/legal/DataSources'))
 const SettingsPage       = lazyWithReload(() => import('./pages/Settings'))
 const StockScreener      = lazyWithReload(() => import('./pages/StockScreener'))
-const EarningsSummarizer = lazyWithReload(() => import('./pages/EarningsSummarizer'))
-const PortfolioManager   = lazyWithReload(() => import('./pages/PortfolioManager'))
+const PortfolioWorkspace = lazyWithReload(() => import('./pages/PortfolioWorkspace'))
 const PortfolioAnalysis  = lazyWithReload(() => import('./pages/PortfolioAnalysis'))
 const AdminTester        = lazyWithReload(() => import('./pages/AdminTester'))
 const CreditSpreads      = lazyWithReload(() => import('./pages/CreditSpreads'))
@@ -111,8 +108,7 @@ const AlertsPage         = lazyWithReload(() => import('./pages/Alerts'))
 const EconomyMonitor     = lazyWithReload(() => import('./pages/EconomyMonitor'))
 const MacroEventHub      = lazyWithReload(() => import('./pages/MacroEventHub'))
 const SectorRotation     = lazyWithReload(() => import('./pages/SectorRotation'))
-const IVTracker          = lazyWithReload(() => import('./pages/IVTracker'))
-const SkewTool           = lazyWithReload(() => import('./pages/SkewTool'))
+const VolatilityScanner  = lazyWithReload(() => import('./pages/VolatilityScanner'))
 const MarketMakerSimulator = lazyWithReload(() => import('./pages/MarketMakerSimulator'))
 const UnusualOptions     = lazyWithReload(() => import('./pages/UnusualOptions'))
 const Compare            = lazyWithReload(() => import('./pages/Compare'))
@@ -271,13 +267,17 @@ export default function App() {
               <Route path="/bond"       element={<BondAnalytics />} />
               <Route path="/cusip"      element={<CusipLookup />} />
               <Route path="/nav"        element={<NAVTracker />} />
-              <Route path="/portfolio-manager" element={<PortfolioManager />} />
+              <Route path="/portfolio-manager" element={<PortfolioWorkspace />} />
+              {/* Merged into the workspace's Live tab; old route keeps working. */}
+              <Route path="/portfolio-live" element={<Navigate to="/portfolio-manager?view=live" replace />} />
               <Route path="/portfolio-analysis" element={<PortfolioAnalysis />} />
               {/* Portfolio tools — now standalone (legacy /portfolio-skills hub dismantled) */}
               <Route path="/backtest"         element={<PortfolioBacktester />} />
               <Route path="/montecarlo"       element={<MonteCarlo />} />
-              <Route path="/portfolio-optimizer" element={<PortfolioOptimizer />} />
-              <Route path="/portfolio-builder" element={<PortfolioBuilder />} />
+              <Route path="/portfolio-allocator" element={<PortfolioAllocator />} />
+              {/* Builder and Optimizer are fused into the allocator; both old routes redirect. */}
+              <Route path="/portfolio-optimizer" element={<Navigate to="/portfolio-allocator" replace />} />
+              <Route path="/portfolio-builder" element={<Navigate to="/portfolio-allocator" replace />} />
               <Route path="/factor-decomposition" element={<FactorDecomposition />} />
               <Route path="/pairs-trader"       element={<PairsTrader />} />
               <Route path="/portfolio-compare" element={<PortfolioCompare />} />
@@ -293,9 +293,13 @@ export default function App() {
               <Route path="/reverse-dcf" element={<ReverseDCF />} />
               <Route path="/valuation"   element={<RedirectWithSearch to="/master-valuation" />} />
               <Route path="/probability" element={<ImpliedProbability />} />
-              <Route path="/skew"       element={<SkewTool />} />
+              <Route path="/volatility-scanner" element={<VolatilityScanner />} />
+              {/* IV Rank and Vol Skew are fused into the scanner; every old route redirects. */}
+              <Route path="/volatility"  element={<Navigate to="/volatility-scanner" replace />} />
+              <Route path="/skew"       element={<Navigate to="/volatility-scanner" replace />} />
               <Route path="/fed"        element={<FedRates />} />
-              <Route path="/corporate"  element={<CorporateHub />} />
+              {/* Portfolio Earnings is now the book scope of the fused Earnings tool. */}
+              <Route path="/corporate"  element={<RedirectWithSearch to="/earnings" />} />
               <Route path="/chain"      element={<OptionsChainScanner />} />
               <Route path="/correlation" element={<CorrelationAnalysis />} />
               <Route path="/strategy"   element={<StrategyBuilder />} />
@@ -304,8 +308,9 @@ export default function App() {
               <Route path="/dashboard"       element={<CustomDashboard />} />
               <Route path="/settings"        element={<SettingsPage />} />
               <Route path="/screener"        element={<StockScreener />} />
-              <Route path="/earnings"        element={<EarningsSummarizer />} />
-              <Route path="/earnings-calendar" element={<EarningsCalendar />} />
+              {/* Summarizer, Portfolio Earnings and the Scanner are fused here. */}
+              <Route path="/earnings"        element={<EarningsScanner />} />
+              <Route path="/earnings-calendar" element={<RedirectWithSearch to="/earnings" />} />
               <Route path="/ipo-calendar"    element={<IpoCalendar />} />
               <Route path="/admin"           element={<AdminTester />} />
               <Route path="/stress-test"     element={<Navigate to="/admin" replace />} />
@@ -332,8 +337,8 @@ export default function App() {
               <Route path="/regression"         element={<RegressionAnalysis />} />
               <Route path="/options-hub"        element={<Navigate to="/options" replace />} />
               <Route path="/macro-hub"          element={<Navigate to="/fed" replace />} />
-              <Route path="/research-hub"       element={<Navigate to="/corporate" replace />} />
-              <Route path="/iv-tracker"         element={<IVTracker />} />
+              <Route path="/research-hub"       element={<Navigate to="/earnings" replace />} />
+              <Route path="/iv-tracker"         element={<Navigate to="/volatility-scanner" replace />} />
               <Route path="/market-maker"       element={<MarketMakerSimulator />} />
               <Route path="/fixed-income-mm"    element={<Navigate to="/market-maker?desk=fixed-income" replace />} />
               <Route path="/unusual-options"    element={<UnusualOptions />} />

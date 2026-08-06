@@ -155,8 +155,10 @@ def _prior_report(sym: str) -> dict:
         # that many *unguarded* concurrent yfinance calls, undermining the
         # exact contention guard the rest of the app relies on.
         # Only the single most recent past date and single nearest future one
-        # are ever used below — limit=4 (2 back, 2 forward) safely covers both
-        # with far less payload/parse work per ticker than the old limit=12.
+        # are ever used below. NOTE: yfinance does not honour this limit — it
+        # returns the ticker's full history regardless (verified 2026-08-06:
+        # limit=4 came back with 25 rows), so this is not the payload saving the
+        # previous comment claimed. Kept only because the arg is harmless.
         df = _run_yf(f"earnings_dates {sym}", lambda: yf.Ticker(sym).get_earnings_dates(limit=4))
         if df is not None and not df.empty:
             now = pd.Timestamp.now(tz=df.index.tz)
@@ -183,6 +185,18 @@ def _prior_report(sym: str) -> dict:
             future = df[df.index >= now]
             if not future.empty:
                 out["nextDate"] = future.index.min().date().isoformat()
+
+            # Yahoo adds the just-reported quarter's row with a 1-3 day lag, so
+            # right after a report its schedule has a HOLE: the last "past" row is
+            # the PREVIOUS quarter and the next scheduled one is the FOLLOWING
+            # quarter. A quarterly reporter should never show a >4.5-month span
+            # across today, so that span is the tell. Caching it for 24h left the
+            # calendar insisting a company had not reported (and made the next
+            # quarter's date look like a reschedule) long after Yahoo caught up.
+            if out.get("date") and out.get("nextDate"):
+                span = (pd.Timestamp(out["nextDate"]) - pd.Timestamp(out["date"])).days
+                if span > 135:
+                    ttl = 1800
     except Exception:
         # Now that the yfinance call shares the app-wide semaphore, a busy
         # moment legitimately raises YFContention — that's a transient queueing

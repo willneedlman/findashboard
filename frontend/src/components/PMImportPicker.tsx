@@ -12,19 +12,30 @@ async function fetchPrice(ticker: string): Promise<number | null> {
 }
 
 // Dropdown that loads a saved Portfolio Manager portfolio and hands the caller
-// market-value-weighted equity legs plus a cash-sleeve weight. Renders nothing
-// when the PM has no saved portfolios. Surfaces the "excluded options/futures"
-// note itself so every host gets consistent feedback.
+// market-value-weighted equity legs plus a cash-sleeve weight. Surfaces the
+// "excluded options/futures" note itself so every host gets consistent feedback.
+// With no saved portfolios it renders nothing by default; pass `emptyLabel` to
+// keep the control visible as a disabled placeholder instead, so a host that
+// presents this as one of its primary inputs doesn't lose the affordance
+// entirely when the book is empty.
 export default function PMImportPicker({
-  onImport, style,
+  onImport, style, emptyLabel,
 }: {
   onImport: (result: ImportResult, name: string) => void
   style?: React.CSSProperties
+  emptyLabel?: string
 }) {
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<string | null>(null)
   const ports = readPMBooks()
-  if (ports.length === 0) return null
+  if (ports.length === 0) {
+    if (!emptyLabel) return null
+    return (
+      <select disabled value="" style={style} aria-label={emptyLabel}>
+        <option value="">{emptyLabel}</option>
+      </select>
+    )
+  }
 
   const handle = async (id: string) => {
     const p = ports.find(x => x.id === id)

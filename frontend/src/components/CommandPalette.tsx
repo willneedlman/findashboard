@@ -3,7 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { HUBS } from '../lib/hubs'
 import { setLinkedTicker, TICKER_TOOLS, tickerToolUrl } from '../lib/tickerLink'
 
-interface Cmd { label: string; route?: string; group: string; desc?: string; action?: () => void }
+interface Cmd { label: string; route?: string; group: string; desc?: string; alias?: string; action?: () => void }
+
+// Retired tool names still resolve to the tool that absorbed them, so existing
+// search habits ("skew", "portfolio earnings") keep working after a merge.
+const ALIASES: Record<string, string> = {
+  '/earnings': 'earnings summarizer portfolio earnings earnings scanner earnings calendar corporate hub filings transcripts',
+  '/volatility-scanner': 'iv rank iv tracker vol skew volatility skew implied volatility smile term structure',
+}
 
 const WORKSPACE: Cmd[] = [
   { label: 'Home', route: '/app', group: 'Workspace' },
@@ -15,7 +22,7 @@ const _RAW: Cmd[] = [
   ...WORKSPACE,
   ...HUBS.flatMap(h => [
     { label: `${h.label} Hub`, route: `/hub/${h.slug}`, group: 'Hubs', desc: h.tagline },
-    ...h.tools.map(t => ({ label: t.title, route: t.route, group: h.label, desc: t.desc })),
+    ...h.tools.map(t => ({ label: t.title, route: t.route, group: h.label, desc: t.desc, alias: ALIASES[t.route] })),
   ]),
 ]
 // Dedupe by route (e.g. Portfolio Manager lives in both Workspace and a hub) so
@@ -27,7 +34,7 @@ function score(q: string, c: Cmd): number {
   const ql = q.toLowerCase().trim()
   if (!ql) return 0
   const label = c.label.toLowerCase()
-  const hay = `${label} ${c.group.toLowerCase()} ${(c.desc ?? '').toLowerCase()}`
+  const hay = `${label} ${c.group.toLowerCase()} ${(c.desc ?? '').toLowerCase()} ${(c.alias ?? '').toLowerCase()}`
   let s = 0
   for (const tok of ql.split(/\s+/)) {
     if (!hay.includes(tok)) return -1

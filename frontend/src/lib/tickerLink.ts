@@ -28,7 +28,7 @@ export const TICKER_TOOLS: TickerTool[] = [
   { label: 'DCF Valuation',       short: 'DCF',      route: '/dcf' },
   { label: 'Master Valuation',    short: 'Master',   route: '/master-valuation' },
   { label: 'Relative Valuation',  short: 'Rel Val',  route: '/relative-valuation' },
-  { label: 'Portfolio Earnings',  short: 'Earnings', route: '/corporate', param: 'tickers' },
+  { label: 'Earnings Scanner',    short: 'Earnings', route: '/earnings' },
 ]
 
 export const tickerToolUrl = (t: TickerTool, sym: string) =>

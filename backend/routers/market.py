@@ -370,10 +370,28 @@ def get_quotes(tickers: str):
     extended_by_symbol: dict[str, dict] = {}
     overnight_by_symbol: dict[str, dict] = {}
     live_by_symbol: dict[str, float] = {}
+    regular_live_by_symbol: dict[str, float] = {}
+    crypto_live_symbols: set[str] = set()
     market_open = is_market_open()
     session = session_label()
     overnight_active = is_overnight_session()
     use_extended_marks = not market_open and session in {"pre-market", "after-hours"}
+    if market_open:
+        # The daily bar above is a still-forming, delayed candle while the session
+        # runs, so a fast poll would re-read the same stale close all afternoon.
+        # Alpaca's real-time last trade is the actual mark when the market is open.
+        # Batch equities in one request; crypto is 24/7 so it needs the same
+        # treatment (Binance, keyless, 1s-cached). Deliberately NOT falling back to
+        # yfinance fast_info per symbol here — that would fan out unbounded calls
+        # against the 2-slot budget on every poll.
+        import quotes
+        regular_live_by_symbol = dict(alpaca.get_latest_prices(tuple(symbols)))
+        for symbol in symbols:
+            if symbol.endswith("-USD") and symbol not in regular_live_by_symbol:
+                crypto_last = quotes.live_price(symbol)
+                if crypto_last:
+                    regular_live_by_symbol[symbol] = float(crypto_last)
+                    crypto_live_symbols.add(symbol)
     if overnight_active:
         # Alpaca's free overnight feed is a real-time indicative quote, not a
         # BOATS trade. Preserve that distinction in the returned source.
@@ -408,20 +426,31 @@ def get_quotes(tickers: str):
         extended = extended_by_symbol.get(symbol, {})
         overnight = overnight_by_symbol.get(symbol, {})
         live_price = live_by_symbol.get(symbol)
+        regular_live = regular_live_by_symbol.get(symbol)
         extended_price = live_price or extended.get("price")
-        price = float(extended_price) if extended_price else regular_close
+        price = float(regular_live) if regular_live else (float(extended_price) if extended_price else regular_close)
         # A closing daily bar should still report its regular-session move when
         # no extended print is available. With an after-hours print, stack that
         # print on the prior close. With a pre-market print, compare it with the
-        # prior session's close.
-        baseline = (
-            prior if not extended_price else
-            (prior if has_today and prior is not None else regular_close)
-        )
+        # prior session's close. A real-time in-session mark measures against the
+        # prior close too, but the daily series may not carry today's bar yet, in
+        # which case its last row IS the prior close.
+        if regular_live:
+            baseline = prior if (has_today and prior is not None) else regular_close
+        else:
+            baseline = (
+                prior if not extended_price else
+                (prior if has_today and prior is not None else regular_close)
+            )
         quote = {
             "current_price": round(price, 2),
             "pct_change_1d": round((price / baseline - 1) * 100, 3) if baseline else None,
-            "source": "alpaca_overnight_indicative" if overnight else "alpaca_extended" if live_price else "extended_hours" if extended_price else "batch_history",
+            "source": (
+                ("crypto_realtime" if symbol in crypto_live_symbols else "alpaca_realtime") if regular_live else
+                "alpaca_overnight_indicative" if overnight else
+                "alpaca_extended" if live_price else
+                "extended_hours" if extended_price else "batch_history"
+            ),
             "session": session,
         }
         if extended_price:
@@ -432,7 +461,9 @@ def get_quotes(tickers: str):
             })
         quotes[symbol] = quote
     source = "batch_history"
-    if any(q.get("source") == "alpaca_overnight_indicative" for q in quotes.values()):
+    if any(q.get("source") in {"alpaca_realtime", "crypto_realtime"} for q in quotes.values()):
+        source = "realtime"
+    elif any(q.get("source") == "alpaca_overnight_indicative" for q in quotes.values()):
         source = "alpaca_overnight_indicative"
     elif any(q.get("source") in {"alpaca_extended", "extended_hours"} for q in quotes.values()):
         source = "extended_hours"

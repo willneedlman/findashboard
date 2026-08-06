@@ -187,7 +187,7 @@ const editInp: React.CSSProperties = {
 
 type Upd<T> = T | ((prev: T) => T)
 
-export default function PortfolioManager() {
+export function PortfolioManagerContent() {
   const isMobile = useIsMobile()
   const navigate = useNavigate()
   // Multi-portfolio store — the active tab is the working set. The position
@@ -663,9 +663,7 @@ export default function PortfolioManager() {
   const lbl: React.CSSProperties = { fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted }
 
   return (
-    <PageWrapper
-      title="Portfolio Manager"
-    >
+    <>
       <div className="w-full">
 
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, marginBottom: 16, paddingBottom: 10, borderBottom: `1px solid ${T.border}`, flexWrap: 'wrap' }}>
@@ -1274,6 +1272,17 @@ export default function PortfolioManager() {
           </div>
         )}
       </div>
+    </>
+  )
+}
+
+// Portfolio Manager and Portfolio Live are two views of the SAME book, so they
+// live behind one route as tabs. This default export keeps /portfolio-manager
+// working on its own; PortfolioWorkspace is what the route actually renders.
+export default function PortfolioManager() {
+  return (
+    <PageWrapper title="Portfolio Manager">
+      <PortfolioManagerContent />
     </PageWrapper>
   )
 }

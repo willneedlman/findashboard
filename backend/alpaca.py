@@ -118,6 +118,51 @@ def history_df(symbol: str, tf: str, start, end=None) -> "pd.DataFrame":
     return df[["Open", "High", "Low", "Close", "Volume"]].dropna(subset=["Close"])
 
 
+def bars_multi(symbols: tuple[str, ...], tf: str, start, end=None, adjustment: str = "all") -> dict:
+    """Bars for a basket of equities in ONE request, as {symbol: [{t,o,h,l,c,v}, ...]}.
+
+    The intraday book-value curve needs every holding on the same clock; a
+    per-symbol fan-out would be N round trips against a shared rate limit. Returns
+    {} on any failure so callers can fall back. Symbols with no bars are absent
+    from the mapping rather than present-and-empty.
+    """
+    if not available():
+        return {}
+    atf = alpaca_timeframe(tf)
+    if not atf:
+        return {}
+    requested = tuple(dict.fromkeys(s.strip().upper() for s in symbols if is_equity(s)))
+    if not requested:
+        return {}
+    alpaca_to_symbol = {to_alpaca_symbol(s): s for s in requested}
+    params = {
+        "symbols": ",".join(alpaca_to_symbol), "timeframe": atf, "start": _iso(start),
+        "limit": 10_000, "adjustment": adjustment, "feed": _FEED, "sort": "asc",
+    }
+    if end is not None:
+        params["end"] = _iso(end)
+    out: dict[str, list] = {}
+    token, total = None, 0
+    try:
+        while total < _MAX_BARS:
+            if token:
+                params["page_token"] = token
+            r = httpx.get(f"{_DATA_BASE}/v2/stocks/bars", headers=_HEADERS, params=params, timeout=15)
+            r.raise_for_status()
+            j = r.json()
+            for alpaca_symbol, bars in (j.get("bars") or {}).items():
+                symbol = alpaca_to_symbol.get(alpaca_symbol)
+                if symbol and bars:
+                    out.setdefault(symbol, []).extend(bars)
+                    total += len(bars)
+            token = j.get("next_page_token")
+            if not token:
+                break
+    except Exception:
+        return {}
+    return out
+
+
 @ttl_cache(maxsize=512, ttl=1)   # 1s cache — real-time chart tick; dedupes concurrent viewers per symbol
 def get_latest_quote(symbol: str) -> dict:
     """Latest NBBO-ish quote for the live tick. Returns {bid, ask, price} or {} on
