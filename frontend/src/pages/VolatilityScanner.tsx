@@ -8,39 +8,36 @@ import {
 import PageWrapper from '../components/PageWrapper'
 import EmptyState from '../components/EmptyState'
 import Provenance from '../components/Provenance'
-import { KpiCell } from '../components/mmCockpit'
 import { TOOLTIP_STYLE } from '../components/ChartTooltip'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, chartClip } from '../lib/reportCaptureRegistry'
 import type { ClipDraft } from '../lib/reportCreator'
+import { T } from '../lib/theme'
 
 const TAB = 'Volatility Scanner'
-const GOLD = 'var(--theme-primary, #c9a84c)'
-const BLUE = 'var(--theme-tertiary, #60a5fa)'
-const POS = 'var(--theme-positive, #3fb950)'
-const NEG = 'var(--theme-negative, #f85149)'
-const TEXT = 'var(--theme-text, #d7e3fc)'
-const SEC = 'var(--theme-secondary, #8099b0)'
+const GOLD = T.gold
+const BLUE = T.blue
+const POS = T.pos
+const NEG = T.neg
+const TEXT = T.text
+const SEC = T.muted
 const FAINT = 'var(--theme-text-faint, #5e768f)'
-const MONO = 'var(--theme-mono, monospace)'
-const SANS = 'var(--theme-sans, sans-serif)'
-const BORDER = 'var(--theme-border, rgba(255,255,255,0.08))'
-const SURFACE = 'var(--theme-surface, #0d1826)'
+const MONO = T.mono
+const SANS = T.label
+const BORDER = T.border
+const PANEL = T.bg
+const PANEL_ALT = T.surface
 
 const lbl: React.CSSProperties = {
-  fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
-  color: FAINT, fontFamily: SANS, marginBottom: 6, display: 'block',
+  fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
+  color: SEC, fontFamily: SANS, marginBottom: 5, display: 'block',
 }
-// Project input token: 32px tall, dark, single gold border.
 const inp: React.CSSProperties = {
-  background: 'var(--theme-bg)', border: `1px solid color-mix(in srgb, ${GOLD} 30%, transparent)`,
+  background: PANEL, border: `1px solid color-mix(in srgb, ${GOLD} 30%, transparent)`,
   color: TEXT, fontFamily: MONO, fontSize: 11, padding: '0 10px', height: 32,
   outline: 'none', boxSizing: 'border-box',
 }
-const panelHead: React.CSSProperties = {
-  padding: '6px 12px', borderBottom: `1px solid ${BORDER}`, fontFamily: SANS, fontSize: 10,
-  fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD,
-}
+const metaText: React.CSSProperties = { fontFamily: SANS, fontSize: 10, color: SEC }
 
 interface SmilePoint { moneyness: number; iv: number }
 interface TermPoint {
@@ -77,46 +74,73 @@ function expectedMove(ivPct: number, dte: number, spot: number) {
   return { pct: sigma * 100, dollars, lo: spot - dollars, hi: spot + dollars }
 }
 
-const ivZone = (v: number | null) => (v == null ? '—' : v >= 66 ? 'EXPENSIVE' : v >= 33 ? 'FAIR' : 'CHEAP')
-const ivZoneColor = (v: number | null) => (v == null ? SEC : v >= 66 ? NEG : v >= 33 ? 'var(--theme-warn, #d29922)' : POS)
+const ivZone = (v: number | null) => (v == null ? '—' : v >= 67 ? 'EXPENSIVE' : v >= 34 ? 'FAIR' : 'CHEAP')
+const ivZoneColor = (v: number | null) => (v == null ? SEC : v >= 67 ? NEG : v >= 34 ? T.warn : POS)
 
-/** IV Rank's three-zone gauge, carried over intact. */
-function IVGauge({ value, title }: { value: number | null; title: string }) {
+function IVRankVerdict({ value }: { value: number | null }) {
   const pct = Math.max(0, Math.min(100, value ?? 0))
   const color = ivZoneColor(value)
-  const W = 160, H = 22
-  const markerX = (pct / 100) * W
   return (
-    <div style={{ minWidth: 180, flex: '1 1 180px', padding: '10px 13px', borderRight: `1px solid ${BORDER}` }}>
-      <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: FAINT, fontFamily: MONO, marginBottom: 6 }}>{title}</div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 6 }}>
-        <span style={{ fontSize: 22, fontWeight: 700, fontFamily: MONO, color }}>{value == null ? '—' : value.toFixed(1)}</span>
-        <span style={{ fontSize: 8, fontFamily: MONO, color: FAINT }}>/ 100</span>
-        <span style={{ fontSize: 9, fontWeight: 700, fontFamily: MONO, color, marginLeft: 4 }}>{ivZone(value)}</span>
-      </div>
-      <svg width={W} height={H} style={{ display: 'block', overflow: 'visible' }}>
-        <rect x={0} y={6} width={W * 0.33} height={6} rx={1} style={{ fill: 'var(--theme-positive)' }} opacity={0.28} />
-        <rect x={W * 0.33} y={6} width={W * 0.33} height={6} rx={1} style={{ fill: 'var(--theme-warn)' }} opacity={0.28} />
-        <rect x={W * 0.66} y={6} width={W * 0.34} height={6} rx={1} style={{ fill: 'var(--theme-negative)' }} opacity={0.28} />
-        <text x={W * 0.165} y={20} textAnchor="middle" fontSize={7} fontFamily={MONO} style={{ fill: 'var(--theme-positive)' }} opacity={0.75}>CHEAP</text>
-        <text x={W * 0.495} y={20} textAnchor="middle" fontSize={7} fontFamily={MONO} style={{ fill: 'var(--theme-warn)' }} opacity={0.75}>FAIR</text>
-        <text x={W * 0.83} y={20} textAnchor="middle" fontSize={7} fontFamily={MONO} style={{ fill: 'var(--theme-negative)' }} opacity={0.75}>EXP</text>
-        {value !== null && (
-          <>
-            <line x1={markerX} y1={3} x2={markerX} y2={15} stroke={color} strokeWidth={1.5} />
-            <circle cx={markerX} cy={9} r={3.5} fill={color} />
-          </>
+    <div className="vol-rank-cell">
+      <div className="vol-kicker">IV rank · trailing 52 weeks</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+        <span style={{ fontFamily: MONO, fontSize: 62, lineHeight: 0.9, letterSpacing: '-0.02em', fontWeight: 700, color }}>{value == null ? '—' : value.toFixed(0)}</span>
+        <span style={{ fontFamily: MONO, fontSize: 13, color: SEC }}>/ 100</span>
+        {value != null && (
+          <span style={{ fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', color, border: `1px solid color-mix(in srgb, ${color} 45%, transparent)`, background: `color-mix(in srgb, ${color} 10%, transparent)`, padding: '4px 9px' }}>
+            {ivZone(value)}
+          </span>
         )}
-      </svg>
+      </div>
+      <div className="vol-zone-gauge">
+        <span style={{ background: `color-mix(in srgb, ${POS} 28%, transparent)` }} />
+        <span style={{ background: `color-mix(in srgb, ${T.warn} 28%, transparent)` }} />
+        <span style={{ background: `color-mix(in srgb, ${NEG} 28%, transparent)` }} />
+        {value != null && <i style={{ left: `${pct}%`, background: color }}><b style={{ background: color }} /></i>}
+      </div>
+      <div className="vol-zone-labels"><span>Cheap</span><span>Fair</span><span>Expensive</span></div>
     </div>
   )
 }
 
-function Stat({ label, value, color, tip }: { label: string; value: string; color?: string; tip?: string }) {
+function VerdictMetric({ label, value, unit, caption, color }: { label: string; value: string; unit: string; caption: string; color: string }) {
   return (
-    <div style={{ minWidth: 96, padding: '7px 11px', borderRight: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}`, flex: '1 1 96px' }} title={tip}>
-      <div style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: FAINT }}>{label}</div>
-      <div style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, color: color ?? TEXT, marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+    <div className="vol-verdict-metric">
+      <div className="vol-kicker">{label}</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '9px 0 10px' }}>
+        <span style={{ fontFamily: MONO, fontSize: 28, lineHeight: 1, fontWeight: 700, color }}>{value}</span>
+        <span style={metaText}>{unit}</span>
+      </div>
+      <p>{caption}</p>
+    </div>
+  )
+}
+
+function SectionStrip({ title, children }: { title: string; children?: React.ReactNode }) {
+  return (
+    <div className="vol-section-strip">
+      <span>{title}</span>
+      {children && <div className="vol-section-meta">{children}</div>}
+    </div>
+  )
+}
+
+function GroupStat({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div className="vol-group-stat">
+      <span>{label}</span>
+      <strong style={{ color: color ?? TEXT }}>{value}</strong>
+    </div>
+  )
+}
+
+function MiniSparkline({ values }: { values: number[] }) {
+  if (values.length < 2) return <div className="vol-mini-sparkline" />
+  return (
+    <div className="vol-mini-sparkline">
+      <LineChart width={150} height={34} data={values.map((value, index) => ({ index, value }))} margin={{ top: 2, right: 1, bottom: 2, left: 1 }}>
+        <Line type="monotone" dataKey="value" stroke={T.chartNeutral} strokeWidth={1.2} dot={false} isAnimationActive={false} />
+      </LineChart>
     </div>
   )
 }
@@ -162,18 +186,49 @@ function ivScale(term: TermPoint[]): [number, number] {
   return hi > lo ? [lo, hi] : [lo, lo + 1]
 }
 
-/**
- * IV -> cell colour. `rank` shifts the palette so the surface reads against the
- * name's own 52-week history: a high-rank surface runs hot even where the raw
- * numbers look ordinary, which is the whole point of rank contextualizing it.
- */
-function cellColor(iv: number | null, [lo, hi]: [number, number], rank: number | null): string {
+function cellColor(iv: number | null, [lo, hi]: [number, number]): string {
   if (iv == null || !Number.isFinite(iv)) return 'transparent'
   const t = Math.max(0, Math.min(1, (iv - lo) / (hi - lo)))
-  const bias = rank == null ? 0.5 : Math.max(0, Math.min(1, rank / 100))
-  // Blend toward gold as IV rises within the surface, and lift the floor with rank.
-  const intensity = Math.round((0.12 + 0.78 * t) * (0.55 + 0.45 * bias) * 100)
+  const intensity = Math.round((0.08 + 0.40 * t) * 100)
   return `color-mix(in srgb, ${GOLD} ${intensity}%, var(--theme-bg))`
+}
+
+function skewCaption(value: number) {
+  if (value > 5) return `Puts price ${Math.abs(value).toFixed(1)} points above calls. Downside protection carries the premium.`
+  if (value < -5) return `Calls price ${Math.abs(value).toFixed(1)} points above puts. Upside demand carries the premium.`
+  return `Calls and puts are within ${Math.abs(value).toFixed(1)} points. Directional premium is limited.`
+}
+
+function termCaption(value: number) {
+  if (value > 0.5) return 'Long-dated vol prices above the front. The curve is in normal contango.'
+  if (value < -0.5) return 'Front vol prices above the back. The curve points to near-term event stress.'
+  return 'Volatility is nearly flat across expiries. No single tenor dominates the curve.'
+}
+
+function premiumCaption(value: number | null, rank: number | null) {
+  if (value == null) return 'Realized volatility history is not available for this contract yet.'
+  const tension = rank != null && rank >= 67 && value < 0
+    ? ' Rich against its own range, but still below delivered volatility.'
+    : ''
+  if (value < 0) return `Implied volatility is ${Math.abs(value).toFixed(1)} points below realized.${tension}`
+  if (value > 0) return `Implied volatility is ${value.toFixed(1)} points above realized. Options carry a delivered-vol premium.`
+  return 'Implied and realized volatility are aligned. The market prices what the stock delivered.'
+}
+
+function thetaCaption(theta: number | undefined, mid: number) {
+  if (theta == null || mid <= 0) return 'Daily decay is unavailable for this contract.'
+  const pct = Math.abs(theta) / mid * 100
+  return `Theta of ${Math.abs(theta).toFixed(3)} against a $${mid.toFixed(2)} mid. The contract loses about ${pct.toFixed(0)}% of its value per day if nothing moves.`
+}
+
+function paddedDomain(values: Array<number | null | undefined>, minimumSpan = 6): [number, number] {
+  const finite = values.filter((v): v is number => v != null && Number.isFinite(v))
+  if (!finite.length) return [0, minimumSpan]
+  const lo = Math.min(...finite)
+  const hi = Math.max(...finite)
+  const span = Math.max(hi - lo, minimumSpan)
+  const pad = span * 0.14
+  return [Math.max(0, Math.floor(lo - pad)), Math.ceil(hi + pad)]
 }
 
 export function VolatilityScannerContent() {
@@ -182,9 +237,9 @@ export function VolatilityScannerContent() {
   const [side, setSide] = useState<Side>('composite')
   const [expiryIdx, setExpiryIdx] = useState(0)
   const [moneyness, setMoneyness] = useState(0)
-  // IV Rank let you pick the exact contract and lookback; both carry over. Strike
-  // is blank = ATM (the backend snaps to the nearest listed strike either way).
   const [strikeDraft, setStrikeDraft] = useState('')
+  const [strikeValue, setStrikeValue] = useState<number | null>(null)
+  const [strikeEditing, setStrikeEditing] = useState(false)
   const [days, setDays] = useState(180)
 
   // One FETCH loads one chain snapshot; every panel below is a slice of it. The
@@ -200,9 +255,17 @@ export function VolatilityScannerContent() {
   const term = data?.term_structure ?? []
   const selected = term[Math.min(expiryIdx, Math.max(0, term.length - 1))]
 
+  useEffect(() => {
+    if (!data?.ticker) return
+    setExpiryIdx(0)
+    setMoneyness(0)
+    setStrikeDraft('')
+    setStrikeValue(null)
+  }, [data?.ticker])
+
   // IV rank + the IV-vs-HV history, for the selected expiry's ATM contract. This is
   // IVTracker's source, reused unchanged — no new options vendor.
-  const strikeParam = parseFloat(strikeDraft) > 0 ? parseFloat(strikeDraft) : data?.spot
+  const strikeParam = strikeValue ?? data?.spot
   const rankQ = useQuery<IVHistory>({
     queryKey: ['vol-rank', data?.ticker, selected?.expiry, side === 'put' ? 'put' : 'call', strikeParam, days],
     queryFn: () => axios.get('/api/iv/history', {
@@ -229,14 +292,29 @@ export function VolatilityScannerContent() {
   })), [term, side, moneyness])
 
   const smileSeries = useMemo(
-    () => (selected ? pointsFor(selected, side).filter(p => Math.abs(p.moneyness) <= 25) : []),
-    [selected, side],
+    () => (selected && data
+      ? pointsFor(selected, side)
+        .filter(p => Math.abs(p.moneyness) <= 25)
+        .map(point => ({ ...point, strike: data.spot * (1 + point.moneyness / 100) }))
+      : []),
+    [selected, side, data],
   )
 
   const histSeries = useMemo(
     () => (rankQ.data?.time_series ?? []).filter(p => p.iv != null || p.hv_30d != null),
     [rankQ.data],
   )
+  const stockSpark = useMemo(
+    () => histSeries.map(point => point.stock_price).filter(Number.isFinite).slice(-60),
+    [histSeries],
+  )
+  const dayChange = stockSpark.length > 1 ? (stockSpark[stockSpark.length - 1] / stockSpark[stockSpark.length - 2] - 1) * 100 : null
+  const termDomain = useMemo(() => paddedDomain(termSeries.map(point => point.iv), 6), [termSeries])
+  const skewDomain = useMemo(() => paddedDomain(smileSeries.map(point => point.iv), 10), [smileSeries])
+
+  useEffect(() => {
+    if (!strikeEditing && !rankQ.isFetching && rankQ.data?.strike != null) setStrikeDraft(String(rankQ.data.strike))
+  }, [rankQ.data?.strike, rankQ.isFetching, strikeEditing])
 
   useReportCapture(() => {
     if (!data || !selected) return null
@@ -290,352 +368,268 @@ export function VolatilityScannerContent() {
 
   const submit = () => {
     const sym = draft.trim().toUpperCase()
-    if (sym) setTicker(sym)
+    if (!sym) return
+    if (sym === ticker) loadSurface()
+    else setTicker(sym)
+  }
+
+  const commitStrike = () => {
+    const value = Number(strikeDraft)
+    setStrikeEditing(false)
+    setStrikeValue(Number.isFinite(value) && value > 0 ? value : null)
   }
 
   return (
-    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {/* Controls */}
-      <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderTop: `2px solid ${GOLD}`, display: 'flex', alignItems: 'flex-end', gap: 18, padding: '12px 16px', flexWrap: 'wrap' }}>
-        <div>
-          <label style={lbl} htmlFor="vol-ticker">Ticker</label>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <input id="vol-ticker" value={draft} onChange={e => setDraft(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && submit()}
-              placeholder="AAPL" style={{ ...inp, width: 130, textTransform: 'uppercase' }} />
-            <button onClick={submit} disabled={isPending}
-              style={{ background: GOLD, border: `1px solid ${GOLD}`, color: 'var(--theme-bg)', fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '0 16px', height: 32, cursor: isPending ? 'default' : 'pointer', opacity: isPending ? 0.6 : 1 }}>
-              {isPending ? 'Loading' : 'Fetch'}
-            </button>
+    <div className="vol-scanner-frame">
+      <div className="vol-instrument-bar">
+        <div className="vol-instrument-identity">
+          <div>
+            <strong>{data?.ticker ?? (draft.trim().toUpperCase() || 'AAPL')}</strong>
+            <span>{data ? 'Options surface' : 'Load an optionable ticker'}</span>
+          </div>
+          {data && (
+            <div className="vol-spot-block">
+              <strong>${data.spot.toFixed(2)}</strong>
+              <span style={{ color: dayChange == null ? SEC : dayChange >= 0 ? POS : NEG }}>
+                {dayChange == null ? 'live spot' : `${dayChange >= 0 ? '+' : ''}${dayChange.toFixed(2)}% latest`}
+              </span>
+            </div>
+          )}
+          <MiniSparkline values={stockSpark} />
+        </div>
+        <div className="vol-instrument-controls">
+          <div>
+            <label style={lbl}>Side</label>
+            <div className="vol-side-toggle">
+              {SIDES.map(s => (
+                <button key={s.key} type="button" onClick={() => setSide(s.key)} aria-pressed={side === s.key}
+                  title={s.key === 'composite' ? 'Fitted out-of-the-money smile using the tighter side of the market' : `Raw ${s.key} quotes across listed strikes`}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label style={lbl} htmlFor="vol-ticker">Ticker</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input id="vol-ticker" value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()}
+                placeholder="AAPL" style={{ ...inp, width: 110, textTransform: 'uppercase' }} />
+              <button className="vol-fetch" onClick={submit} disabled={isPending}>{isPending ? 'Loading' : 'Fetch'}</button>
+            </div>
           </div>
         </div>
-        <div>
-          <label style={lbl}>Side</label>
-          <div style={{ display: 'flex', border: `1px solid ${BORDER}`, height: 32 }}>
-            {SIDES.map((s, i) => (
-              <button key={s.key} onClick={() => setSide(s.key)} aria-pressed={side === s.key}
-                title={s.key === 'composite'
-                  ? 'Fitted out-of-the-money smile: puts below spot, calls above. The tightest quotes on each side.'
-                  : `Raw ${s.key} quotes across all strikes. In-the-money wings are wide, so this is noisier than the composite.`}
-                style={{ background: side === s.key ? `color-mix(in srgb, ${GOLD} 16%, transparent)` : 'transparent', border: 'none', borderRight: i < SIDES.length - 1 ? `1px solid ${BORDER}` : 'none', cursor: 'pointer', color: side === s.key ? GOLD : SEC, fontFamily: MONO, fontSize: 10, fontWeight: 700, padding: '0 12px' }}>{s.label}</button>
-            ))}
-          </div>
-        </div>
-        {data && (
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'baseline', gap: 10, fontFamily: MONO }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: GOLD, letterSpacing: '0.04em' }}>
-              IV RANK {rank != null ? `${rank.toFixed(0)}%` : '—'}
-            </span>
-            <span style={{ fontSize: 10, color: FAINT }}>· 52-WK</span>
-            <span style={{ fontSize: 10, color: SEC }}>{data.ticker} ${data.spot.toFixed(2)}</span>
-          </div>
-        )}
-        {isError && <div style={{ width: '100%', fontFamily: MONO, fontSize: 9, color: NEG }}>{errMsg ?? 'No options data for this ticker'}</div>}
-        {limitedHistory && (
-          <div style={{ width: '100%', fontFamily: SANS, fontSize: 9.5, color: SEC }}>
-            Limited history: options come from Yahoo chains only, so this name has no stored
-            IV history to rank against yet. The surface and cross-sections are still live.
-          </div>
-        )}
+        {isError && <div className="vol-inline-status" style={{ color: NEG }}>{errMsg ?? 'No options data for this ticker. Try another symbol.'}</div>}
+        {limitedHistory && <div className="vol-inline-status">Limited IV history. The live surface and cross-sections are still available.</div>}
       </div>
 
       {!data && !isPending && (
-        <EmptyState title="Volatility Scanner"
-          hint="Enter a ticker and press FETCH. One chain load drives the IV surface, the term structure, and the skew." />
+        <div className="vol-empty-band">
+          <EmptyState title="Volatility Scanner" hint="Enter a ticker and press Fetch. One chain load drives the surface, term structure, skew, and contract evidence." />
+        </div>
       )}
-      {isPending && <EmptyState title="Loading the chain" hint="Fitting the smile across every listed expiry." variant="loading" />}
+      {isPending && !data && (
+        <div className="vol-loading-ladder" aria-label="Loading volatility surface">
+          <div /><div /><div /><div /><div />
+        </div>
+      )}
 
       {data && selected && (
         <>
-          <div style={{ display: 'flex', borderTop: `1px solid ${BORDER}`, border: `1px solid ${BORDER}`, background: SURFACE, flexWrap: 'wrap' }}>
-            <KpiCell grow align="top" label="ATM IV" value={`${selected.atm_iv.toFixed(1)}%`} valueSize={18} sub={`${selected.dte}d · ${selected.expiry}`} />
-            <KpiCell grow align="top" label="IV Rank" value={rank != null ? `${rank.toFixed(0)}%` : '—'} valueSize={18}
-              color={rank == null ? SEC : rank > 60 ? NEG : rank < 30 ? POS : GOLD}
-              sub={rankQ.data?.iv_percentile != null ? `${rankQ.data.iv_percentile.toFixed(0)}th pctile` : 'limited history'} />
-            <KpiCell grow align="top" label="25D Risk Reversal" value={`${selected.rr_25 > 0 ? '+' : ''}${selected.rr_25.toFixed(1)}`} valueSize={18}
-              color={selected.rr_25 > 4 ? NEG : GOLD} sub="put IV minus call IV" />
-            <KpiCell grow align="top" label="25D Butterfly" value={selected.bf_25.toFixed(1)} valueSize={18} sub="wing richness" />
-            <KpiCell grow align="top" label="Term Slope" value={`${data.ts_slope > 0 ? '+' : ''}${data.ts_slope.toFixed(1)}`} valueSize={18}
-              color={data.ts_slope < -0.5 ? NEG : POS} sub={data.ts_slope < -0.5 ? 'inverted' : 'contango'} />
+          <div className="vol-verdict-row">
+            <IVRankVerdict value={rank} />
+            <div className="vol-verdict-grid">
+              <VerdictMetric label="Skew · 25 delta" value={`${selected.rr_25 >= 0 ? '+' : ''}${selected.rr_25.toFixed(1)}`} unit="vol pts"
+                caption={skewCaption(selected.rr_25)} color={Math.abs(selected.rr_25) > 5 ? NEG : GOLD} />
+              <VerdictMetric label="Term slope" value={`${data.ts_slope >= 0 ? '+' : ''}${data.ts_slope.toFixed(1)}`} unit={data.ts_slope > 0.5 ? 'contango' : data.ts_slope < -0.5 ? 'backwardation' : 'flat'}
+                caption={termCaption(data.ts_slope)} color={data.ts_slope < -0.5 ? NEG : POS} />
+              <VerdictMetric label="Implied less realized" value={rankQ.data?.iv_premium == null ? '—' : `${rankQ.data.iv_premium >= 0 ? '+' : ''}${rankQ.data.iv_premium.toFixed(1)}`}
+                unit={rankQ.data?.current_hv_30d == null ? 'history limited' : `${rankQ.data.current_iv.toFixed(1)} vs ${rankQ.data.current_hv_30d.toFixed(1)}`}
+                caption={premiumCaption(rankQ.data?.iv_premium ?? null, rank)} color={(rankQ.data?.iv_premium ?? 0) > 0 ? NEG : POS} />
+            </div>
           </div>
 
-          {/* Surface — the centerpiece. Click a row for its skew, a column for its term structure. */}
-          <div style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-            <div style={{ ...panelHead, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-              <span>Implied Volatility Surface <span style={{ color: FAINT, fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>· expiry x moneyness · click a row or column</span></span>
-              <span style={{ fontFamily: MONO, fontSize: 9, color: FAINT, textTransform: 'none', letterSpacing: 0 }}>
-                {scale[0].toFixed(0)}% <span style={{ display: 'inline-block', width: 54, height: 8, verticalAlign: 'middle', margin: '0 5px', background: `linear-gradient(90deg, ${cellColor(scale[0], scale, rank)}, ${cellColor(scale[1], scale, rank)})`, border: `1px solid ${BORDER}` }} /> {scale[1].toFixed(0)}% IV
-              </span>
-            </div>
-            <div style={{ overflowX: 'auto', padding: '8px 10px 10px' }}>
-              <table style={{ borderCollapse: 'collapse', fontFamily: MONO, fontSize: 9 }}>
-                <thead>
-                  <tr>
-                    <th style={{ padding: '3px 7px', color: FAINT, fontWeight: 400, textAlign: 'right', whiteSpace: 'nowrap' }}>exp / mny</th>
-                    {BUCKETS.map(b => (
-                      <th key={b} style={{ padding: '3px 2px', fontWeight: 700, minWidth: 40 }}>
-                        <button onClick={() => setMoneyness(b)} aria-pressed={Math.abs(moneyness - b) < 0.01}
-                          title={`Show the term structure at ${b > 0 ? '+' : ''}${b}% moneyness`}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 3px', fontFamily: MONO, fontSize: 9, fontWeight: 700, color: Math.abs(moneyness - b) < 0.01 ? GOLD : SEC }}>
-                          {b > 0 ? '+' : ''}{b}%
-                        </button>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {term.map((t, i) => {
-                    const isSel = i === expiryIdx
-                    const pts = pointsFor(t, side)
-                    return (
-                      <tr key={t.expiry}>
-                        <td style={{ padding: '2px 7px', textAlign: 'right', whiteSpace: 'nowrap', borderRight: `1px solid ${BORDER}` }}>
-                          <button onClick={() => setExpiryIdx(i)} aria-pressed={isSel}
-                            title={`Show the ${t.expiry} skew cross-section`}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: MONO, fontSize: 9, fontWeight: isSel ? 700 : 400, color: isSel ? GOLD : SEC }}>
-                            {t.dte}d
+          <section className="vol-band">
+            <SectionStrip title="Implied volatility surface">
+              <span>Click a row for its skew, a column for its term structure</span>
+              <i />
+              <span>{scale[0].toFixed(0)}%</span>
+              <span className="vol-surface-swatch" style={{ background: `linear-gradient(90deg, ${cellColor(scale[0], scale)}, ${cellColor(scale[1], scale)})` }} />
+              <span>{scale[1].toFixed(0)}% IV</span>
+            </SectionStrip>
+            <div className="vol-surface-scroll">
+              <div className="vol-surface-grid">
+                <div className="vol-surface-header vol-expiry-head">Expiry</div>
+                {BUCKETS.map(bucket => (
+                  <button key={bucket} className="vol-surface-header" aria-pressed={Math.abs(moneyness - bucket) < 0.01} onClick={() => setMoneyness(bucket)}>
+                    {bucket > 0 ? '+' : ''}{bucket}%
+                  </button>
+                ))}
+                <div className="vol-surface-header vol-atm-head">ATM IV</div>
+                {term.map((point, rowIndex) => {
+                  const rowSelected = rowIndex === Math.min(expiryIdx, term.length - 1)
+                  const points = pointsFor(point, side)
+                  return (
+                    <div key={point.expiry} style={{ display: 'contents' }}>
+                      <button className="vol-expiry-cell" aria-pressed={rowSelected} onClick={() => setExpiryIdx(rowIndex)}>
+                        <span>{point.expiry}</span><b>{point.dte}d</b>
+                      </button>
+                      {BUCKETS.map(bucket => {
+                        const iv = ivAt(points, bucket)
+                        const columnSelected = Math.abs(moneyness - bucket) < 0.01
+                        const cellDescription = iv == null
+                          ? `${point.expiry}, ${bucket}% moneyness, no quote`
+                          : `${point.expiry}, ${bucket}% moneyness, ${iv.toFixed(1)}% IV, strike $${(data.spot * (1 + bucket / 100)).toFixed(0)}`
+                        return (
+                          <button key={bucket} className="vol-heat-cell" onClick={() => { setExpiryIdx(rowIndex); setMoneyness(bucket) }}
+                            aria-label={cellDescription} aria-pressed={rowSelected && columnSelected} title={cellDescription}
+                            style={{ background: cellColor(iv, scale), color: iv == null ? FAINT : TEXT, outline: rowSelected || columnSelected ? `1px solid color-mix(in srgb, ${GOLD} 60%, transparent)` : 'none' }}>
+                            {iv == null ? '·' : iv.toFixed(0)}
                           </button>
-                        </td>
-                        {BUCKETS.map(b => {
-                          const iv = ivAt(pts, b)
-                          const colSel = Math.abs(moneyness - b) < 0.01
-                          return (
-                            <td key={b} title={iv != null ? `${t.expiry} · ${b > 0 ? '+' : ''}${b}% · IV ${iv.toFixed(1)}%` : `${t.expiry} · ${b > 0 ? '+' : ''}${b}% · no quote`}
-                              style={{
-                                background: cellColor(iv, scale, rank), textAlign: 'center', padding: '3px 2px',
-                                color: iv == null ? FAINT : TEXT,
-                                outline: isSel || colSel ? `1px solid color-mix(in srgb, ${GOLD} 55%, transparent)` : 'none',
-                                outlineOffset: -1,
-                              }}>
-                              {iv != null ? iv.toFixed(0) : '·'}
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-              {side !== 'composite' && (
-                <div style={{ fontFamily: SANS, fontSize: 9, color: SEC, marginTop: 7 }}>
-                  Raw {side} quotes. In-the-money strikes carry wide, stale markets, so those cells
-                  are less reliable than the composite. The colour scale stays on the composite fit.
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Linked cross-sections */}
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <div style={{ flex: '1 1 420px', minWidth: 0, background: SURFACE, border: `1px solid ${BORDER}` }}>
-              <div style={panelHead}>Term Structure <span style={{ color: FAINT, fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>· IV by expiry at {moneyness > 0 ? '+' : ''}{moneyness}%</span></div>
-              <div style={{ padding: '10px 8px 4px' }}>
-                <ResponsiveContainer width="100%" height={230}>
-                  <LineChart data={termSeries} margin={{ top: 4, right: 8, bottom: 4, left: 4 }}>
-                    <CartesianGrid stroke="rgba(255,255,255,0.05)" />
-                    <XAxis dataKey="dte" tick={{ fontFamily: MONO, fontSize: 9, fill: SEC }} tickLine={false} axisLine={{ stroke: BORDER }}
-                      tickFormatter={(v: number) => `${v}d`} minTickGap={26} />
-                    <YAxis tick={{ fontFamily: MONO, fontSize: 9, fill: SEC }} tickLine={false} axisLine={{ stroke: BORDER }} width={40}
-                      tickFormatter={(v: number) => `${v.toFixed(0)}%`} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE}
-                      labelFormatter={(v: number) => `${v} days to expiry`}
-                      formatter={(v: number, n: string) => [`${v.toFixed(1)}%`, n === 'iv' ? `IV at ${moneyness}%` : 'ATM IV']} />
-                    <Line type="monotone" dataKey="atm" name="atm" stroke={SEC} strokeWidth={1.1} strokeDasharray="3 3" dot={false} isAnimationActive={false} connectNulls />
-                    <Line type="monotone" dataKey="iv" name="iv" stroke={GOLD} strokeWidth={1.8} dot={false} isAnimationActive={false} connectNulls />
-                    {selected && <ReferenceLine x={selected.dte} stroke={GOLD} strokeDasharray="2 3" />}
-                  </LineChart>
-                </ResponsiveContainer>
-                <div style={{ fontFamily: SANS, fontSize: 9, color: FAINT, padding: '2px 10px 8px' }}>
-                  <span style={{ color: GOLD }}>─</span> selected moneyness · <span style={{ color: SEC }}>- -</span> ATM · vertical marks the selected expiry
-                </div>
+                        )
+                      })}
+                      <button className="vol-atm-cell" aria-label={`${point.expiry}, ATM implied volatility ${point.atm_iv.toFixed(1)}%`} aria-pressed={rowSelected} onClick={() => setExpiryIdx(rowIndex)}>{point.atm_iv.toFixed(1)}%</button>
+                    </div>
+                  )
+                })}
               </div>
+              {side !== 'composite' && <div className="vol-surface-note">Raw {side} quotes can be noisier in the in-the-money wing. The scale stays anchored to the composite fit.</div>}
             </div>
+          </section>
 
-            <div style={{ flex: '1 1 420px', minWidth: 0, background: SURFACE, border: `1px solid ${BORDER}` }}>
-              <div style={panelHead}>Skew <span style={{ color: FAINT, fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>· {selected.expiry} · {selected.dte}d</span></div>
-              <div style={{ padding: '10px 8px 4px' }}>
-                <ResponsiveContainer width="100%" height={230}>
-                  <AreaChart data={smileSeries} margin={{ top: 4, right: 8, bottom: 4, left: 4 }}>
-                    <defs>
-                      <linearGradient id="vol-smile" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={GOLD} stopOpacity={0.24} />
-                        <stop offset="100%" stopColor={GOLD} stopOpacity={0.02} />
-                      </linearGradient>
-                    </defs>
+          <div className="vol-chart-grid">
+            <section className="vol-band">
+              <SectionStrip title="Term structure"><span>IV by expiry at {moneyness > 0 ? '+' : ''}{moneyness}% moneyness</span></SectionStrip>
+              <div className="vol-chart-body">
+                <ResponsiveContainer width="100%" height={320}>
+                  <AreaChart data={termSeries} margin={{ top: 12, right: 16, bottom: 8, left: 0 }}>
+                    <defs><linearGradient id="vol-term-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={GOLD} stopOpacity={0.2} /><stop offset="100%" stopColor={GOLD} stopOpacity={0.01} /></linearGradient></defs>
                     <CartesianGrid stroke="rgba(255,255,255,0.05)" />
-                    <XAxis dataKey="moneyness" type="number" domain={['dataMin', 'dataMax']}
-                      tick={{ fontFamily: MONO, fontSize: 9, fill: SEC }} tickLine={false} axisLine={{ stroke: BORDER }}
-                      tickFormatter={(v: number) => `${v > 0 ? '+' : ''}${v.toFixed(0)}%`} minTickGap={24} />
-                    <YAxis tick={{ fontFamily: MONO, fontSize: 9, fill: SEC }} tickLine={false} axisLine={{ stroke: BORDER }} width={40}
-                      tickFormatter={(v: number) => `${v.toFixed(0)}%`} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE}
-                      labelFormatter={(v: number) => `${v > 0 ? '+' : ''}${Number(v).toFixed(1)}% from spot`}
-                      formatter={(v: number) => [`${v.toFixed(1)}%`, 'IV']} />
-                    <ReferenceLine x={0} stroke={SEC} strokeDasharray="3 3" label={{ value: 'spot', position: 'insideTopLeft', fill: FAINT, fontSize: 9, fontFamily: MONO }} />
-                    <ReferenceLine x={moneyness} stroke={GOLD} strokeDasharray="2 3" />
-                    <Area type="monotone" dataKey="iv" stroke={GOLD} strokeWidth={1.8} fill="url(#vol-smile)" dot={false} isAnimationActive={false} />
+                    <XAxis dataKey="expiry" tick={{ fontFamily: MONO, fontSize: 11, fill: SEC }} tickLine={false} axisLine={false}
+                      tickFormatter={(value: string) => `${term.find(point => point.expiry === value)?.dte ?? ''}d`} interval="preserveStartEnd" />
+                    <YAxis domain={termDomain} tick={{ fontFamily: MONO, fontSize: 11, fill: SEC }} tickLine={false} axisLine={false} width={48} tickFormatter={(value: number) => `${value.toFixed(0)}%`} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={(value: string) => {
+                      const point = term.find(item => item.expiry === value)
+                      return point ? `${point.expiry}, ${point.dte} DTE` : value
+                    }} formatter={(value: number) => [`${value.toFixed(1)}%`, 'IV']} />
+                    <ReferenceLine x={selected.expiry} stroke={GOLD} strokeDasharray="2 3" />
+                    <Area type="monotone" dataKey="iv" stroke={GOLD} strokeWidth={2.2} fill="url(#vol-term-fill)" connectNulls isAnimationActive={false}
+                      dot={{ r: 2.6, fill: PANEL, stroke: GOLD, strokeWidth: 1.4 }} />
                   </AreaChart>
                 </ResponsiveContainer>
-                <div style={{ fontFamily: SANS, fontSize: 9, color: FAINT, padding: '2px 10px 8px' }}>
-                  {side === 'composite' ? 'Fitted OTM smile' : `Raw ${side} quotes`} · gold mark is the selected moneyness
-                </div>
               </div>
-            </div>
+            </section>
+            <section className="vol-band">
+              <SectionStrip title="Skew"><span>{selected.expiry} · {selected.dte}d · {side === 'composite' ? 'fitted OTM smile' : `raw ${side} quotes`}</span></SectionStrip>
+              <div className="vol-chart-body">
+                <ResponsiveContainer width="100%" height={320}>
+                  <AreaChart data={smileSeries} margin={{ top: 12, right: 16, bottom: 8, left: 0 }}>
+                    <defs><linearGradient id="vol-smile-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={GOLD} stopOpacity={0.26} /><stop offset="100%" stopColor={GOLD} stopOpacity={0.02} /></linearGradient></defs>
+                    <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
+                    <XAxis dataKey="moneyness" type="number" domain={[-15, 15]} ticks={[-15, -10, -5, 0, 5, 10, 15]} tick={{ fontFamily: MONO, fontSize: 11, fill: SEC }} tickLine={false} axisLine={false} tickFormatter={(value: number) => `${value > 0 ? '+' : ''}${value}%`} />
+                    <YAxis domain={skewDomain} tick={{ fontFamily: MONO, fontSize: 11, fill: SEC }} tickLine={false} axisLine={false} width={48} tickFormatter={(value: number) => `${value.toFixed(0)}%`} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={(value: number) => {
+                      const point = smileSeries.find(item => Math.abs(item.moneyness - Number(value)) < 0.001)
+                      return `${value > 0 ? '+' : ''}${Number(value).toFixed(1)}% moneyness${point ? ` · $${point.strike.toFixed(2)} strike` : ''}`
+                    }} formatter={(value: number) => [`${value.toFixed(1)}%`, 'IV']} />
+                    <ReferenceLine x={0} stroke={SEC} strokeDasharray="3 3" label={{ value: 'spot', position: 'insideTopRight', fill: FAINT, fontSize: 10, fontFamily: MONO }} />
+                    {Math.abs(moneyness) > 0.01 && <ReferenceLine x={moneyness} stroke={GOLD} strokeDasharray="2 3" />}
+                    <Area type="monotone" dataKey="iv" stroke={GOLD} strokeWidth={2.2} fill="url(#vol-smile-fill)" dot={false} isAnimationActive={false} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
           </div>
 
-          {/* Full contract detail — every field IV Rank surfaced. */}
-          <div style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-            <div style={{ ...panelHead, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-              <span>Contract Detail <span style={{ color: FAINT, fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>
-                · {selected.expiry} · {rankQ.data ? `${rankQ.data.strike} ${rankQ.data.option_type}` : 'ATM'}
-              </span></span>
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, textTransform: 'none', letterSpacing: 0 }}>
-                <div>
-                  <label style={{ ...lbl, marginBottom: 3 }} htmlFor="vs-strike">Strike</label>
-                  <input id="vs-strike" type="number" step="1" value={strikeDraft} onChange={e => setStrikeDraft(e.target.value)}
-                    placeholder={data.spot.toFixed(0)} title="Blank uses at-the-money. Snaps to the nearest listed strike."
-                    style={{ ...inp, width: 92, height: 28 }} />
-                </div>
-                <div>
-                  <label style={{ ...lbl, marginBottom: 3 }} htmlFor="vs-days">Lookback</label>
-                  <select id="vs-days" value={days} onChange={e => setDays(parseInt(e.target.value, 10))}
-                    style={{ ...inp, width: 92, height: 28, cursor: 'pointer' }}>
-                    {[30, 60, 90, 180, 365].map(d => <option key={d} value={d}>{d} days</option>)}
-                  </select>
-                </div>
-              </div>
-            </div>
-            {rankQ.isLoading && <div style={{ padding: 16, fontFamily: SANS, fontSize: 11, color: FAINT }}>Loading contract…</div>}
-            {rankQ.isError && <div style={{ padding: 16, fontFamily: SANS, fontSize: 11, color: SEC }}>No chain data for this contract. Try another strike or expiry.</div>}
+          <section className="vol-band">
+            <SectionStrip title={`Contract · ${data.ticker} ${rankQ.data?.strike ?? data.spot.toFixed(0)} ${(rankQ.data?.option_type ?? (side === 'put' ? 'put' : 'call')).toUpperCase()} · ${selected.expiry} · ${selected.dte} DTE`}>
+              <label htmlFor="vs-strike">Strike</label>
+              <input id="vs-strike" type="number" step="1" value={strikeDraft} onFocus={() => setStrikeEditing(true)} onChange={event => { setStrikeEditing(true); setStrikeDraft(event.target.value) }} onBlur={commitStrike}
+                onKeyDown={event => event.key === 'Enter' && commitStrike()} placeholder={data.spot.toFixed(0)} title="Blank uses at the money. Values snap to the nearest listed strike." style={{ ...inp, width: 84, height: 28 }} />
+              <label htmlFor="vs-days">Lookback</label>
+              <select id="vs-days" value={days} onChange={event => setDays(Number(event.target.value))} style={{ ...inp, width: 96, height: 28, cursor: 'pointer' }}>
+                {[90, 180, 365].map(value => <option key={value} value={value}>{value} days</option>)}
+              </select>
+            </SectionStrip>
+            {rankQ.isLoading && <div className="vol-contract-state">Loading contract evidence</div>}
+            {rankQ.isError && <div className="vol-contract-state">No chain data for this contract. Choose another strike or expiry.</div>}
             {rankQ.data && (() => {
-              const d = rankQ.data
-              const g = d.greeks ?? {}
-              const em = expectedMove(d.current_iv, d.dte, d.spot)
+              const detail = rankQ.data
+              const greeks = detail.greeks ?? {}
+              const move = expectedMove(detail.current_iv, detail.dte, detail.spot)
+              const spread = detail.ask > 0 && detail.bid > 0 ? detail.ask - detail.bid : null
+              const maxRange = Math.max(detail.iv_max ?? detail.current_iv, detail.current_iv) * 1.08
+              const rangeLeft = Math.max(0, Math.min(100, ((detail.iv_min ?? 0) / maxRange) * 100))
+              const rangeMarker = Math.max(0, Math.min(100, (detail.current_iv / maxRange) * 100))
               return (
-                <>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'stretch', borderBottom: `1px solid ${BORDER}` }}>
-                    <IVGauge value={d.iv_rank} title="IV Rank" />
-                    <IVGauge value={d.iv_percentile} title="IV Percentile" />
+                <div className="vol-contract-grid">
+                  <div className="vol-contract-group">
+                    <div className="vol-group-title">Pricing</div>
+                    <div className="vol-contract-hero"><strong style={{ color: GOLD }}>{detail.mid > 0 ? `$${detail.mid.toFixed(2)}` : '—'}</strong><span>mid · ${detail.bid.toFixed(2)} / ${detail.ask.toFixed(2)}</span></div>
+                    <div className="vol-group-grid">
+                      <GroupStat label="Straddle" value={detail.straddle == null ? '—' : `$${detail.straddle.toFixed(2)}`} />
+                      <GroupStat label="Spread" value={spread == null ? '—' : `$${spread.toFixed(2)}`} />
+                      <GroupStat label="Volume" value={detail.volume.toLocaleString()} />
+                      <GroupStat label="Open interest" value={detail.open_interest.toLocaleString()} />
+                      <GroupStat label="Spot" value={`$${detail.spot.toFixed(2)}`} />
+                      <GroupStat label="Risk free" value={`${detail.risk_free_rate.toFixed(2)}%`} />
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap' }}>
-                    <Stat label="Implied Vol" value={`${d.current_iv.toFixed(1)}%`} color={GOLD} />
-                    <Stat label="Realized 30d" value={d.current_hv_30d != null ? `${d.current_hv_30d.toFixed(1)}%` : '—'} color={BLUE} />
-                    <Stat label="IV Premium" value={d.iv_premium != null ? `${d.iv_premium > 0 ? '+' : ''}${d.iv_premium.toFixed(1)}%` : '—'}
-                      color={d.iv_premium != null && d.iv_premium > 0 ? NEG : POS} tip="Implied minus realized. Positive means options are pricing more movement than the stock has delivered." />
-                    <Stat label="IV Min" value={d.iv_min != null ? `${d.iv_min.toFixed(1)}%` : '—'} />
-                    <Stat label="IV Mean" value={d.iv_mean != null ? `${d.iv_mean.toFixed(1)}%` : '—'} />
-                    <Stat label="IV Max" value={d.iv_max != null ? `${d.iv_max.toFixed(1)}%` : '—'} />
-                    <Stat label="Spot" value={`$${d.spot.toFixed(2)}`} />
-                    <Stat label="Strike" value={`${d.strike}`} />
-                    <Stat label="DTE" value={`${d.dte}d`} />
-                    <Stat label="Bid" value={d.bid > 0 ? `$${d.bid.toFixed(2)}` : '—'} />
-                    <Stat label="Ask" value={d.ask > 0 ? `$${d.ask.toFixed(2)}` : '—'} />
-                    <Stat label="Mid" value={d.mid > 0 ? `$${d.mid.toFixed(2)}` : '—'} color={GOLD} />
-                    <Stat label="Open Interest" value={d.open_interest.toLocaleString()} />
-                    <Stat label="Volume" value={d.volume.toLocaleString()} />
-                    <Stat label="Straddle" value={d.straddle != null ? `$${d.straddle.toFixed(2)}` : '—'} tip="Cost of the at-the-money call plus put" />
-                    <Stat label="Implied Move" value={d.implied_move != null ? `${d.implied_move > 0 ? '±' : ''}${d.implied_move.toFixed(1)}%` : `±${em.pct.toFixed(1)}%`}
-                      color={GOLD} tip={`One sigma by expiry: $${em.lo.toFixed(2)} to $${em.hi.toFixed(2)}`} />
-                    {/* Backend already returns this as a percent (iv_tracker.py rounds r*100). */}
-                    <Stat label="Risk-Free" value={`${d.risk_free_rate.toFixed(2)}%`} />
-                    <Stat label="Delta" value={g.delta != null ? g.delta.toFixed(3) : '—'} />
-                    <Stat label="Gamma" value={g.gamma != null ? g.gamma.toFixed(4) : '—'} />
-                    <Stat label="Theta" value={g.theta != null ? g.theta.toFixed(3) : '—'} color={NEG} />
-                    <Stat label="Vega" value={g.vega != null ? g.vega.toFixed(3) : '—'} />
-                    <Stat label="Rho" value={g.rho != null ? g.rho.toFixed(3) : '—'} />
+                  <div className="vol-contract-group">
+                    <div className="vol-group-title">Volatility</div>
+                    <div className="vol-contract-hero"><strong style={{ color: GOLD }}>{detail.current_iv.toFixed(1)}%</strong><span>implied · {detail.current_hv_30d == null ? 'realized unavailable' : `${detail.current_hv_30d.toFixed(1)}% realized 30d`}</span></div>
+                    <div className="vol-range-row"><div className="vol-range-track"><span style={{ left: `${rangeLeft}%` }} /><i style={{ left: `${rangeMarker}%` }} /></div><span>{detail.iv_min?.toFixed(1) ?? '—'} to {detail.iv_max?.toFixed(1) ?? '—'} · mean {detail.iv_mean?.toFixed(1) ?? '—'}</span></div>
+                    <div className="vol-group-grid">
+                      <GroupStat label="IV premium" value={detail.iv_premium == null ? '—' : `${detail.iv_premium >= 0 ? '+' : ''}${detail.iv_premium.toFixed(1)}%`} color={(detail.iv_premium ?? 0) > 0 ? NEG : POS} />
+                      <GroupStat label="IV percentile" value={detail.iv_percentile == null ? '—' : detail.iv_percentile.toFixed(1)} color={(detail.iv_percentile ?? 0) >= 67 ? NEG : TEXT} />
+                      <GroupStat label="Implied move" value={`±${(detail.implied_move ?? move.pct).toFixed(1)}%`} color={GOLD} />
+                      <GroupStat label="1 sigma range" value={`$${move.lo.toFixed(0)} to $${move.hi.toFixed(0)}`} />
+                      <GroupStat label="25D RR" value={`${selected.rr_25 >= 0 ? '+' : ''}${selected.rr_25.toFixed(1)}`} color={Math.abs(selected.rr_25) > 5 ? NEG : TEXT} />
+                      <GroupStat label="25D fly" value={selected.bf_25.toFixed(1)} />
+                    </div>
                   </div>
-                </>
+                  <div className="vol-contract-group vol-greeks-group">
+                    <div className="vol-group-title">Greeks</div>
+                    <div className="vol-contract-hero"><strong>{greeks.delta == null ? '—' : greeks.delta.toFixed(3)}</strong><span>delta · at the money</span></div>
+                    <div className="vol-group-grid">
+                      <GroupStat label="Gamma" value={greeks.gamma == null ? '—' : greeks.gamma.toFixed(4)} />
+                      <GroupStat label="Theta" value={greeks.theta == null ? '—' : greeks.theta.toFixed(3)} color={NEG} />
+                      <GroupStat label="Vega" value={greeks.vega == null ? '—' : greeks.vega.toFixed(3)} />
+                      <GroupStat label="Rho" value={greeks.rho == null ? '—' : greeks.rho.toFixed(3)} />
+                    </div>
+                    <p className="vol-theta-caption">{thetaCaption(greeks.theta, detail.mid)}</p>
+                  </div>
+                </div>
               )
             })()}
-          </div>
+          </section>
 
-          {/* Per-expiry term-structure table — Vol Skew's numeric read, kept whole. */}
-          <div style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-            <div style={panelHead}>Term Structure Detail <span style={{ color: FAINT, fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>· every listed expiry</span></div>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: MONO, fontSize: 10, minWidth: 560 }}>
-                <thead>
-                  <tr>
-                    {['Expiry', 'DTE', 'ATM IV', '25D RR', '25D Fly', 'Implied Move', '1σ Range'].map((h, i) => (
-                      <th key={h} style={{ padding: '5px 10px', textAlign: i === 0 ? 'left' : 'right', color: FAINT, fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', borderBottom: `1px solid ${BORDER}`, whiteSpace: 'nowrap' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {term.map((t, i) => {
-                    const em = expectedMove(t.atm_iv, t.dte, data.spot)
-                    const isSel = i === expiryIdx
-                    return (
-                      <tr key={t.expiry} onClick={() => setExpiryIdx(i)} style={{ cursor: 'pointer', background: isSel ? `color-mix(in srgb, ${GOLD} 8%, transparent)` : 'transparent' }}>
-                        <td style={{ padding: '5px 10px', color: isSel ? GOLD : TEXT, fontWeight: isSel ? 700 : 400, whiteSpace: 'nowrap' }}>{t.expiry}</td>
-                        <td style={{ padding: '5px 10px', textAlign: 'right', color: SEC }}>{t.dte}d</td>
-                        <td style={{ padding: '5px 10px', textAlign: 'right', color: GOLD }}>{t.atm_iv.toFixed(1)}%</td>
-                        <td style={{ padding: '5px 10px', textAlign: 'right', color: t.rr_25 > 4 ? NEG : TEXT }}>{t.rr_25 > 0 ? '+' : ''}{t.rr_25.toFixed(1)}</td>
-                        <td style={{ padding: '5px 10px', textAlign: 'right', color: TEXT }}>{t.bf_25.toFixed(1)}</td>
-                        <td style={{ padding: '5px 10px', textAlign: 'right', color: TEXT }}>±{em.pct.toFixed(1)}%</td>
-                        <td style={{ padding: '5px 10px', textAlign: 'right', color: SEC }}>${em.lo.toFixed(0)} – ${em.hi.toFixed(0)}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* IV vs realized history for the selected contract — IVTracker's view, kept. */}
-          <div style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-            <div style={panelHead}>IV vs Realized <span style={{ color: FAINT, fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>· {selected.expiry} ATM {side === 'put' ? 'put' : 'call'}</span></div>
-            <div style={{ padding: '10px 8px 4px' }}>
-              {rankQ.isLoading ? (
-                <div style={{ height: 200, display: 'grid', placeItems: 'center', fontFamily: SANS, fontSize: 11, color: FAINT }}>Loading IV history…</div>
-              ) : !histSeries.length ? (
-                <div style={{ height: 200, display: 'grid', placeItems: 'center', fontFamily: SANS, fontSize: 11, color: FAINT, textAlign: 'center', padding: '0 20px' }}>
-                  No stored IV history for this contract yet. Yahoo chains carry no history, so
-                  rank builds up from snapshots this app records over time.
-                </div>
+          <section className="vol-band">
+            <SectionStrip title="Implied vs realized">
+              <span style={{ color: GOLD }}>- implied</span><span style={{ color: BLUE }}>- realized 30d</span><span>- stock price</span>
+              <Provenance kind="live" source="Yahoo option chains · daily" />
+            </SectionStrip>
+            <div className="vol-history-body">
+              {rankQ.isLoading ? <div className="vol-chart-state">Loading IV history</div> : !histSeries.length ? (
+                <div className="vol-chart-state">No stored IV history yet. Rank builds as the app records daily snapshots.</div>
               ) : (
-                <ResponsiveContainer width="100%" height={200}>
-                  <LineChart data={histSeries} margin={{ top: 4, right: 8, bottom: 4, left: 4 }}>
-                    <CartesianGrid stroke="rgba(255,255,255,0.05)" />
-                    <XAxis dataKey="date" tick={{ fontFamily: MONO, fontSize: 9, fill: SEC }} tickLine={false} axisLine={{ stroke: BORDER }} minTickGap={44}
-                      tickFormatter={(v: string) => {
-                        const d = new Date(v)
-                        return isNaN(d.getTime()) ? v : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                      }} />
-                    <YAxis yAxisId="vol" tick={{ fontFamily: MONO, fontSize: 9, fill: SEC }} tickLine={false} axisLine={{ stroke: BORDER }} width={40}
-                      tickFormatter={(v: number) => `${v.toFixed(0)}%`} />
-                    <YAxis yAxisId="px" orientation="right" domain={['auto', 'auto']} tick={{ fontFamily: MONO, fontSize: 9, fill: FAINT }}
-                      tickLine={false} axisLine={{ stroke: BORDER }} width={48} tickFormatter={(v: number) => `$${v.toFixed(0)}`} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE}
-                      formatter={(v: number, n: string) => [
-                        n === 'stock_price' ? `$${v.toFixed(2)}` : `${v.toFixed(1)}%`,
-                        n === 'iv' ? 'Implied' : n === 'hv_30d' ? 'Realized 30d' : 'Stock price',
-                      ]} />
-                    <Line yAxisId="px" type="monotone" dataKey="stock_price" name="stock_price" stroke={FAINT} strokeWidth={1} dot={false} isAnimationActive={false} connectNulls />
-                    <Line yAxisId="vol" type="monotone" dataKey="iv" name="iv" stroke={GOLD} strokeWidth={1.7} dot={false} isAnimationActive={false} connectNulls />
-                    <Line yAxisId="vol" type="monotone" dataKey="hv_30d" name="hv_30d" stroke={BLUE} strokeWidth={1.4} dot={false} isAnimationActive={false} connectNulls />
+                <ResponsiveContainer width="100%" height={230}>
+                  <LineChart data={histSeries} margin={{ top: 12, right: 4, bottom: 8, left: 0 }}>
+                    <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
+                    <XAxis dataKey="date" tick={{ fontFamily: MONO, fontSize: 11, fill: SEC }} tickLine={false} axisLine={false} minTickGap={60} tickFormatter={(value: string) => {
+                      const parsed = new Date(value)
+                      return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                    }} />
+                    <YAxis yAxisId="vol" domain={paddedDomain(histSeries.flatMap(point => [point.iv, point.hv_30d]), 10)} tick={{ fontFamily: MONO, fontSize: 11, fill: SEC }} tickLine={false} axisLine={false} width={48} tickFormatter={(value: number) => `${value.toFixed(0)}%`} />
+                    <YAxis yAxisId="px" orientation="right" domain={paddedDomain(histSeries.map(point => point.stock_price), 10)} tick={{ fontFamily: MONO, fontSize: 11, fill: FAINT }} tickLine={false} axisLine={false} width={52} tickFormatter={(value: number) => `$${value.toFixed(0)}`} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: number, name: string) => [name === 'stock_price' ? `$${value.toFixed(2)}` : `${value.toFixed(1)}%`, name === 'iv' ? 'Implied' : name === 'hv_30d' ? 'Realized 30d' : 'Stock price']} />
+                    <Line yAxisId="px" type="monotone" dataKey="stock_price" stroke="color-mix(in srgb, var(--theme-text) 28%, transparent)" strokeWidth={1.1} dot={false} isAnimationActive={false} connectNulls />
+                    <Line yAxisId="vol" type="monotone" dataKey="hv_30d" stroke={BLUE} strokeWidth={1.7} dot={false} isAnimationActive={false} connectNulls />
+                    <Line yAxisId="vol" type="monotone" dataKey="iv" stroke={GOLD} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
                   </LineChart>
                 </ResponsiveContainer>
               )}
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '4px 10px 8px', flexWrap: 'wrap', fontFamily: SANS, fontSize: 9, color: FAINT }}>
-                <span><span style={{ color: GOLD }}>─</span> implied</span>
-                <span><span style={{ color: BLUE }}>─</span> realized 30d</span>
-                <span><span style={{ color: FAINT }}>─</span> stock price</span>
-                {histSeries.length > 0 && (
-                  <span title="Where each IV point came from: a stored snapshot, or a realized-vol proxy scaled to the current IV/HV ratio">
-                    sources: {[...new Set(histSeries.map(p => p.source).filter(Boolean))].join(', ')}
-                  </span>
-                )}
-                <Provenance kind="live" source="Yahoo option chains · daily" />
-              </div>
             </div>
-          </div>
-
-          {data.read && (
-            <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, padding: '11px 14px', fontFamily: SANS, fontSize: 11, color: TEXT, lineHeight: 1.6 }}>
-              {data.read}
-            </div>
-          )}
+          </section>
         </>
       )}
     </div>
