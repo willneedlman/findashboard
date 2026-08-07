@@ -958,10 +958,325 @@ def dealer_gex(ticker: str, expiry: str | None = None):
         try:
             from routers.snapshots import record_point
             net = float(pivot["net_gex"].sum())
-            record_point("gex", sym, {"v": round(net, 2), "spot": round(float(spot), 2) if spot else None})
+            point = {"v": round(net, 2), "spot": round(float(spot), 2) if spot else None}
+            # Record the flip too — without it the accrued history can't answer
+            # "was this level defended?", only "was net gamma up or down".
+            if levels.get("flip") is not None:
+                point["flip"] = round(float(levels["flip"]), 2)
+            record_point("gex", sym, point)
         except Exception:
             pass
     return result
+
+
+_expo_cache: TTLCache = TTLCache(maxsize=32, ttl=300)   # 5 min while the market is open
+
+
+def _next_monthly_opex(expiries: list[str], today) -> str | None:
+    """The next monthly OPEX (third Friday) that is actually listed.
+
+    Gamma is near-term dominated, so a window of the N nearest expiries is the
+    right default — but on a name with daily expiries that window can end days
+    before the monthly, which is the single biggest open-interest concentration
+    on the board. This pulls it back in whatever N is.
+    """
+    import calendar as _cal
+    import datetime as _dt
+    for offset in (0, 1, 2):
+        m = today.month + offset
+        y = today.year + (m - 1) // 12
+        m = (m - 1) % 12 + 1
+        fridays = [d for d in range(1, _cal.monthrange(y, m)[1] + 1)
+                   if _dt.date(y, m, d).weekday() == 4]
+        if len(fridays) < 3:
+            continue
+        third = _dt.date(y, m, fridays[2])
+        if third < today:
+            continue
+        if third.isoformat() in expiries:
+            return third.isoformat()
+    return None
+
+
+def _expo_greeks(S: float, K: float, T: float, r: float, iv: float, is_call: bool) -> dict:
+    """d1/d2-derived greeks for one contract. Vanna and charm are never supplied
+    by the feed, so they are always modelled; delta and gamma are modelled only
+    when the feed omits them, so GEX here ties out to /gex exactly.
+
+    With no dividend, put delta is call delta minus one, so vanna (dDelta/dSigma)
+    and charm (dDelta/dt) are identical for both sides — the call/put sign in the
+    exposure sums, not the greek, carries the dealer-positioning assumption.
+    """
+    sqrt_t = np.sqrt(T)
+    d1 = (np.log(S / K) + (r + 0.5 * iv ** 2) * T) / (iv * sqrt_t)
+    d2 = d1 - iv * sqrt_t
+    pdf = float(norm.pdf(d1))
+    return {
+        "delta": float(norm.cdf(d1)) if is_call else float(norm.cdf(d1)) - 1.0,
+        "gamma": pdf / (S * iv * sqrt_t),
+        "vanna": -pdf * d2 / iv,                                           # per 1.00 of vol
+        "charm": -(pdf * (2 * r * T - d2 * iv * sqrt_t) / (2 * T * iv * sqrt_t)) / 365,   # per calendar day
+    }
+
+
+@router.get("/exposure")
+def dealer_exposure(ticker: str, expiries: int = 8, min_volume: int = 250, min_vol_oi: float = 1.0):
+    """Dealer positioning across the expiry term structure: gamma, delta, vanna
+    and charm exposure per strike and per expiry, plus the vol/OI flow screen —
+    all off ONE pass over the same chains.
+
+    /gex answers "where are dealers positioned" one expiry at a time. Dealer
+    books are the sum across expiries, and the greeks that say how that book
+    moves when vol or time changes (vanna, charm) come free from the same rows.
+    """
+    import datetime as _dt
+    sym = validate_ticker(ticker)
+    n_exp = max(1, min(int(expiries), 32))
+    open_now = is_market_open()
+    cache_key = f"gexpo:v3:{sym}:{n_exp}:{min_volume}:{min_vol_oi}"
+
+    if open_now:
+        hit = _expo_cache.get(cache_key)
+        if hit:
+            return hit
+    else:
+        cached = disk_get(cache_key)
+        if cached:
+            # A cache built before the last session closed carries a stale spot.
+            try:
+                latest_close = float(get_history(sym, period="5d")["Close"].dropna().iloc[-1])
+                stale = bool(cached.get("spot")) and abs(float(cached["spot"]) - latest_close) > 0.01
+            except Exception:
+                stale = False
+            if not stale:
+                cached["delayed"] = True
+                return cached
+
+    # ── Spot ────────────────────────────────────────────────────────────────
+    spot, quote_ms = None, None
+    if open_now:
+        try:
+            q = _tradier.get_quote(sym)
+            spot = float(q.get("last") or q.get("close") or 0) or None
+            quote_ms = q.get("trade_date")
+        except Exception:
+            pass
+    if not spot:
+        try:
+            hist = get_history(sym, period="5d")
+            spot = float(hist["Close"].dropna().iloc[-1]) if not hist.empty else None
+        except Exception:
+            pass
+    if not spot:
+        raise HTTPException(404, "Could not fetch spot price")
+
+    # ── Expirations ─────────────────────────────────────────────────────────
+    all_exps: list[str] = []
+    try:
+        all_exps = _tradier.get_expirations(sym)
+    except Exception:
+        pass
+    if not all_exps:
+        try:
+            all_exps = list(yf.Ticker(sym).options or [])
+        except Exception:
+            all_exps = []
+    today = _dt.date.today()
+    future = [e for e in all_exps if _dt.date.fromisoformat(e) >= today]
+    if not future:
+        raise HTTPException(404, "No listed expirations")
+    processed = future[:n_exp]
+    opex = _next_monthly_opex(future, today)
+    if opex and opex not in processed:
+        processed = sorted(set(processed + [opex]))
+
+    # Strikes far from spot carry no dealer risk worth charting and would triple
+    # the payload, so the window is fixed here rather than in the client.
+    lo, hi = spot * 0.65, spot * 1.35
+    r = 0.045
+    used_yf = False
+    per_exp: list[dict] = []
+    by_exp_strike: dict[str, list[dict]] = {}
+    flow: list[dict] = []
+
+    def _blank(strike: float) -> dict:
+        return {"strike": strike, "call_gex": 0.0, "put_gex": 0.0, "net_gex": 0.0,
+                "net_dex": 0.0, "net_vanna": 0.0, "net_charm": 0.0,
+                "call_oi": 0, "put_oi": 0, "call_vol": 0, "put_vol": 0}
+
+    for exp in processed:
+        exp_dt = _dt.date.fromisoformat(exp)
+        dte = max((exp_dt - today).days, 0)
+        T = max(dte, 1) / 365.25
+
+        chain = None
+        try:
+            chain = _tradier.get_options_chain(sym, exp, greeks=True)
+        except Exception as e:
+            logger.warning("Tradier exposure chain %s %s: %s", sym, exp, e)
+        if not chain or (not chain.get("calls") and not chain.get("puts")):
+            used_yf = True
+            try:
+                yc = yf.Ticker(sym).option_chain(exp)
+
+                def _rows(df):
+                    return [{
+                        "strike": float(x.get("strike", 0)),
+                        "openInterest": int(x.get("openInterest", 0)),
+                        "volume": int(x.get("volume", 0)),
+                        "impliedVolatility": float(x.get("impliedVolatility", 0)),
+                        "bid": float(x.get("bid", 0)), "ask": float(x.get("ask", 0)),
+                        "lastPrice": float(x.get("lastPrice", 0)),
+                        "delta": 0, "gamma": 0,
+                    } for _, x in df.fillna(0).iterrows()]
+                chain = {"calls": _rows(yc.calls), "puts": _rows(yc.puts)}
+            except Exception as e2:
+                logger.warning("yfinance exposure fallback %s %s: %s", sym, exp, e2)
+                continue
+
+        strikes: dict[float, dict] = {}
+        for side, rows, sign in (("call", chain["calls"], 1), ("put", chain["puts"], -1)):
+            is_call = side == "call"
+            for o in rows:
+                K = float(o.get("strike") or 0)
+                if K <= 0 or not (lo <= K <= hi):
+                    continue
+                oi = float(o.get("openInterest") or 0)
+                vol = float(o.get("volume") or 0)
+                if oi <= 0 and vol <= 0:
+                    continue
+
+                iv_dec = float(o.get("impliedVolatility") or 0)
+                iv = iv_dec if iv_dec >= 0.05 else 0.20
+                try:
+                    g = _expo_greeks(spot, K, T, r, iv, is_call)
+                except Exception:
+                    continue
+                gamma = float(o.get("gamma") or 0) or g["gamma"]
+                delta = float(o.get("delta") or 0) or g["delta"]
+
+                row = strikes.setdefault(K, _blank(K))
+                row[f"{side}_oi"] += int(oi)
+                row[f"{side}_vol"] += int(vol)
+                if oi > 0:
+                    notional = oi * 100 * spot
+                    gex = sign * notional * gamma * spot * 0.01 / 1e6      # $M per 1% move
+                    row[f"{side}_gex"] += gex
+                    row["net_gex"] += gex
+                    # Put delta is already negative, so the call/put sign is not
+                    # reapplied here — net DEX reads call-heavy vs put-heavy.
+                    row["net_dex"] += notional * delta / 1e6               # $M of delta
+                    row["net_vanna"] += sign * notional * g["vanna"] * 0.01 / 1e6   # $M delta per vol pt
+                    row["net_charm"] += sign * notional * g["charm"] / 1e6          # $M delta per day
+
+                if vol >= min_volume:
+                    ratio = vol / oi if oi > 0 else vol
+                    if oi <= 0 or ratio >= min_vol_oi:
+                        mid = ((float(o.get("bid") or 0) + float(o.get("ask") or 0)) / 2
+                               or float(o.get("lastPrice") or 0))
+                        flow.append({
+                            "expiry": exp, "dte": dte, "type": side, "strike": K,
+                            "volume": int(vol), "oi": int(oi), "vol_oi": round(ratio, 2),
+                            # The feed's own IV, not the 20% model floor — a
+                            # defaulted vol must not be shown as a quoted one.
+                            "iv": round(iv_dec * 100, 1) if iv_dec >= 0.05 else None,
+                            "mid": round(mid, 2),
+                            "premium": round(vol * mid * 100, 0),
+                            "moneyness": round((K / spot - 1) * 100, 2),
+                        })
+
+        ordered = sorted(strikes.values(), key=lambda x: x["strike"])
+        if not ordered:
+            continue
+        by_exp_strike[exp] = [{k: (round(v, 4) if isinstance(v, float) else v) for k, v in row.items()}
+                              for row in ordered]
+        per_exp.append({
+            "expiry": exp, "dte": dte,
+            **_expo_summary(ordered, spot),
+        })
+
+    if not per_exp:
+        raise HTTPException(404, "No option data with open interest for this ticker")
+
+    # ── Aggregate across every processed expiry — the actual dealer book ─────
+    agg: dict[float, dict] = {}
+    for rows in by_exp_strike.values():
+        for row in rows:
+            a = agg.setdefault(row["strike"], _blank(row["strike"]))
+            for k, v in row.items():
+                if k != "strike":
+                    a[k] += v
+    by_strike = sorted(agg.values(), key=lambda x: x["strike"])
+
+    _env = os.getenv("TRADIER_ENV", "sandbox")
+    _qdt = None
+    if quote_ms:
+        try:
+            _qdt = _dt.datetime.fromtimestamp(int(quote_ms) / 1000, _dt.timezone.utc)
+        except Exception:
+            pass
+    _age = (_dt.datetime.now(_dt.timezone.utc) - _qdt).total_seconds() if _qdt else None
+
+    # Summaries above are computed over the full +/-35% window so the totals
+    # describe the whole book. The per-strike arrays are what the payload weighs,
+    # and nothing renders beyond +/-15%, so only those are trimmed.
+    ship_lo, ship_hi = spot * 0.85, spot * 1.15
+    def _ship(rows: list[dict]) -> list[dict]:
+        return [{k: (round(v, 4) if isinstance(v, float) else v) for k, v in row.items()}
+                for row in rows if ship_lo <= row["strike"] <= ship_hi]
+
+    result = {
+        "ticker": sym,
+        "spot": round(spot, 2),
+        "expirations": all_exps,
+        "processed": [p["expiry"] for p in per_exp],
+        "per_expiry": per_exp,
+        "by_strike": _ship(by_strike),
+        "by_expiry_strike": {e: _ship(rows) for e, rows in by_exp_strike.items()},
+        "flow": sorted(flow, key=lambda f: f["premium"], reverse=True)[:150],
+        "totals": _expo_summary(by_strike, spot),
+        "screen": {"min_volume": min_volume, "min_vol_oi": min_vol_oi},
+        "as_of": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+        "quote_time": _qdt.isoformat() if _qdt else None,
+        "source": "yfinance" if used_yf else ("Tradier" if _env == "production" else "Tradier sandbox"),
+        "delayed": (_age is None) or (_age > 180),
+    }
+
+    if open_now:
+        _expo_cache[cache_key] = result
+    else:
+        disk_set(cache_key, result, ttl=86400)
+    return result
+
+
+def _expo_summary(rows: list[dict], spot: float) -> dict:
+    """Net exposures plus the three levels that read off a gamma profile: the
+    flip (nearest per-strike sign change), and the call/put gamma walls."""
+    net_gex = sum(r["net_gex"] for r in rows)
+    ordered = sorted(rows, key=lambda r: r["strike"])
+    flip = None
+    for a, b in zip(ordered, ordered[1:]):
+        if a["net_gex"] * b["net_gex"] < 0:
+            cand = a["strike"] if abs(a["strike"] - spot) <= abs(b["strike"] - spot) else b["strike"]
+            if flip is None or abs(cand - spot) < abs(flip - spot):
+                flip = cand
+    calls = [r for r in ordered if r["call_gex"] > 0]
+    puts = [r for r in ordered if r["put_gex"] < 0]
+    return {
+        "net_gex": round(net_gex, 2),
+        "call_gex": round(sum(r["call_gex"] for r in rows), 2),
+        "put_gex": round(sum(r["put_gex"] for r in rows), 2),
+        "net_dex": round(sum(r["net_dex"] for r in rows), 2),
+        "net_vanna": round(sum(r["net_vanna"] for r in rows), 4),
+        "net_charm": round(sum(r["net_charm"] for r in rows), 4),
+        "call_oi": sum(r["call_oi"] for r in rows),
+        "put_oi": sum(r["put_oi"] for r in rows),
+        "call_vol": sum(r["call_vol"] for r in rows),
+        "put_vol": sum(r["put_vol"] for r in rows),
+        "flip": round(float(flip), 2) if flip is not None else None,
+        "call_wall": max(calls, key=lambda r: r["call_gex"])["strike"] if calls else None,
+        "put_wall": min(puts, key=lambda r: r["put_gex"])["strike"] if puts else None,
+    }
 
 
 class StrategyLeg(BaseModel):

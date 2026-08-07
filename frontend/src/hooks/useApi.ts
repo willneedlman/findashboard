@@ -64,6 +64,13 @@ export const fetchRiskFreeRate = (days?: number): Promise<{ rate: number; tenor_
 export const fetchGEX = (ticker: string, expiry?: string) =>
   api.get('/options/gex', { params: { ticker, ...(expiry ? { expiry } : {}) } }).then(r => r.data)
 
+// Gamma/delta/vanna/charm exposure per strike AND per expiry, plus the vol/OI
+// flow screen — one pass over the same chains.
+export const fetchDealerExposure = (ticker: string, expiries: number, minVolume: number, minVolOi: number) =>
+  api.get('/options/exposure', {
+    params: { ticker, expiries, min_volume: minVolume, min_vol_oi: minVolOi },
+  }).then(r => r.data)
+
 export const fetchBondAnalytics = (body: object) =>
   api.post('/bond/analytics', body).then(r => r.data)
 
