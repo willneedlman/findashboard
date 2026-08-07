@@ -3145,3 +3145,437 @@ React will try to recreate this component tree from scratch using the error boun
 11:14:31 AM [vite] (client) hmr update /src/index.css, /src/pages/PortfolioLive.tsx
 11:14:36 AM [vite] (client) hmr update /src/index.css, /src/pages/PortfolioLive.tsx
 11:14:38 AM [vite] (client) hmr update /src/index.css, /src/pages/PortfolioLive.tsx
+11:25:28 AM [vite] (client) hmr update /src/index.css, /src/pages/VolatilityScanner.tsx
+11:26:18 AM [vite] (client) hmr update /src/index.css, /src/pages/VolatilityScanner.tsx
+11:26:42 AM [vite] (client) hmr update /src/index.css, /src/pages/VolatilityScanner.tsx
+11:26:47 AM [vite] (client) hmr update /src/index.css, /src/pages/VolatilityScanner.tsx
+11:27:13 AM [vite] (client) hmr update /src/index.css, /src/pages/VolatilityScanner.tsx
+11:32:26 AM [vite] (client) hmr update /src/index.css, /src/pages/VolatilityScanner.tsx
+11:34:26 AM [vite] (client) hmr update /src/index.css
+11:34:35 AM [vite] (client) hmr update /src/index.css, /src/pages/VolatilityScanner.tsx
+11:39:03 AM [vite] (client) hmr update /src/index.css, /src/pages/VolatilityScanner.tsx
+11:41:27 AM [vite] (client) hmr update /src/index.css, /src/pages/VolatilityScanner.tsx
+11:44:57 AM [vite] (client) hmr update /src/index.css, /src/pages/VolatilityScanner.tsx
+11:45:43 AM [vite] (client) hmr update /src/index.css, /src/pages/VolatilityScanner.tsx
+11:45:55 AM [vite] (client) hmr update /src/index.css
+11:50:13 AM [vite] (client) hmr update /src/index.css, /src/pages/VolatilityScanner.tsx
+11:50:13 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+11:50:13 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+11:50:23 AM [vite] (client) hmr update /src/index.css
+11:53:46 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+11:53:46 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+11:54:57 AM [vite] (client) hmr update /src/index.css, /src/pages/VolatilityScanner.tsx
+11:55:04 AM [vite] (client) hmr update /src/index.css
+11:59:35 AM [vite] (client) hmr update /src/index.css, /src/pages/VolatilityScanner.tsx
+11:59:42 AM [vite] (client) hmr update /src/index.css
+12:54:55 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/index.css
+12:54:55 PM [vite] (client) hmr update /src/pages/ReportPrint.tsx, /src/index.css
+1:12:03 PM [vite] (client) hmr update /src/App.tsx, /src/components/CommandPalette.tsx, /src/components/Layout.tsx, /src/components/ReportCaptureToolbar.tsx, /src/marketing/Marketing.tsx, /src/pages/Home.tsx, /src/pages/HubLanding.tsx, /src/index.css
+1:16:23 PM [vite] (client) hmr update /src/index.css, /src/components/ReportCaptureHost.tsx, /src/components/ReportCaptureButton.tsx, /src/pages/ReportCreator.tsx, /src/components/report/SectionLayout.tsx, /src/components/report/ReviseControls.tsx, /src/pages/ReportPrint.tsx
+1:16:33 PM [vite] (client) hmr update /src/index.css, /src/components/ReportCaptureHost.tsx, /src/components/ReportCaptureButton.tsx, /src/pages/ReportCreator.tsx, /src/components/report/SectionLayout.tsx, /src/components/report/ReviseControls.tsx, /src/pages/ReportPrint.tsx
+1:16:51 PM [vite] (client) hmr update /src/index.css, /src/components/ReportCaptureToolbar.tsx, /src/pages/SOTP.tsx, /src/pages/SupplyChainPeers.tsx, /src/pages/OptionsPricer.tsx, /src/pages/PortfolioAnalysis.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/AlgoStrategyBuilder.tsx, /src/pages/StockScreener.tsx, /src/pages/MonteCarlo.tsx, /src/pages/FixedIncomeMarketMaker.tsx, /src/pages/OptionsMarketMaker.tsx, /src/pages/DCFValuation.tsx, /src/pages/Multiples.tsx, /src/pages/RelativeValuation.tsx and 12 more
+1:16:51 PM [vite] (client) hmr invalidate /src/pages/StockScreener.tsx Could not Fast Refresh ("loadScreens" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+1:16:51 PM [vite] (client) hmr update /src/App.tsx, /src/pages/AlgoStrategyBuilder.tsx
+1:17:50 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+1:18:08 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+1:18:34 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+1:18:42 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+1:18:50 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+1:18:55 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+1:19:08 PM [vite] (client) hmr update /src/index.css, /src/components/ReportCaptureHost.tsx, /src/components/ReportCaptureButton.tsx, /src/pages/ReportCreator.tsx, /src/components/report/SectionLayout.tsx, /src/components/report/ReviseControls.tsx, /src/pages/ReportPrint.tsx
+1:19:36 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+1:21:22 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/index.css
+1:27:37 PM [vite] (client) hmr update /src/index.css, /src/components/report/ClipRenderer.tsx
+1:28:14 PM [vite] (client) hmr update /src/index.css, /src/components/report/SectionLayout.tsx
+1:29:25 PM [vite] (client) hmr update /src/index.css, /src/components/report/SectionLayout.tsx
+1:29:39 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/index.css
+1:29:39 PM [vite] (client) hmr update /src/pages/ReportPrint.tsx, /src/index.css
+1:30:15 PM [vite] (client) hmr update /src/index.css, /src/components/ReportCaptureHost.tsx, /src/components/ReportCaptureButton.tsx, /src/pages/ReportCreator.tsx, /src/components/report/SectionLayout.tsx, /src/components/report/ReviseControls.tsx, /src/pages/ReportPrint.tsx
+1:30:15 PM [vite] (client) hmr update /src/pages/ReportPrint.tsx, /src/index.css
+1:32:03 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportPrint.tsx
+1:32:11 PM [vite] (client) hmr update /src/index.css, /src/components/report/SectionLayout.tsx, /src/pages/ReportPrint.tsx
+1:32:12 PM [vite] (client) hmr update /src/index.css, /src/components/report/ClipRenderer.tsx
+1:32:12 PM [vite] (client) hmr update /src/pages/ReportPrint.tsx, /src/index.css
+1:32:25 PM [vite] (client) hmr update /src/pages/ReportPrint.tsx, /src/index.css
+1:33:50 PM [vite] (client) hmr update /src/index.css
+1:34:09 PM [vite] (client) hmr update /src/index.css
+1:34:48 PM [vite] (client) hmr update /src/index.css
+1:35:25 PM [vite] (client) hmr update /src/index.css
+1:37:36 PM [vite] (client) hmr update /src/index.css, /src/components/ReportCaptureHost.tsx, /src/components/ReportCaptureButton.tsx, /src/pages/ReportCreator.tsx, /src/components/report/SectionLayout.tsx, /src/components/report/ReviseControls.tsx, /src/pages/ReportPrint.tsx
+1:37:36 PM [vite] (client) hmr update /src/index.css, /src/components/ReportCaptureToolbar.tsx, /src/pages/SOTP.tsx, /src/pages/SupplyChainPeers.tsx, /src/pages/OptionsPricer.tsx, /src/pages/PortfolioAnalysis.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/AlgoStrategyBuilder.tsx, /src/pages/StockScreener.tsx, /src/pages/MonteCarlo.tsx, /src/pages/FixedIncomeMarketMaker.tsx, /src/pages/OptionsMarketMaker.tsx, /src/pages/DCFValuation.tsx, /src/pages/Multiples.tsx, /src/pages/RelativeValuation.tsx and 12 more
+1:37:36 PM [vite] (client) hmr invalidate /src/pages/StockScreener.tsx Could not Fast Refresh ("loadScreens" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+1:37:36 PM [vite] (client) hmr update /src/App.tsx, /src/pages/AlgoStrategyBuilder.tsx
+1:38:36 PM [vite] (client) hmr update /src/index.css, /src/components/report/ClipRenderer.tsx
+1:39:33 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+1:40:20 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/index.css
+1:41:04 PM [vite] (client) hmr update /src/index.css
+1:43:16 PM [vite] (client) hmr update /src/index.css
+1:43:51 PM [vite] (client) hmr update /src/index.css
+1:44:02 PM [vite] (client) hmr update /src/index.css
+1:45:31 PM [vite] (client) hmr update /src/index.css
+1:47:27 PM [vite] (client) hmr update /src/index.css, /src/components/ReportCaptureHost.tsx, /src/components/ReportCaptureButton.tsx, /src/pages/ReportCreator.tsx, /src/components/report/SectionLayout.tsx, /src/components/report/ReviseControls.tsx, /src/pages/ReportPrint.tsx
+1:47:58 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+1:47:58 PM [vite] (client) hmr update /src/index.css
+1:51:52 PM [vite] (client) hmr update /src/index.css
+1:54:18 PM [vite] (client) hmr update /src/index.css, /src/components/ReportCaptureHost.tsx, /src/components/ReportCaptureButton.tsx, /src/pages/ReportCreator.tsx, /src/components/report/SectionLayout.tsx, /src/components/report/ReviseControls.tsx, /src/pages/ReportPrint.tsx
+1:56:03 PM [vite] (client) hmr update /src/index.css
+1:57:19 PM [vite] (client) hmr update /src/App.tsx, /src/index.css
+1:57:21 PM [vite] (client) hmr update /src/App.tsx, /src/index.css
+1:59:33 PM [vite] (client) hmr update /src/index.css, /src/components/ReportCaptureHost.tsx, /src/components/ReportCaptureButton.tsx, /src/pages/ReportCreator.tsx, /src/components/report/SectionLayout.tsx, /src/components/report/ReviseControls.tsx, /src/pages/ReportPrint.tsx
+1:59:35 PM [vite] (client) hmr update /src/index.css, /src/components/ReportCaptureToolbar.tsx, /src/pages/SOTP.tsx, /src/pages/SupplyChainPeers.tsx, /src/pages/OptionsPricer.tsx, /src/pages/PortfolioAnalysis.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/AlgoStrategyBuilder.tsx, /src/pages/StockScreener.tsx, /src/pages/MonteCarlo.tsx, /src/pages/FixedIncomeMarketMaker.tsx, /src/pages/OptionsMarketMaker.tsx, /src/pages/DCFValuation.tsx, /src/pages/Multiples.tsx, /src/pages/RelativeValuation.tsx and 17 more
+1:59:54 PM [vite] (client) hmr invalidate /src/pages/StockScreener.tsx Could not Fast Refresh ("loadScreens" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+1:59:54 PM [vite] (client) hmr update /src/App.tsx, /src/pages/AlgoStrategyBuilder.tsx
+2:00:59 PM [vite] (client) hmr update /src/index.css, /src/components/ReportCaptureHost.tsx, /src/components/ReportCaptureButton.tsx, /src/pages/ReportCreator.tsx, /src/components/report/SectionLayout.tsx, /src/components/report/ReviseControls.tsx, /src/pages/ReportPrint.tsx
+2:00:59 PM [vite] (client) hmr update /src/index.css, /src/components/ReportCaptureToolbar.tsx, /src/pages/SOTP.tsx, /src/pages/SupplyChainPeers.tsx, /src/pages/OptionsPricer.tsx, /src/pages/PortfolioAnalysis.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/AlgoStrategyBuilder.tsx, /src/pages/StockScreener.tsx, /src/pages/MonteCarlo.tsx, /src/pages/FixedIncomeMarketMaker.tsx, /src/pages/OptionsMarketMaker.tsx, /src/pages/DCFValuation.tsx, /src/pages/Multiples.tsx, /src/pages/RelativeValuation.tsx and 17 more
+2:00:59 PM [vite] (client) hmr invalidate /src/pages/StockScreener.tsx Could not Fast Refresh ("loadScreens" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+2:00:59 PM [vite] (client) hmr update /src/App.tsx, /src/pages/AlgoStrategyBuilder.tsx
+2:06:53 PM [vite] (client) hmr update /src/index.css
+2:06:54 PM [vite] (client) hmr update /src/index.css
+2:06:54 PM [vite] (client) hmr update /src/index.css
+2:09:15 PM [vite] (client) hmr update /src/index.css
+2:09:42 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:10:19 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:10:23 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:10:56 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:11:18 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:12:21 PM [vite] (client) hmr update /src/pages/ReportPrint.tsx, /src/index.css
+2:13:18 PM [vite] (client) hmr update /src/index.css, /src/components/ReportCaptureHost.tsx, /src/components/ReportCaptureButton.tsx, /src/pages/ReportCreator.tsx, /src/components/report/SectionLayout.tsx, /src/components/report/ReviseControls.tsx, /src/pages/ReportPrint.tsx
+2:13:19 PM [vite] (client) hmr update /src/index.css, /src/components/report/SectionLayout.tsx
+2:13:19 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/index.css
+2:13:19 PM [vite] (client) hmr update /src/pages/ReportPrint.tsx, /src/index.css
+2:13:58 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:13:59 PM [vite] (client) hmr update /src/index.css
+2:14:08 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:14:12 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:14:24 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:14:41 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:16:13 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:16:30 PM [vite] (client) hmr update /src/index.css
+2:16:51 PM [vite] (client) hmr update /src/index.css
+2:17:10 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:17:19 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:17:20 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:17:26 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:17:28 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:17:58 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:18:07 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:18:13 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:18:25 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:18:29 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:19:28 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:20:15 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+2:20:15 PM [vite] (client) hmr update /src/index.css, /src/components/report/ReportSetupWizard.tsx
+2:20:28 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:21:06 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:21:22 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:21:25 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:21:40 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:21:43 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:22:13 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:22:47 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:23:20 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:23:22 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:23:24 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:23:26 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:24:29 PM [vite] (client) hmr update /src/index.css, /src/pages/PortfolioLive.tsx
+2:24:40 PM [vite] (client) hmr update /src/index.css, /src/pages/PortfolioLive.tsx
+2:24:45 PM [vite] (client) hmr update /src/index.css, /src/pages/PortfolioLive.tsx
+2:34:31 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/DealerGEXWidget.tsx, /src/components/dashboard/widgets/FactorDecompositionWidget.tsx, /src/pages/OptionsPricer.tsx, /src/pages/FedRates.tsx, /src/pages/BondAnalytics.tsx, /src/pages/SupplyChain.tsx, /src/pages/OptionsChainScanner.tsx, /src/pages/DealerGEX.tsx
+2:36:41 PM [vite] (client) hmr update /src/App.tsx, /src/index.css
+2:36:44 PM [vite] (client) hmr update /src/App.tsx, /src/index.css
+2:37:19 PM [vite] (client) hmr update /src/index.css
+2:37:49 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+2:37:49 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+2:53:36 PM [vite] (client) hmr update /src/index.css
+2:55:49 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+2:55:49 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+2:57:15 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:57:25 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:57:39 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:57:43 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:57:47 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:57:51 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:57:56 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:58:08 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:58:17 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:58:28 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+2:58:28 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+2:58:31 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:58:45 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:58:52 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:59:07 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:59:21 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:59:35 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+2:59:45 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+3:00:16 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+3:01:26 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+3:02:14 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+3:05:11 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+3:05:11 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+3:14:57 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+3:14:57 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+3:20:47 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+3:20:57 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+3:21:02 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+3:21:29 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+3:22:44 PM [vite] (client) [console.error] Warning: Encountered two children with the same key, `SHAZ|2026-08-06`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at GroupBody (http://localhost:5173/src/pages/EarningsScanner.tsx?t=1786047689210:2097:22)
+    at tbody
+    at table
+    at div
+    at EarningsScannerContent (http://localhost:5173/src/pages/EarningsScanner.tsx?t=1786047689210:638:19)
+    at div
+    at MotionComponent (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:1194:35)
+    at PageWrapper (http://localhost:5173/src/components/PageWrapper.tsx?t=1785908233950:34:39)
+    at EarningsScanner
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3329:8)
+    at Outlet (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3700:25)
+    at Suspense
+    at PresenceChild (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:113:24)
+    at AnimatePresence (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:279:26)
+    at div
+    at div
+    at main
+    at div
+    at Layout (http://localhost:5173/src/components/Layout.tsx?t=1786043598790:18:34)
+    at TerminalChrome (http://localhost:5173/src/App.tsx?t=1786046534957:277:19)
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3329:8)
+    at Routes (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3772:8)
+    at Suspense
+    at PortfolioProvider (http://localhost:5173/src/contexts/PortfolioContext.tsx?t=1785909187355:58:37)
+    at ThemeProvider (http://localhost:5173/src/contexts/ThemeContext.tsx?t=1785909187355:253:33)
+    at Router (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3720:18)
+    at BrowserRouter (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:4395:8)
+    at App
+    at AnalysisProvider (http://localhost:5173/src/context/AnalysisContext.tsx:7:36)
+    at QueryClientProvider (http://localhost:5173/node_modules/.vite/deps/@tanstack_react-query.js?v=6249f826:2549:30)
+    at ErrorBoundary (http://localhost:5173/src/components/ErrorBoundary.tsx:6:16)
+3:22:56 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+3:22:58 PM [vite] (client) [console.error] Warning: Encountered two children with the same key, `SHAZ|2026-08-06`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at GroupBody (http://localhost:5173/src/pages/EarningsScanner.tsx?t=1786047776938:2097:22)
+    at tbody
+    at table
+    at div
+    at EarningsScannerContent (http://localhost:5173/src/pages/EarningsScanner.tsx?t=1786047776938:638:19)
+    at div
+    at MotionComponent (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:1194:35)
+    at PageWrapper (http://localhost:5173/src/components/PageWrapper.tsx?t=1785908233950:34:39)
+    at EarningsScanner
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3329:8)
+    at Outlet (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3700:25)
+    at Suspense
+    at PresenceChild (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:113:24)
+    at AnimatePresence (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:279:26)
+    at div
+    at div
+    at main
+    at div
+    at Layout (http://localhost:5173/src/components/Layout.tsx?t=1786043598790:18:34)
+    at TerminalChrome (http://localhost:5173/src/App.tsx?t=1786046534957:277:19)
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3329:8)
+    at Routes (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3772:8)
+    at Suspense
+    at PortfolioProvider (http://localhost:5173/src/contexts/PortfolioContext.tsx?t=1785909187355:58:37)
+    at ThemeProvider (http://localhost:5173/src/contexts/ThemeContext.tsx?t=1785909187355:253:33)
+    at Router (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3720:18)
+    at BrowserRouter (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:4395:8)
+    at App
+    at AnalysisProvider (http://localhost:5173/src/context/AnalysisContext.tsx:7:36)
+    at QueryClientProvider (http://localhost:5173/node_modules/.vite/deps/@tanstack_react-query.js?v=6249f826:2549:30)
+    at ErrorBoundary (http://localhost:5173/src/components/ErrorBoundary.tsx:6:16)
+3:23:16 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+3:23:45 PM [vite] (client) [console.error] Warning: Encountered two children with the same key, `SHAZ|2026-08-06`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at GroupBody (http://localhost:5173/src/pages/EarningsScanner.tsx?t=1786047796682:2098:22)
+    at tbody
+    at table
+    at div
+    at EarningsScannerContent (http://localhost:5173/src/pages/EarningsScanner.tsx?t=1786047796682:639:19)
+    at div
+    at MotionComponent (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:1194:35)
+    at PageWrapper (http://localhost:5173/src/components/PageWrapper.tsx?t=1785908233950:34:39)
+    at EarningsScanner
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3329:8)
+    at Outlet (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3700:25)
+    at Suspense
+    at PresenceChild (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:113:24)
+    at AnimatePresence (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:279:26)
+    at div
+    at div
+    at main
+    at div
+    at Layout (http://localhost:5173/src/components/Layout.tsx?t=1786043598790:18:34)
+    at TerminalChrome (http://localhost:5173/src/App.tsx?t=1786046534957:277:19)
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3329:8)
+    at Routes (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3772:8)
+    at Suspense
+    at PortfolioProvider (http://localhost:5173/src/contexts/PortfolioContext.tsx?t=1785909187355:58:37)
+    at ThemeProvider (http://localhost:5173/src/contexts/ThemeContext.tsx?t=1785909187355:253:33)
+    at Router (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3720:18)
+    at BrowserRouter (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:4395:8)
+    at App
+    at AnalysisProvider (http://localhost:5173/src/context/AnalysisContext.tsx:7:36)
+    at QueryClientProvider (http://localhost:5173/node_modules/.vite/deps/@tanstack_react-query.js?v=6249f826:2549:30)
+    at ErrorBoundary (http://localhost:5173/src/components/ErrorBoundary.tsx:6:16)
+3:24:00 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+3:24:01 PM [vite] (client) [console.error] Warning: Encountered two children with the same key, `SHAZ|2026-08-06`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at GroupBody (http://localhost:5173/src/pages/EarningsScanner.tsx?t=1786047840450:2098:22)
+    at tbody
+    at table
+    at div
+    at EarningsScannerContent (http://localhost:5173/src/pages/EarningsScanner.tsx?t=1786047840450:639:19)
+    at div
+    at MotionComponent (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:1194:35)
+    at PageWrapper (http://localhost:5173/src/components/PageWrapper.tsx?t=1785908233950:34:39)
+    at EarningsScanner
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3329:8)
+    at Outlet (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3700:25)
+    at Suspense
+    at PresenceChild (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:113:24)
+    at AnimatePresence (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:279:26)
+    at div
+    at div
+    at main
+    at div
+    at Layout (http://localhost:5173/src/components/Layout.tsx?t=1786043598790:18:34)
+    at TerminalChrome (http://localhost:5173/src/App.tsx?t=1786046534957:277:19)
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3329:8)
+    at Routes (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3772:8)
+    at Suspense
+    at PortfolioProvider (http://localhost:5173/src/contexts/PortfolioContext.tsx?t=1785909187355:58:37)
+    at ThemeProvider (http://localhost:5173/src/contexts/ThemeContext.tsx?t=1785909187355:253:33)
+    at Router (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3720:18)
+    at BrowserRouter (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:4395:8)
+    at App
+    at AnalysisProvider (http://localhost:5173/src/context/AnalysisContext.tsx:7:36)
+    at QueryClientProvider (http://localhost:5173/node_modules/.vite/deps/@tanstack_react-query.js?v=6249f826:2549:30)
+    at ErrorBoundary (http://localhost:5173/src/components/ErrorBoundary.tsx:6:16)
+3:24:25 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+3:24:30 PM [vite] (client) [console.error] Warning: Encountered two children with the same key, `SHAZ|2026-08-06`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at GroupBody (http://localhost:5173/src/pages/EarningsScanner.tsx?t=1786047840450:2098:22)
+    at tbody
+    at table
+    at div
+    at EarningsScannerContent (http://localhost:5173/src/pages/EarningsScanner.tsx?t=1786047840450:639:19)
+    at div
+    at MotionComponent (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:1194:35)
+    at PageWrapper (http://localhost:5173/src/components/PageWrapper.tsx?t=1785908233950:34:39)
+    at EarningsScanner
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3329:8)
+    at Outlet (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3700:25)
+    at Suspense
+    at PresenceChild (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:113:24)
+    at AnimatePresence (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:279:26)
+    at div
+    at div
+    at main
+    at div
+    at Layout (http://localhost:5173/src/components/Layout.tsx?t=1786043598790:18:34)
+    at TerminalChrome (http://localhost:5173/src/App.tsx?t=1786046534957:277:19)
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3329:8)
+    at Routes (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3772:8)
+    at Suspense
+    at PortfolioProvider (http://localhost:5173/src/contexts/PortfolioContext.tsx?t=1785909187355:58:37)
+    at ThemeProvider (http://localhost:5173/src/contexts/ThemeContext.tsx?t=1785909187355:253:33)
+    at Router (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3720:18)
+    at BrowserRouter (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:4395:8)
+    at App
+    at AnalysisProvider (http://localhost:5173/src/context/AnalysisContext.tsx:7:36)
+    at QueryClientProvider (http://localhost:5173/node_modules/.vite/deps/@tanstack_react-query.js?v=6249f826:2549:30)
+    at ErrorBoundary (http://localhost:5173/src/components/ErrorBoundary.tsx:6:16)
+3:24:59 PM [vite] (client) [console.error] Warning: Encountered two children with the same key, `SHAZ|2026-08-06`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at GroupBody (http://localhost:5173/src/pages/EarningsScanner.tsx?t=1786047865462:2098:22)
+    at tbody
+    at table
+    at div
+    at EarningsScannerContent (http://localhost:5173/src/pages/EarningsScanner.tsx?t=1786047865462:639:19)
+    at div
+    at MotionComponent (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:1194:35)
+    at PageWrapper (http://localhost:5173/src/components/PageWrapper.tsx?t=1785908233950:34:39)
+    at EarningsScanner
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3329:8)
+    at Outlet (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3700:25)
+    at Suspense
+    at PresenceChild (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:113:24)
+    at AnimatePresence (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:279:26)
+    at div
+    at div
+    at main
+    at div
+    at Layout (http://localhost:5173/src/components/Layout.tsx?t=1786043598790:18:34)
+    at TerminalChrome (http://localhost:5173/src/App.tsx?t=1786046534957:277:19)
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3329:8)
+    at Routes (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3772:8)
+    at Suspense
+    at PortfolioProvider (http://localhost:5173/src/contexts/PortfolioContext.tsx?t=1785909187355:58:37)
+    at ThemeProvider (http://localhost:5173/src/contexts/ThemeContext.tsx?t=1785909187355:253:33)
+    at Router (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3720:18)
+    at BrowserRouter (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:4395:8)
+    at App
+    at AnalysisProvider (http://localhost:5173/src/context/AnalysisContext.tsx:7:36)
+    at QueryClientProvider (http://localhost:5173/node_modules/.vite/deps/@tanstack_react-query.js?v=6249f826:2549:30)
+    at ErrorBoundary (http://localhost:5173/src/components/ErrorBoundary.tsx:6:16)
+3:25:01 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+3:25:15 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+3:26:09 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+3:26:24 PM [vite] (client) [console.error] Warning: Encountered two children with the same key, `SHAZ|2026-08-06`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at GroupBody (http://localhost:5173/src/pages/EarningsScanner.tsx?t=1786047901791:2098:22)
+    at tbody
+    at table
+    at div
+    at EarningsScannerContent (http://localhost:5173/src/pages/EarningsScanner.tsx?t=1786047901791:639:19)
+    at div
+    at MotionComponent (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:1194:35)
+    at PageWrapper (http://localhost:5173/src/components/PageWrapper.tsx?t=1785908233950:34:39)
+    at EarningsScanner
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3329:8)
+    at Outlet (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3700:25)
+    at Suspense
+    at PresenceChild (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:113:24)
+    at AnimatePresence (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=6249f826:279:26)
+    at div
+    at div
+    at main
+    at div
+    at Layout (http://localhost:5173/src/components/Layout.tsx?t=1786043598790:18:34)
+    at TerminalChrome (http://localhost:5173/src/App.tsx?t=1786046534957:277:19)
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3329:8)
+    at Routes (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3772:8)
+    at Suspense
+    at PortfolioProvider (http://localhost:5173/src/contexts/PortfolioContext.tsx?t=1785909187355:58:37)
+    at ThemeProvider (http://localhost:5173/src/contexts/ThemeContext.tsx?t=1785909187355:253:33)
+    at Router (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:3720:18)
+    at BrowserRouter (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=6249f826:4395:8)
+    at App
+    at AnalysisProvider (http://localhost:5173/src/context/AnalysisContext.tsx:7:36)
+    at QueryClientProvider (http://localhost:5173/node_modules/.vite/deps/@tanstack_react-query.js?v=6249f826:2549:30)
+    at ErrorBoundary (http://localhost:5173/src/components/ErrorBoundary.tsx:6:16)
+3:26:39 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+3:27:40 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+3:30:46 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+3:30:46 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+3:47:12 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+3:47:12 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:00:14 PM [vite] (client) hmr update /src/pages/DealerGEX.tsx, /src/index.css
+4:01:18 PM [vite] (client) hmr update /src/App.tsx, /src/index.css
+4:01:18 PM [vite] (client) hmr update /src/pages/DealerGEX2.tsx, /src/index.css
+4:02:49 PM [vite] (client) hmr update /src/pages/DealerGEX.tsx, /src/index.css
+4:05:23 PM [vite] (client) hmr update /src/index.css
+4:11:16 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+4:11:16 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:15:12 PM [vite] (client) hmr update /src/pages/DealerGEX.tsx, /src/index.css
+4:15:54 PM [vite] (client) hmr update /src/pages/DealerGEX.tsx, /src/index.css
+4:17:59 PM [vite] (client) hmr update /src/pages/DealerGEX.tsx, /src/index.css
+4:23:57 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+4:27:26 PM [vite] (client) hmr update /src/pages/DealerGEX.tsx, /src/index.css
+4:28:08 PM [vite] (client) hmr update /src/pages/DealerGEX.tsx, /src/index.css
+4:33:29 PM [vite] (client) hmr update /src/pages/DealerGEX.tsx, /src/index.css
+4:34:55 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+4:34:55 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:36:51 PM [vite] (client) hmr update /src/pages/DealerGEX.tsx, /src/index.css
+4:39:09 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+4:39:09 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:40:42 PM [vite] (client) hmr update /src/pages/DealerGEX.tsx, /src/index.css
+6:31:01 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+6:31:01 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+11:28:54 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+11:28:54 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
