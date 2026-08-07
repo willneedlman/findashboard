@@ -10,27 +10,28 @@ class ReportToolSpec:
     description: str
     target_mode: str
     produces_visuals: bool = False
+    domain: str = "issuer"
 
 
 REPORT_TOOL_REGISTRY: tuple[ReportToolSpec, ...] = (
-    ReportToolSpec("portfolio", "Active book", "Holdings, cash, saved values, and concentration.", "portfolio"),
-    ReportToolSpec("portfolio-risk", "Risk and performance", "Portfolio return, volatility, drawdown, beta, and benchmark-relative performance.", "portfolio", True),
+    ReportToolSpec("portfolio", "Active book", "Holdings, cash, saved values, and concentration.", "portfolio", domain="portfolio"),
+    ReportToolSpec("portfolio-risk", "Risk and performance", "Portfolio return, volatility, drawdown, beta, and benchmark-relative performance.", "portfolio", True, "portfolio"),
     ReportToolSpec("company", "Company snapshot", "Company fundamentals, market data, valuation multiples, and beta.", "symbols"),
     ReportToolSpec("price-history", "Price and drawdown", "Historical price path with return and drawdown context.", "symbols", True),
-    ReportToolSpec("market-compare", "Relative performance", "Normalized multi-asset performance comparison.", "symbols", True),
+    ReportToolSpec("market-compare", "Relative performance", "Normalized multi-asset performance comparison.", "symbols", True, "benchmark"),
     ReportToolSpec("mover", "Catalyst scan", "Price, volume, market context, filings, and event evidence behind a move.", "symbols"),
     ReportToolSpec("news", "Recent news", "Recent symbol-specific headlines and sources.", "symbols"),
     ReportToolSpec("options", "Options snapshot", "Implied volatility, realized volatility, expected move, and positioning.", "symbols", True),
     ReportToolSpec("earnings", "Earnings calendar", "Scheduled earnings events over the report outlook horizon.", "symbols"),
-    ReportToolSpec("global-markets", "Global market board", "Cross-asset session levels and performance.", "market", True),
-    ReportToolSpec("macro-events", "Macro event calendar", "Upcoming economic and policy events.", "market"),
-    ReportToolSpec("sentiment", "Market sentiment", "Current directional news sentiment and participation.", "market", True),
-    ReportToolSpec("sector-rotation", "Sector leadership", "Sector return leadership and momentum across horizons.", "market", True),
-    ReportToolSpec("correlation", "Correlation structure", "Correlation matrix, strongest pairs, beta, and rolling correlation.", "symbols", True),
-    ReportToolSpec("regression", "Regression model", "Fitted returns, coefficients, significance, and residual diagnostics.", "symbols", True),
-    ReportToolSpec("factor-decomposition", "Factor exposures", "Systematic, idiosyncratic, macro, or style factor exposures and rolling betas.", "portfolio-or-symbols", True),
-    ReportToolSpec("credit-spreads", "Credit risk regime", "Investment-grade, high-yield, quality ladder, VIX, and spread history.", "market", True),
-    ReportToolSpec("rate-engine", "Rates and Fed path", "Market-implied Fed path and Treasury yield-curve visuals.", "market", True),
+    ReportToolSpec("global-markets", "Global market board", "Cross-asset session levels and performance.", "market", True, "macro"),
+    ReportToolSpec("macro-events", "Macro event calendar", "Upcoming economic and policy events.", "market", domain="macro"),
+    ReportToolSpec("sentiment", "Market sentiment", "Current directional news sentiment and participation.", "market", True, "macro"),
+    ReportToolSpec("sector-rotation", "Sector leadership", "Sector return leadership and momentum across horizons.", "market", True, "benchmark"),
+    ReportToolSpec("correlation", "Correlation structure", "Correlation matrix, strongest pairs, beta, and rolling correlation.", "symbols", True, "portfolio"),
+    ReportToolSpec("regression", "Regression model", "Fitted returns, coefficients, significance, and residual diagnostics.", "symbols", True, "benchmark"),
+    ReportToolSpec("factor-decomposition", "Factor exposures", "Systematic, idiosyncratic, macro, or style factor exposures and rolling betas.", "portfolio-or-symbols", True, "portfolio"),
+    ReportToolSpec("credit-spreads", "Credit risk regime", "Investment-grade, high-yield, quality ladder, VIX, and spread history.", "market", True, "macro"),
+    ReportToolSpec("rate-engine", "Rates and Fed path", "Market-implied Fed path and Treasury yield-curve visuals.", "market", True, "macro"),
     ReportToolSpec("peer-valuation", "Peer valuation", "Peer multiples, operating quality, consensus targets, and valuation gaps.", "symbols", True),
     ReportToolSpec("dcf-valuation", "DCF valuation", "Intrinsic value, projected revenue and free cash flow, and driver sensitivity.", "symbols", True),
     ReportToolSpec("volatility-skew", "Volatility skew", "Options smile, downside skew, implied move, and ATM volatility term structure.", "symbols", True),
@@ -50,6 +51,7 @@ def report_tool_manifest() -> list[dict]:
             "description": tool.description,
             "targetMode": tool.target_mode,
             "producesVisuals": tool.produces_visuals,
+            "domain": tool.domain,
         }
         for tool in REPORT_TOOL_REGISTRY
     ]

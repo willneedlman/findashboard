@@ -538,7 +538,7 @@ export default function ReportSetupWizard({
   const subjectsText = () => {
     const list = scope.researchSymbols.split(',').map(s => s.trim()).filter(Boolean)
     if (!list.length) return 'Taken from the question'
-    const shown = list.slice(0, 8).join(', ')
+    const shown = list.join(', ')
     return list.length > 8 ? `${list.length} subjects — ${shown}, +${list.length - 8} more` : shown
   }
 

@@ -11,6 +11,7 @@ import sys, os
 import threading
 from datetime import datetime, timezone
 from statistics import median as _median
+from typing import Literal
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from cachetools import TTLCache
@@ -27,7 +28,13 @@ from routers.screener import (
     run_screen,
 )
 from disk_cache import disk_get, disk_set
-from reporting.pipeline import ReportDataBankIn, template_contract, validate_data_bank, validate_template_sections
+from reporting.pipeline import (
+    ReportDataBankIn,
+    guard_evidence_domain_text,
+    template_contract,
+    validate_data_bank,
+    validate_template_sections,
+)
 from reporting.tool_registry import REPORT_TOOL_BY_ID, report_tool_manifest
 import fmp
 
@@ -492,53 +499,6 @@ def screener_parse(req: ScreenerParseRequest):
     raw = groq_complete(f'Query: "{req.query}"', max_tokens=400,
                         model=MODEL_FAST, system=_SCREENER_SYSTEM)
     return _normalize_screener_parse(parse_json(raw), req.query)
-
-
-# ── 4. Corporate hub brief ────────────────────────────────────────────────────
-
-class CorporateBriefRequest(BaseModel):
-    tickers: list[str]
-    rows: list[dict] = []
-
-_BRIEF_SYSTEM = """Write a desk brief for a watchlist of holdings heading into their earnings reports, using the available data.
-Produce EXACTLY 3 bullets. Each bullet is ONE plain-English sentence (a string, never an object or list) that sweeps across the watchlist:
-1. Report timing: which names report soonest, what is on deck.
-2. Implied-move outliers, valuation or analyst sentiment.
-3. Short-interest or positioning risk into the prints.
-Respond ONLY with valid JSON (no markdown), exactly this shape:
-{"bullets": ["sentence 1", "sentence 2", "sentence 3"], "tone": "bullish|neutral|bearish|mixed"}"""
-
-@router.post("/corporate-brief")
-def corporate_brief(req: CorporateBriefRequest):
-    summaries = []
-    for row in req.rows[:12]:
-        tk = row.get("ticker", "")
-        news = " | ".join(n.get("title", "") for n in row.get("news", [])[:2])
-        summaries.append(
-            f"{tk}: reports_in={row.get('daysToReport','N/A')}d implied_move={row.get('impliedMove','N/A')}% "
-            f"short_float={row.get('shortPct','N/A')} change={row.get('pctChange','N/A')}% "
-            f"mcap={row.get('marketCap','N/A')} consensus={row.get('consensus','N/A')} "
-            f"pe={row.get('pe','N/A')} news=[{news}]"
-        )
-    tickers_str = ", ".join(req.tickers)
-    context = "\n".join(summaries) or tickers_str
-
-    prompt = f"""Write a brief for: {tickers_str}
-
-Available data:
-{context}"""
-    raw = groq_complete(prompt, max_tokens=300, model=MODEL_FAST, system=_BRIEF_SYSTEM)
-    out = parse_json(raw)
-    # Models drift on the shape: bare array, wrong key name, list markers.
-    if isinstance(out, list):
-        out = {"bullets": out}
-    elif not isinstance(out, dict):
-        out = {}
-    bullets = out.get("bullets") or out.get("brief") or []
-    if isinstance(bullets, str):
-        bullets = [bullets]
-    bullets = [str(b).lstrip("-• ").strip() for b in bullets if str(b).strip()]
-    return {"bullets": bullets, "tone": out.get("tone") or "neutral"}
 
 
 # ── 5. Strategy risk narrative ────────────────────────────────────────────────
@@ -2037,7 +1997,7 @@ def plan_report_research(req: ReportResearchPlanRequest):
         "objective": objective[:1200],
         "mustInclude": req.mustInclude[:1200],
         "timeframe": req.timeframe[:160],
-        "symbols": req.symbols[:8],
+        "symbols": req.symbols,
         "portfolio": req.portfolio,
         "baselineSourceIds": sorted(baseline),
         "toolCatalog": [
@@ -2047,6 +2007,7 @@ def plan_report_research(req: ReportResearchPlanRequest):
                 "description": tool["description"][:240],
                 "targetMode": tool["targetMode"],
                 "producesVisuals": tool["producesVisuals"],
+                "domain": tool["domain"],
             }
             for tool in tools
         ],
@@ -2074,6 +2035,7 @@ class ReportClipIn(BaseModel):
     title: str = ""
     userDescription: str = ""
     dataSummary: str = ""
+    evidenceDomain: Literal["portfolio", "issuer", "macro", "benchmark"] = "issuer"
 
 class ReportGenRequest(BaseModel):
     projectName: str = ""
@@ -2099,26 +2061,27 @@ class ReportGenRequest(BaseModel):
 
 _LENGTH_SPEC = {
     "short": {
-        "sections": "1 to 2",
+        "sections": "selected template contract",
         "guidance": (
-            "Short: headline verdict plus the single most decisive driver. One or two body sections, "
-            "each with 2-3 tight sentences and 2-3 keyFigures. No secondary color, no minor caveats. "
+            "Short: follow the selected template contract exactly. Keep each required section to 2-3 tight "
+            "sentences and 2-3 keyFigures. No secondary color or minor caveats. "
             "Executive summary is 1-2 sentences. Conclusion is 1 sentence."
         ),
     },
     "medium": {
-        "sections": "3 to 5",
+        "sections": "selected template contract",
         "guidance": (
-            "Medium: standard research-note depth. 3 to 5 body sections, each 1-2 short paragraphs with "
+            "Medium: follow the selected template contract exactly at standard research-note depth. "
+            "Use 1-2 short paragraphs per required section with "
             "2-4 keyFigures. Executive summary is one tight paragraph. Conclusion covers the verdict, "
-            "the main risk to it, and an action. Merge related evidence rather than adding modules."
+            "the main risk to it, and the supported implication."
         ),
     },
     "long": {
-        "sections": "5 to 8",
+        "sections": "selected template contract",
         "guidance": (
-            "Long: full supporting detail for a desk that wants the complete picture. 5 to 8 body "
-            "sections — cover secondary drivers, sensitivities, and peer/segment detail that medium "
+            "Long: follow the selected template contract exactly with full supporting detail. Cover "
+            "secondary drivers, sensitivities, and peer or segment detail that medium "
             "length would cut, in addition to the core thesis sections. Each section can run 2-4 "
             "paragraphs with 2-4 keyFigures. Executive summary can run 2-3 sentences. Conclusion "
             "should also name secondary risks and a monitoring checklist. Still cut clips that add "
@@ -2158,7 +2121,7 @@ _REPORT_RANGE_GUIDANCE = """The Goal is a price call on ONE equity. Return a dol
 - Use options strikes, gamma levels, probability anchors, catalysts, and valuation only when the supplied clips contain them."""
 
 _REPORT_OPEN_GUIDANCE = """The Goal is a comparison, screen, ranking, thematic read, portfolio question, or other non-range task.
-- keyResult.value is a direct headline verdict under 40 characters, such as "Buy NVDA", "NVDA over AAPL", or "Reduce Tech Risk". Never return a bare ticker.
+- keyResult.value is an evidence-backed bottom line under 70 characters. A comparison may name the preferred subject when the supplied evidence supports it. A portfolio review states the measured finding and must not invent a trade.
 - stance.baseCase is only the favored ticker/name or a 2–3 word tag. Put reasoning in stance.thesis.
 - For a single-company equity research note that did not explicitly request a price target, give a Buy, Hold, Avoid, Watch, or equivalent research verdict. Do not manufacture a fair-value range from volatility or an implied move.
 - For multiple subjects, build one side-by-side argument organized by comparative theme. Do not create mirrored sections for each subject.
@@ -2174,8 +2137,8 @@ _REPORT_SCHEMA_BY_MODE = {
     },
     "open": {
         "baseCase": "the favored ticker/name or a 2-3 word tag, never a sentence",
-        "label": "a short answer label such as 'Relative Pick', 'Risk Call', or 'Verdict'",
-        "value": "a headline verdict under 40 characters",
+        "label": "a short evidence label such as 'Relative Finding', 'Risk Finding', or 'Bottom Line'",
+        "value": "an evidence-backed finding under 70 characters; never an invented trade",
         "context": "the figures that decided the verdict",
     },
 }
@@ -2206,6 +2169,8 @@ OUTLINE: if the input includes an `outline` (a thesis plus planned sections), it
 {{TEMPLATE_CONTRACT}}
 
 DATA BOUNDARY: use only evidence inside dataBank.evidence and deterministic values in dataBank.valuationContext. dataBank.toolRuns records tools that failed or returned partial data. Treat those records as missing evidence, disclose material gaps, and never fill them with invented figures.
+EVIDENCE DOMAINS: every clip declares portfolio, issuer, macro, or benchmark. A portfolio-level claim must come from portfolio-domain evidence. Issuer evidence may support only a sentence that names that issuer. Macro evidence provides regime context, not portfolio composition. Benchmark evidence is a reference comparison, not a portfolio holding or policy benchmark unless the evidence explicitly says so. Never aggregate issuer segment or revenue-mix clips into portfolio sector, revenue, or exposure claims.
+COMPLETENESS: dataBank.coverage reports target and domain coverage and dataBank.unresolvedGaps lists missing evidence. State decision-relevant gaps explicitly. Do not describe a partial issuer sample as the whole portfolio.
 
 ════════════════════════════════════════
 LENGTH — valuationContext.reportLength sets the target depth
@@ -2276,7 +2241,7 @@ HARD RULES & NARRATIVE VOCABULARY (both modes)
 - Valuation methods: Relative multiples, analyst consensus, and DCF are separate methods. Never say a P/E discount delivers or implies DCF upside. If consensus and DCF upside differ, show both, explain that they use different methods, and state which one informs the conclusion. In portfolio reviews, valuation is one compact supporting panel, not the central argument.
 - Valuation integrity: If DCF value and market price differ by more than 5x, or DCF and consensus point sharply in opposite directions, treat the DCF as unreconciled. Check units, diluted share count, corporate actions, and price alignment. Do not use that output to justify an allocation action.
 - Catalyst labels: Use "upcoming catalyst" only when the supplied evidence contains the actual future event and date. A methodology clip is not a catalyst calendar. Remove catalyst language from a heading when no dated event is available.
-- Portfolio summary structure: For a portfolio review, write the executive summary as exactly three short sentences: what happened, the strongest supported diagnosis, and the decision implication. Keep it under 80 words. Use exactly four body sections that answer What Happened, Why It Happened, What Could Happen Next, and What Action Follows. Keep each section analysis under 110 words and move definitions or calculation details to the appendix.
+- Portfolio summary structure: For a portfolio review, write the executive summary as exactly three short sentences: measured result, strongest supported diagnosis, and decision implication. Keep it under 80 words. Follow the selected portfolio template contract exactly. Short, medium, and long have different required section sets. Move definitions and calculation details to the appendix.
 - Measurement versus outlook: State the historical measurement window separately from the forecast horizon. Recent beta, volatility, and a near-term event do not establish a multi-year outlook unless a forward model explicitly connects them.
 - Derivative coverage: When the book contains options, distinguish contract inventory and underlying-market research from whole-account exposure. Equity-and-cash return, beta, volatility, factor, drawdown, and allocation statistics are sleeve metrics until verified option marks and Greeks support nonlinear position-level aggregation. Never present underlying shares as though the option contracts were stock holdings.
 - Statistical claims: Call a coefficient significant only when the coefficient evidence gives its p-value and it is below the stated threshold. Regression is association, never proof of causation.
@@ -2320,7 +2285,7 @@ Respond ONLY with valid JSON (no markdown, no code fences):
       "keyFigures": [ { "label": "metric", "value": "figure with units" } ]
     }
   ],
-  "conclusion": "restate the verdict and conviction, the main risk to it, and a concrete action",
+  "conclusion": "restate the finding and confidence, the main risk, and either a supported implication or the evidence limitation",
   "appendixClipIds": ["<supporting non-chart clip ids only>"]
 }
 Every clipId must be one of the provided clip ids."""
@@ -2371,8 +2336,8 @@ _REPORT_TYPE_GUIDANCE = {
     ),
     "portfolio-review": (
         "REPORT TYPE — Portfolio review. The subject is the reader's book. Organize by exposure, "
-        "concentration, and risk contribution rather than by holding. Close on specific actions (trim, add, "
-        "hedge, hold) naming the positions each applies to. The allocation table and deterministic portfolio "
+        "concentration, and risk contribution rather than by holding. Close on the supported implication, "
+        "and state the evidence limitation when no tested alternative allocation supports a trade. The allocation table and deterministic portfolio "
         "metrics are authoritative. Never describe a negative active return as outperformance. For samples "
         "under one year, say period return, not CAGR. Do not claim a tilt or holding caused performance unless "
         "a holding-level or factor attribution clip quantifies that contribution. Do not recommend maintaining "
@@ -2398,8 +2363,7 @@ _BOOK_LEVEL_VERDICT_GUIDANCE = (
     "AGGREGATE SUBJECT — this report is about a book, a regime, or a result set, not one issuer.\n"
     "- Do NOT headline a single ticker and do NOT make the verdict a rating on one name. "
     "\"Hold NVDA\" is wrong here even if one holding dominates the evidence.\n"
-    "- keyResult.value is an action on the whole subject, such as \"Trim Semis Concentration\", "
-    "\"Reduce Tech Risk\", or \"Add Duration\".\n"
+    "- keyResult.value states the strongest measured aggregate finding. It is not a trade instruction unless a proposed portfolio and quantified before-and-after risk impact are supplied.\n"
     "- stance.baseCase names the aggregate or the theme, never a single ticker.\n"
     "- Individual names appear as evidence for the aggregate read, not as the thing being rated."
 )
@@ -2459,12 +2423,8 @@ def _clean_figs(raw) -> list:
 
 def _report_title(result: dict, outline: dict | None, req: ReportGenRequest) -> str:
     raw = str(result.get("headline", "")).strip()
-    if not raw and outline:
-        raw = str(outline.get("thesis", "")).strip()
-    if not raw:
-        raw = (req.goal or req.projectName or "AlphaTape Research").strip()
     words = raw.rstrip(" .").split()
-    return _title_case(" ".join(words[:12]), 96) or "AlphaTape Research"
+    return _title_case(" ".join(words[:12]), 96)
 
 _CHART_TYPES = {"bar", "line", "area", "pie", "histogram", "dot", "range", "scatter", "box"}
 _SINGLE_SERIES_TYPES = {"pie", "scatter"}  # only series[0] is used
@@ -2597,8 +2557,12 @@ def _clean_box_chart(raw: dict) -> dict | None:
         return None
     return {"kind": "chart", "chartType": "box",
             "title": _title_case(str(raw.get("title", "")).strip(), 60) or None,
-            "xKey": x_key, "data": rows,
-            "series": [{"key": s.get("key", "v"), "label": str(s.get("label", "")).strip()[:40] or "value"}
+            "xKey": x_key, "xUnit": _chart_unit(raw.get("xUnit")), "data": rows,
+            "series": [{
+                "key": s.get("key", "v"),
+                "label": str(s.get("label", "")).strip()[:40] or "value",
+                "unit": _chart_unit(s.get("unit")),
+            }
                        for s in (raw.get("series") or [{"key": "v", "label": "value"}])[:1]]}
 
 def _coerce_num(v) -> float | None:
@@ -2609,6 +2573,17 @@ def _coerce_num(v) -> float | None:
     if isinstance(v, str):
         return _parse_money(v.replace("%", "").replace("$", ""))
     return None
+
+
+_CHART_UNITS = {
+    "number", "percent", "percentage-point", "basis-point", "currency",
+    "multiple", "index", "beta", "correlation", "shares",
+}
+
+
+def _chart_unit(explicit=None) -> str:
+    unit = str(explicit or "").strip().lower()
+    return unit if unit in _CHART_UNITS else "number"
 
 def _clean_chart(raw) -> dict | None:
     """Validate/sanitize a model-synthesized chart (ClipPayload 'chart' shape).
@@ -2638,7 +2613,7 @@ def _clean_chart(raw) -> dict | None:
         if not key:
             continue
         label = str(s.get("label", "")).strip()[:40] or key
-        series.append({"key": key, "label": label})
+        series.append({"key": key, "label": label, "unit": _chart_unit(s.get("unit"))})
     if not series:
         return None
     if chart_type != "range" and any(
@@ -2697,6 +2672,7 @@ def _clean_chart(raw) -> dict | None:
         "chartType": chart_type,
         "title": title or None,
         "xKey": x_key,
+        "xUnit": _chart_unit(raw.get("xUnit")),
         "data": data,
         "series": series,
     }
@@ -3238,7 +3214,7 @@ def _report_prompt_clips(
     receives a decision-grade subset so outline and drafting stay within the
     edge proxy's response window.
     """
-    cap = {"short": 16, "medium": 24, "long": 32}.get(_length_key(length), 24)
+    base_cap = {"short": 16, "medium": 24, "long": 32}.get(_length_key(length), 24)
     data_cap = {"short": 650, "medium": 850, "long": 1_050}.get(_length_key(length), 850)
     priority_rules = [
         (r"current allocation|current option positions", 1_000),
@@ -3266,7 +3242,22 @@ def _report_prompt_clips(
     selected: list[ReportClipIn] = []
     source_counts: dict[str, int] = {}
     ticker_counts: dict[str, int] = {}
+    if book_level:
+        issuer_representatives: dict[str, ReportClipIn] = {}
+        for clip in sorted(clips, key=lambda item: (-score(item), item.title.lower(), item.id)):
+            ticker = (_clip_ticker(clip) or "").upper()
+            if clip.evidenceDomain == "issuer" and ticker and ticker not in issuer_representatives:
+                issuer_representatives[ticker] = clip
+        selected.extend(issuer_representatives.values())
+        for clip in selected:
+            source = clip.sourceTab.strip().lower() or "unknown"
+            ticker = (_clip_ticker(clip) or "").upper()
+            source_counts[source] = source_counts.get(source, 0) + 1
+            ticker_counts[ticker] = ticker_counts.get(ticker, 0) + 1
+    cap = max(base_cap, len(selected) + (16 if book_level else 0))
     for clip in sorted(clips, key=lambda item: (-score(item), item.title.lower(), item.id)):
+        if clip in selected:
+            continue
         source = clip.sourceTab.strip().lower() or "unknown"
         ticker = (_clip_ticker(clip) or "").upper()
         high_priority = score(clip) >= 900
@@ -3281,18 +3272,19 @@ def _report_prompt_clips(
         if len(selected) >= cap:
             break
 
-    if not book_level:
-        selected.sort(key=lambda item: (-score(item), item.title.lower(), item.id))
+    selected.sort(key=lambda item: (-score(item), item.title.lower(), item.id))
 
     def compact(clip: ReportClipIn) -> dict:
         data = clip.dataSummary.strip()
-        if len(data) > data_cap:
-            data = f"{data[:data_cap].rstrip()} … [supporting detail retained in appendix]"
+        clip_cap = 5_000 if re.search(r"\bcurrent allocation\b", clip.title or "", re.I) else data_cap
+        if len(data) > clip_cap:
+            data = f"{data[:clip_cap].rstrip()} … [supporting detail retained in appendix]"
         return {
             "id": clip.id,
             "sourceTool": clip.sourceTab,
             "type": clip.dataType,
             "title": clip.title,
+            "evidenceDomain": clip.evidenceDomain,
             "userInstruction": clip.userDescription,
             "data": data,
         }
@@ -3317,24 +3309,13 @@ def _is_bare_ticker(value: str) -> bool:
 def _stance_from_result(result: dict, market: float | None) -> dict | None:
     raw = result.get("stance")
     if not isinstance(raw, dict):
-        raw = {}
+        return None
     lean = str(raw.get("lean", "")).strip().lower()
     if lean not in ("bullish", "bearish", "neutral"):
-        # Infer from baseCase vs spot if possible
-        lean = "neutral"
-        bc = _parse_range(f"${raw.get('baseCase', '')}") or None
-        if market and raw.get("baseCase"):
-            try:
-                bcv = _parse_money(str(raw.get("baseCase", "")).replace("$", ""))
-                if bcv and bcv > market * 1.01:
-                    lean = "bullish"
-                elif bcv and bcv < market * 0.99:
-                    lean = "bearish"
-            except Exception:
-                pass
+        return None
     conv = str(raw.get("conviction", "")).strip().lower()
     if conv not in ("low", "moderate", "high"):
-        conv = "moderate"
+        return None
     base = str(raw.get("baseCase", "")).strip()
     thesis = str(raw.get("thesis", "")).strip()
     return {
@@ -3356,169 +3337,20 @@ def _normalize_key_result(
     signal_digest: dict | None = None,
     force_range: bool = True,
 ) -> dict | None:
-    """Ensure a usable keyResult. When force_range is True (single-subject
-    price-target style goal), repair/build a live-spot dollar range and
-    preserve asymmetric, stance-encoding wings — the original behavior.
-    When False (comparison, screen, or any other non-price-target goal),
-    trust the model's own direct answer verbatim; only patch in missing
-    spot/lean context, never rewrite the value into a price range."""
-    lean = (stance or {}).get("lean") or "neutral"
-
+    """Validate the writer's result without manufacturing a decision or range."""
+    if not isinstance(key_result, dict):
+        return None
+    label = str(key_result.get("label", "")).strip()[:80]
+    value = str(key_result.get("value", "")).strip()
+    context = str(key_result.get("context", "")).strip()[:200]
+    if not label or not value or "not estimable" in value.lower() or _is_bare_ticker(value):
+        return None
     if not force_range:
-        label = ((key_result or {}).get("label") or "Bottom Line").strip()[:80] or "Bottom Line"
-        value = ((key_result or {}).get("value") or "").strip()
-        context = ((key_result or {}).get("context") or "").strip()
-        usable = bool(value) and "not estimable" not in value.lower() and not _is_bare_ticker(value)
-        if usable:
-            if market and market > 0 and "spot $" not in context.lower():
-                context = _spot_context(market, change_pct, context or f"{lean} lean")
-            elif not context and lean != "neutral":
-                context = f"{lean} lean"
-            return {"label": label, "value": _truncate_clean(value, 70), "context": context[:200]}
-        thesis = ((stance or {}).get("thesis") or "").strip()
-        if thesis:
-            return {"label": label, "value": _truncate_clean(thesis, 120), "context": context[:200]}
-        if value:
-            # Bare ticker with nothing to back it — still not a verdict on its own.
-            return {"label": label, "value": f"Favor {value}"[:80], "context": context[:200]}
-        return key_result
-
-    label = f"Near-Term Range ({subject})" if subject else (
-        (key_result or {}).get("label") or "Fair Value Range"
-    )
-    # Prefer model label if it already names the ticker sensibly
-    if key_result and key_result.get("label"):
-        label = str(key_result["label"]).strip()[:80]
-    value = ((key_result or {}).get("value") or "").strip()
-    context = ((key_result or {}).get("context") or "").strip()
+        return {"label": label, "value": _truncate_clean(value, 70), "context": context}
     rng = _parse_range(value)
-    ctx_l = context.lower()
-    weak_ctx = (
-        not context
-        or "not estimable" in ctx_l
-        or "spot unknown" in ctx_l
-        or "not estimable" in value.lower()
-    )
-    missing_range = (not rng) or "not estimable" in value.lower() or "pending" in value.lower()
-    sig = signal_digest or {}
-    impl = sig.get("impliedMovePct")
-    if isinstance(impl, (int, float)) and impl > 0:
-        impl = float(impl) / 100.0
-    else:
-        impl = None
-
-    # Fallback range when the model omitted one: directional if signals say so.
-    if market and market > 0 and missing_range:
-        if subject_dcf and dcf_intrinsic and dcf_intrinsic > 0:
-            blend = market * 0.55 + dcf_intrinsic * 0.45
-            lo, hi = sorted((blend * 0.94, blend * 1.08))
-            lo = max(lo, market * 0.75)
-            hi = min(hi, market * 1.35)
-            if lo >= hi:
-                lo, hi = market * 0.92, market * 1.10
-            gap_pct = (dcf_intrinsic / market - 1) * 100
-            value = _fmt_range(lo, hi)
-            rng = (lo, hi)
-            context = _spot_context(
-                market, change_pct,
-                f"{lean} · DCF ${dcf_intrinsic:,.2f} ({gap_pct:+.0f}% vs spot)",
-            )
-        else:
-            # Asymmetric default from lean + optional implied-move width.
-            wing = impl if impl and 0.02 <= impl <= 0.20 else 0.06
-            if lean == "bullish":
-                lo, hi = market * (1 - wing * 0.55), market * (1 + wing * 1.15)
-            elif lean == "bearish":
-                lo, hi = market * (1 - wing * 1.15), market * (1 + wing * 0.55)
-            else:
-                lo, hi = market * (1 - wing * 0.85), market * (1 + wing * 0.85)
-            value = _fmt_range(lo, hi)
-            rng = (lo, hi)
-            context = _spot_context(market, change_pct, f"{lean} lean · multi-signal fallback")
-
-    if market and market > 0 and rng:
-        lo, hi = rng[0], rng[1]
-        mid = (lo + hi) / 2
-        down = market - lo
-        up = hi - market
-        # Only cap fantasy mids — do not re-center a reasoned asymmetric band onto spot.
-        if mid > market * 1.45 or mid < market * 0.55:
-            wing = impl if impl and impl > 0 else 0.10
-            if lean == "bullish":
-                lo, hi = market * (1 - wing * 0.5), market * (1 + wing * 1.2)
-            elif lean == "bearish":
-                lo, hi = market * (1 - wing * 1.2), market * (1 + wing * 0.5)
-            else:
-                lo, hi = market * (1 - wing), market * (1 + wing)
-            value = _fmt_range(lo, hi)
-            rng = (lo, hi)
-            mid = (lo + hi) / 2
-            context = _spot_context(market, change_pct, f"{lean} · range capped vs spot")
-        else:
-            width = hi - lo
-            if width > market * 0.50:
-                # Shrink wings proportionally (keep mid / asymmetry).
-                scale = (market * 0.36) / width
-                lo = mid - (mid - lo) * scale
-                hi = mid + (hi - mid) * scale
-                value = _fmt_range(lo, hi)
-                rng = (lo, hi)
-
-        # If model produced a near-symmetric band glued to spot while lean is
-        # directional, nudge mid and wings slightly (do not invent a new thesis).
-        mid = (rng[0] + rng[1]) / 2
-        down = max(market - rng[0], 1e-9)
-        up = max(rng[1] - market, 1e-9)
-        sym_ratio = min(down, up) / max(down, up)
-        mid_glued = abs(mid / market - 1) < 0.008
-        if lean in ("bullish", "bearish") and mid_glued and sym_ratio > 0.85:
-            wing = (rng[1] - rng[0]) / 2
-            if lean == "bullish":
-                lo = market - wing * 0.65
-                hi = market + wing * 1.25
-            else:
-                lo = market - wing * 1.25
-                hi = market + wing * 0.65
-            value = _fmt_range(lo, hi)
-            rng = (lo, hi)
-            mid = (lo + hi) / 2
-            if "lean" not in context.lower():
-                context = _spot_context(
-                    market, change_pct,
-                    f"{lean} lean · range shifted off spot (signals, not pure vol envelope)",
-                )
-
-        if weak_ctx or "spot $" not in context.lower() or "spot unknown" in context.lower():
-            to_mid = (mid / market - 1) * 100
-            extra = f"{lean} · mid {to_mid:+.1f}% vs spot"
-            if subject_dcf and dcf_intrinsic and dcf_intrinsic > 0:
-                gap = (dcf_intrinsic / market - 1) * 100
-                extra = f"DCF ${dcf_intrinsic:,.2f} ({gap:+.0f}% vs spot) · {extra}"
-            context = _spot_context(market, change_pct, extra)
-        else:
-            if not re.search(r"spot\s*\$", context, re.I):
-                context = _spot_context(market, change_pct, context)
-            if lean and lean not in context.lower():
-                context = f"{context} · {lean}"
-            if subject_dcf and dcf_intrinsic and dcf_intrinsic > 0 and "dcf" not in context.lower():
-                gap = (dcf_intrinsic / market - 1) * 100
-                context = f"{context} · DCF ${dcf_intrinsic:,.2f} ({gap:+.0f}% vs spot)"
-
-        return {"label": label[:80], "value": value[:80], "context": context[:200]}
-
-    if value and "not estimable" not in value.lower():
-        return {
-            "label": label[:80],
-            "value": value[:80],
-            "context": (context or "Live spot unavailable for this symbol")[:160],
-        }
-    if subject:
-        return {
-            "label": f"Near-Term Range ({subject})",
-            "value": "Range pending spot",
-            "context": f"Could not fetch a live market price for {subject}. Check the symbol or market data feed.",
-        }
-    return key_result
+    if not rng:
+        return None
+    return {"label": label, "value": _fmt_range(*rng), "context": context}
 
 def _chart_signature(chart: dict) -> tuple:
     return (
@@ -3662,7 +3494,7 @@ def _mechanical_sensitivity_chart(clips: list[ReportClipIn]) -> dict | None:
         "kind": "chart", "chartType": "range",
         "title": _title_case("DCF Sensitivity — One-Way Swing ($/sh)"),
         "xKey": "driver", "data": data,
-        "series": [{"key": s, "label": f"{s} $/sh"} for s in subjects],
+        "series": [{"key": s, "label": f"{s} $/sh", "unit": "currency"} for s in subjects],
     }
 
 def _mechanical_segments_pie(clip: ReportClipIn) -> dict | None:
@@ -3690,7 +3522,7 @@ def _mechanical_segments_pie(clip: ReportClipIn) -> dict | None:
         "kind": "chart", "chartType": "pie",
         "title": clip.title, "xKey": "segment",
         "data": data[:8],
-        "series": [{"key": "share", "label": "Share %"}],
+        "series": [{"key": "share", "label": "Share %", "unit": "percent"}],
     }
 
 def _all_kpis_by_ticker(clips: list[ReportClipIn]) -> dict[str, dict[str, str]]:
@@ -3711,7 +3543,8 @@ def _all_kpis_by_ticker(clips: list[ReportClipIn]) -> dict[str, dict[str, str]]:
     return out
 
 def _grouped_kpi_chart(by_ticker: dict[str, dict[str, str]],
-                       metrics: list[tuple[str, str]], title: str) -> dict | None:
+                       metrics: list[tuple[str, str]], title: str,
+                       unit: str = "number") -> dict | None:
     """Grouped bar comparing `metrics` across every subject (xKey=metric name,
     one series per ticker). metrics is (kpi label to look up, display label).
     Only metrics present for >=2 tickers are charted, and >=2 such metrics are
@@ -3733,7 +3566,7 @@ def _grouped_kpi_chart(by_ticker: dict[str, dict[str, str]],
     if len(data) < 2:
         return None
     return {"kind": "chart", "chartType": "bar", "title": _title_case(title), "xKey": "metric",
-            "data": data, "series": [{"key": t, "label": t} for t in tickers]}
+            "data": data, "series": [{"key": t, "label": t, "unit": unit} for t in tickers]}
 
 def _valuation_gap_chart(by_ticker: dict[str, dict[str, str]]) -> dict | None:
     """Grouped bar of DCF intrinsic value vs market price per subject — the
@@ -3748,8 +3581,8 @@ def _valuation_gap_chart(by_ticker: dict[str, dict[str, str]]) -> dict | None:
         return None
     return {"kind": "chart", "chartType": "bar", "title": _title_case("DCF Intrinsic vs Market Price"),
             "xKey": "name", "data": rows[:4],
-            "series": [{"key": "intrinsic", "label": "DCF Intrinsic"},
-                       {"key": "market", "label": "Market Price"}]}
+            "series": [{"key": "intrinsic", "label": "DCF Intrinsic", "unit": "currency"},
+                       {"key": "market", "label": "Market Price", "unit": "currency"}]}
 
 def _peer_pe_median_chart(clips: list[ReportClipIn]) -> dict | None:
     """Grouped bar of each subject's P/E vs its sector-median P/E, read from the
@@ -3782,8 +3615,8 @@ def _peer_pe_median_chart(clips: list[ReportClipIn]) -> dict | None:
         return None
     return {"kind": "chart", "chartType": "bar", "title": _title_case("P/E vs Sector Median"),
             "xKey": "name", "data": rows[:4],
-            "series": [{"key": "company", "label": "Company P/E"},
-                       {"key": "median", "label": "Sector Median"}]}
+            "series": [{"key": "company", "label": "Company P/E", "unit": "multiple"},
+                       {"key": "median", "label": "Sector Median", "unit": "multiple"}]}
 
 def _analyst_upside_chart(clips: list[ReportClipIn]) -> dict | None:
     """Dot plot of each subject's analyst upside %, read from the subject's own
@@ -3815,7 +3648,7 @@ def _analyst_upside_chart(clips: list[ReportClipIn]) -> dict | None:
     # "prefer bar" styling rule.
     return {"kind": "chart", "chartType": "bar", "title": _title_case("Analyst Upside to Target (%)"),
             "xKey": "name", "data": rows[:6],
-            "series": [{"key": "upside", "label": "Upside %"}]}
+            "series": [{"key": "upside", "label": "Upside %", "unit": "percent"}]}
 
 _POINTS_RE = re.compile(r"POINTS:\s*(.+)", re.S)
 
@@ -3889,7 +3722,7 @@ def _revenue_overlay_chart(clips: list[ReportClipIn]) -> dict | None:
         return None
     return {"kind": "chart", "chartType": "line", "title": _title_case("Revenue Trajectory (Projected, $M)"),
             "xKey": "year", "data": data[:12],
-            "series": [{"key": t, "label": f"{t} revenue"} for t in tickers]}
+            "series": [{"key": t, "label": f"{t} revenue", "unit": "currency"} for t in tickers]}
 
 def _quartiles(vals: list[float]) -> tuple[float, float, float, float, float]:
     s = sorted(vals)
@@ -3958,7 +3791,7 @@ def _peer_distribution_box(clips: list[ReportClipIn]) -> dict | None:
             "data": [{"metric": "P/E", "min": round(mn, 1), "q1": round(q1, 1),
                       "median": round(med, 1), "q3": round(q3, 1), "max": round(mx, 1),
                       "markers": [{"label": k, "value": round(v, 1)} for k, v in markers.items()]}],
-            "series": [{"key": "P/E", "label": "P/E"}]}
+            "series": [{"key": "P/E", "label": "P/E", "unit": "multiple"}]}
 
 def _peg_comparison_chart(clips: list[ReportClipIn]) -> dict | None:
     """PEG (P/E-to-growth) comparison for the subjects, read from the Top Matches
@@ -3992,7 +3825,7 @@ def _peg_comparison_chart(clips: list[ReportClipIn]) -> dict | None:
         return None
     return {"kind": "chart", "chartType": "bar", "title": _title_case("PEG Ratio — Growth-Adjusted Valuation"),
             "xKey": "name", "data": [{"name": t, "peg": peg[t]} for t in present],
-            "series": [{"key": "peg", "label": "PEG"}]}
+            "series": [{"key": "peg", "label": "PEG", "unit": "multiple"}]}
 
 def _price_performance_overlay(clips: list[ReportClipIn]) -> dict | None:
     """Tier-2 data sourcing: when the clips lack a shared historical series, fetch
@@ -4037,7 +3870,7 @@ def _price_performance_overlay(clips: list[ReportClipIn]) -> dict | None:
     return {"kind": "chart", "chartType": "line",
             "title": _title_case("Relative Price Performance (Indexed to 100, 1Yr)"),
             "xKey": "month", "data": data,
-            "series": [{"key": t, "label": t} for t in subjects]}
+            "series": [{"key": t, "label": t, "unit": "index"} for t in subjects]}
 
 def _has_critical_sensitivity_insight(clips: list[ReportClipIn]) -> bool:
     """Determine whether DCF sensitivity provides critical decision-making insight.
@@ -4086,12 +3919,14 @@ def _mechanical_chart_pool(clips: list[ReportClipIn]) -> list[tuple[dict, tuple[
         (_grouped_kpi_chart(by_ticker, [
             ("Rev Growth", "Rev Growth"), ("Gross Margin", "Gross Margin"),
             ("Operating Margin", "Op Margin"), ("Net Margin", "Net Margin"),
-        ], "Growth & Margin Comparison"),
+        ], "Growth & Margin Comparison", "percent"),
          ("growth", "margin", "profitab", "edge", "momentum"), 2),
+        (_peer_pe_median_chart(clips),
+         ("multiple", "p/e", "peer", "relative", "premium", "discount"), 2),
         (_grouped_kpi_chart(by_ticker, [
-            ("P/E", "P/E"), ("ROE", "ROE"), ("ROA", "ROA"),
-        ], "Multiple & Return Comparison"),
-         ("multiple", "return on", "efficiency", "capital", "quality"), 2),
+            ("ROE", "ROE"), ("ROA", "ROA"),
+        ], "Capital Return Comparison", "percent"),
+         ("return on", "efficiency", "capital", "quality"), 2),
     ]
     pool: list[tuple[dict, tuple[str, ...], int]] = []
     for chart, keywords, priority in candidates:
@@ -4124,7 +3959,7 @@ def _auto_must_include(clips: list[ReportClipIn]) -> list[str]:
             "tighter or wider swing implies). Do not bury this in another section. You write "
             "the analysis; a chart is added automatically, so do not build one yourself."
         )
-    if any(_mechanical_segments_pie(c) for c in clips):
+    if not is_portfolio and any(_mechanical_segments_pie(c) for c in clips):
         out.append(
             "Write a short section on the primary subject's revenue composition / segment "
             "mix (where its revenue comes from and how concentrated it is). You write the "
@@ -4171,12 +4006,6 @@ def _inject_mechanical_charts(sections: list[dict], clips: list[ReportClipIn]) -
     for sec in sections:
         sec["chart"] = None  # the model does not get to choose charts
     pool = _mechanical_chart_pool(clips)
-    if any(re.search(r"\b(current allocation|portfolio risk metrics)\b", c.title or "", re.I) for c in clips):
-        pool = [item for item in pool if not re.search(
-            r"\b(peer|consensus upside|dcf|sensitivity|intrinsic|multiple)\b",
-            str(item[0].get("title", "")),
-            re.I,
-        )]
     if not pool:
         return
     pool.sort(key=lambda item: item[2])  # priority 0 (distinct types) first
@@ -4287,87 +4116,8 @@ def _material_portfolio_positions(clips: list[ReportClipIn]) -> list[tuple[str, 
     return []
 
 
-def _portfolio_position_decisions(clips: list[ReportClipIn]) -> list[dict]:
-    """Make the required position-by-position decision explicit without
-    fabricating a security-level trade from portfolio-only evidence."""
-    decisions: list[dict] = []
-    for ticker, weight in _material_portfolio_positions(clips):
-        decision = "Review sizing" if weight >= 10 else "No resize supported"
-        basis = (
-            f"{weight:.2f}% of the positive-weight book. Review its sizing against the account risk budget before changing it."
-            if weight >= 10
-            else f"{weight:.2f}% of the positive-weight book. The supplied evidence does not quantify a better replacement or resize."
-        )
-        decisions.append({"position": ticker, "weight": f"{weight:.2f}%", "decision": decision, "basis": basis})
-
-    for clip in clips:
-        if not re.search(r"\bcurrent option positions\b", clip.title, re.I):
-            continue
-        parsed = _parse_table_summary(clip.dataSummary)
-        if not parsed:
-            continue
-        columns, rows = parsed
-        underlying_i = next((i for i, column in enumerate(columns) if re.search(r"underlying", column, re.I)), -1)
-        strategy_i = next((i for i, column in enumerate(columns) if re.search(r"strategy", column, re.I)), -1)
-        expiry_i = next((i for i, column in enumerate(columns) if re.search(r"expiry", column, re.I)), -1)
-        for row in rows:
-            if underlying_i < 0 or len(row) <= underlying_i:
-                continue
-            underlying = row[underlying_i].strip().upper()
-            if not underlying:
-                continue
-            strategy = row[strategy_i].strip() if strategy_i >= 0 and len(row) > strategy_i else "Option position"
-            expiry = row[expiry_i].strip() if expiry_i >= 0 and len(row) > expiry_i else ""
-            suffix = f", expiry {expiry}" if expiry else ""
-            decisions.append({
-                "position": f"{underlying} {strategy}".strip(),
-                "weight": "Option sleeve",
-                "decision": "No contract change supported",
-                "basis": f"{strategy}{suffix}. Contract-level Greeks and a proposed adjustment were not supplied.",
-            })
-    return decisions
-
-
 def _has_option_positions(clips: list[ReportClipIn]) -> bool:
     return any(re.search(r"\bcurrent option positions\b", clip.title, re.I) for clip in clips)
-
-
-def _normalize_portfolio_sections(sections: list[dict]) -> list[dict]:
-    if len(sections) <= 4:
-        return sections
-    buckets: dict[str, dict] = {}
-    extras: list[dict] = []
-    for section in sections:
-        heading = str(section.get("heading", ""))
-        key = (
-            "happened" if re.search(r"\bwhat happened\b", heading, re.I)
-            else "why" if re.search(r"\bwhy it happened\b", heading, re.I)
-            else "next" if re.search(r"\bwhat could happen next\b", heading, re.I)
-            else "action" if re.search(r"\bwhat action follows\b", heading, re.I)
-            else ""
-        )
-        if key and key not in buckets:
-            buckets[key] = section
-        else:
-            extras.append(section)
-    if len(buckets) < 4:
-        return sections[:4]
-    for extra in extras:
-        text = f"{extra.get('heading', '')} {extra.get('analysis', '')}"
-        target_key = (
-            "next" if re.search(r"\b(valuation|dcf|catalyst|earnings|scenario|stress|outlook)\b", text, re.I)
-            else "why" if re.search(r"\b(beta|factor|correlation|concentration|risk)\b", text, re.I)
-            else "action"
-        )
-        target = buckets[target_key]
-        target["analysis"] = f"{target.get('analysis', '')} {extra.get('analysis', '')}".strip()
-        existing = {(str(item.get("label", "")).lower(), str(item.get("value", ""))) for item in target.get("keyFigures", [])}
-        for figure in extra.get("keyFigures", []):
-            signature = (str(figure.get("label", "")).lower(), str(figure.get("value", "")))
-            if signature not in existing and len(target.get("keyFigures", [])) < 4:
-                target.setdefault("keyFigures", []).append(figure)
-                existing.add(signature)
-    return [buckets[key] for key in ("happened", "why", "next", "action")]
 
 
 def _section_evidence_profile(section: dict, clip: ReportClipIn | None) -> dict:
@@ -4447,10 +4197,9 @@ def _apply_section_layout_architecture(
 
     `preset` is the composition the user picked during setup. It outranks the
     model's per-section intent and the role heuristics, because it is an explicit
-    instruction rather than an inference — but it never outranks the two renderer
-    safety rules above it (a dense table needs the full width; a section with no
-    visual cannot use a side-by-side layout). 'editorial' is the historical
-    default and deliberately falls through to the unchanged behaviour."""
+    instruction rather than an inference, but it never outranks renderer safety.
+    Every preset has a deterministic composition so the selected layout cannot
+    silently fall back to the generic heuristic."""
     preset = preset if preset in {"editorial", "visual-first", "data-dense", "narrative"} else "editorial"
     clips_by_id = {clip.id: clip for clip in clips}
     side_index = 0
@@ -4486,6 +4235,15 @@ def _apply_section_layout_architecture(
             preset_locked = True
         elif preset == "narrative":
             layout = "analysis-first"
+            preset_locked = True
+        elif preset == "editorial":
+            if profile["hasVisual"]:
+                layout = "visual-right" if side_index % 2 == 0 else "visual-left"
+                side_index += 1
+            elif figures >= 2:
+                layout = "metric-rail"
+            else:
+                layout = "analysis-first"
             preset_locked = True
         elif profile["dense"]:
             layout = "full-width"
@@ -4536,24 +4294,25 @@ def _apply_section_layout_architecture(
     # renderer never leaves an unexplained empty half-row.
     for section in sections:
         section.pop("placement", None)
-    index = 1
-    while index < len(sections) - 1:
-        first = sections[index]
-        second = sections[index + 1]
-        if (
-            _can_share_editorial_row(profiles[index], str(first.get("layout", "")), roles[index], index)
-            and _can_share_editorial_row(
-                profiles[index + 1],
-                str(second.get("layout", "")),
-                roles[index + 1],
-                index + 1,
-            )
-        ):
-            first["placement"] = "half"
-            second["placement"] = "half"
-            index += 2
-        else:
-            index += 1
+    if preset == "data-dense":
+        index = 1
+        while index < len(sections) - 1:
+            first = sections[index]
+            second = sections[index + 1]
+            if (
+                _can_share_editorial_row(profiles[index], str(first.get("layout", "")), roles[index], index)
+                and _can_share_editorial_row(
+                    profiles[index + 1],
+                    str(second.get("layout", "")),
+                    roles[index + 1],
+                    index + 1,
+                )
+            ):
+                first["placement"] = "half"
+                second["placement"] = "half"
+                index += 2
+            else:
+                index += 1
 
 
 def _select_report_appendix_clip_ids(raw_ids, clips: list[ReportClipIn], used: set[str]) -> list[str]:
@@ -4581,7 +4340,7 @@ _REPORT_OUTLINE_SYSTEM = """You are an equity-research editor planning a report 
 
 Rules:
 - State a single decisive thesis sentence that directly answers the goal.
-- Follow reportLength: short uses 1 to 2 sections; medium uses 3 to 5; long uses 5 to 8. If reportType is portfolio-review, use exactly four sections: What Happened, Why It Happened, What Could Happen Next, and What Action Follows. Merge evidence into those four sections instead of creating module-by-module sections.
+- Follow templateContract exactly. Its selected short, medium, or long section count overrides generic length guidance.
 - Target a compact two-to-three-page decision note for short and medium reports. Continue beyond three pages only when material evidence cannot be presented clearly within that target. Never pad a report or cut decision-critical evidence merely to hit a page count.
 - Each section must advance the thesis with distinct evidence, ordered so the argument builds top-down.
 - Use this order when supported: what changed and the call, operating or financial drivers, valuation, catalysts, then risks. Background belongs last and should be omitted when the reader can understand the call without it.
@@ -4627,16 +4386,6 @@ def _template_outline_fallback(payload: dict) -> dict:
 def _generate_outline(payload: dict) -> dict | None:
     """Step 1 — draft a thesis-first section outline. Returns None on any failure
     so the pipeline falls back to a single unplanned draft."""
-    if payload.get("reportType") == "portfolio-review":
-        return {
-            "thesis": "Assess the book through measured performance, concentration, and decision-relevant risk.",
-            "sections": [
-                {"templateSection": "what-happened", "heading": "What Happened", "argues": "Compare portfolio and SPY period return, active return, volatility, and maximum drawdown using matching dates and methods.", "chartHint": "performance"},
-                {"templateSection": "why-it-happened", "heading": "Why It Happened", "argues": "Separate measured market sensitivity, factor coefficients, and holding concentration from unsupported active-return attribution.", "chartHint": "risk"},
-                {"templateSection": "what-could-happen-next", "heading": "What Could Happen Next", "argues": "Show beta-only market stress, any supplied compact valuation evidence, and only catalysts with actual supplied dates.", "chartHint": "scenario"},
-                {"templateSection": "what-action-follows", "heading": "What Action Follows", "argues": "Recommend no allocation change unless a proposed portfolio and quantified before-and-after risk and return evidence are supplied.", "chartHint": "none"},
-            ],
-        }
     try:
         messages = [
             {"role": "system", "content": _REPORT_OUTLINE_SYSTEM},
@@ -5393,9 +5142,17 @@ def generate_report(req: ReportGenRequest):
         data_bank_meta = req.dataBank.model_dump()
     else:
         data_bank_meta = {
-            "phase": "complete",
+            "phase": "ready",
             "requiredSourceIds": [],
+            "criticalSourceIds": [],
             "runs": [],
+            "coverage": {
+                "requestedTargets": 0,
+                "coveredTargets": 0,
+                "targetCoveragePct": 100,
+                "domainCoveragePct": {"portfolio": 100, "issuer": 100, "macro": 100, "benchmark": 100},
+            },
+            "unresolvedGaps": [],
             "objectivePlan": {
                 "thesis": "",
                 "requiredDataPoints": [],
@@ -5404,7 +5161,10 @@ def generate_report(req: ReportGenRequest):
         }
 
     subject = _subject_ticker(req)
-    subjects_ranked = _ranked_subjects(req)
+    subjects_ranked = _ranked_subjects(
+        req,
+        limit=128 if contract["id"] == "portfolio-review" else 4,
+    )
     # A book, a regime and a result set have no single subject equity. Resolving
     # one anyway hands the model a subjectTicker with live spot and an
     # instruction to always cite it, which is how a four-holding portfolio review
@@ -5472,7 +5232,7 @@ def generate_report(req: ReportGenRequest):
 
     if (mode == "open" and len(subjects_ranked) >= 2) or (book_level and subjects_ranked):
         subj_ctx = []
-        for t in subjects_ranked[:4]:
+        for t in (subjects_ranked if book_level else subjects_ranked[:4]):
             q = quote if t == subject else _fetch_market_quote(t)
             mkt_t = float(q["price"]) if q.get("price") else None
             chg_t = float(q["changePct"]) if q.get("changePct") is not None else None
@@ -5558,14 +5318,17 @@ def generate_report(req: ReportGenRequest):
     resp = groq_chat(messages, model=MODEL_SMART, max_tokens=max_tokens, temperature=0.3)
     raw = (resp.choices[0].message.content or "").strip()
     result = parse_json(raw)
-    if not isinstance(result, dict) or "executiveSummary" not in result:
+    if (
+        not isinstance(result, dict)
+        or not str(result.get("headline", "")).strip()
+        or not isinstance(result.get("stance"), dict)
+        or not isinstance(result.get("keyResult"), dict)
+        or "executiveSummary" not in result
+    ):
         raise HTTPException(502, "AI returned an unexpected report shape")
 
     sections = _build_sections(result.get("sections"), valid_ids, contract)
     material_positions = _material_portfolio_positions(req.clips) if book_level else []
-    position_decisions = _portfolio_position_decisions(req.clips) if book_level else []
-    if (req.reportType or "").strip() == "portfolio-review":
-        sections = _normalize_portfolio_sections(sections)
     # STEP 3 — Intentional chart mapping: the site builds and assigns every chart.
     _inject_mechanical_charts(sections, req.clips)
     _annotate_sensitivity_swing(sections, price_by_subject)
@@ -5608,7 +5371,7 @@ def generate_report(req: ReportGenRequest):
 
     stance = _stance_from_result(result, market)
     # If model omitted stance lean, use signal digest as soft prior.
-    if stance and stance.get("lean") == "neutral" and signal_digest.get("suggestedLean") in ("bullish", "bearish"):
+    if not book_level and stance and stance.get("lean") == "neutral" and signal_digest.get("suggestedLean") in ("bullish", "bearish"):
         stance["lean"] = signal_digest["suggestedLean"]
         if not stance.get("thesis"):
             stance["thesis"] = (
@@ -5635,6 +5398,8 @@ def generate_report(req: ReportGenRequest):
         signal_digest=signal_digest,
         force_range=(mode == "range"),
     )
+    if stance is None or key_result is None:
+        raise HTTPException(502, "AI omitted a required evidence-backed stance or key result")
 
     # STEP 4 — Verification gate: proofread the summary and conclusion against the
     # exact numbers the charts show, and tighten the tone.
@@ -5666,61 +5431,42 @@ def generate_report(req: ReportGenRequest):
         key_result["value"] = _apply_report_linters(str(key_result["value"]), req.clips, slot_ctx)
 
     if book_level and not _has_portfolio_trade_impact_evidence(req.clips):
-        single_position = material_positions[0] if len(material_positions) == 1 and not _has_option_positions(req.clips) else None
-        key_result = (
-            {
-                "label": "Portfolio action",
-                "value": "Test Diversification Alternatives",
-                "context": f"{single_position[0]} is {single_position[1]:.1f}% of positive-weight holdings; no alternative book was evaluated.",
-            }
-            if single_position
-            else {
-                "label": "Portfolio action",
-                "value": "No Allocation Change Supported",
-                "context": "A proposed allocation and quantified before/after risk impact were not supplied.",
-            }
-        )
-        if stance:
-            stance["lean"] = "neutral"
-            stance["conviction"] = "low"
-            stance["baseCase"] = "Single-position account" if single_position else stance.get("baseCase", "")
-            stance["thesis"] = (
-                "The account is dominated by one security; the next decision is to test diversified alternatives."
-                if single_position
-                else "The evidence describes current risk but does not support a specific portfolio trade."
-            )
+        limitation = "A proposed portfolio and quantified before-and-after risk impact were not supplied, so the report does not support an implementable trade."
         executive_summary = _remove_unsupported_portfolio_actions(executive_summary)
         if not executive_summary:
-            executive_summary = "The supplied evidence describes current portfolio behavior but does not quantify an implementable allocation change."
+            executive_summary = limitation
         for section in sections:
             section["analysis"] = _remove_unsupported_portfolio_actions(str(section.get("analysis", "")))
-            if re.search(r"\bwhat action follows\b", str(section.get("heading", "")), re.I):
-                section["analysis"] = (
-                    "The account is a single-position exposure. Test a diversified alternative against the current book using matched-period return, volatility, drawdown, beta, scenario loss, costs, and taxes before trading."
-                    if single_position
-                    else "No allocation change is supported. Monitor measured return, volatility, drawdown, market sensitivity, and holding-level variance contributions."
-                )
-                section["keyFigures"] = []
-            elif not section["analysis"]:
+            if not section["analysis"]:
                 section["analysis"] = "This evidence measures portfolio behavior but does not establish the effect of a specific trade."
-            section["heading"] = _remove_unsupported_portfolio_actions(str(section.get("heading", ""))) or "Portfolio Risk Requires Quantification"
+        action_section = next((
+            section for section in reversed(sections)
+            if re.search(r"\baction|evidence gaps?\b", str(section.get("templateSection", "")), re.I)
+        ), sections[-1] if sections else None)
+        if action_section is not None and limitation not in str(action_section.get("analysis", "")):
+            action_section["analysis"] = f"{action_section.get('analysis', '')} {limitation}".strip()
+        conclusion = _remove_unsupported_portfolio_actions(conclusion)
+        conclusion = f"{conclusion} {limitation}".strip() if conclusion else limitation
+        if key_result.get("context") and limitation not in str(key_result["context"]):
+            key_result["context"] = f"{key_result['context']} Alternative allocation impact was not tested."
         dcf_warning = _extreme_dcf_warning(req.clips)
         if dcf_warning:
             for section in sections:
-                if re.search(r"\bwhat could happen next\b", str(section.get("heading", "")), re.I):
+                if re.search(r"\b(downside|upside|outlook|scenario)\b", str(section.get("templateSection", "")), re.I):
                     sentences = re.split(r"(?<=[.!?])\s+", str(section.get("analysis", "")))
                     retained = [sentence for sentence in sentences if not re.search(r"\b(dcf|intrinsic|analyst consensus|peer multiple|valuation)\b", sentence, re.I)]
                     section["analysis"] = " ".join([*retained, dcf_warning]).strip()
-        headline = (
-            f"Single-Position {single_position[0]} Exposure Dominates Account Risk"
-            if single_position
-            else "Beta and Concentration Shape Recent Portfolio Risk"
-        )
-        conclusion = (
-            "The account's single-position concentration is the primary risk. Test diversified alternatives on matched return, risk, scenario loss, costs, and taxes before trading."
-            if single_position
-            else "No allocation change is supported. The evidence identifies recent market sensitivity and concentration risk, but does not quantify a superior trade."
-        )
+
+    if book_level:
+        headline = guard_evidence_domain_text(headline, req.clips, headline=True)
+        executive_summary = guard_evidence_domain_text(executive_summary, req.clips)
+        conclusion = guard_evidence_domain_text(conclusion, req.clips)
+        if stance and stance.get("thesis"):
+            stance["thesis"] = guard_evidence_domain_text(str(stance["thesis"]), req.clips)
+        if key_result.get("context"):
+            key_result["context"] = guard_evidence_domain_text(str(key_result["context"]), req.clips)
+        for section in sections:
+            section["analysis"] = guard_evidence_domain_text(str(section.get("analysis", "")), req.clips)
 
     _apply_section_layout_architecture(sections, req.clips, (req.layoutPreset or "").strip())
     template_errors = validate_template_sections(sections, contract)
@@ -5736,7 +5482,6 @@ def generate_report(req: ReportGenRequest):
         "sections": sections,
         "conclusion": conclusion,
         "appendixClipIds": appendix,
-        "positionDecisions": position_decisions,
         "model": MODEL_SMART,
         "valuationContext": valuation_context,
         "pipeline": {
@@ -5744,6 +5489,8 @@ def generate_report(req: ReportGenRequest):
             "templateId": contract["id"],
             "layoutPreset": (req.layoutPreset or "editorial").strip(),
             "requiredSourceIds": data_bank_meta.get("requiredSourceIds", []),
+            "coverage": data_bank_meta.get("coverage", {}),
+            "unresolvedGaps": data_bank_meta.get("unresolvedGaps", []),
         },
     }
 
@@ -5831,7 +5578,10 @@ def revise_report(req: ReportReviseRequest):
         projectName=req.projectName, purpose=req.purpose, goal=req.goal,
         subjectTicker=req.subjectTicker, clips=req.clips,
     )
-    subjects_ranked = _ranked_subjects(gen_req)
+    subjects_ranked = _ranked_subjects(
+        gen_req,
+        limit=128 if (req.reportType or "").strip() == "portfolio-review" else 4,
+    )
     book_level = _book_level_report(req, subjects_ranked)
     subject = None if book_level else _subject_ticker(gen_req)
     mode = "open" if book_level else _report_mode(gen_req, subjects_ranked)
@@ -5844,7 +5594,7 @@ def revise_report(req: ReportReviseRequest):
         price_by_subject[subject.upper()] = market
     subjects_ctx = []
     if (mode == "open" and len(subjects_ranked) >= 2) or (book_level and subjects_ranked):
-        for t in subjects_ranked[:4]:
+        for t in (subjects_ranked if book_level else subjects_ranked[:4]):
             q = quote if t == subject else _fetch_market_quote(t)
             mkt_t = float(q["price"]) if q.get("price") else None
             if mkt_t:

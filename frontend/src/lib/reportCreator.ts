@@ -12,6 +12,18 @@ const EVT = 'ft:report-creator'          // store changed
 const CAPTURE_EVT = 'ft:report-capture'  // a page asked to clip something
 
 export type ClipDataType = 'table' | 'chart' | 'kpi' | 'text'
+export type EvidenceDomain = 'portfolio' | 'issuer' | 'macro' | 'benchmark'
+export type ChartUnit =
+  | 'number'
+  | 'percent'
+  | 'percentage-point'
+  | 'basis-point'
+  | 'currency'
+  | 'multiple'
+  | 'index'
+  | 'beta'
+  | 'correlation'
+  | 'shares'
 
 export interface TablePayload {
   kind: 'table'
@@ -50,10 +62,11 @@ export interface ChartPayload {
    * rankings and categorical labels that need room to read. */
   barOrientation?: 'vertical' | 'horizontal'
   xKey: string
+  xUnit?: ChartUnit
   data: Array<Record<string, string | number | null | [number, number] | Array<{ label: string; value: number }>>>
-  series: Array<{ key: string; label: string; color?: string }>
+  series: Array<{ key: string; label: string; color?: string; unit?: ChartUnit }>
   /** Supporting values shown in the tooltip without adding more plotted marks. */
-  details?: Array<{ key: string; label: string }>
+  details?: Array<{ key: string; label: string; unit?: ChartUnit }>
 }
 export interface TextPayload {
   kind: 'text'
@@ -74,6 +87,7 @@ export interface ReportClip {
   researchSourceId?: string
   researchKey?: string
   sourceRoute?: string
+  evidenceDomain?: EvidenceDomain
 }
 
 /** @deprecated Use lookbackPreset — kept for stored-project migration. */
@@ -174,12 +188,6 @@ export interface GeneratedSection {
   keyFigures?: KeyFigure[]       // AI-extracted evidence actually used, not the raw dataset
   chart?: ChartPayload           // AI-synthesized chart built from this section's own figures — not sourced from a clip
 }
-export interface PositionDecision {
-  position: string
-  weight: string
-  decision: string
-  basis: string
-}
 export interface GeneratedReport {
   headline?: string              // research-note title for the masthead
   stance?: ReportStance          // directional lean + conviction (not a vol envelope)
@@ -188,9 +196,21 @@ export interface GeneratedReport {
   sections: GeneratedSection[]   // curated, in argument order
   conclusion: string
   appendixClipIds: string[]      // down-ranked clips, shown as supporting data
-  positionDecisions?: PositionDecision[] // deterministic decision for every current holding
   generatedAt: string            // ISO; compare with project.updatedAt for staleness
   model?: string
+  pipeline?: {
+    phase: string
+    templateId: string
+    layoutPreset: string
+    requiredSourceIds: string[]
+    coverage?: {
+      requestedTargets: number
+      coveredTargets: number
+      targetCoveragePct: number
+      domainCoveragePct: Record<EvidenceDomain, number>
+    }
+    unresolvedGaps?: string[]
+  }
 }
 
 // An immutable, self-contained copy of one generation, kept so past reports are
@@ -236,6 +256,7 @@ export interface ClipDraft {
   researchSourceId?: string
   researchKey?: string
   sourceRoute?: string
+  evidenceDomain?: EvidenceDomain
 }
 
 const uid = () =>
@@ -427,6 +448,14 @@ export function updateScope(id: string, patch: Partial<ReportScope>) {
   })
 }
 
+export function evidenceDomainForCapture(sourceTab: string, title = ''): EvidenceDomain {
+  const source = `${sourceTab} ${title}`.toLowerCase()
+  if (/portfolio manager|portfolio analysis|portfolio compare|factor decomposition|correlation/.test(source)) return 'portfolio'
+  if (/asset overlay|regression|sector rotation|benchmark|relative performance/.test(source)) return 'benchmark'
+  if (/global market|macro|fed|rate engine|credit spread|yield curve|sentiment/.test(source)) return 'macro'
+  return 'issuer'
+}
+
 export function addClip(projectId: string, draft: ClipDraft, userDescription?: string): ReportClip | null {
   const clip: ReportClip = {
     id: uid(),
@@ -440,6 +469,7 @@ export function addClip(projectId: string, draft: ClipDraft, userDescription?: s
     researchSourceId: draft.researchSourceId,
     researchKey: draft.researchKey,
     sourceRoute: draft.sourceRoute,
+    evidenceDomain: draft.evidenceDomain ?? evidenceDomainForCapture(draft.sourceTab, draft.payload.title),
   }
   let ok = false
   mutate(s => {
@@ -477,6 +507,7 @@ export function mergeAlphaTapeClips(
       researchSourceId: draft.researchSourceId,
       researchKey: draft.researchKey,
       sourceRoute: draft.sourceRoute,
+      evidenceDomain: draft.evidenceDomain ?? evidenceDomainForCapture(draft.sourceTab, draft.payload.title),
     }
   })
   const freshByKey = new Map(
@@ -676,10 +707,12 @@ export function summarizeClipForAI(clip: ReportClip): string {
   }
   if (p.kind === 'table') {
     const head = p.columns.join(' | ')
-    const maxRows = 15
+    const portfolioWide = clip.evidenceDomain === 'portfolio'
+      || /\b(current allocation|current option positions|correlation matrix|scenario losses)\b/i.test(p.title || '')
+    const maxRows = portfolioWide ? p.rows.length : 15
     const body = p.rows.slice(0, maxRows).map(r => r.map(v => (v == null ? '' : String(v))).join(' | ')).join('\n')
     const more = p.rows.length > maxRows ? `\n(+${p.rows.length - maxRows} more rows)` : ''
-    return cap(`Columns: ${head}\n${body}${more}`, 1400)
+    return cap(`Columns: ${head}\n${body}${more}`, portfolioWide ? 6000 : 1400)
   }
   if (p.kind === 'chart') {
     const parts = p.series.map(s => {

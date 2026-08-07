@@ -6,11 +6,13 @@ import {
   preferChartVisual,
   promoteKeyFiguresToChart,
   promoteTableToChart,
+  reportVisualFamily,
   reportSectionAssignmentKey,
   normalizeReportSectionLayout,
   resolveReportSectionLayout,
 } from './SectionLayout'
 import type { ReportClip } from '../../lib/reportCreator'
+import portfolioReviewFixture from '../../fixtures/portfolioReview16.json'
 
 function chart(id: string, title: string, sourceTab = 'Implied Probability'): ReportClip {
   return {
@@ -321,6 +323,7 @@ describe('assignBodyVisuals', () => {
     })
     expect(promoted?.chartType).toBe('pie')
     expect(promoted?.series[0].label).toBe('Weight %')
+    expect(promoted?.series[0].unit).toBe('percent')
     expect(promoted?.data).toEqual([
       { category: 'MCD', value: 42 },
       { category: 'YUM', value: 31 },
@@ -345,6 +348,7 @@ describe('assignBodyVisuals', () => {
     expect(promoted?.chartType).toBe('bar')
     expect(promoted?.barOrientation).toBe('horizontal')
     expect(promoted?.series[0].label).toBe('Upside %')
+    expect(promoted?.series[0].unit).toBe('percent')
   })
 
   it('never turns event dates into numeric chart values', () => {
@@ -373,12 +377,12 @@ describe('assignBodyVisuals', () => {
       chartType: 'bar',
       barOrientation: 'horizontal',
       xKey: 'sector',
-      series: [{ key: 'momentum', label: 'Momentum score (pp)' }],
+      series: [{ key: 'momentum', label: 'Momentum score (pp)', unit: 'percentage-point' }],
       details: [
-        { key: 'oneWeek', label: '1W return %' },
-        { key: 'oneMonth', label: '1M return %' },
-        { key: 'threeMonth', label: '3M return %' },
-        { key: 'vsSpyOneMonth', label: 'Vs SPY · 1M %' },
+        { key: 'oneWeek', label: '1W return %', unit: 'percent' },
+        { key: 'oneMonth', label: '1M return %', unit: 'percent' },
+        { key: 'threeMonth', label: '3M return %', unit: 'percent' },
+        { key: 'vsSpyOneMonth', label: 'Vs SPY · 1M %', unit: 'percent' },
       ],
     })
     expect(promoted?.data.map(row => row.sector)).toEqual([
@@ -404,6 +408,7 @@ describe('assignBodyVisuals', () => {
     expect(promoted?.chartType).toBe('bar')
     expect(promoted?.barOrientation).toBe('horizontal')
     expect(promoted?.series[0].label).toBe('Percent (%)')
+    expect(promoted?.series[0].unit).toBe('percent')
     expect(promoted?.data).toEqual([
       { metric: 'WEN DCF Upside', value: 106 },
       { metric: 'WEN Consensus Upside', value: 1.3 },
@@ -566,39 +571,57 @@ describe('assignBodyVisuals', () => {
     expect(assigned.get('k1')?.visual?.id).toBe('c1')
   })
 
-  it('gives portfolio stages one decision-specific visual each', () => {
+  it('assigns the 16-position long portfolio contract diverse evidence without fixed section mappings', () => {
+    const symbols = portfolioReviewFixture.symbols
     const allocation: ReportClip = {
       id: 'allocation', sourceTab: 'Portfolio Manager', dataType: 'table', capturedAt: '', projectId: 'p1',
-      payload: { kind: 'table', title: 'Core account · current allocation', columns: ['Ticker', 'Weight %'], rows: [['NVDA', 5.6]] },
+      evidenceDomain: 'portfolio',
+      payload: { kind: 'table', title: 'Core account · current allocation', columns: ['Ticker', 'Weight %'], rows: symbols.map((symbol, index) => [symbol, 10 - index * 0.4]) },
     }
-    const metrics = { ...kpi('metrics', 'Portfolio Compare'), payload: {
+    const metrics = { ...kpi('metrics', 'Portfolio Compare'), evidenceDomain: 'portfolio' as const, payload: {
       kind: 'kpi' as const, title: 'Portfolio risk metrics · 2026-07-01 to 2026-07-31', cells: [{ label: 'Period return', value: '4.2%' }],
     } }
-    const performance = chart('performance', 'Portfolio vs SPY · 2026-07-01 to 2026-07-31', 'Portfolio Compare')
-    const rolling = chart('rolling', 'Rolling multifactor market coefficient', 'Factor Decomposition')
+    const performance = { ...chart('performance', 'Portfolio vs SPY · matched-period performance', 'Portfolio Compare'), evidenceDomain: 'benchmark' as const }
+    const drawdown = { ...chart('drawdown', 'Portfolio underwater drawdown history', 'Portfolio Compare'), evidenceDomain: 'portfolio' as const }
+    if (drawdown.payload.kind === 'chart') drawdown.payload.chartType = 'area'
+    const correlation = { ...chart('correlation', 'Portfolio correlation matrix', 'Correlation Matrix'), evidenceDomain: 'portfolio' as const }
+    if (correlation.payload.kind === 'chart') correlation.payload.chartType = 'bar'
+    const rolling = { ...chart('rolling', 'Rolling multifactor market coefficient', 'Factor Decomposition'), evidenceDomain: 'portfolio' as const }
+    const stress = { ...chart('stress', 'Market-shock scenario losses', 'Portfolio Compare'), evidenceDomain: 'portfolio' as const }
+    if (stress.payload.kind === 'chart') stress.payload.chartType = 'bar'
+    const distribution = { ...chart('distribution', 'Monte Carlo terminal return distribution', 'Portfolio Analysis'), evidenceDomain: 'portfolio' as const }
+    if (distribution.payload.kind === 'chart') distribution.payload.chartType = 'histogram'
+    const rates = { ...chart('rates', 'Rates and credit outlook', 'Macro'), evidenceDomain: 'macro' as const }
     const schedule: ReportClip = {
       id: 'schedule', sourceTab: 'Earnings Scanner', dataType: 'table', capturedAt: '', projectId: 'p1',
+      evidenceDomain: 'issuer',
       payload: { kind: 'table', title: 'Upcoming portfolio earnings schedule', columns: ['Holding', 'Report date'], rows: [['NVDA', '2026-08-26']] },
     }
-    const clips = [allocation, metrics, performance, rolling, schedule]
+    const clips = [allocation, metrics, performance, drawdown, correlation, rolling, stress, distribution, rates, schedule]
     const sections = [
-      { clipId: 'metrics', heading: 'What Happened: Return and Risk Versus SPY', analysis: 'Performance evidence.' },
-      { clipId: 'metrics', heading: 'Why It Happened: Market Sensitivity and Name-Specific Risk', analysis: 'Risk evidence.' },
-      { clipId: 'metrics', heading: 'What Could Happen Next: Stress, Valuation, and Dated Catalysts', analysis: 'Forward evidence.' },
-      { clipId: 'metrics', heading: 'What Action Follows: Evidence Before Reallocation', analysis: 'No tested trade.' },
+      { clipId: 'metrics', templateSection: 'portfolio-verdict', heading: 'Portfolio Verdict', analysis: 'Performance and risk decide the view.' },
+      { clipId: 'metrics', templateSection: 'return-and-drawdown', heading: 'Return and Drawdown', analysis: 'Matched portfolio and benchmark returns with drawdown.' },
+      { clipId: 'metrics', templateSection: 'concentration-and-exposure', heading: 'Concentration and Exposure', analysis: 'Weights and exposure define concentration.' },
+      { clipId: 'metrics', templateSection: 'correlation-and-factor-risk', heading: 'Correlation and Factor Risk', analysis: 'Correlation and factor sensitivity test diversification.' },
+      { clipId: 'metrics', templateSection: 'downside-scenarios', heading: 'Downside Scenarios', analysis: 'Stress losses and terminal distribution define the downside.' },
+      { clipId: 'metrics', templateSection: 'upside-and-forward-outlook', heading: 'Upside and Forward Outlook', analysis: 'Rates and dated earnings frame the forward outlook.' },
+      { clipId: 'metrics', templateSection: 'portfolio-actions-and-gaps', heading: 'Portfolio Actions and Evidence Gaps', analysis: 'Sizing and unresolved evidence govern any action.' },
     ]
+    expect(sections.map(section => section.templateSection)).toEqual(portfolioReviewFixture.requiredLongSections)
 
     const assigned = assignReportBodyVisuals(
       sections,
       new Map(clips.map(clip => [clip.id, clip])),
       clips,
-      { projectId: 'p1', generatedAt: '2026-07-31T00:00:00Z' },
+      { projectId: 'p1', generatedAt: '2026-07-31T00:00:00Z', objective: 'Review all 16 holdings over the long horizon.' },
     )
 
-    expect(assigned.get(reportSectionAssignmentKey(sections, 0))?.visual?.payload.title).toContain('Portfolio vs SPY')
-    expect(assigned.get(reportSectionAssignmentKey(sections, 1))?.visual?.payload.title).toContain('Rolling multifactor')
-    expect(assigned.get(reportSectionAssignmentKey(sections, 1))?.showKeyFigures).toBe(true)
-    expect(assigned.get(reportSectionAssignmentKey(sections, 2))?.visual?.payload.title).toContain('Upcoming portfolio earnings')
-    expect(assigned.get(reportSectionAssignmentKey(sections, 3))?.visual).toBeUndefined()
+    const visuals = sections.map((_, index) => assigned.get(reportSectionAssignmentKey(sections, index))?.visual).filter(Boolean) as ReportClip[]
+    expect(visuals).toHaveLength(7)
+    expect(new Set(visuals.map(visual => visual.id)).size).toBe(7)
+    expect(new Set(visuals.map(reportVisualFamily)).size).toBeGreaterThanOrEqual(5)
+    expect(new Set(visuals.map(visual => visual.payload.kind === 'chart' ? visual.payload.chartType : 'table')).size).toBeGreaterThanOrEqual(3)
+    expect(allocation.payload.kind).toBe('table')
+    if (allocation.payload.kind === 'table') expect(allocation.payload.rows).toHaveLength(16)
   })
 })

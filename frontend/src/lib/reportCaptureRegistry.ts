@@ -2,7 +2,7 @@
 // getClip snapshot; the shell toolbar reads the active route's entry so every
 // hub tool can offer "Send to Report" without each page owning its own button.
 
-import type { ClipDraft } from './reportCreator'
+import type { ChartUnit, ClipDraft } from './reportCreator'
 
 export type ReportCaptureEntry = {
   getClip: () => ClipDraft | ClipDraft[] | null
@@ -83,15 +83,18 @@ export function chartClip(
   chartType: 'line' | 'bar' | 'area',
   xKey: string,
   data: Array<Record<string, string | number | null>>,
-  series: Array<{ key: string; label: string; color?: string }>,
+  series: Array<{ key: string; label: string; color?: string; unit?: ChartUnit }>,
   options?: {
     barOrientation?: 'vertical' | 'horizontal'
-    details?: Array<{ key: string; label: string }>
+    xUnit?: ChartUnit
+    details?: Array<{ key: string; label: string; unit?: ChartUnit }>
   },
 ): ClipDraft {
+  const normalizedSeries = series.map(item => ({ ...item, unit: item.unit ?? 'number' as const }))
+  const normalizedDetails = options?.details?.map(item => ({ ...item, unit: item.unit ?? 'number' as const }))
   return {
     sourceTab,
     dataType: 'chart',
-    payload: { kind: 'chart', title, chartType, xKey, data, series, ...options },
+    payload: { kind: 'chart', title, chartType, xKey, data, series: normalizedSeries, ...options, details: normalizedDetails },
   }
 }

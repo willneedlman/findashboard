@@ -1,0 +1,35 @@
+{
+  "id": "portfolio-review-16",
+  "name": "Portfolio Review Regression",
+  "asOf": "2026-08-06",
+  "lookbackPreset": "last90",
+  "lookforwardPreset": "next365",
+  "length": "long",
+  "symbols": [
+    "SNDK",
+    "MSTR",
+    "NVDA",
+    "ORCL",
+    "MSFT",
+    "AMZN",
+    "NBIS",
+    "JOBY",
+    "QCOM",
+    "TOST",
+    "RVI",
+    "SMR",
+    "VST",
+    "OWL",
+    "MU",
+    "TSLL"
+  ],
+  "requiredLongSections": [
+    "portfolio-verdict",
+    "return-and-drawdown",
+    "concentration-and-exposure",
+    "correlation-and-factor-risk",
+    "downside-scenarios",
+    "upside-and-forward-outlook",
+    "portfolio-actions-and-gaps"
+  ]
+}

@@ -4,7 +4,7 @@ import type { ActivePortfolioContext } from './pmImport'
 import { smaArr, emaArr, rsiArr, hvArr, bollinger } from './indicators'
 import { parseChartDirective } from './researchDirective'
 import { normalizeTicker } from './pmImport'
-import type { ClipDraft, ReportClip, ReportScope } from './reportCreator'
+import type { ClipDraft, EvidenceDomain, ReportClip, ReportScope } from './reportCreator'
 
 export type ReportResearchIntent =
   | 'portfolio'
@@ -47,6 +47,8 @@ export interface ReportResearchSource {
   route: string
   reason: string
   targets: string[]
+  domain: EvidenceDomain
+  critical: boolean
   selectionOrigin?: 'baseline' | 'ai'
   /** Plain-English setup instruction from the planner ("chart it against SPY with
    * 50 and 200 day moving averages"). Resolved deterministically by the collector
@@ -81,13 +83,27 @@ export interface ReportDataBankRun {
   clipIds: string[]
   missingTargets: string[]
   error: string
+  domain: EvidenceDomain
+  critical: boolean
+  requestedTargetCount: number
+  coveredTargetCount: number
+  coveragePct: number
+  unresolvedGaps: string[]
 }
 
 export interface ReportDataBank {
-  phase: 'complete'
+  phase: 'ready' | 'blocked'
   requiredSourceIds: ReportResearchSourceId[]
+  criticalSourceIds: ReportResearchSourceId[]
   runs: ReportDataBankRun[]
   objectivePlan: ReportObjectivePlan
+  coverage: {
+    requestedTargets: number
+    coveredTargets: number
+    targetCoveragePct: number
+    domainCoveragePct: Record<EvidenceDomain, number>
+  }
+  unresolvedGaps: string[]
 }
 
 export interface ReportResearchFailure {
@@ -199,30 +215,30 @@ async function mapSettledWithConcurrency<T, R>(
   })
 }
 
-const SOURCE_META: Record<ReportResearchSourceId, Omit<ReportResearchSource, 'reason' | 'targets'>> = {
-  portfolio: { id: 'portfolio', label: 'Active book', tool: 'Portfolio Manager', route: '/portfolio-manager' },
-  'portfolio-risk': { id: 'portfolio-risk', label: 'Risk and performance', tool: 'Portfolio Compare', route: '/portfolio-compare' },
-  company: { id: 'company', label: 'Company snapshot', tool: 'Earnings Scanner', route: '/earnings' },
-  'price-history': { id: 'price-history', label: 'Price and drawdown', tool: 'Chart Studio', route: '/chart-studio' },
-  'market-compare': { id: 'market-compare', label: 'Relative performance', tool: 'Asset Overlay', route: '/asset-overlay' },
-  mover: { id: 'mover', label: 'Catalyst scan', tool: 'Mover Radar', route: '/mover-radar' },
-  news: { id: 'news', label: 'Recent news', tool: 'Mover Radar', route: '/mover-radar' },
-  options: { id: 'options', label: 'Options snapshot', tool: 'Options Desk', route: '/options' },
-  earnings: { id: 'earnings', label: 'Earnings calendar', tool: 'Earnings Scanner', route: '/earnings' },
-  'global-markets': { id: 'global-markets', label: 'Global market board', tool: 'Global Markets', route: '/global-markets' },
-  'macro-events': { id: 'macro-events', label: 'Macro event calendar', tool: 'Macro Event Hub', route: '/macro-events' },
-  sentiment: { id: 'sentiment', label: 'Market sentiment', tool: 'Sentiment Tracker', route: '/sentiment' },
-  'sector-rotation': { id: 'sector-rotation', label: 'Sector leadership', tool: 'Sector Rotation', route: '/sector-rotation' },
-  correlation: { id: 'correlation', label: 'Correlation structure', tool: 'Correlation', route: '/correlation' },
-  regression: { id: 'regression', label: 'Regression model', tool: 'Regression', route: '/regression' },
-  'factor-decomposition': { id: 'factor-decomposition', label: 'Factor exposures', tool: 'Factor Decomposition', route: '/factor-decomposition' },
-  'credit-spreads': { id: 'credit-spreads', label: 'Credit risk regime', tool: 'Credit Spreads', route: '/credit-spreads' },
-  'rate-engine': { id: 'rate-engine', label: 'Rates and Fed path', tool: 'Rate Engine', route: '/fed' },
-  'peer-valuation': { id: 'peer-valuation', label: 'Peer valuation', tool: 'Peer Comparison', route: '/relative-valuation' },
-  'dcf-valuation': { id: 'dcf-valuation', label: 'DCF valuation', tool: 'DCF Valuation', route: '/dcf' },
-  'volatility-skew': { id: 'volatility-skew', label: 'Volatility skew', tool: 'Volatility Skew', route: '/skew' },
-  'dealer-gex': { id: 'dealer-gex', label: 'Dealer gamma', tool: 'Dealer GEX', route: '/gex' },
-  'implied-probability': { id: 'implied-probability', label: 'Implied probability', tool: 'Implied Probability', route: '/probability' },
+const SOURCE_META: Record<ReportResearchSourceId, Omit<ReportResearchSource, 'reason' | 'targets' | 'critical'>> = {
+  portfolio: { id: 'portfolio', label: 'Active book', tool: 'Portfolio Manager', route: '/portfolio-manager', domain: 'portfolio' },
+  'portfolio-risk': { id: 'portfolio-risk', label: 'Risk and performance', tool: 'Portfolio Compare', route: '/portfolio-compare', domain: 'portfolio' },
+  company: { id: 'company', label: 'Company snapshot', tool: 'Earnings Scanner', route: '/earnings', domain: 'issuer' },
+  'price-history': { id: 'price-history', label: 'Price and drawdown', tool: 'Chart Studio', route: '/chart-studio', domain: 'issuer' },
+  'market-compare': { id: 'market-compare', label: 'Relative performance', tool: 'Asset Overlay', route: '/asset-overlay', domain: 'benchmark' },
+  mover: { id: 'mover', label: 'Catalyst scan', tool: 'Mover Radar', route: '/mover-radar', domain: 'issuer' },
+  news: { id: 'news', label: 'Recent news', tool: 'Mover Radar', route: '/mover-radar', domain: 'issuer' },
+  options: { id: 'options', label: 'Options snapshot', tool: 'Options Desk', route: '/options', domain: 'issuer' },
+  earnings: { id: 'earnings', label: 'Earnings calendar', tool: 'Earnings Scanner', route: '/earnings', domain: 'issuer' },
+  'global-markets': { id: 'global-markets', label: 'Global market board', tool: 'Global Markets', route: '/global-markets', domain: 'macro' },
+  'macro-events': { id: 'macro-events', label: 'Macro event calendar', tool: 'Macro Event Hub', route: '/macro-events', domain: 'macro' },
+  sentiment: { id: 'sentiment', label: 'Market sentiment', tool: 'Sentiment Tracker', route: '/sentiment', domain: 'macro' },
+  'sector-rotation': { id: 'sector-rotation', label: 'Sector leadership', tool: 'Sector Rotation', route: '/sector-rotation', domain: 'benchmark' },
+  correlation: { id: 'correlation', label: 'Correlation structure', tool: 'Correlation', route: '/correlation', domain: 'portfolio' },
+  regression: { id: 'regression', label: 'Regression model', tool: 'Regression', route: '/regression', domain: 'benchmark' },
+  'factor-decomposition': { id: 'factor-decomposition', label: 'Factor exposures', tool: 'Factor Decomposition', route: '/factor-decomposition', domain: 'portfolio' },
+  'credit-spreads': { id: 'credit-spreads', label: 'Credit risk regime', tool: 'Credit Spreads', route: '/credit-spreads', domain: 'macro' },
+  'rate-engine': { id: 'rate-engine', label: 'Rates and Fed path', tool: 'Rate Engine', route: '/fed', domain: 'macro' },
+  'peer-valuation': { id: 'peer-valuation', label: 'Peer valuation', tool: 'Peer Comparison', route: '/relative-valuation', domain: 'issuer' },
+  'dcf-valuation': { id: 'dcf-valuation', label: 'DCF valuation', tool: 'DCF Valuation', route: '/dcf', domain: 'issuer' },
+  'volatility-skew': { id: 'volatility-skew', label: 'Volatility skew', tool: 'Volatility Skew', route: '/skew', domain: 'issuer' },
+  'dealer-gex': { id: 'dealer-gex', label: 'Dealer gamma', tool: 'Dealer GEX', route: '/gex', domain: 'issuer' },
+  'implied-probability': { id: 'implied-probability', label: 'Implied probability', tool: 'Implied Probability', route: '/probability', domain: 'issuer' },
 }
 
 type ResearchTargetMode = 'market' | 'symbols' | 'portfolio' | 'portfolio-or-symbols'
@@ -233,9 +249,10 @@ export interface ReportResearchToolCatalogItem {
   description: string
   targetMode: ResearchTargetMode
   producesVisuals: boolean
+  domain: EvidenceDomain
 }
 
-export const REPORT_RESEARCH_TOOL_CATALOG: ReportResearchToolCatalogItem[] = [
+const REPORT_RESEARCH_TOOL_CATALOG_BASE: Omit<ReportResearchToolCatalogItem, 'domain'>[] = [
   { id: 'portfolio', label: 'Active book', description: 'Holdings, cash, saved values, and concentration.', targetMode: 'portfolio', producesVisuals: false },
   { id: 'portfolio-risk', label: 'Risk and performance', description: 'Portfolio return, volatility, drawdown, beta, and a benchmark-relative performance chart.', targetMode: 'portfolio', producesVisuals: true },
   { id: 'company', label: 'Company snapshot', description: 'Company fundamentals, market data, valuation multiples, and beta.', targetMode: 'symbols', producesVisuals: false },
@@ -260,6 +277,11 @@ export const REPORT_RESEARCH_TOOL_CATALOG: ReportResearchToolCatalogItem[] = [
   { id: 'dealer-gex', label: 'Dealer gamma', description: 'Dealer gamma exposure by strike, gamma flip, and the largest positive and negative positioning levels.', targetMode: 'symbols', producesVisuals: true },
   { id: 'implied-probability', label: 'Implied probability', description: 'Risk-neutral price cone, options-implied terminal distribution, percentiles, and finish-above probabilities.', targetMode: 'symbols', producesVisuals: true },
 ]
+
+export const REPORT_RESEARCH_TOOL_CATALOG: ReportResearchToolCatalogItem[] = REPORT_RESEARCH_TOOL_CATALOG_BASE.map(item => ({
+  ...item,
+  domain: SOURCE_META[item.id].domain,
+}))
 
 const HISTORICAL_RESEARCH_SOURCES = new Set<ReportResearchSourceId>([
   'price-history',
@@ -300,7 +322,7 @@ export function parseResearchSymbols(value: string): string[] {
       .split(/[\s,;]+/)
       .map(normalizeTicker)
       .filter(symbol => /^[A-Z0-9^][A-Z0-9^=-]{0,11}$/.test(symbol) && !SYMBOL_STOP.has(symbol)),
-  ).slice(0, 8)
+  )
 }
 
 export function inferResearchSymbols(value: string): string[] {
@@ -309,7 +331,7 @@ export function inferResearchSymbols(value: string): string[] {
     matches
       .map(match => normalizeTicker(match.replace(/^\$/, '')))
       .filter(symbol => !SYMBOL_STOP.has(symbol)),
-  ).slice(0, 8)
+  )
 }
 
 function detectIntent(objective: string, symbolCount = 0): ReportResearchIntent {
@@ -324,20 +346,32 @@ function detectIntent(objective: string, symbolCount = 0): ReportResearchIntent 
   return 'company'
 }
 
+const CRITICAL_SOURCES: Record<ReportResearchIntent, ReadonlySet<ReportResearchSourceId>> = {
+  portfolio: new Set(['portfolio', 'portfolio-risk', 'correlation', 'factor-decomposition']),
+  macro: new Set(['global-markets', 'macro-events']),
+  options: new Set(['company', 'options', 'volatility-skew', 'implied-probability']),
+  catalyst: new Set(['company', 'mover', 'news']),
+  comparison: new Set(['company', 'market-compare', 'regression']),
+  valuation: new Set(['company', 'peer-valuation', 'dcf-valuation']),
+  company: new Set(['company', 'price-history']),
+}
+
+function isCriticalSource(intent: ReportResearchIntent, sourceId: ReportResearchSourceId): boolean {
+  return CRITICAL_SOURCES[intent].has(sourceId)
+}
+
 function portfolioSymbols(portfolio: ActivePortfolioContext): string[] {
   return [...portfolio.holdings]
-    .filter(holding => holding.shares > 0)
-    .sort((a, b) => (b.shares * b.avgCost) - (a.shares * a.avgCost))
+    .filter(holding => holding.shares !== 0)
+    .sort((a, b) => Math.abs(b.shares * b.avgCost) - Math.abs(a.shares * a.avgCost))
     .map(holding => normalizeTicker(holding.ticker))
     .filter(Boolean)
-    .slice(0, 8)
 }
 
 function portfolioOptionSymbols(portfolio: ActivePortfolioContext): string[] {
   return unique((portfolio.optionPositions ?? [])
     .map(position => normalizeTicker(position.underlying))
     .filter(Boolean))
-    .slice(0, 8)
 }
 
 function usesActivePortfolio(scope: ReportScope, portfolio: ActivePortfolioContext): boolean {
@@ -354,7 +388,7 @@ export function planReportResearch(
   const hasActivePortfolio = usesActivePortfolio(scope, portfolio)
   const equitySymbols = hasActivePortfolio ? portfolioSymbols(portfolio) : []
   const optionSymbols = hasActivePortfolio ? portfolioOptionSymbols(portfolio) : []
-  const bookSymbols = unique([...equitySymbols, ...optionSymbols]).slice(0, 8)
+  const bookSymbols = unique([...equitySymbols, ...optionSymbols])
   const requestedSymbols = unique(explicit.length ? explicit : inferred.length ? inferred : bookSymbols)
   const intent = detectIntent(objective, requestedSymbols.length)
   const symbols = intent === 'portfolio' && bookSymbols.length ? bookSymbols : requestedSymbols
@@ -372,7 +406,13 @@ export function planReportResearch(
     const resolved = MULTI_ASSET_SOURCES.has(id) && targets.length
       ? targetsForSource(id, targets)
       : targets
-    sources.push({ ...SOURCE_META[id], reason, targets: resolved, selectionOrigin: 'baseline' })
+    sources.push({
+      ...SOURCE_META[id],
+      reason,
+      targets: resolved,
+      critical: isCriticalSource(intent, id),
+      selectionOrigin: 'baseline',
+    })
   }
 
   if (!objective) {
@@ -397,9 +437,9 @@ export function planReportResearch(
         add('factor-decomposition', 'Separate systematic exposure from name-specific risk for the equity and cash sleeve.', equitySymbols)
       }
       if (equitySymbols.length >= 2) add('correlation', 'Test whether the equity holdings provide real diversification under a common window.', equitySymbols)
-      add('company', 'Review fundamentals, growth, valuation, analyst expectations, and company-specific risks for the largest actual holdings.', bookSymbols)
-      add('price-history', 'Measure return paths and drawdowns across the largest actual holdings.', bookSymbols)
-      add('news', 'Capture current catalysts and changes in the information set for the largest actual holdings.', bookSymbols)
+      add('company', 'Review fundamentals, growth, valuation, analyst expectations, and company-specific risks for every actual holding.', bookSymbols)
+      add('price-history', 'Measure return paths and drawdowns across every actual holding.', bookSymbols)
+      add('news', 'Capture current catalysts and changes in the information set for every actual holding.', bookSymbols)
       if (optionSymbols.length) {
         add('options', 'Measure implied volatility, realized volatility, expected move, and positioning for each option underlying.', optionSymbols)
         add('volatility-skew', 'Measure downside skew and the volatility term structure for each option underlying.', optionSymbols)
@@ -428,8 +468,8 @@ export function planReportResearch(
       add('sentiment', 'Measure whether the current news tape confirms or contradicts the portfolio thesis.')
     }
     if (valuationRequested || fullPortfolioRequested) {
-      add('peer-valuation', 'Benchmark the largest holdings against relevant peers, operating quality, and consensus targets.', bookSymbols)
-      add('dcf-valuation', 'Build intrinsic-value anchors and sensitivities for the largest holdings.', bookSymbols)
+      add('peer-valuation', 'Benchmark every eligible holding against relevant peers, operating quality, and consensus targets.', bookSymbols)
+      add('dcf-valuation', 'Build intrinsic-value anchors and sensitivities for every eligible holding.', bookSymbols)
     }
     add('earnings', 'Check near-term earnings risk only for actual portfolio holdings.', bookSymbols.length ? bookSymbols : symbols)
   } else if (intent === 'macro') {
@@ -702,6 +742,7 @@ function tagClip(
     researchSourceId: source.id,
     researchKey: `${source.id}:${key}`,
     sourceRoute: routeFor(source.route, ticker),
+    evidenceDomain: source.domain,
   }
 }
 
@@ -829,14 +870,8 @@ export function researchSourceProducesVisuals(sourceId: ReportResearchSourceId):
 // them fail every time the planner chose them for a portfolio or macro report.
 const MULTI_ASSET_SOURCES = new Set<ReportResearchSourceId>(['correlation', 'regression', 'market-compare'])
 
-function targetsForSource(sourceId: ReportResearchSourceId, symbols: string[]): string[] {
-  const limit = sourceId === 'dcf-valuation' || sourceId === 'volatility-skew'
-    || sourceId === 'dealer-gex' || sourceId === 'implied-probability'
-    ? 3
-    : sourceId === 'peer-valuation'
-      ? 4
-      : 8
-  return symbols.slice(0, limit)
+function targetsForSource(_sourceId: ReportResearchSourceId, symbols: string[]): string[] {
+  return unique(symbols.map(normalizeTicker).filter(Boolean))
 }
 
 export async function enhanceReportResearchPlan(
@@ -901,6 +936,7 @@ export async function enhanceReportResearchPlan(
     sources.push({
       ...SOURCE_META[id],
       reason,
+      critical: isCriticalSource(baseline.intent, id),
       targets: item.targetMode === 'market' || item.targetMode === 'portfolio'
         ? []
         : targetsForSource(id, MULTI_ASSET_SOURCES.has(id)
@@ -1000,7 +1036,7 @@ async function runSource(
             'Corporate Hub',
             `Product Segments · ${ticker}`,
             ['Segment', 'Value', 'Share %', 'YoY %'],
-            segmentRows.slice(0, 8).map(row => [
+            segmentRows.map(row => [
               plain(row.name),
               finite(row.value),
               finite(row.pct),
@@ -1034,7 +1070,7 @@ async function runSource(
             'line',
             'year',
             activityRows,
-            activityNames.map(name => ({ key: name, label: `${name} ($B)` })),
+            activityNames.map(name => ({ key: name, label: `${name} ($B)`, unit: 'currency' as const })),
           ), source, `${ticker}:activity-history`, ticker))
         }
 
@@ -1045,7 +1081,7 @@ async function runSource(
             'Corporate Hub',
             `Geographic Segments · ${ticker}`,
             ['Region', 'Value', 'Share %'],
-            geographicRows.slice(0, 8).map(row => [
+            geographicRows.map(row => [
               plain(row.name),
               finite(row.value),
               finite(row.pct),
@@ -1123,8 +1159,8 @@ async function runSource(
             'period',
             trendRows,
             [
-              ...(revenue ? [{ key: 'revenue', label: 'Revenue ($M)' }] : []),
-              ...(netIncome ? [{ key: 'netIncome', label: 'Net income ($M)' }] : []),
+              ...(revenue ? [{ key: 'revenue', label: 'Revenue ($M)', unit: 'currency' as const }] : []),
+              ...(netIncome ? [{ key: 'netIncome', label: 'Net income ($M)', unit: 'currency' as const }] : []),
             ],
           ), source, `${ticker}:financial-trend`, ticker))
 
@@ -1181,7 +1217,7 @@ async function runSource(
             'bar',
             'metric',
             multipleRows,
-            [{ key: 'subject', label: ticker }, { key: 'median', label: 'Peer median' }],
+            [{ key: 'subject', label: ticker, unit: 'multiple' }, { key: 'median', label: 'Peer median', unit: 'multiple' }],
           ), source, `${ticker}:multiples-visual`, ticker))
         }
         const qualityRows = [
@@ -1195,7 +1231,7 @@ async function runSource(
             'bar',
             'metric',
             qualityRows,
-            [{ key: 'subject', label: ticker }, { key: 'median', label: 'Peer median' }],
+            [{ key: 'subject', label: ticker, unit: 'percent' }, { key: 'median', label: 'Peer median', unit: 'percent' }],
           ), source, `${ticker}:quality-visual`, ticker))
         }
         const targetRows = peers
@@ -1215,7 +1251,7 @@ async function runSource(
             'bar',
             'ticker',
             targetRows,
-            [{ key: 'upside', label: 'Consensus upside %' }],
+            [{ key: 'upside', label: 'Consensus upside %', unit: 'percent' }],
           ), source, `${ticker}:consensus-visual`, ticker))
         }
         clips.push(tagClip(tableClip(
@@ -1333,7 +1369,7 @@ async function runSource(
             'bar',
             'year',
             fcfs.map(row => ({ year: `Y${plain(row.year)}`, revenue: finite(row.revenue) == null ? null : finite(row.revenue)! / 1000 })),
-            [{ key: 'revenue', label: 'Revenue (USD billions)' }],
+            [{ key: 'revenue', label: 'Revenue (USD billions)', unit: 'currency' }],
           ), source, `${ticker}:revenue-visual`, ticker))
           clips.push(tagClip(chartClip(
             'DCF Valuation',
@@ -1345,7 +1381,7 @@ async function runSource(
               fcf: finite(row.fcf) == null ? null : finite(row.fcf)! / 1000,
               presentValue: finite(row.pv_fcf) == null ? null : finite(row.pv_fcf)! / 1000,
             })),
-            [{ key: 'fcf', label: 'Free cash flow (USD billions)' }, { key: 'presentValue', label: 'PV of FCF (USD billions)' }],
+            [{ key: 'fcf', label: 'Free cash flow (USD billions)', unit: 'currency' }, { key: 'presentValue', label: 'PV of FCF (USD billions)', unit: 'currency' }],
           ), source, `${ticker}:fcf-visual`, ticker))
           clips.push(tagClip(tableClip(
             'DCF Valuation',
@@ -1376,9 +1412,9 @@ async function runSource(
               high: finite(row.hi),
             })),
             [
-              { key: 'low', label: 'Low $/share' },
-              { key: 'base', label: 'Base $/share' },
-              { key: 'high', label: 'High $/share' },
+              { key: 'low', label: 'Low $/share', unit: 'currency' },
+              { key: 'base', label: 'Base $/share', unit: 'currency' },
+              { key: 'high', label: 'High $/share', unit: 'currency' },
             ],
           ), source, `${ticker}:sensitivity-visual`, ticker))
           clips.push(tagClip(tableClip(
@@ -1433,7 +1469,7 @@ async function runSource(
 
         const plan = parseChartDirective(source.directive, [ticker])
         const closes = full.map(p => p.price)
-        const series: { key: string; label: string }[] = [{ key: 'price', label: ticker }]
+        const series: { key: string; label: string; unit: 'currency' }[] = [{ key: 'price', label: ticker, unit: 'currency' }]
         const priced: Record<string, (number | null)[]> = {}
 
         // Only same-scale indicators belong on the price axis. RSI, MACD and HV
@@ -1471,8 +1507,8 @@ async function runSource(
           for (const [sym, byDate] of Object.entries(overlaySeries)) row[sym] = byDate[point.date] ?? null
           return row
         })
-        for (const key of Object.keys(priced)) series.push({ key, label: key })
-        for (const sym of Object.keys(overlaySeries)) series.push({ key: sym, label: `${sym} (rebased)` })
+        for (const key of Object.keys(priced)) series.push({ key, label: key, unit: 'currency' })
+        for (const sym of Object.keys(overlaySeries)) series.push({ key: sym, label: `${sym} (rebased)`, unit: 'currency' })
 
         const metrics = record(data.metrics)
         const clip = chartClip('Chart Studio', `${ticker} price history`, 'line', 'date', thin(merged), series)
@@ -1490,7 +1526,11 @@ async function runSource(
             return row
           })
           const oscClip = chartClip('Chart Studio', `${ticker} ${oscillators.map(o => o.label).join(' and ')}`,
-            'line', 'date', thin(oscRows), oscillators.map(o => ({ key: o.label, label: o.label })))
+            'line', 'date', thin(oscRows), oscillators.map(o => ({
+              key: o.label,
+              label: o.label,
+              unit: o.kind === 'hv' ? 'percent' as const : 'index' as const,
+            })))
           out.push(tagClip(oscClip, source, `${ticker}-osc`, ticker))
         }
         return out
@@ -1508,7 +1548,7 @@ async function runSource(
         'line',
         'date',
         rows,
-        tickers.map(ticker => ({ key: ticker, label: ticker })),
+        tickers.map(ticker => ({ key: ticker, label: ticker, unit: 'index' as const })),
       ), source, source.targets.join('-'))]
     }
 
@@ -1576,7 +1616,7 @@ async function runSource(
               { measure: 'ATM IV', volatility: atmIv },
               { measure: '30D realized', volatility: realized },
             ],
-            [{ key: 'volatility', label: 'Volatility %' }],
+            [{ key: 'volatility', label: 'Volatility %', unit: 'percent' }],
           ), source, `${ticker}:volatility-visual`, ticker))
         }
         return clips
@@ -1612,7 +1652,7 @@ async function runSource(
             'area',
             'moneyness',
             smile.map(point => ({ moneyness: finite(point.moneyness), iv: finite(point.iv) })),
-            [{ key: 'iv', label: 'Implied volatility %' }],
+            [{ key: 'iv', label: 'Implied volatility %', unit: 'percent' }],
           ), source, `${ticker}:smile-visual`, ticker))
         }
         if (terms.length) {
@@ -1622,7 +1662,7 @@ async function runSource(
             'line',
             'dte',
             terms.map(term => ({ dte: finite(term.dte), atmIv: finite(term.atm_iv), downsideSkew: finite(term.rr_25) })),
-            [{ key: 'atmIv', label: 'ATM IV %' }, { key: 'downsideSkew', label: '25Δ put skew' }],
+            [{ key: 'atmIv', label: 'ATM IV %', unit: 'percent' }, { key: 'downsideSkew', label: '25Δ put skew', unit: 'percentage-point' }],
           ), source, `${ticker}:term-visual`, ticker))
         }
         return clips
@@ -1659,7 +1699,7 @@ async function runSource(
             'bar',
             'strike',
             rows,
-            [{ key: 'netGex', label: 'Net GEX ($M)' }],
+            [{ key: 'netGex', label: 'Net GEX ($M)', unit: 'currency' }],
           ), source, `${ticker}:net-gex-visual`, ticker))
           clips.push(tagClip(chartClip(
             'Dealer GEX',
@@ -1671,7 +1711,7 @@ async function runSource(
               callGex: finite(row.call_gex),
               putGex: finite(row.put_gex),
             })),
-            [{ key: 'callGex', label: 'Call GEX ($M)' }, { key: 'putGex', label: 'Put GEX ($M)' }],
+            [{ key: 'callGex', label: 'Call GEX ($M)', unit: 'currency' }, { key: 'putGex', label: 'Put GEX ($M)', unit: 'currency' }],
           ), source, `${ticker}:call-put-visual`, ticker))
         }
         return clips
@@ -1729,9 +1769,9 @@ async function runSource(
               lower: finite(row.lower),
             })), 100),
             [
-              { key: 'upper', label: '~85th percentile' },
-              { key: 'median', label: 'Median' },
-              { key: 'lower', label: '~15th percentile' },
+              { key: 'upper', label: '~85th percentile', unit: 'currency' },
+              { key: 'median', label: 'Median', unit: 'currency' },
+              { key: 'lower', label: '~15th percentile', unit: 'currency' },
             ],
           ), source, `${ticker}:cone-visual`, ticker))
         }
@@ -1742,7 +1782,7 @@ async function runSource(
             'area',
             'strike',
             thin(density.map(row => ({ strike: finite(row.strike), density: finite(row.density) == null ? null : finite(row.density)! * 100 })), 100),
-            [{ key: 'density', label: 'Probability density %' }],
+            [{ key: 'density', label: 'Probability density %', unit: 'percent' }],
           ), source, `${ticker}:density-visual`, ticker))
         }
         const curve = array(distribution.delta_curve).map(record)
@@ -1753,7 +1793,7 @@ async function runSource(
             'line',
             'strike',
             thin(curve.map(row => ({ strike: finite(row.strike), probability: finite(row.delta) == null ? null : finite(row.delta)! * 100 })), 100),
-            [{ key: 'probability', label: 'Finish-above probability %' }],
+            [{ key: 'probability', label: 'Finish-above probability %', unit: 'percent' }],
           ), source, `${ticker}:finish-above-visual`, ticker))
         }
         return clips
@@ -1843,7 +1883,7 @@ async function runSource(
           'bar',
           'instrument',
           movers,
-          [{ key: 'change', label: 'Change %' }],
+          [{ key: 'change', label: 'Change %', unit: 'percent' }],
         ), source, 'moves-visual'))
       }
       return clips
@@ -1893,7 +1933,7 @@ async function runSource(
             { stance: 'Bullish', share: bull },
             { stance: 'Bearish', share: bear },
           ],
-          [{ key: 'share', label: 'Share %' }],
+          [{ key: 'share', label: 'Share %', unit: 'percent' }],
         ), source, 'split-visual'))
       }
       return clips
@@ -1939,14 +1979,14 @@ async function runSource(
           'bar',
           'sector',
           momentumData,
-          [{ key: 'momentum', label: 'Momentum score (pp)' }],
+          [{ key: 'momentum', label: 'Momentum score (pp)', unit: 'percentage-point' }],
           {
             barOrientation: 'horizontal',
             details: [
-              { key: 'oneWeek', label: '1W return %' },
-              { key: 'oneMonth', label: '1M return %' },
-              { key: 'threeMonth', label: '3M return %' },
-              { key: 'vsSpyOneMonth', label: 'Vs SPY · 1M %' },
+              { key: 'oneWeek', label: '1W return %', unit: 'percent' },
+              { key: 'oneMonth', label: '1M return %', unit: 'percent' },
+              { key: 'threeMonth', label: '3M return %', unit: 'percent' },
+              { key: 'vsSpyOneMonth', label: 'Vs SPY · 1M %', unit: 'percent' },
             ],
           },
         ), source, 'rotation-visual'),
@@ -2013,7 +2053,7 @@ async function runSource(
             actual: finite(value),
             fitted: finite(fitted[index]),
           })), 120),
-          [{ key: 'actual', label: `${dependent} actual` }, { key: 'fitted', label: 'Model fitted' }],
+          [{ key: 'actual', label: `${dependent} actual`, unit: 'number' }, { key: 'fitted', label: 'Model fitted', unit: 'number' }],
         ), source, `${source.targets.join('-')}:fit-visual`))
       }
       const residuals = array(data.residuals)
@@ -2027,7 +2067,7 @@ async function runSource(
             date: plain(dates[index] ?? index + 1),
             residual: finite(value),
           })), 80),
-          [{ key: 'residual', label: 'Residual' }],
+          [{ key: 'residual', label: 'Residual', unit: 'number' }],
         ), source, `${source.targets.join('-')}:residuals-visual`))
       }
       return clips
@@ -2091,7 +2131,7 @@ async function runSource(
             pair: `${plain(pair.a)} ↔ ${plain(pair.b)}`,
             correlation: finite(pair.value),
           })),
-          [{ key: 'correlation', label: 'Correlation' }],
+          [{ key: 'correlation', label: 'Correlation', unit: 'correlation' }],
         ), source, `${source.targets.join('-')}:pairs-visual`))
       }
       const betas = array(data.betas).map(record)
@@ -2102,7 +2142,7 @@ async function runSource(
           'bar',
           'ticker',
           betas.map(beta => ({ ticker: plain(beta.ticker), beta: finite(beta.beta) })),
-          [{ key: 'beta', label: 'Beta' }],
+          [{ key: 'beta', label: 'Beta', unit: 'beta' }],
         ), source, `${source.targets.join('-')}:beta-visual`))
       }
       const rolling = record(data.rolling)
@@ -2128,7 +2168,7 @@ async function runSource(
           'line',
           'date',
           thin(dates.map((date, index) => ({ date: String(date), correlation: finite(values[index]) })), 100),
-          [{ key: 'correlation', label: `${plain(rolling.window)}-day correlation` }],
+          [{ key: 'correlation', label: `${plain(rolling.window)}-day correlation`, unit: 'correlation' }],
         ), source, `${source.targets.join('-')}:rolling`))
       }
       return clips
@@ -2179,7 +2219,7 @@ async function runSource(
             'bar',
             'factor',
             factors.map(factor => ({ factor: plain(factor.factor), beta: finite(factor.beta) })),
-            [{ key: 'beta', label: 'Beta' }],
+            [{ key: 'beta', label: 'Beta', unit: 'beta' }],
           ), source, `${response.mode}:betas`))
           clips.push(tagClip(tableClip(
             'Factor Decomposition',
@@ -2239,10 +2279,10 @@ async function runSource(
             'date',
             thin(rollingPoints, 100),
             [
-              { key: 'beta', label: 'Rolling beta' },
-              { key: 'fullSample', label: 'Full-sample beta' },
-              { key: 'lower95', label: '95% lower' },
-              { key: 'upper95', label: '95% upper' },
+              { key: 'beta', label: 'Rolling beta', unit: 'beta' },
+              { key: 'fullSample', label: 'Full-sample beta', unit: 'beta' },
+              { key: 'lower95', label: '95% lower', unit: 'beta' },
+              { key: 'upper95', label: '95% upper', unit: 'beta' },
             ],
           ), source, `${response.mode}:rolling-${factor}`))
         }
@@ -2284,7 +2324,11 @@ async function runSource(
           'line',
           'date',
           history,
-          entries.slice(0, 6).map(([key, value]) => ({ key, label: plain(record(value).label ?? key) })),
+          entries.slice(0, 6).map(([key, value]) => ({
+            key,
+            label: plain(record(value).label ?? key),
+            unit: key === 'vix' ? 'index' as const : 'basis-point' as const,
+          })),
         ), source, 'history-visual'))
       }
       return clips
@@ -2306,7 +2350,7 @@ async function runSource(
           'line',
           'date',
           meetings.map(meeting => ({ date: plain(meeting.date), rate: finite(meeting.rate) })),
-          [{ key: 'rate', label: 'Implied rate %' }],
+          [{ key: 'rate', label: 'Implied rate %', unit: 'percent' }],
         ), source, 'fed-path-visual'))
         clips.push(tagClip(tableClip(
           'Rate Engine',
@@ -2340,10 +2384,10 @@ async function runSource(
           'tenor',
           curveRows,
           [
-            { key: 'today', label: 'Today' },
-            { key: '1D ago', label: '1D ago' },
-            { key: '1M ago', label: '1M ago' },
-            { key: '6M ago', label: '6M ago' },
+            { key: 'today', label: 'Today', unit: 'percent' },
+            { key: '1D ago', label: '1D ago', unit: 'percent' },
+            { key: '1M ago', label: '1M ago', unit: 'percent' },
+            { key: '6M ago', label: '6M ago', unit: 'percent' },
           ],
         ), source, 'yield-curve-visual'))
       }
@@ -2373,7 +2417,7 @@ async function runSource(
           value: mark == null ? null : Math.max(0, holding.shares * mark),
         }
       })
-      const sectorPairs = await Promise.all(valued.slice(0, 30).map(async holding => {
+      const sectorPairs = await Promise.all(valued.map(async holding => {
         try {
           const company = record(await client.get(`/api/corporate/hub?ticker=${encodeURIComponent(holding.ticker)}`))
           const sector = plain(company.sector)
@@ -2502,7 +2546,7 @@ async function runSource(
           'bar',
           'sector',
           sectorRows.map(([sector, weight]) => ({ sector, weight: +weight.toFixed(2) })),
-          [{ key: 'weight', label: 'Portfolio weight %' }],
+          [{ key: 'weight', label: 'Portfolio weight %', unit: 'percent' }],
           { barOrientation: 'horizontal' },
         ), source, `${portfolio.id}:sector-allocation-visual`))
         if (fundLookThroughWeight > 0) {
@@ -2556,7 +2600,7 @@ async function runSource(
         })
         .filter(holding => holding.ticker && holding.value > 0)
         .sort((a, b) => b.value - a.value)
-      const selected = priced.slice(0, 20)
+      const selected = priced
       const fullEquity = priced.reduce((sum, holding) => sum + holding.value, 0)
       const fullTotal = fullEquity + portfolio.cashValue
       const selectedEquity = selected.reduce((sum, holding) => sum + holding.value, 0)
@@ -2664,7 +2708,7 @@ async function runSource(
           'line',
           'date',
           indexedRows,
-          [{ key: 'portfolio', label: analysisName }, { key: 'SPY', label: 'SPY' }],
+          [{ key: 'portfolio', label: analysisName, unit: 'index' }, { key: 'SPY', label: 'SPY', unit: 'index' }],
         ), source, `${portfolio.id}:performance`))
         clips.push(tagClip(chartClip(
           'Portfolio Compare',
@@ -2675,7 +2719,7 @@ async function runSource(
             date: point.date,
             activeReturn: point.SPY == null ? null : +(Number(point.portfolio) - Number(point.SPY)).toFixed(3),
           })),
-          [{ key: 'activeReturn', label: 'Cumulative active return (pp)' }],
+          [{ key: 'activeReturn', label: 'Cumulative active return (pp)', unit: 'percentage-point' }],
         ), source, `${portfolio.id}:active-return`))
         let portfolioPeak = -Infinity
         let benchmarkPeak = -Infinity
@@ -2694,7 +2738,7 @@ async function runSource(
           'line',
           'date',
           drawdowns,
-          [{ key: 'portfolioDrawdown', label: `${analysisName} drawdown %` }, { key: 'benchmarkDrawdown', label: 'SPY drawdown %' }],
+          [{ key: 'portfolioDrawdown', label: `${analysisName} drawdown %`, unit: 'percent' }, { key: 'benchmarkDrawdown', label: 'SPY drawdown %', unit: 'percent' }],
         ), source, `${portfolio.id}:drawdown`))
       }
       return clips
@@ -2806,26 +2850,76 @@ export function buildReportDataBank(
     const status = sourceClips.length
       ? failures.length ? 'partial' : 'complete'
       : 'failed'
+    const missingTargets = unique(failures.flatMap(failure => failure.target ? [failure.target] : []))
+    const requestedTargetCount = source?.targets.length || 1
+    const coveredTargetCount = status === 'failed'
+      ? 0
+      : source?.targets.length
+        ? Math.max(0, source.targets.length - missingTargets.length)
+        : sourceClips.length ? 1 : 0
+    const coveragePct = requestedTargetCount
+      ? Math.round((coveredTargetCount / requestedTargetCount) * 1000) / 10
+      : 100
+    const failureGaps = failures.map(failure => (
+      failure.target
+        ? `${source?.label ?? sourceId}: ${failure.target} - ${failure.message}`
+        : `${source?.label ?? sourceId}: ${failure.message}`
+    ))
+    const unresolvedGaps = failureGaps.length
+      ? failureGaps
+      : status === 'failed'
+        ? [`${source?.label ?? sourceId}: No usable evidence returned.`]
+        : []
     return {
       sourceId,
       label: source?.label ?? sourceId,
       status,
       targets: source?.targets ?? [],
       clipIds: sourceClips.map(clip => clip.id),
-      missingTargets: failures.flatMap(failure => failure.target ? [failure.target] : []),
+      missingTargets,
       error: failures.length
         ? failures.map(failure => failure.message).filter(Boolean).join(' ') || 'Some requested evidence did not complete.'
         : status === 'failed' ? 'No usable evidence returned.' : '',
+      domain: source?.domain ?? 'issuer',
+      critical: source?.critical ?? false,
+      requestedTargetCount,
+      coveredTargetCount,
+      coveragePct,
+      unresolvedGaps,
     }
   })
+  const requestedTargets = runs.reduce((sum, run) => sum + run.requestedTargetCount, 0)
+  const coveredTargets = runs.reduce((sum, run) => sum + run.coveredTargetCount, 0)
+  const domains: EvidenceDomain[] = ['portfolio', 'issuer', 'macro', 'benchmark']
+  const domainCoveragePct = Object.fromEntries(domains.map(domain => {
+    const domainRuns = runs.filter(run => run.domain === domain)
+    const requested = domainRuns.reduce((sum, run) => sum + run.requestedTargetCount, 0)
+    const covered = domainRuns.reduce((sum, run) => sum + run.coveredTargetCount, 0)
+    return [domain, requested ? Math.round((covered / requested) * 1000) / 10 : 100]
+  })) as Record<EvidenceDomain, number>
+  const unresolvedGaps = runs.flatMap(run => run.unresolvedGaps)
+  const criticalSourceIds = requiredSourceIds.filter(sourceId => (
+    plan.sources.find(source => source.id === sourceId)?.critical === true
+  ))
+  const criticalReady = runs
+    .filter(run => criticalSourceIds.includes(run.sourceId))
+    .every(run => run.status === 'complete' && run.coveragePct === 100)
   return {
-    phase: 'complete',
+    phase: criticalReady ? 'ready' : 'blocked',
     requiredSourceIds,
+    criticalSourceIds,
     runs,
     objectivePlan: plan.objectivePlan ?? {
       thesis: '',
       requiredDataPoints: [],
       requiredChecks: [],
     },
+    coverage: {
+      requestedTargets,
+      coveredTargets,
+      targetCoveragePct: requestedTargets ? Math.round((coveredTargets / requestedTargets) * 1000) / 10 : 100,
+      domainCoveragePct,
+    },
+    unresolvedGaps,
   }
 }

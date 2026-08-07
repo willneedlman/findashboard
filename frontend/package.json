@@ -15,8 +15,6 @@
     "axios": "^1.7.2",
     "clsx": "^2.1.1",
     "framer-motion": "^11.2.10",
-    "html2canvas": "^1.4.1",
-    "jspdf": "^4.2.1",
     "leaflet": "^1.9.4",
     "lightweight-charts": "^4.2.0",
     "lucide-react": "^0.395.0",

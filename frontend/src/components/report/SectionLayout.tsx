@@ -8,6 +8,7 @@ import type {
   TablePayload,
   ReportSectionLayout,
   LayoutPreset,
+  ChartUnit,
 } from '../../lib/reportCreator'
 import { toTitleCase } from '../../lib/reportCreator'
 import type { ReportPalette, ClipPalette } from '../../lib/reportTheme'
@@ -330,6 +331,18 @@ function humanLabel(value: string): string {
     .trim()
 }
 
+function chartUnitFromLabel(label: string): ChartUnit {
+  if (/\bpp\b|percentage points?/i.test(label)) return 'percentage-point'
+  if (/\bbps?\b|basis points?/i.test(label)) return 'basis-point'
+  if (/\bcorrelation\b/i.test(label)) return 'correlation'
+  if (/\bbeta\b|coefficient/i.test(label)) return 'beta'
+  if (/\bindexed?\b|normalized/i.test(label)) return 'index'
+  if (/\$|\busd\b|price|spot|strike|target|intrinsic|fair value|nav|per share|\/sh/i.test(label)) return 'currency'
+  if (/\bp\/e\b|\bev\/ebitda\b|\bp\/s\b|\bp\/b\b|\bp\/fcf\b|\bpeg\b|multiple/i.test(label)) return 'multiple'
+  if (/%|\bpct\b|\bpercent\b|volatility|margin|growth|upside|return|yield|rate|share|weight|allocation|premium|roe|roa/i.test(label)) return 'percent'
+  return 'number'
+}
+
 function tableMetricScore(column: string, title: string): number {
   const label = column.toLowerCase()
   const titleWords = new Set(title.toLowerCase().split(/[^a-z0-9]+/).filter(word => word.length > 3))
@@ -391,10 +404,10 @@ export function promoteTableToChart(table: TablePayload): ChartPayload | undefin
           title: `${table.title} · Momentum ranking`,
           xKey: 'sector',
           data,
-          series: [{ key: 'momentum', label: 'Momentum score (pp)' }],
+          series: [{ key: 'momentum', label: 'Momentum score (pp)', unit: 'percentage-point' }],
           details: detailColumns
             .filter(detail => detail.index >= 0)
-            .map(({ key, label }) => ({ key, label })),
+            .map(({ key, label }) => ({ key, label, unit: chartUnitFromLabel(label) })),
         }
       }
     }
@@ -453,23 +466,25 @@ export function promoteTableToChart(table: TablePayload): ChartPayload | undefin
     title,
     xKey: 'category',
     data,
-    series: [{ key: 'value', label: humanLabel(metric.column) }],
+    series: [{ key: 'value', label: humanLabel(metric.column), unit: chartUnitFromLabel(metric.column) }],
   }
 }
 
-function figureUnit(value: string): 'pct' | 'price' | 'multiple' | 'bps' | 'number' {
-  if (/\bbps?\b|basis points?/i.test(value)) return 'bps'
-  if (/%/.test(value)) return 'pct'
-  if (/\$|\busd\b/i.test(value)) return 'price'
+function figureUnit(value: string): ChartUnit {
+  if (/\bpp\b|percentage points?/i.test(value)) return 'percentage-point'
+  if (/\bbps?\b|basis points?/i.test(value)) return 'basis-point'
+  if (/%/.test(value)) return 'percent'
+  if (/\$|\busd\b/i.test(value)) return 'currency'
   if (/[×x]\b/i.test(value)) return 'multiple'
   return 'number'
 }
 
-function figureUnitLabel(unit: ReturnType<typeof figureUnit>): string {
-  if (unit === 'pct') return 'Percent (%)'
-  if (unit === 'price') return 'Value (USD)'
+function figureUnitLabel(unit: ChartUnit): string {
+  if (unit === 'percent') return 'Percent (%)'
+  if (unit === 'percentage-point') return 'Percentage points (pp)'
+  if (unit === 'currency') return 'Value (USD)'
   if (unit === 'multiple') return 'Multiple (×)'
-  if (unit === 'bps') return 'Basis points (bps)'
+  if (unit === 'basis-point') return 'Basis points (bps)'
   return 'Value'
 }
 
@@ -492,7 +507,7 @@ export function promoteKeyFiguresToChart(
   const selected = best.slice(0, 6)
   const unit = selected[0].unit
   const sum = selected.reduce((total, item) => total + item.value, 0)
-  const composition = unit === 'pct'
+  const composition = unit === 'percent'
     && selected.length <= 8
     && selected.every(item => item.value >= 0)
     && sum >= 85
@@ -505,7 +520,7 @@ export function promoteKeyFiguresToChart(
     title: `${heading} · Key Figures`,
     xKey: 'metric',
     data: selected.map(item => ({ metric: item.metric, value: item.value })),
-    series: [{ key: 'value', label: figureUnitLabel(unit) }],
+    series: [{ key: 'value', label: figureUnitLabel(unit), unit }],
   }
 }
 
@@ -522,6 +537,125 @@ function chartSignature(clip: ReportClip): string {
   const categories = payload.data.map(row => String(row[payload.xKey] ?? '')).join('|')
   const series = payload.series.map(item => item.key).sort().join('|')
   return `${payload.chartType}:${(payload.title || '').toLowerCase()}:${payload.xKey}:${categories}:${series}`
+}
+
+export type ReportVisualFamily =
+  | 'allocation'
+  | 'performance'
+  | 'drawdown'
+  | 'risk'
+  | 'correlation'
+  | 'factor'
+  | 'scenario'
+  | 'distribution'
+  | 'valuation'
+  | 'catalyst'
+  | 'macro'
+  | 'benchmark'
+  | 'issuer'
+  | 'other'
+
+export function reportVisualFamily(clip: ReportClip): ReportVisualFamily {
+  const title = chartTitle(clip).toLowerCase()
+  const source = `${clip.researchSourceId ?? ''} ${clip.researchKey ?? ''}`.toLowerCase()
+  const hay = `${title} ${source}`
+  if (/correlation|covariance/.test(hay)) return 'correlation'
+  if (/factor|coefficient|alpha|beta|regression/.test(hay)) return 'factor'
+  if (/drawdown|underwater/.test(hay)) return 'drawdown'
+  if (/scenario|shock|stress|tail loss|liquidation/.test(hay)) return 'scenario'
+  if (/distribution|monte carlo|percentile|histogram|probability/.test(hay)) return 'distribution'
+  if (/allocation|weight|concentration|sector exposure|risk share/.test(hay)) return 'allocation'
+  if (/volatility|var\b|cvar\b|sharpe|sortino|risk metrics|risk contribution/.test(hay)) return 'risk'
+  if (/performance|return|cagr|growth of|wealth|p&l/.test(hay)) return 'performance'
+  if (/valuation|dcf|multiple|fair value|peer/.test(hay)) return 'valuation'
+  if (/earnings|event|calendar|catalyst|news/.test(hay)) return 'catalyst'
+  if (/macro|rates?|fed|credit|yield curve|sentiment|global market/.test(hay)) return 'macro'
+  if (/benchmark|active return|vs spy|relative performance|market compare/.test(hay)) return 'benchmark'
+  if (clip.evidenceDomain === 'issuer') return 'issuer'
+  return 'other'
+}
+
+function portfolioFamilyRelevance(family: ReportVisualFamily, hint: string): number {
+  const normalized = hint.toLowerCase()
+  const terms: Record<ReportVisualFamily, RegExp> = {
+    allocation: /allocation|weight|concentration|exposure|position|sizing|diversif|composition/,
+    performance: /performance|return|cagr|happened|track record|wealth|outcome/,
+    drawdown: /drawdown|loss|downside|stress|risk|underwater/,
+    risk: /risk|volatility|var|cvar|sharpe|sortino|beta|downside|stability/,
+    correlation: /correlation|diversif|co-move|relationship|dependenc/,
+    factor: /factor|driver|explain|why|beta|alpha|market sensitivity/,
+    scenario: /scenario|stress|shock|downside|upside|could happen|tail|liquidat/,
+    distribution: /distribution|probability|odds|percentile|monte carlo|range|uncertainty/,
+    valuation: /valuation|value|multiple|dcf|upside|downside|price target/,
+    catalyst: /earnings|catalyst|event|outlook|next|forward|news/,
+    macro: /macro|rate|fed|credit|economic|outlook|next|forward/,
+    benchmark: /benchmark|active|relative|spy|market|performance|return/,
+    issuer: /issuer|company|holding|position|security|stock/,
+    other: /evidence|data|gap|limitation/,
+  }
+  return terms[family].test(normalized) ? 28 : 0
+}
+
+function assignPortfolioVisuals(
+  sections: GeneratedSection[],
+  assigned: Map<string, { visual: ReportClip | undefined; showKeyFigures: boolean }>,
+  projectClips: ReportClip[],
+  objective: string,
+  domainCoveragePct?: Partial<Record<NonNullable<ReportClip['evidenceDomain']>, number>>,
+): void {
+  const generated = sections.flatMap((_, index) => {
+    const visual = assigned.get(reportSectionAssignmentKey(sections, index))?.visual
+    return visual ? [visual] : []
+  })
+  const pool = [...new Map([...projectClips, ...generated]
+    .filter(clip => clip.payload.kind === 'chart' || clip.payload.kind === 'table')
+    .map(clip => [clip.id, clip])).values()]
+  const usedIds = new Set<string>()
+  const usedSignatures = new Set<string>()
+  const familyCounts = new Map<ReportVisualFamily, number>()
+  const chartTypeCounts = new Map<string, number>()
+
+  for (const [index, section] of sections.entries()) {
+    const assignmentKey = reportSectionAssignmentKey(sections, index)
+    const hint = `${section.templateSection ?? ''} ${section.heading} ${section.analysis} ${objective}`
+    const candidates = pool.flatMap(clip => {
+      const signature = chartSignature(clip)
+      if (usedIds.has(clip.id) || usedSignatures.has(signature)) return []
+      const family = reportVisualFamily(clip)
+      const familyScore = portfolioFamilyRelevance(family, hint)
+      const domainScore = clip.evidenceDomain === 'portfolio'
+        ? 12
+        : clip.evidenceDomain === 'benchmark'
+          ? 8
+          : clip.evidenceDomain === 'macro' && /outlook|next|forward|macro|rate|credit/i.test(hint)
+            ? 8
+            : clip.evidenceDomain === 'issuer' && /issuer|holding|position|earnings|catalyst|valuation/i.test(hint)
+              ? 4
+              : 0
+      const coverageScore = clip.evidenceDomain
+        ? ((domainCoveragePct?.[clip.evidenceDomain] ?? 100) / 10) - 10
+        : 0
+      const diversityScore = (familyCounts.get(family) ?? 0) === 0 ? 18 : -22 * (familyCounts.get(family) ?? 0)
+      const chartType = clip.payload.kind === 'chart' ? clip.payload.chartType : 'table'
+      const typePenalty = -5 * (chartTypeCounts.get(chartType) ?? 0)
+      const relevance = scoreChartForHint(clip, hint) + familyScore + domainScore
+      return relevance > 4 ? [{ clip, family, chartType, score: relevance + coverageScore + diversityScore + typePenalty }] : []
+    }).sort((a, b) => b.score - a.score)
+
+    const selected = candidates[0]
+    if (!selected) {
+      assigned.set(assignmentKey, { visual: undefined, showKeyFigures: true })
+      continue
+    }
+    usedIds.add(selected.clip.id)
+    usedSignatures.add(chartSignature(selected.clip))
+    familyCounts.set(selected.family, (familyCounts.get(selected.family) ?? 0) + 1)
+    chartTypeCounts.set(selected.chartType, (chartTypeCounts.get(selected.chartType) ?? 0) + 1)
+    assigned.set(assignmentKey, {
+      visual: selected.clip,
+      showKeyFigures: selected.clip.payload.kind !== 'table',
+    })
+  }
 }
 
 function researchTarget(clip: ReportClip): string {
@@ -719,7 +853,12 @@ export function assignReportBodyVisuals(
   sections: GeneratedSection[],
   clipById: Map<string, ReportClip>,
   projectClips: ReportClip[],
-  meta: { projectId: string; generatedAt: string },
+  meta: {
+    projectId: string
+    generatedAt: string
+    objective?: string
+    domainCoveragePct?: Partial<Record<NonNullable<ReportClip['evidenceDomain']>, number>>
+  },
 ): Map<string, { visual: ReportClip | undefined; showKeyFigures: boolean }> {
   const rejectedVisuals = new Set<string>()
   const keyedSections = sections.map((section, index) => ({
@@ -770,46 +909,11 @@ export function assignReportBodyVisuals(
     })
   }
 
-  const portfolioReport = projectClips.some(clip => (
-    /\bcurrent allocation\b/i.test(clip.payload.title || '')
-    && /portfolio manager|active book/i.test(clip.sourceTab)
-  ))
-    && projectClips.some(clip => /\brisk metrics\b/i.test(clip.payload.title || ''))
+  const portfolioReport = projectClips.some(clip => clip.evidenceDomain === 'portfolio')
+    || (projectClips.some(clip => /\bcurrent allocation\b/i.test(clip.payload.title || ''))
+      && projectClips.some(clip => /\brisk metrics\b/i.test(clip.payload.title || '')))
   if (portfolioReport) {
-    const findVisual = (pattern: RegExp, kind?: ClipPayload['kind']) => projectClips.find(clip => (
-      (!kind || clip.payload.kind === kind) && pattern.test(clip.payload.title || '')
-    ))
-    for (const [index, section] of sections.entries()) {
-      const assignmentKey = reportSectionAssignmentKey(sections, index)
-      const heading = section.heading.toLowerCase()
-      let visual: ReportClip | undefined
-      let showKeyFigures = false
-      if (heading.includes('what happened')) {
-        visual = projectClips.find(clip => (
-          clip.payload.kind === 'chart'
-          && clip.researchSourceId === 'portfolio-risk'
-          && /:performance$/i.test(clip.researchKey || '')
-        )) ?? projectClips.find(clip => clip.payload.kind === 'chart'
-          && /\bvs SPY\b/i.test(clip.payload.title || '')
-          && !/\b(active return|drawdown)\b/i.test(clip.payload.title || ''))
-        showKeyFigures = true
-      } else if (heading.includes('why it happened')) {
-        visual = projectClips.find(clip => (
-          clip.payload.kind === 'chart'
-          && clip.researchSourceId === 'factor-decomposition'
-          && /:rolling-market$/i.test(clip.researchKey || '')
-        )) ?? findVisual(/rolling .*market coefficient/i, 'chart')
-          ?? findVisual(/holding-level beta and portfolio risk contribution/i, 'table')
-        showKeyFigures = true
-      } else if (heading.includes('what could happen next')) {
-        visual = findVisual(/upcoming portfolio earnings schedule/i, 'table')
-          ?? findVisual(/market-shock scenario losses/i, 'table')
-      } else if (heading.includes('what action follows')) {
-        visual = findVisual(/proposed allocation|trade impact|before and after/i, 'table')
-        if (!visual) rejectedVisuals.add(assignmentKey)
-      }
-      assigned.set(assignmentKey, { visual, showKeyFigures })
-    }
+    assignPortfolioVisuals(sections, assigned, projectClips, meta.objective ?? '', meta.domainCoveragePct)
   }
 
   const chartGroups = new Map<string, Array<{ section: GeneratedSection; visual: ReportClip }>>()

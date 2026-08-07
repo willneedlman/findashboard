@@ -11,7 +11,7 @@ import SectionLayout, {
 } from '../components/report/SectionLayout'
 import {
   useReportCreator, timeframeLabel, clipTitle,
-  type ReportClip, type ClipPayload, type PositionDecision,
+  type ReportClip, type ClipPayload,
 } from '../lib/reportCreator'
 import { exportReportPdf, reportPdfBaseName } from '../lib/exportReportPdf'
 import { selectReportAppendixData } from '../lib/reportPresentation'
@@ -56,52 +56,6 @@ function kpiCell(clip: ReportClip | undefined, pattern: RegExp) {
   return clip.payload.cells.find(cell => pattern.test(cell.label))
 }
 
-function fallbackPositionDecisions(clips: ReportClip[]): PositionDecision[] {
-  const allocation = clips.find(clip => clip.payload.kind === 'table' && /\bcurrent allocation\b/i.test(clip.payload.title || ''))
-  const decisions: PositionDecision[] = []
-  if (allocation?.payload.kind === 'table') {
-    const tickerIndex = allocation.payload.columns.findIndex(column => /^ticker$/i.test(column))
-    const weightIndex = allocation.payload.columns.findIndex(column => /weight/i.test(column))
-    if (tickerIndex >= 0 && weightIndex >= 0) {
-      decisions.push(...allocation.payload.rows.map(row => {
-      const position = String(row[tickerIndex] ?? '').trim().toUpperCase()
-      const rawWeight = String(row[weightIndex] ?? '').trim()
-      const weight = Number(rawWeight.replace(/[%+,]/g, ''))
-      if (!position || position === 'CASH' || position === 'OPTIONS' || !Number.isFinite(weight) || weight <= 0.05) return undefined
-      const decision = weight >= 10 ? 'Review sizing' : 'No resize supported'
-      return {
-        position,
-        weight: `${weight.toFixed(2)}%`,
-        decision,
-        basis: weight >= 10
-          ? `${weight.toFixed(2)}% of the positive-weight book. Review its sizing against the account risk budget before changing it.`
-          : `${weight.toFixed(2)}% of the positive-weight book. The supplied evidence does not quantify a better replacement or resize.`,
-      }
-      }).filter((decision): decision is PositionDecision => !!decision))
-    }
-  }
-  for (const clip of clips) {
-    if (clip.payload.kind !== 'table' || !/\bcurrent option positions\b/i.test(clip.payload.title || '')) continue
-    const underlyingIndex = clip.payload.columns.findIndex(column => /underlying/i.test(column))
-    const strategyIndex = clip.payload.columns.findIndex(column => /strategy/i.test(column))
-    const expiryIndex = clip.payload.columns.findIndex(column => /expiry/i.test(column))
-    if (underlyingIndex < 0) continue
-    for (const row of clip.payload.rows) {
-      const underlying = String(row[underlyingIndex] ?? '').trim().toUpperCase()
-      if (!underlying) continue
-      const strategy = String(strategyIndex >= 0 ? row[strategyIndex] ?? 'Option position' : 'Option position').trim()
-      const expiry = String(expiryIndex >= 0 ? row[expiryIndex] ?? '' : '').trim()
-      decisions.push({
-        position: `${underlying} ${strategy}`.trim(),
-        weight: 'Option sleeve',
-        decision: 'No contract change supported',
-        basis: `${strategy}${expiry ? `, expiry ${expiry}` : ''}. Contract-level Greeks and a proposed adjustment were not supplied.`,
-      })
-    }
-  }
-  return decisions
-}
-
 // keyResult.value ranges from a short "$280–$310" to a longer open-mode
 // verdict phrase — scale down instead of hard-truncating so long text still
 // reads cleanly in a box sized for short ones.
@@ -141,8 +95,7 @@ function AppendixBlock({ clip, palette, compact = false }: { clip: ReportClip; p
   }
   if (p.kind === 'table') {
     const allocation = /\bcurrent allocation\b/i.test(p.title || '')
-    const rowLimit = allocation ? 18 : p.columns.some(column => /\b(headline|event|name)\b/i.test(column)) ? 6 : 10
-    let slim: ClipPayload = { ...p, rows: p.rows.slice(0, rowLimit) }
+    let semanticTable: ClipPayload = p
     if (allocation) {
       const columnIndex = (pattern: RegExp) => p.columns.findIndex(column => pattern.test(column))
       const ticker = columnIndex(/^ticker$/i)
@@ -150,11 +103,11 @@ function AppendixBlock({ clip, palette, compact = false }: { clip: ReportClip; p
       const weight = columnIndex(/weight/i)
       const sector = columnIndex(/sector classification/i)
       if ([ticker, marketValue, weight, sector].every(index => index >= 0)) {
-        slim = {
+        semanticTable = {
           kind: 'table',
           title: p.title,
           columns: ['Ticker', 'Market value', 'Weight %', 'Asset class', 'Sector'],
-          rows: p.rows.slice(0, rowLimit).map(row => {
+          rows: p.rows.map(row => {
             const classification = String(row[sector] ?? 'Unclassified')
             const isFund = /exchange[- ]traded fund|\betf\b/i.test(classification)
             return [
@@ -172,12 +125,7 @@ function AppendixBlock({ clip, palette, compact = false }: { clip: ReportClip; p
       <div style={frame}>
         <div style={head}>{title}</div>
         <div style={{ padding: '6px 10px 8px', background: palette.cellBg }}>
-          <ClipRenderer payload={slim} mode="print" compact={compact} maxTableRows={rowLimit} palette={clipPal} />
-          {p.rows.length > rowLimit && (
-            <div style={{ fontFamily: palette.mono, fontSize: 8, color: palette.muted, marginTop: 4 }}>
-              Showing {rowLimit} of {p.rows.length} rows. Full data remains in the saved project.
-            </div>
-          )}
+          <ClipRenderer payload={semanticTable} mode="print" compact={compact} palette={clipPal} />
         </div>
       </div>
     )
@@ -186,7 +134,7 @@ function AppendixBlock({ clip, palette, compact = false }: { clip: ReportClip; p
     <div style={frame}>
       <div style={head}>{title}</div>
       <div style={{ padding: '6px 10px 8px', background: palette.cellBg }}>
-        <ClipRenderer payload={p} mode="print" compact={compact} maxTableRows={10} palette={clipPal} />
+        <ClipRenderer payload={p} mode="print" compact={compact} palette={clipPal} />
       </div>
     </div>
   )
@@ -241,8 +189,10 @@ export default function ReportPrint() {
     return assignReportBodyVisuals(gen.sections, clipById, allClips, {
       projectId: project?.id ?? '',
       generatedAt: gen.generatedAt,
+      objective: `${renderScope?.goal ?? ''} ${renderScope?.purpose ?? ''}`,
+      domainCoveragePct: gen.pipeline?.coverage?.domainCoveragePct,
     })
-  }, [allClips, clipById, gen, project?.id])
+  }, [allClips, clipById, gen, project?.id, renderScope?.goal, renderScope?.purpose])
   const figureNumbers = useMemo(() => {
     const numbers = new Map<string, number>()
     if (!gen) return numbers
@@ -329,8 +279,6 @@ export default function ReportPrint() {
   }, [autoDownload, gen])
 
   const portfolioRiskClip = allClips.find(clip => clip.payload.kind === 'kpi' && /\brisk metrics\b/i.test(clip.payload.title || ''))
-  const factorSummaryClip = allClips.find(clip => clip.payload.kind === 'kpi' && /\bfactor decomposition\b/i.test(clip.payload.title || ''))
-  const rollingSummaryClip = allClips.find(clip => clip.payload.kind === 'kpi' && /\brolling multifactor market coefficient summary\b/i.test(clip.payload.title || ''))
   const allocationClip = allClips.find(clip => clip.payload.kind === 'table' && /\bcurrent allocation\b/i.test(clip.payload.title || ''))
 
   const keyData = useMemo(() => {
@@ -371,11 +319,6 @@ export default function ReportPrint() {
     }
     return result.slice(0, 4)
   }, [allocationClip, gen?.sections, portfolioRiskClip])
-  const positionDecisions = useMemo(
-    () => gen?.positionDecisions?.length ? gen.positionDecisions : fallbackPositionDecisions(allClips),
-    [allClips, gen?.positionDecisions],
-  )
-
   return (
     <div style={{ minHeight: '100vh', background: 'var(--theme-bg, #101c2e)', padding: '20px 16px 60px' }}>
       <div style={{ maxWidth: 720, margin: '0 auto 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
@@ -390,7 +333,7 @@ export default function ReportPrint() {
             )}
             <button onClick={handleDownloadPdf} disabled={exporting}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'var(--theme-primary, #c9a84c)', border: 'none', color: 'var(--theme-bg, #101c2e)', fontFamily: palette.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '8px 16px', cursor: exporting ? 'wait' : 'pointer', opacity: exporting ? 0.7 : 1 }}>
-              <Download size={14} /> {exporting ? 'Building PDF…' : 'Download PDF'}
+              <Download size={14} /> {exporting ? 'Opening print…' : 'Print / Save PDF'}
             </button>
           </div>
         )}
@@ -467,11 +410,8 @@ export default function ReportPrint() {
                           ticker={ticker}
                           size={28}
                           crossOrigin="anonymous"
-                          fit="contain"
+                          fit="cover"
                           cornerRadius="50%"
-                          padding={2}
-                          logoBackground="#ffffff"
-                          normalizeVisualWeight
                           showFallbackText={false}
                         />
                       </span>
@@ -603,55 +543,6 @@ export default function ReportPrint() {
                     const clip = clipById.get(s.clipId)
                     const sectionKey = reportSectionAssignmentKey(gen.sections, i)
                     const assigned = bodyVisuals.get(sectionKey)
-                    const whatHappened = /\bwhat happened\b/i.test(s.heading)
-                    const whyHappened = /\bwhy it happened\b/i.test(s.heading)
-                    const performanceFigures = whatHappened && portfolioRiskClip?.payload.kind === 'kpi'
-                      ? (() => {
-                          const cells = portfolioRiskClip.payload.cells
-                          const find = (pattern: RegExp) => cells.find(cell => pattern.test(cell.label))
-                          const portfolioReturn = find(/^Period return$|^CAGR$/i)
-                          const spyReturn = find(/^SPY (?:period return|cagr)$/i)
-                          const activeReturn = find(/^Active return vs SPY$/i)
-                          const portfolioVol = find(/^Portfolio volatility$/i)
-                          const spyVol = find(/^SPY volatility$/i)
-                          const portfolioSharpe = find(/^Portfolio Sharpe$/i)
-                          const spySharpe = find(/^SPY Sharpe$/i)
-                          const portfolioDrawdown = find(/^Portfolio max drawdown$/i)
-                          const spyDrawdown = find(/^SPY max drawdown$/i)
-                          return [
-                            portfolioReturn && spyReturn ? {
-                              label: 'Matched-period return',
-                              value: `${portfolioReturn.value} portfolio · ${spyReturn.value} SPY${activeReturn ? ` · ${activeReturn.value} active` : ''}`,
-                            } : undefined,
-                            portfolioVol && spyVol ? {
-                              label: 'Annual volatility',
-                              value: `${portfolioVol.value} portfolio · ${spyVol.value} SPY`,
-                            } : undefined,
-                            portfolioSharpe && spySharpe ? {
-                              label: 'Sharpe ratio',
-                              value: `${portfolioSharpe.value} portfolio · ${spySharpe.value} SPY`,
-                            } : undefined,
-                            portfolioDrawdown && spyDrawdown ? {
-                              label: 'Maximum drawdown',
-                              value: `${portfolioDrawdown.value} portfolio · ${spyDrawdown.value} SPY`,
-                            } : undefined,
-                          ].filter((figure): figure is NonNullable<typeof figure> => !!figure)
-                        })()
-                      : whyHappened
-                        ? (() => {
-                            const latest = kpiCell(rollingSummaryClip, /^Latest beta$/i)
-                            const minimum = kpiCell(rollingSummaryClip, /^Minimum beta$/i)
-                            const maximum = kpiCell(rollingSummaryClip, /^Maximum beta$/i)
-                            const window = kpiCell(rollingSummaryClip, /^Rolling window$/i)
-                            const fullSample = kpiCell(factorSummaryClip, /^Multifactor market coefficient$/i)
-                            return [
-                              fullSample ? { label: 'Full-sample coefficient', value: fullSample.value } : undefined,
-                              latest ? { label: 'Latest rolling coefficient', value: latest.value } : undefined,
-                              minimum && maximum ? { label: 'Rolling range', value: `${minimum.value} to ${maximum.value}` } : undefined,
-                              window ? { label: 'Rolling window', value: window.value } : undefined,
-                            ].filter((figure): figure is NonNullable<typeof figure> => !!figure)
-                          })()
-                        : s.keyFigures
                     return (
                       <section
                         key={sectionKey}
@@ -676,13 +567,13 @@ export default function ReportPrint() {
                         <SectionLayout
                           analysis={s.analysis}
                           clip={clip}
-                          keyFigures={performanceFigures}
+                          keyFigures={s.keyFigures}
                           index={i}
                           layout={s.layout}
                           layoutPreset={renderScope?.layoutPreset}
                           projectClips={allClips}
                           visual={assigned?.visual}
-                          showKeyFigures={whatHappened || whyHappened ? true : assigned?.showKeyFigures}
+                          showKeyFigures={assigned?.showKeyFigures}
                           column={s.placement === 'half'}
                           figureNumber={figureNumbers.get(sectionKey)}
                           palette={palette}
@@ -701,50 +592,17 @@ export default function ReportPrint() {
                   <h2 style={{
                     ...bandHead, border: 'none', margin: '0 0 6px', paddingBottom: 0,
                   }}>
-                    Conclusion &amp; Action
+                    Conclusion &amp; Evidence Limits
                   </h2>
                   <p style={prose}>{gen.conclusion || '—'}</p>
                 </section>
-
-                {positionDecisions.length > 0 && (
-                  <section style={{ marginTop: 20 }}>
-                    <h2 className="rc-keep rc-keep-tight" style={bandHead}>Position Decisions</h2>
-                    <div style={{ border: `1px solid ${palette.border}`, background: palette.cellBg }}>
-                      <div style={{
-                        display: 'grid', gridTemplateColumns: 'minmax(72px, 0.8fr) minmax(80px, 0.9fr) minmax(112px, 1fr) minmax(0, 2.7fr)',
-                        gap: 0, background: palette.panel, borderBottom: `1px solid ${palette.border}`,
-                      }}>
-                        {['Position', 'Weight', 'Decision', 'Basis'].map(label => (
-                          <div key={label} style={{ ...eyebrow, padding: '7px 9px', minWidth: 0, overflowWrap: 'anywhere' }}>{label}</div>
-                        ))}
-                      </div>
-                      {positionDecisions.map((item, index) => (
-                        <div key={`${item.position}-${index}`} className="rc-atomic" style={{
-                          display: 'grid', gridTemplateColumns: 'minmax(72px, 0.8fr) minmax(80px, 0.9fr) minmax(112px, 1fr) minmax(0, 2.7fr)',
-                          gap: 0, borderTop: index === 0 ? 'none' : `1px solid ${palette.border}`,
-                        }}>
-                          {[item.position, item.weight, item.decision, item.basis].map((value, cell) => (
-                            <div key={cell} style={{
-                              fontFamily: cell === 3 ? palette.sans : palette.mono,
-                              fontSize: cell === 3 ? 9.5 : 10,
-                              fontWeight: cell === 2 ? 700 : 500,
-                              color: cell === 2 ? palette.accent : palette.ink,
-                              lineHeight: 1.35, padding: '7px 9px', minWidth: 0,
-                              overflowWrap: 'anywhere', wordBreak: 'break-word',
-                            }}>{value}</div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                )}
 
                 {appendixData.length > 0 && (
                   <section style={{ marginTop: 20 }}>
                     <h2 className="rc-keep rc-keep-tight" style={bandHead}>Data Appendix</h2>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 2 }}>
                       {appendixData.map(c => (
-                        <div key={c.id} className="rc-keep rc-atomic">
+                        <div key={c.id} className={c.payload.kind === 'table' ? 'rc-appendix-table' : 'rc-keep rc-atomic'}>
                           <AppendixBlock clip={c} palette={palette} />
                         </div>
                       ))}

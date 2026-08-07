@@ -8,6 +8,7 @@ instead of being rewritten into a dollar range. Network-free (no LLM calls).
 import json
 import os
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -25,6 +26,11 @@ from routers.ai import (  # noqa: E402
     _annotate_sensitivity_swing, _revise_block_before, _sensitivity_swing_summary, _ALLOWED_REVISE_FIELDS,
     _select_report_appendix_clip_ids, _remove_unverified_numeric_sentences,
     _filter_unverified_key_figures, _build_report_slot_ctx,
+)
+
+
+PORTFOLIO_REVIEW_FIXTURE = json.loads(
+    (Path(__file__).parents[2] / "frontend/src/fixtures/portfolioReview16.json").read_text()
 )
 
 
@@ -95,12 +101,10 @@ def test_planner_directives_are_kept_only_for_known_tools():
     }
 
 
-def test_report_title_uses_ai_headline_and_outline_fallback():
+def test_report_title_uses_only_the_writer_headline():
     req = ReportGenRequest(projectName="Untitled report", goal="Compare AAPL and MSFT", clips=[])
     assert ai._report_title({"headline": "AAPL Leads on Quality"}, None, req) == "AAPL Leads on Quality"
-    assert ai._report_title({}, {"thesis": "MSFT offers the stronger risk adjusted profile over this horizon."}, req) == (
-        "MSFT Offers the Stronger Risk Adjusted Profile over This Horizon"
-    )
+    assert ai._report_title({}, {"thesis": "MSFT offers the stronger risk adjusted profile over this horizon."}, req) == ""
 
 
 def test_report_appendix_omits_unused_and_explicit_chart_clips():
@@ -226,17 +230,17 @@ def test_normalize_key_result_open_mode_preserves_model_verdict_verbatim():
     assert "$" not in out["value"]
 
 
-def test_normalize_key_result_open_mode_falls_back_to_thesis_not_a_price_range():
+def test_normalize_key_result_open_mode_does_not_invent_a_fallback_decision():
     out = _normalize_key_result(
         None, subject="AAPL", market=333.02, change_pct=0.4,
         subject_dcf=True, dcf_intrinsic=185.58,
         stance={"lean": "bullish", "thesis": "NVDA offers superior growth at a comparable multiple"},
         signal_digest={}, force_range=False,
     )
-    assert out["value"] == "NVDA offers superior growth at a comparable multiple"
+    assert out is None
 
 
-def test_normalize_key_result_open_mode_rejects_bare_ticker_as_a_verdict():
+def test_normalize_key_result_open_mode_rejects_bare_ticker_without_rewriting_it():
     # A lone ticker/name is not a verdict — it has no action or comparison to it.
     kr = {"label": "Verdict", "value": "NVDA", "context": ""}
     out = _normalize_key_result(
@@ -245,16 +249,15 @@ def test_normalize_key_result_open_mode_rejects_bare_ticker_as_a_verdict():
         stance={"lean": "bullish", "thesis": "NVDA offers superior growth at a comparable multiple"},
         signal_digest={}, force_range=False,
     )
-    assert out["value"] != "NVDA"
-    assert out["value"] == "NVDA offers superior growth at a comparable multiple"
+    assert out is None
 
-    # Same bare ticker with no thesis to fall back on still gets an action word.
+    # The pipeline must not turn the ticker into a synthetic action.
     out2 = _normalize_key_result(
         kr, subject="AAPL", market=333.02, change_pct=0.4,
         subject_dcf=True, dcf_intrinsic=185.58,
         stance={"lean": "bullish"}, signal_digest={}, force_range=False,
     )
-    assert out2["value"] == "Favor NVDA"
+    assert out2 is None
 
     # A real verdict phrase naming the same ticker passes through untouched.
     out3 = _normalize_key_result(
@@ -265,14 +268,21 @@ def test_normalize_key_result_open_mode_rejects_bare_ticker_as_a_verdict():
     assert out3["value"] == "Buy NVDA"
 
 
-def test_normalize_key_result_range_mode_unchanged_behavior():
+def test_normalize_key_result_range_mode_requires_a_writer_supplied_range():
     out = _normalize_key_result(
         None, subject="AAPL", market=333.02, change_pct=0.4,
         subject_dcf=True, dcf_intrinsic=185.58,
         stance={"lean": "bearish"}, signal_digest={}, force_range=True,
     )
-    assert out["value"].startswith("$")
-    assert "–" in out["value"]
+    assert out is None
+
+    supplied = _normalize_key_result(
+        {"label": "Near-Term Range", "value": "$310-$350", "context": "Model range"},
+        subject="AAPL", market=333.02, change_pct=0.4,
+        subject_dcf=True, dcf_intrinsic=185.58,
+        stance={"lean": "neutral"}, signal_digest={}, force_range=True,
+    )
+    assert supplied == {"label": "Near-Term Range", "value": "$310–$350", "context": "Model range"}
 
 
 def test_length_key_defaults_to_medium_for_unknown_values():
@@ -336,6 +346,24 @@ def test_clean_chart_accepts_valid_comparison_bar_chart():
     assert out["chartType"] == "bar"
     assert out["data"][0]["AAPL"] == 16.6
     assert out["data"][1]["NVDA"] == 74.1
+    assert out["series"][0]["unit"] == "number"
+    assert out["xUnit"] == "number"
+
+
+def test_clean_chart_uses_structured_units_without_label_inference():
+    neutral = _clean_chart({
+        "chartType": "bar", "xKey": "metric",
+        "data": [{"metric": "A", "value": 10}, {"metric": "B", "value": 20}],
+        "series": [{"key": "value", "label": "Return %"}],
+    })
+    explicit = _clean_chart({
+        "chartType": "bar", "xKey": "metric", "xUnit": "number",
+        "data": [{"metric": "A", "value": 10}, {"metric": "B", "value": 20}],
+        "series": [{"key": "value", "label": "Return %", "unit": "percent"}],
+    })
+
+    assert neutral["series"][0]["unit"] == "number"
+    assert explicit["series"][0]["unit"] == "percent"
 
 
 def test_clean_chart_rejects_malformed_or_sparse_input():
@@ -360,10 +388,11 @@ def test_clean_chart_pie_caps_to_one_series():
     out = _clean_chart({
         "chartType": "pie", "xKey": "segment",
         "data": [{"segment": "Compute", "share": 75.2}, {"segment": "Gaming", "share": 7.4}],
-        "series": [{"key": "share", "label": "Share %"}, {"key": "extra", "label": "Ignored"}],
+        "series": [{"key": "share", "label": "Share %", "unit": "percent"}, {"key": "extra", "label": "Ignored", "unit": "number"}],
     })
     assert len(out["series"]) == 1
     assert out["series"][0]["key"] == "share"
+    assert out["series"][0]["unit"] == "percent"
 
 
 def test_clean_chart_scatter_requires_numeric_x_and_keeps_point_label():
@@ -374,11 +403,12 @@ def test_clean_chart_scatter_requires_numeric_x_and_keeps_point_label():
             {"pe": "n/a", "growth": 47.9, "label": "AVGO"},  # non-numeric x -> dropped
             {"pe": 40.3, "growth": "16.6", "label": "AAPL"},
         ],
-        "series": [{"key": "growth", "label": "Rev Growth %"}],
+        "series": [{"key": "growth", "label": "Rev Growth %", "unit": "percent"}],
     })
     assert len(out["data"]) == 2
     assert out["data"][0]["label"] == "NVDA"
     assert out["data"][1]["growth"] == 16.6
+    assert out["series"][0]["unit"] == "percent"
 
 
 def test_clean_chart_range_takes_a_low_high_tuple_per_series():
@@ -389,13 +419,14 @@ def test_clean_chart_range_takes_a_low_high_tuple_per_series():
             {"driver": "Tax rate", "NVDA": "not a tuple", "AAPL": [178.78, 192.38]},  # NVDA dropped for this row
             {"driver": "Terminal growth", "NVDA": [180.05, 165.44], "AAPL": [162.63, 221.28]},  # NVDA swapped -> normalized
         ],
-        "series": [{"key": "NVDA", "label": "NVDA $/sh swing"}, {"key": "AAPL", "label": "AAPL $/sh swing"}],
+        "series": [{"key": "NVDA", "label": "NVDA $/sh swing", "unit": "currency"}, {"key": "AAPL", "label": "AAPL $/sh swing", "unit": "currency"}],
     })
     assert len(out["data"]) == 3
     assert out["data"][0]["NVDA"] == [148.27, 203.29]
     assert "NVDA" not in out["data"][1]
     assert out["data"][1]["AAPL"] == [178.78, 192.38]
     assert out["data"][2]["NVDA"] == [165.44, 180.05]
+    assert {series["unit"] for series in out["series"]} == {"currency"}
 
 
 def test_clean_chart_rejects_hand_rolled_range_disguised_as_bar():
@@ -537,14 +568,14 @@ def test_layout_architecture_uses_real_evidence_then_removes_ai_intent():
     _apply_section_layout_architecture(sections, clips)
 
     assert [section["layout"] for section in sections] == [
+        "visual-right",
         "visual-left",
-        "wrap-left",
-        "wrap-right",
-        "wrap-left",
+        "visual-right",
+        "visual-left",
         "full-width",
     ]
     assert [section.get("placement") for section in sections] == [
-        None, "half", "half", None, None,
+        None, None, None, None, None,
     ]
     assert all("design" not in section for section in sections)
 
@@ -565,7 +596,7 @@ def test_layout_architecture_varies_repeated_ai_intents():
 
     _apply_section_layout_architecture(sections, clips)
 
-    assert [section["layout"] for section in sections] == ["visual-left", "visual-right"]
+    assert [section["layout"] for section in sections] == ["visual-right", "visual-left"]
 
 
 def test_layout_architecture_infers_a_safe_design_when_llama_omits_it():
@@ -1271,11 +1302,11 @@ def test_layout_preset_outranks_the_models_per_section_intent():
         assert [s["layout"] for s in sections] == expected, preset
 
 
-def test_editorial_preset_and_no_preset_keep_the_historical_behaviour():
+def test_editorial_preset_and_no_preset_use_the_same_deterministic_alternation():
     for preset in ("editorial", ""):
         sections, clips = _setup_sections()
         _apply_section_layout_architecture(sections, clips, preset)
-        assert [s["layout"] for s in sections] == ["visual-left", "visual-right"], preset
+        assert [s["layout"] for s in sections] == ["visual-right", "visual-left"], preset
 
 
 def test_layout_preset_never_overrides_the_renderer_safety_rules():
@@ -1565,29 +1596,6 @@ def test_option_inventory_prevents_single_stock_book_classification():
     assert ai._has_option_positions(clips) is True
 
 
-def test_portfolio_position_decisions_cover_every_holding_and_option_contract():
-    clips = [
-        ReportClipIn(
-            id="allocation", sourceTab="Portfolio Manager", dataType="table",
-            title="Current allocation",
-            dataSummary="Columns: Ticker | Weight %\nNVDA | 14.2\nMSFT | 7.1\nCASH | 4.0\nOPTIONS | 3.0",
-        ),
-        ReportClipIn(
-            id="options", sourceTab="Portfolio Manager", dataType="table",
-            title="Current option positions",
-            dataSummary="Columns: Underlying | Strategy | Expiry\nNVDA | Long Call | 2026-08-07",
-        ),
-    ]
-
-    decisions = ai._portfolio_position_decisions(clips)
-
-    assert [(item["position"], item["decision"]) for item in decisions] == [
-        ("NVDA", "Review sizing"),
-        ("MSFT", "No resize supported"),
-        ("NVDA Long Call", "No contract change supported"),
-    ]
-
-
 def test_beta_due_to_language_is_not_treated_as_active_return_attribution():
     clips = [_clip(
         "risk", "Portfolio Compare", "Portfolio risk metrics",
@@ -1602,20 +1610,27 @@ def test_beta_due_to_language_is_not_treated_as_active_return_attribution():
     assert "market exposure" in fixed
 
 
-def test_portfolio_outline_is_always_the_four_decision_stages(monkeypatch):
+def test_portfolio_outline_obeys_the_selected_medium_contract(monkeypatch):
     response = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps({
         "thesis": "Risk remains elevated.",
         "sections": [{"heading": "Risk", "argues": "Beta is high.", "chartHint": "risk"}],
     })))])
     monkeypatch.setattr(ai, "groq_chat", lambda *_args, **_kwargs: response)
 
-    outline = ai._generate_outline({"reportLength": "medium", "reportType": "portfolio-review"})
+    outline = ai._generate_outline({
+        "reportLength": "medium",
+        "reportType": "portfolio-review",
+        "templateContract": ai.template_contract("portfolio-review", "medium"),
+    })
 
     assert outline is not None
-    assert [section["heading"].split(":")[0] for section in outline["sections"]] == [
-        "What Happened", "Why It Happened", "What Could Happen Next", "What Action Follows",
+    assert [section["heading"] for section in outline["sections"]] == [
+        "Portfolio Verdict",
+        "Performance",
+        "Exposure and Diversification",
+        "Downside and Upside",
+        "Action and Evidence Gaps",
     ]
-    assert "Valuation" not in outline["sections"][2]["heading"]
 
 
 def test_unfinished_fund_lookthrough_does_not_block_report_generation():
@@ -1673,3 +1688,45 @@ def test_large_research_run_is_compacted_for_the_report_writer():
     assert len(payload) <= 32
     assert {"allocation", "risk", "options"}.issubset({clip["id"] for clip in payload})
     assert all(len(clip["data"]) <= 1_100 for clip in payload)
+
+
+def test_16_position_book_prompt_keeps_one_issuer_evidence_record_per_holding():
+    symbols = PORTFOLIO_REVIEW_FIXTURE["symbols"]
+    clips = [
+        ReportClipIn(
+            id="allocation",
+            sourceTab="Portfolio Manager",
+            dataType="table",
+            title="Current allocation",
+            dataSummary="Ticker | Weight %",
+            evidenceDomain="portfolio",
+        ),
+        ReportClipIn(
+            id="risk",
+            sourceTab="Portfolio Compare",
+            dataType="kpi",
+            title="Portfolio risk metrics",
+            dataSummary="Annual volatility: 18%",
+            evidenceDomain="portfolio",
+        ),
+    ] + [
+        ReportClipIn(
+            id=f"company-{symbol}",
+            sourceTab="Company Profile",
+            dataType="kpi",
+            title=f"Company snapshot · {symbol}",
+            dataSummary=f"Ticker: {symbol}; revenue growth: 10%",
+            evidenceDomain="issuer",
+        )
+        for symbol in symbols
+    ]
+
+    payload = ai._report_prompt_clips(clips, "long", True)
+    issuer_titles = {
+        clip["title"].split("·")[-1].strip()
+        for clip in payload
+        if clip["evidenceDomain"] == "issuer"
+    }
+
+    assert issuer_titles == set(symbols)
+    assert any(clip["evidenceDomain"] == "portfolio" for clip in payload)

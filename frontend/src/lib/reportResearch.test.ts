@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { defaultScope, mergeAlphaTapeClips, type ReportClip } from './reportCreator'
+import { defaultScope, mergeAlphaTapeClips, summarizeClipForAI, type ReportClip } from './reportCreator'
 import {
   collectReportResearch,
   buildReportDataBank,
@@ -14,6 +14,8 @@ import {
   SAVED_SCREENS_STORAGE_KEY,
 } from './reportResearch'
 import type { ActivePortfolioContext } from './pmImport'
+import portfolioReviewFixture from '../fixtures/portfolioReview16.json'
+import { chartClip } from './reportCaptureRegistry'
 
 const emptyPortfolio: ActivePortfolioContext = {
   id: '',
@@ -42,9 +44,168 @@ const portfolio: ActivePortfolioContext = {
   hasData: true,
 }
 
+const portfolioReview16Symbols = portfolioReviewFixture.symbols
+
+const portfolioReview16: ActivePortfolioContext = {
+  ...emptyPortfolio,
+  id: 'portfolio-review-16',
+  name: 'Portfolio Review Regression',
+  portfolioIds: ['portfolio-review-16'],
+  holdings: portfolioReview16Symbols.map((ticker, index) => ({
+    ticker,
+    shares: 1,
+    avgCost: 160 - index,
+  })),
+  positionCount: 16,
+  hasData: true,
+}
+
 const reportToolManifest = { tools: REPORT_RESEARCH_TOOL_CATALOG }
 
 describe('Report Creator AlphaTape research', () => {
+  it('stores chart units as metadata and never guesses from display labels', () => {
+    const neutral = chartClip('Test', 'Return chart', 'bar', 'bucket', [
+      { bucket: 'A', value: 10 },
+      { bucket: 'B', value: 20 },
+    ], [{ key: 'value', label: 'Return %' }])
+    const explicit = chartClip('Test', 'Return chart', 'bar', 'bucket', [
+      { bucket: 'A', value: 10 },
+      { bucket: 'B', value: 20 },
+    ], [{ key: 'value', label: 'Return %', unit: 'percent' }])
+
+    expect(neutral.payload.kind).toBe('chart')
+    expect(explicit.payload.kind).toBe('chart')
+    if (neutral.payload.kind === 'chart' && explicit.payload.kind === 'chart') {
+      expect(neutral.payload.series[0].unit).toBe('number')
+      expect(explicit.payload.series[0].unit).toBe('percent')
+    }
+  })
+
+  it('keeps every row in the exact 16-position portfolio summary sent to the writer', () => {
+    const allocation: ReportClip = {
+      id: 'allocation-16',
+      sourceTab: 'Portfolio Manager',
+      capturedAt: '2026-08-06T12:00:00Z',
+      dataType: 'table',
+      projectId: 'portfolio-review-project',
+      evidenceDomain: 'portfolio',
+      payload: {
+        kind: 'table',
+        title: 'Portfolio Review Regression · current allocation',
+        columns: ['Ticker', 'Weight %'],
+        rows: portfolioReview16Symbols.map((ticker, index) => [ticker, 10 - index * 0.4]),
+      },
+    }
+
+    const summary = summarizeClipForAI(allocation)
+
+    for (const symbol of portfolioReview16Symbols) expect(summary).toContain(symbol)
+    expect(summary).not.toContain('more rows')
+    expect(summary).not.toContain('[truncated]')
+  })
+
+  it('covers all 16 portfolio positions and separates book analytics from issuer coverage', () => {
+    const scope = {
+      ...defaultScope(),
+      evidenceMode: 'alphatape' as const,
+      reportType: 'portfolio-review' as const,
+      length: 'long' as const,
+      lookbackPreset: portfolioReviewFixture.lookbackPreset as 'last90',
+      lookforwardPreset: portfolioReviewFixture.lookforwardPreset as 'next365',
+      goal: 'Create a comprehensive review of the complete portfolio with valuation, risk, and catalysts.',
+    }
+    const plan = planReportResearch(scope, portfolioReview16)
+
+    expect(plan.symbols).toEqual(portfolioReview16Symbols)
+    expect(plan.sources.some(source => source.id === 'portfolio-risk')).toBe(true)
+    expect(plan.sources.some(source => source.id === 'earnings')).toBe(true)
+    expect(plan.sources.find(source => source.id === 'portfolio')).toMatchObject({ domain: 'portfolio', targets: [] })
+    expect(plan.sources.find(source => source.id === 'portfolio-risk')).toMatchObject({ domain: 'portfolio', targets: [] })
+    expect(plan.sources.find(source => source.id === 'correlation')).toMatchObject({
+      domain: 'portfolio',
+      targets: portfolioReview16Symbols,
+    })
+    for (const sourceId of ['company', 'price-history', 'news', 'earnings', 'peer-valuation', 'dcf-valuation']) {
+      expect(plan.sources.find(source => source.id === sourceId)).toMatchObject({
+        domain: 'issuer',
+        targets: portfolioReview16Symbols,
+      })
+    }
+  })
+
+  it('reports exact target coverage and blocks only when critical portfolio evidence is incomplete', () => {
+    const scope = {
+      ...defaultScope(),
+      evidenceMode: 'alphatape' as const,
+      reportType: 'portfolio-review' as const,
+      goal: 'Create a comprehensive review of the complete portfolio.',
+    }
+    const fullPlan = planReportResearch(scope, portfolioReview16)
+    const wanted = new Set(['portfolio', 'portfolio-risk', 'correlation', 'factor-decomposition', 'company'])
+    const plan = {
+      ...fullPlan,
+      sources: fullPlan.sources.filter(source => wanted.has(source.id)),
+      requiredSourceIds: fullPlan.sources.filter(source => wanted.has(source.id)).map(source => source.id),
+    }
+    const drafts = plan.sources.flatMap(source => {
+      const targets = source.targets.length ? source.targets : ['portfolio-review-16']
+      return targets.map(target => ({
+        sourceTab: source.tool,
+        dataType: 'text' as const,
+        payload: { kind: 'text' as const, title: `${source.label} · ${target}`, body: 'Regression evidence.' },
+        origin: 'alphatape' as const,
+        researchSourceId: source.id,
+        researchKey: `${source.id}:${target}`,
+        evidenceDomain: source.domain,
+      }))
+    })
+    const clips = mergeAlphaTapeClips([], 'portfolio-review-project', drafts)
+    const completeResult = {
+      clips: drafts,
+      completed: plan.sources.map(source => ({ sourceId: source.id, label: source.label, clipCount: 1 })),
+      failed: [],
+      finishedAt: '2026-08-06T12:00:00Z',
+    }
+    const complete = buildReportDataBank(plan, completeResult, clips)
+    expect(complete.phase).toBe('ready')
+    expect(new Set(complete.criticalSourceIds)).toEqual(new Set(['portfolio', 'portfolio-risk', 'correlation', 'factor-decomposition']))
+    expect(complete.coverage.targetCoveragePct).toBe(100)
+
+    const issuerGapResult = {
+      ...completeResult,
+      failed: [{
+        sourceId: 'company' as const,
+        label: 'Company snapshot',
+        message: 'Issuer fundamentals unavailable.',
+        target: 'TSLL',
+        researchKey: 'company:TSLL',
+      }],
+    }
+    const issuerGap = buildReportDataBank(plan, issuerGapResult, clips)
+    expect(issuerGap.phase).toBe('ready')
+    expect(issuerGap.runs.find(run => run.sourceId === 'company')).toMatchObject({
+      status: 'partial',
+      requestedTargetCount: 16,
+      coveredTargetCount: 15,
+      coveragePct: 93.8,
+    })
+    expect(issuerGap.unresolvedGaps).toEqual([expect.stringContaining('TSLL')])
+
+    const criticalGapResult = {
+      ...completeResult,
+      failed: [{
+        sourceId: 'correlation' as const,
+        label: 'Correlation structure',
+        message: 'One holding lacked matched history.',
+        target: 'TSLL',
+        researchKey: 'correlation:TSLL',
+      }],
+    }
+    const criticalGap = buildReportDataBank(plan, criticalGapResult, clips)
+    expect(criticalGap.phase).toBe('blocked')
+    expect(criticalGap.runs.find(run => run.sourceId === 'correlation')?.coveragePct).toBe(93.8)
+  })
+
   it('parses explicit symbols and ignores common uppercase prose', () => {
     expect(parseResearchSymbols('aapl, msft BRK.B')).toEqual(['AAPL', 'MSFT', 'BRK-B'])
     expect(inferResearchSymbols('Compare NVDA vs AAPL and include EPS')).toEqual(['NVDA', 'AAPL'])
@@ -83,11 +244,13 @@ describe('Report Creator AlphaTape research', () => {
 
     const dataBank = buildReportDataBank(plan, result, clips)
 
-    expect(dataBank.phase).toBe('complete')
+    expect(dataBank.phase).toBe('ready')
     expect(dataBank.runs).toEqual([
       expect.objectContaining({ sourceId: 'company', status: 'complete', clipIds: [clips[0].id] }),
-      expect.objectContaining({ sourceId: 'news', status: 'failed', clipIds: [], error: 'No usable data returned.' }),
+      expect.objectContaining({ sourceId: 'news', status: 'failed', clipIds: [], coveragePct: 0 }),
     ])
+    expect(dataBank.coverage.targetCoveragePct).toBe(50)
+    expect(dataBank.unresolvedGaps).toEqual([expect.stringContaining('No usable data returned')])
     expect(dataBank.objectivePlan.thesis).toContain('AAPL fundamentals')
   })
 
@@ -285,6 +448,8 @@ describe('Report Creator AlphaTape research', () => {
       route: '/portfolio-manager',
       reason: 'Test current allocation',
       targets: [],
+      domain: 'portfolio' as const,
+      critical: true,
     }
     const result = await collectReportResearch(
       { ...planReportResearch({ ...defaultScope(), goal: 'Assess my portfolio' }, book), sources: [source] },
@@ -328,6 +493,8 @@ describe('Report Creator AlphaTape research', () => {
       route: '/portfolio-manager',
       reason: 'Capture the complete position inventory',
       targets: [],
+      domain: 'portfolio' as const,
+      critical: true,
     }
     const result = await collectReportResearch(
       { ...planReportResearch({ ...defaultScope(), goal: 'Assess my entire portfolio' }, book), sources: [source] },
@@ -778,6 +945,8 @@ describe('Report Creator AlphaTape research', () => {
       route: '/global-markets',
       reason: 'Test delayed feeds',
       targets: [],
+      domain: 'macro' as const,
+      critical: false,
     }
     const result = await collectReportResearch(
       { ...planReportResearch(scope, emptyPortfolio), sources: [source] },
@@ -810,6 +979,8 @@ describe('Report Creator AlphaTape research', () => {
       route: '/mover-radar',
       reason: 'Test concurrency',
       targets,
+      domain: 'issuer' as const,
+      critical: false,
     }
     let active = 0
     let peak = 0
@@ -952,6 +1123,8 @@ describe('Report Creator AlphaTape research', () => {
         route: '/mover-radar',
         reason: 'Test',
         targets: ['AAPL', 'MSFT'],
+        domain: 'issuer' as const,
+        critical: false,
       }],
     }
     const client = {
@@ -1001,6 +1174,8 @@ describe('Report Creator AlphaTape research', () => {
         route: '/chart-studio',
         reason: 'Test',
         targets: ['AAPL'],
+        domain: 'issuer' as const,
+        critical: false,
       }],
     }
     const urls: string[] = []
@@ -1023,12 +1198,12 @@ describe('Report Creator AlphaTape research', () => {
       goal: 'Compare AAPL and MSFT using valuation, regression, and options evidence',
     }
     const sources = [
-      { id: 'peer-valuation' as const, label: 'Peer valuation', tool: 'Peer Comparison', route: '/relative-valuation', reason: 'test', targets: ['AAPL'] },
-      { id: 'dcf-valuation' as const, label: 'DCF valuation', tool: 'DCF Valuation', route: '/dcf', reason: 'test', targets: ['AAPL'] },
-      { id: 'regression' as const, label: 'Regression', tool: 'Regression', route: '/regression', reason: 'test', targets: ['AAPL', 'MSFT'] },
-      { id: 'volatility-skew' as const, label: 'Skew', tool: 'Volatility Skew', route: '/skew', reason: 'test', targets: ['AAPL'] },
-      { id: 'dealer-gex' as const, label: 'GEX', tool: 'Dealer GEX', route: '/gex', reason: 'test', targets: ['AAPL'] },
-      { id: 'implied-probability' as const, label: 'Probability', tool: 'Implied Probability', route: '/probability', reason: 'test', targets: ['AAPL'] },
+      { id: 'peer-valuation' as const, label: 'Peer valuation', tool: 'Peer Comparison', route: '/relative-valuation', reason: 'test', targets: ['AAPL'], domain: 'issuer' as const, critical: false },
+      { id: 'dcf-valuation' as const, label: 'DCF valuation', tool: 'DCF Valuation', route: '/dcf', reason: 'test', targets: ['AAPL'], domain: 'issuer' as const, critical: false },
+      { id: 'regression' as const, label: 'Regression', tool: 'Regression', route: '/regression', reason: 'test', targets: ['AAPL', 'MSFT'], domain: 'benchmark' as const, critical: false },
+      { id: 'volatility-skew' as const, label: 'Skew', tool: 'Volatility Skew', route: '/skew', reason: 'test', targets: ['AAPL'], domain: 'issuer' as const, critical: false },
+      { id: 'dealer-gex' as const, label: 'GEX', tool: 'Dealer GEX', route: '/gex', reason: 'test', targets: ['AAPL'], domain: 'issuer' as const, critical: false },
+      { id: 'implied-probability' as const, label: 'Probability', tool: 'Implied Probability', route: '/probability', reason: 'test', targets: ['AAPL'], domain: 'issuer' as const, critical: false },
     ]
     const result = await collectReportResearch(
       { ...planReportResearch(scope, emptyPortfolio), sources },
@@ -1120,6 +1295,8 @@ describe('Report Creator AlphaTape research', () => {
       route: '/sector-rotation',
       reason: 'Test',
       targets: [],
+      domain: 'benchmark' as const,
+      critical: false,
     }
     const result = await collectReportResearch(
       { ...planReportResearch(scope, emptyPortfolio), sources: [source] },
@@ -1163,14 +1340,14 @@ describe('Report Creator AlphaTape research', () => {
         'Energy · XLE',
         'Health Care · XLV',
       ])
-      expect(visual.payload.details).toContainEqual({
+      expect(visual.payload.details).toContainEqual(expect.objectContaining({
         key: 'vsSpyOneMonth',
         label: 'Vs SPY · 1M %',
-      })
+      }))
     }
   })
 
-  it('ranks the full portfolio by current value and discloses top-20 coverage', async () => {
+  it('keeps every eligible position in portfolio-wide risk analytics', async () => {
     const holdings = Array.from({ length: 21 }, (_, index) => ({
       ticker: `H${String(index + 1).padStart(2, '0')}`,
       shares: 1,
@@ -1194,6 +1371,8 @@ describe('Report Creator AlphaTape research', () => {
       route: '/portfolio-compare',
       reason: 'Test',
       targets: [],
+      domain: 'portfolio' as const,
+      critical: true,
     }
     let compareRequest: any
     const result = await collectReportResearch(
@@ -1216,15 +1395,15 @@ describe('Report Creator AlphaTape research', () => {
         },
       },
     )
-    expect(compareRequest.portfolios[0].tickers).toHaveLength(20)
+    expect(compareRequest.portfolios[0].tickers).toHaveLength(21)
     expect(compareRequest.portfolios[0].tickers[0]).toBe('H21')
-    expect(compareRequest.portfolios[0].tickers).not.toContain('H01')
+    expect(compareRequest.portfolios[0].tickers).toContain('H01')
     const metrics = result.clips.find(clip => clip.payload.kind === 'kpi')
-    expect(metrics?.payload.title).toContain('top 20 equity sleeve')
+    expect(metrics?.payload.title).not.toContain('top 20 equity sleeve')
     if (metrics?.payload.kind === 'kpi') {
       expect(metrics.payload.cells).toContainEqual(expect.objectContaining({
         label: 'Book coverage',
-        sub: '1 smaller position omitted',
+        sub: 'All eligible positions',
       }))
     }
   })

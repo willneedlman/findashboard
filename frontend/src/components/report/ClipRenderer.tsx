@@ -5,7 +5,7 @@ import {
 } from 'recharts'
 import type { LabelProps } from 'recharts'
 import TickerLogo from '../TickerLogo'
-import type { ClipPayload, ChartPayload, TablePayload, KpiPayload, TextPayload } from '../../lib/reportCreator'
+import type { ChartUnit, ClipPayload, ChartPayload, TablePayload, KpiPayload, TextPayload } from '../../lib/reportCreator'
 import type { ClipPalette } from '../../lib/reportTheme'
 import { isTickerSymbol } from '../../lib/tickerLogos'
 import { formatHorizontalCategoryLabel, horizontalCategoryAxisWidth } from './chartLabels'
@@ -249,25 +249,15 @@ function seriesStats(p: ChartPayload) {
   })
 }
 
-/** Split series into left/right Y scales when magnitudes diverge (IV % vs $ price). */
+/** Split series by their declared measurement unit. Charts may use at most two axes. */
 function partitionScales(p: ChartPayload) {
   const stats = seriesStats(p).filter(s => s.vals.length)
   if (stats.length <= 1) return { left: stats, right: [] as typeof stats }
 
-  // Group by order-of-magnitude of typical level.
-  const mag = (s: typeof stats[0]) => Math.log10(Math.max(Math.abs(s.mid), Math.abs(s.max), 1e-9))
-  const sorted = [...stats].sort((a, b) => mag(b) - mag(a))
-  const primary = sorted[0]
-  const left = [primary]
-  const right: typeof stats = []
-  for (const s of sorted.slice(1)) {
-    const ratio = Math.max(s.span, Math.abs(s.mid)) / Math.max(primary.span, Math.abs(primary.mid), 1e-9)
-    // Different scale if levels differ by ~5× or more (stock $200 vs IV 40).
-    if (ratio > 5 || ratio < 0.2) right.push(s)
-    else left.push(s)
-  }
-  // If everything landed on one side, no dual axis.
-  if (!right.length || !left.length) return { left: stats, right: [] as typeof stats }
+  const primaryUnit = stats[0].unit ?? 'number'
+  const left = stats.filter(series => (series.unit ?? 'number') === primaryUnit)
+  const right = stats.filter(series => (series.unit ?? 'number') !== primaryUnit)
+  if (!right.length) return { left: stats, right: [] as typeof stats }
   return { left, right }
 }
 
@@ -296,22 +286,12 @@ function fmtTick(v: number, kind: TickKind = 'auto'): string {
   return `${sign}${compactNumber(v)}`
 }
 
-function inferTickKind(
-  stats: { mid: number; max: number; min: number; label: string }[],
-  context = '',
-): Exclude<TickKind, 'compact'> {
-  const seriesLabel = stats.map(s => s.label).join(' ').toLowerCase()
-  const label = `${seriesLabel} ${context}`.toLowerCase()
-  if (/\bpp\b|\bpercentage points?\b/.test(seriesLabel)) return 'pp'
-  if (/\b(bps?|basis points?)\b/.test(seriesLabel)) return 'bps'
-  if (/%|\bpct\b|\bpercent\b/.test(seriesLabel)) return 'pct'
-  if (/(\$|\busd\b|\bprice\b|\bspot\b|\bstrike\b|\btarget\b|\bintrinsic\b|\bfair value\b|\bnav\b|\bper share\b|\/sh\b)/.test(seriesLabel)) return 'price'
-  if (/(\bp\/e\b|\bev\/ebitda\b|\bp\/s\b|\bp\/b\b|\bp\/fcf\b|\bpeg\b|\bmultiple\b)/.test(seriesLabel)) return 'multiple'
-  if (/\b(bps?|basis points?)\b/.test(label)) return 'bps'
-  if (/(\bprice history\b|\$|\busd\b|\bspot\b|\bstrike\b|\btarget\b|\bintrinsic\b|\bfair value\b|\bnav\b|\bper share\b|\/sh\b)/.test(label)) return 'price'
-  if (/(%|\bpct\b|\bpercent\b|\biv\b|\bvol(?:atility)?\b|\bmargin\b|\bgrowth\b|\bupside\b|\breturn\b|\byield\b|\brate\b|\bshare\b|\bweight\b|\ballocation\b|\bpremium\b|\broe\b|\broa\b)/.test(label)) return 'pct'
-  if (/(\bp\/e\b|\bev\/ebitda\b|\bp\/s\b|\bp\/b\b|\bp\/fcf\b|\bpeg\b|\bmultiple\b)/.test(label)) return 'multiple'
-  if (!stats.length) return 'auto'
+function tickKindForUnit(unit?: ChartUnit): Exclude<TickKind, 'compact'> {
+  if (unit === 'percent') return 'pct'
+  if (unit === 'percentage-point') return 'pp'
+  if (unit === 'basis-point') return 'bps'
+  if (unit === 'currency') return 'price'
+  if (unit === 'multiple') return 'multiple'
   return 'auto'
 }
 
@@ -325,19 +305,18 @@ function humanizeAxisLabel(value: string): string {
 }
 
 function measureLabel(
-  stats: { label: string }[],
-  kind: Exclude<TickKind, 'compact'>,
-  context = '',
+  stats: { label: string; unit?: ChartUnit }[],
 ): string {
-  if (kind === 'pct') return 'Percent (%)'
-  if (kind === 'price') return 'Value (USD)'
-  if (kind === 'multiple') return 'Multiple (×)'
-  if (kind === 'bps') return 'Basis points (bps)'
-  if (kind === 'pp') return 'Percentage points (pp)'
-  if (/\b(relative performance|indexed|normalized)\b/i.test(context)) return 'Indexed performance (start = 100)'
-  if (/\bcorrelation\b/i.test(context)) return 'Correlation'
-  if (/\bbeta\b/i.test(context)) return 'Beta'
-  if (/\b(residual|return)\b/i.test(context)) return 'Return'
+  const unit = stats[0]?.unit ?? 'number'
+  if (unit === 'percent') return 'Percent (%)'
+  if (unit === 'percentage-point') return 'Percentage points (pp)'
+  if (unit === 'basis-point') return 'Basis points (bps)'
+  if (unit === 'currency') return 'Value (USD)'
+  if (unit === 'multiple') return 'Multiple (×)'
+  if (unit === 'index') return 'Index level'
+  if (unit === 'beta') return 'Beta'
+  if (unit === 'correlation') return 'Correlation'
+  if (unit === 'shares') return 'Shares'
   if (stats.length === 1 && stats[0].label) return stats[0].label
   return 'Value'
 }
@@ -440,6 +419,7 @@ function BoxPlotClip({ p, pal, height, print }: { p: ChartPayload; pal: Palette;
   if (!rows.length) return null
 
   const markerColors = buildColorMap(pal, rows.flatMap(r => r.markers.map(m => m.label)))
+  const valueKind = tickKindForUnit(p.series[0]?.unit)
   const whiskerVals = rows.flatMap(r => [r.min, r.max, ...(r.outliers || [])])
   const markerVals = rows.flatMap(r => r.markers.map(m => m.value))
   let lo = Math.min(...whiskerVals), hi = Math.max(...whiskerVals)
@@ -465,7 +445,7 @@ function BoxPlotClip({ p, pal, height, print }: { p: ChartPayload; pal: Palette;
         {tickVals.map((tv, i) => (
           <g key={`t${i}`}>
             <line x1={x(tv)} x2={x(tv)} y1={topPad - 6} y2={topPad + rows.length * rowH} stroke={pal.gridStroke} strokeWidth={0.6} />
-            <text x={x(tv)} y={VB_H - 8} fontSize={8} fill={pal.muted} textAnchor="middle">{fmtTick(tv)}</text>
+            <text x={x(tv)} y={VB_H - 8} fontSize={8} fill={pal.muted} textAnchor="middle">{fmtTick(tv, valueKind)}</text>
           </g>
         ))}
         {rows.map((r, i) => {
@@ -485,14 +465,14 @@ function BoxPlotClip({ p, pal, height, print }: { p: ChartPayload; pal: Palette;
               {r.outliers?.map((ov, oi) => (
                 <g key={`out-${oi}`}>
                   <circle cx={x(ov)} cy={cy} r={3} fill="none" stroke={pal.muted} strokeWidth={1} />
-                  <text x={x(ov)} y={cy - 12} fontSize={7} fill={pal.muted} textAnchor="middle">{fmtTick(ov)}</text>
+                  <text x={x(ov)} y={cy - 12} fontSize={7} fill={pal.muted} textAnchor="middle">{fmtTick(ov, valueKind)}</text>
                 </g>
               ))}
               {/* subject markers */}
               {r.markers.map((m, mi) => (
                 <g key={m.label}>
                   <circle cx={x(m.value)} cy={cy} r={3.6} fill={markerColors.get(m.label) ?? pal.series[mi % pal.series.length]} stroke={pal.cellBg} strokeWidth={1} />
-                  <text x={x(m.value)} y={cy - (mi % 2 === 0 ? 13 : -21)} fontSize={7.5} fontWeight={700} textAnchor="middle" fill={markerColors.get(m.label) ?? pal.ink}>{m.label} {fmtTick(m.value)}</text>
+                  <text x={x(m.value)} y={cy - (mi % 2 === 0 ? 13 : -21)} fontSize={7.5} fontWeight={700} textAnchor="middle" fill={markerColors.get(m.label) ?? pal.ink}>{m.label} {fmtTick(m.value, valueKind)}</text>
                 </g>
               ))}
             </g>
@@ -560,21 +540,14 @@ function ChartClip({
     })
     : data
 
-  let { left, right } = partitionScales(p)
-  const categoryContext = data.map(row => String(row[p.xKey] ?? '')).join(' ')
-  let leftKind = inferTickKind(left, `${p.title ?? ''} ${categoryContext}`)
-  let rightKind = right.length ? inferTickKind(right, `${p.title ?? ''} ${categoryContext}`) : 'auto'
-  if (right.length && leftKind === rightKind && leftKind !== 'auto') {
-    left = [...left, ...right]
-    right = []
-    leftKind = inferTickKind(left, `${p.title ?? ''} ${categoryContext}`)
-    rightKind = 'auto'
-  }
+  const { left, right } = partitionScales(p)
+  const leftKind = tickKindForUnit(left[0]?.unit)
+  const rightKind = right.length ? tickKindForUnit(right[0]?.unit) : 'auto'
   const dual = right.length > 0
   const axisTick = { fontFamily: MONO, fontSize: 9, fill: pal.muted }
   const xLabel = humanizeAxisLabel(p.xKey)
-  const leftMeasure = measureLabel(left, leftKind, p.title)
-  const rightMeasure = dual ? measureLabel(right, rightKind, p.title) : ''
+  const leftMeasure = measureLabel(left)
+  const rightMeasure = dual ? measureLabel(right) : ''
 
   // Report-consistent per-series colors (NVDA always one color, AAPL another).
   const colorMap = buildColorMap(pal, p.series.map(s => s.key))
@@ -609,7 +582,7 @@ function ChartClip({
   const markCount = data.length * Math.max(p.series.length, 1)
   const showValueLabels = markCount > 0 && markCount <= 20
   const showRangeValueLabels = markCount > 0 && markCount <= 10
-  const seriesKind = (key: string): typeof leftKind => (leftKeys.has(key) || !dual) ? leftKind : rightKind
+  const seriesKind = (key: string): typeof leftKind => tickKindForUnit(p.series.find(series => series.key === key)?.unit)
   const valueLabelFontSize = 9
   const valueLabel = (key: string) => (v: unknown) => fmtTick(Number(v), seriesKind(key))
 
@@ -716,7 +689,7 @@ function ChartClip({
               {details.map(detail => {
                 const value = Number(row[detail.key])
                 if (!Number.isFinite(value)) return null
-                const kind = inferTickKind([{ label: detail.label, min: value, max: value, mid: value }], p.title)
+                const kind = tickKindForUnit(detail.unit)
                 return (
                   <div key={detail.key} style={{ display: 'flex', justifyContent: 'space-between', gap: 14 }}>
                     <span style={{ color: pal.muted }}>{detail.label}</span>
@@ -880,7 +853,7 @@ function ChartClip({
               tick={axisTick}
               tickLine={false}
               axisLine={{ stroke: pal.border }}
-              tickFormatter={v => fmtTick(Number(v))}
+              tickFormatter={v => fmtTick(Number(v), tickKindForUnit(p.xUnit))}
               height={print ? 28 : 30}
             />
             <YAxis
@@ -891,14 +864,17 @@ function ChartClip({
               tickLine={false}
               axisLine={false}
               width={print ? 42 : 48}
-              tickFormatter={v => fmtTick(Number(v))}
+              tickFormatter={v => fmtTick(Number(v), tickKindForUnit(p.series[0]?.unit))}
             />
             {!print && (
               <Tooltip
                 contentStyle={{ background: 'var(--theme-surface, #0d1826)', border: `1px solid ${pal.border}`, fontFamily: MONO, fontSize: 10 }}
                 labelStyle={{ color: pal.accent }}
                 cursor={{ strokeDasharray: '3 3' }}
-                formatter={(value: number) => fmtTick(value)}
+                formatter={(value: number, name: string) => fmtTick(
+                  value,
+                  name === p.xKey ? tickKindForUnit(p.xUnit) : tickKindForUnit(p.series[0]?.unit),
+                )}
                 labelFormatter={(_v, payload) =>
                   String((payload?.[0]?.payload as Record<string, unknown> | undefined)?.label ?? '')}
               />
@@ -922,7 +898,7 @@ function ChartClip({
               axisLine={false}
               width={print ? 42 : 48}
               domain={[0, Math.max(rDomainMax - rDomainMin, 1)]}
-              tickFormatter={(v: number) => fmtTick(v + rDomainMin)}
+              tickFormatter={(v: number) => fmtTick(v + rDomainMin, leftKind)}
             />
             {!print && (
               <Tooltip
@@ -939,7 +915,7 @@ function ChartClip({
                         const span = row[RANGE_SPAN_KEY(s.key)]
                         if (base == null || span == null) return null
                         const lo = base + rDomainMin
-                        return <div key={s.key}>{s.label}: {fmtTick(lo)}–{fmtTick(lo + span)}</div>
+                        return <div key={s.key}>{s.label}: {fmtTick(lo, seriesKind(s.key))}–{fmtTick(lo + span, seriesKind(s.key))}</div>
                       })}
                     </div>
                   )
@@ -1196,7 +1172,7 @@ export default function ClipRenderer({
 }) {
   const print = mode === 'print'
   const pal = print ? (palette ?? PRINT_FALLBACK) : DARK
-  const tableCap = maxTableRows ?? (print ? 10 : undefined)
+  const tableCap = maxTableRows
   const chartH = reportChartHeight(payload, print, compact, inline)
   switch (payload.kind) {
     case 'table': return <TableClip p={payload} pal={pal} maxRows={tableCap} print={print} />

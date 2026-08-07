@@ -140,8 +140,10 @@ function GeneratedEditor({ project }: { project: ReportProject }) {
     () => assignReportBodyVisuals(gen.sections, clipById, project.clips, {
       projectId: project.id,
       generatedAt: gen.generatedAt,
+      objective: `${project.scope.goal} ${project.scope.purpose}`,
+      domainCoveragePct: gen.pipeline?.coverage?.domainCoveragePct,
     }),
-    [clipById, gen.generatedAt, gen.sections, project.clips, project.id],
+    [clipById, gen.generatedAt, gen.sections, project.clips, project.id, project.scope.goal, project.scope.purpose],
   )
   const kr = gen.keyResult
   return (
@@ -160,11 +162,8 @@ function GeneratedEditor({ project }: { project: ReportProject }) {
               <TickerLogo
                 ticker={ticker}
                 size={28}
-                fit="contain"
+                fit="cover"
                 cornerRadius="50%"
-                padding={2}
-                logoBackground="#ffffff"
-                normalizeVisualWeight
                 showFallbackText={false}
               />
             </span>
@@ -420,6 +419,10 @@ function ResearchPanel({
   const screenOperationRef = useRef(0)
   const automaticCount = project.clips.filter(clip => clip.origin === 'alphatape').length
   const failedSourceCount = new Set(result?.failed.map(failure => failure.sourceId) ?? []).size
+  const dataBank = useMemo(
+    () => result ? buildReportDataBank(plan, result, project.clips) : null,
+    [plan, project.clips, result],
+  )
   const mode = project.scope.evidenceMode
   const screenQuery = project.scope.screenerQuery.trim()
   const screenNeedsApply = !!screenQuery && screenQuery !== project.scope.screenerAppliedQuery.trim()
@@ -759,18 +762,28 @@ function ResearchPanel({
           )}
 
           {result && result.clips.length > 0 && (
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
-              border: `1px solid ${result.failed.length ? T.warn : T.pos}`,
-              background: result.failed.length ? T.goldTint(5) : T.posTint(5),
-              padding: '8px 10px',
-            }}>
-              <span style={{ fontFamily: T.label, fontSize: 10.5, color: T.text }}>
-                Added {result.clips.length} clip{result.clips.length === 1 ? '' : 's'} from {result.completed.length} tool{result.completed.length === 1 ? '' : 's'}.
-                {failedSourceCount ? ` ${failedSourceCount} source${failedSourceCount === 1 ? '' : 's'} had missing evidence.` : ''}
-                {` ${result.clips.filter(clip => clip.dataType === 'chart').length} visual${result.clips.filter(clip => clip.dataType === 'chart').length === 1 ? '' : 's'} included.`}
-              </span>
-              <span style={{ fontFamily: T.mono, fontSize: 8.5, color: T.muted }}>Review clips before generating</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
+                border: `1px solid ${dataBank?.phase === 'blocked' ? T.neg : result.failed.length ? T.warn : T.pos}`,
+                background: dataBank?.phase === 'blocked' ? T.negTint(6) : result.failed.length ? T.goldTint(5) : T.posTint(5),
+                padding: '8px 10px',
+              }}>
+                <span style={{ fontFamily: T.label, fontSize: 10.5, color: T.text }}>
+                  DataBank {dataBank?.phase === 'ready' ? 'ready' : 'blocked'} · {dataBank?.coverage.targetCoveragePct.toFixed(1)}% target coverage.
+                  {` ${result.clips.length} clip${result.clips.length === 1 ? '' : 's'} from ${result.completed.length} tool${result.completed.length === 1 ? '' : 's'}.`}
+                  {failedSourceCount ? ` ${failedSourceCount} source${failedSourceCount === 1 ? '' : 's'} had missing evidence.` : ''}
+                </span>
+                <span style={{ fontFamily: T.mono, fontSize: 8.5, color: T.muted }}>
+                  {dataBank?.runs.filter(run => run.critical && run.status === 'complete').length}/{dataBank?.runs.filter(run => run.critical).length} critical sources complete
+                </span>
+              </div>
+              {!!dataBank?.unresolvedGaps.length && (
+                <div style={{ borderLeft: `2px solid ${T.warn}`, padding: '5px 9px', fontFamily: T.mono, fontSize: 9, color: T.muted, lineHeight: 1.5 }}>
+                  Unresolved · {dataBank.unresolvedGaps.slice(0, 5).join(' · ')}
+                  {dataBank.unresolvedGaps.length > 5 ? ` · +${dataBank.unresolvedGaps.length - 5} more` : ''}
+                </div>
+              )}
             </div>
           )}
 
@@ -1023,6 +1036,10 @@ export default function ReportCreator() {
         if (!result) throw new Error('AlphaTape research did not reach a terminal state.')
         clipsForGeneration = getProject(active.id)?.clips ?? active.clips
         dataBank = buildReportDataBank(planToRun, result, clipsForGeneration)
+        if (dataBank.phase === 'blocked') {
+          const gaps = dataBank.unresolvedGaps.slice(0, 4).join(' ')
+          throw new Error(`Research is incomplete. ${gaps || 'Retry the critical AlphaTape sources before generating.'}`)
+        }
       }
       if (!clipsForGeneration.length) throw new Error('Add evidence before generating the report.')
       const payload = {
@@ -1036,7 +1053,15 @@ export default function ReportCreator() {
         evidenceMode: active.scope.evidenceMode,
         mustInclude: active.scope.mustInclude,
         dataBank,
-        clips: clipsForGeneration.map(c => ({ id: c.id, sourceTab: c.sourceTab, dataType: c.dataType, title: clipTitle(c), userDescription: c.userDescription ?? '', dataSummary: summarizeClipForAI(c) })),
+        clips: clipsForGeneration.map(c => ({
+          id: c.id,
+          sourceTab: c.sourceTab,
+          dataType: c.dataType,
+          title: clipTitle(c),
+          userDescription: c.userDescription ?? '',
+          dataSummary: summarizeClipForAI(c),
+          evidenceDomain: c.evidenceDomain ?? 'issuer',
+        })),
       }
       const r = await axios.post('/api/ai/report', payload)
       const activeClipById = new Map(clipsForGeneration.map(clip => [clip.id, clip]))

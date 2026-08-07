@@ -1,7 +1,7 @@
 import type { Theme } from '../contexts/ThemeContext'
 import { DEFAULT_THEME } from '../contexts/ThemeContext'
 
-// Concrete colors for the research-note PDF. html2canvas/Recharts need resolved
+// Concrete colors for the research-note PDF. Recharts and native browser print need resolved
 // hex (not CSS vars). Built from the active Settings color preset.
 
 export interface ReportPalette {
