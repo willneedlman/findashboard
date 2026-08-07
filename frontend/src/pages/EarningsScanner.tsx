@@ -1,18 +1,18 @@
 import { useState, useEffect, useMemo, useRef, useCallback, Fragment } from 'react'
+import { createPortal } from 'react-dom'
 import axios from 'axios'
-import { Calendar, Star } from 'lucide-react'
+import { Star } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import { calendarMismatchDate, hasReportedFigures, sourceHasGapAt } from './earningsCalendarStatus'
 import EmptyState from '../components/EmptyState'
 import TickerLogo from '../components/TickerLogo'
 import TickerLink from '../components/TickerLink'
-import UniversePicker from '../components/UniversePicker'
 import ColumnFilterMenu, { type SortState, type FilterSpec } from '../components/ColumnFilterMenu'
 import useIsMobile from '../hooks/useIsMobile'
 import { usePortfolio } from '../contexts/PortfolioContext'
 import { localDateInputValue } from '../lib/time'
 import { readWatchlist, toggleWatchlist } from '../lib/watchlist'
-import { readActivePortfolioContext, readPMBooks, normalizeTicker, PORTFOLIO_CONTEXT_EVENT, type PMHolding } from '../lib/pmImport'
+import { readActivePortfolioContext, readPMBooks, normalizeTicker, PORTFOLIO_CONTEXT_EVENT, type PMHolding, type PMPortfolio } from '../lib/pmImport'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip, textClip } from '../lib/reportCaptureRegistry'
@@ -48,13 +48,13 @@ function GroupLabel({ children, htmlFor, title }: { children: React.ReactNode; h
   return (
     <label htmlFor={htmlFor} title={title} style={{
       fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
-      textTransform: 'uppercase', color: C.muted, marginRight: 10, whiteSpace: 'nowrap',
+      textTransform: 'uppercase', color: C.muted, marginRight: 8, whiteSpace: 'nowrap', flexShrink: 0,
     }}>{children}</label>
   )
 }
 
 function Divider() {
-  return <span aria-hidden style={{ width: 1, height: 24, background: C.border, margin: '0 16px', flexShrink: 0 }} />
+  return <span aria-hidden style={{ width: 1, height: 24, background: C.border, margin: '0 10px', flexShrink: 0 }} />
 }
 
 function Segmented({ items, value, onPick }: {
@@ -63,7 +63,7 @@ function Segmented({ items, value, onPick }: {
   onPick: (key: string) => void
 }) {
   return (
-    <div style={{ display: 'flex', border: `1px solid ${C.border}`, background: C.inset }}>
+    <div style={{ display: 'flex', border: `1px solid ${C.border}`, background: C.inset, flexShrink: 0 }}>
       {items.map((it, i) => {
         const on = it.key === value
         return (
@@ -72,7 +72,7 @@ function Segmented({ items, value, onPick }: {
               background: on ? C.gold : 'transparent', color: on ? C.header : C.muted,
               border: 'none', borderRight: i < items.length - 1 ? `1px solid ${C.border}` : 'none',
               cursor: 'pointer', fontFamily: C.sans, fontSize: 10, fontWeight: 700,
-              letterSpacing: '0.06em', textTransform: 'uppercase', padding: '7px 12px', whiteSpace: 'nowrap',
+              letterSpacing: '0.06em', textTransform: 'uppercase', padding: '7px 10px', whiteSpace: 'nowrap',
             }}>{it.label}</button>
         )
       })}
@@ -132,6 +132,10 @@ interface BookInfo {
   shortPct: number | null
   insider: InsiderTx[] | null
   detail: EarnDetail | null
+  // "no data" and "not fetched yet" render differently: one is a dash, the
+  // other a skeleton. Without these flags every widget shows the dash first.
+  loaded?: boolean
+  extrasLoaded?: boolean
 }
 
 interface Position { ticker: string; shares: number; avgCost: number }
@@ -156,21 +160,24 @@ interface SummaryResult {
 }
 interface SummaryState { stage: string; pct: number; result: SummaryResult | null; error: string | null }
 
-type Scope = 'covered' | 'all' | 'holdings' | 'watchlist'
+type Scope = 'covered' | 'all' | 'holdings'
 type SortKey = string
 
 const SCOPES: { key: Scope; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'covered', label: 'Covered' },
   { key: 'holdings', label: 'My Holdings' },
-  { key: 'watchlist', label: 'Watchlist' },
 ]
-const isBookScope = (s: Scope) => s === 'holdings' || s === 'watchlist'
+const isBookScope = (s: Scope) => s === 'holdings'
+
+// Sentinel for "whatever the Portfolio Manager has active", as opposed to a
+// pinned book id.
+const ACTIVE_BOOK = '__active__'
 
 // The universe calendar is a date window (the backend caps it at 14 days). The
 // book is a countdown instead — your names report when they report, so the
 // control switches to a proximity horizon rather than a start date + span.
-const WINDOWS = [{ label: 'Day', days: 1 }, { label: '3 Days', days: 3 }, { label: 'Week', days: 7 }, { label: '2 Weeks', days: 14 }]
+const WINDOWS = [{ label: '1D', days: 1 }, { label: '3D', days: 3 }, { label: '1W', days: 7 }, { label: '2W', days: 14 }]
 const HORIZONS: { key: HorizonKey; label: string; limit: number }[] = [
   { key: '14d', label: '14 Days', limit: 14 },
   { key: '30d', label: '30 Days', limit: 30 },
@@ -279,6 +286,20 @@ const shimmer: React.CSSProperties = {
   backgroundSize: '200% 100%', animation: 'ec-shimmer 1.6s infinite',
 }
 
+/** Shimmer block sized to the widget it stands in for. */
+function Skeleton({ w = '100%', h = 10, mt = 0 }: { w?: number | string; h?: number; mt?: number }) {
+  return <span aria-hidden style={{ ...shimmer, display: 'block', width: w, height: h, marginTop: mt }} />
+}
+function SkeletonLines({ n, h = 10, gap = 8, widths }: { n: number; h?: number; gap?: number; widths?: (number | string)[] }) {
+  return (
+    <span aria-hidden style={{ display: 'flex', flexDirection: 'column', gap }}>
+      {Array.from({ length: n }, (_, i) => (
+        <Skeleton key={i} h={h} w={widths?.[i] ?? (i === n - 1 ? '62%' : '100%')} />
+      ))}
+    </span>
+  )
+}
+
 function BeatMissBadge({ surprisePct }: { surprisePct: number | null | undefined }) {
   if (surprisePct == null) return <span style={{ color: C.dim }}>—</span>
   const beat = surprisePct >= 0
@@ -304,16 +325,28 @@ function HourChip({ hour }: { hour: string }) {
   )
 }
 
-function Sparkline({ data, positive }: { data: number[]; positive: boolean }) {
+function Sparkline({ data, positive, fill }: { data: number[]; positive: boolean; fill?: boolean }) {
   if (!data || data.length < 2) return null
   const min = Math.min(...data), max = Math.max(...data)
   const range = max - min || 1
   const pts = data.map((v, i) =>
     `${(i / (data.length - 1) * 100).toFixed(1)},${(25 - ((v - min) / range) * 24 + 0.5).toFixed(1)}`
   ).join(' ')
+  const stroke = positive ? C.pos : C.neg
+  // fill: absolutely fill the parent box. As a flex item an SVG sizes itself
+  // from its own viewBox ratio and stays small no matter what width/height say,
+  // so it is taken out of flow instead. preserveAspectRatio="none" would scale
+  // the stroke with the box, hence the non-scaling stroke; the area under the
+  // line carries the size the 1.6px line cannot.
   return (
-    <svg width={94} height={24} viewBox="0 0 100 26" preserveAspectRatio="none" style={{ display: 'block', flexShrink: 0 }}>
-      <polyline points={pts} fill="none" stroke={positive ? C.pos : C.neg} strokeWidth={1.6} strokeLinejoin="round" />
+    <svg viewBox="0 0 100 26" preserveAspectRatio="none"
+      width={fill ? '100%' : 94} height={fill ? '100%' : 24}
+      style={fill
+        ? { position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }
+        : { display: 'block', flexShrink: 0 }}>
+      {fill && <polygon points={`0,26 ${pts} 100,26`} fill={stroke} opacity={0.1} />}
+      <polyline points={pts} fill="none" stroke={stroke} strokeWidth={1.6} strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke" />
     </svg>
   )
 }
@@ -321,10 +354,25 @@ function Sparkline({ data, positive }: { data: number[]; positive: boolean }) {
 // --- book fetchers (the old Portfolio Earnings data layer, unchanged shape) ---
 const TIMEOUT = 10_000
 
+/** 30d closes when the hub's own sparkline comes back empty — a name with a
+ *  price always has a price series, so the widget should never read "none". */
+async function fetchCloses(tk: string): Promise<number[]> {
+  try {
+    const { data: d } = await axios.get('/api/market/ohlcv', {
+      params: { ticker: tk, period: '1mo', interval: '1d' }, timeout: TIMEOUT,
+    })
+    return (d.candles ?? [])
+      .map((c: any) => Number(c.close))
+      .filter((v: number) => Number.isFinite(v))
+  } catch { return [] }
+}
+
 async function fetchHub(tk: string): Promise<Partial<BookInfo>> {
   try {
     const { data: d } = await axios.get(`/api/corporate/hub?ticker=${tk}`, { timeout: TIMEOUT })
+    const spark: number[] = d.sparkline ?? []
     return {
+      loaded: true,
       name: d.company_name || tk,
       date: d.date && d.date !== '—' ? d.date : null,
       horizon: d.horizon && d.horizon !== '—' ? d.horizon : null,
@@ -332,13 +380,13 @@ async function fetchHub(tk: string): Promise<Partial<BookInfo>> {
       pctChange: d.pct_change_1d ?? null, marketCap: d.market_cap ?? null,
       consensus: d.consensus ?? null,
       price: d.current_price || null, week52Low: d.fifty_two_week_low || null, week52High: d.fifty_two_week_high || null,
-      sparkline: d.sparkline ?? [],
+      sparkline: spark.length > 1 ? spark : await fetchCloses(tk),
       news: (d.news || []).slice(0, 3).map((n: any) => ({
         title: n.title || 'Market Update', link: n.link || '#', publisher: n.publisher || 'Financial Wire',
       })),
     }
   } catch {
-    return { name: tk, date: null, horizon: null, news: [], sparkline: [] }
+    return { name: tk, date: null, horizon: null, news: [], sparkline: await fetchCloses(tk), loaded: true }
   }
 }
 async function fetchShort(tk: string): Promise<number | null> {
@@ -370,23 +418,33 @@ export function EarningsScannerContent() {
   const isMobile = useIsMobile()
   const { tickers: legacyTickers } = usePortfolio()
 
-  // ---- the book: positions from the Portfolio Manager, watchlist from pe_wl.
-  // The PM book is the richer source (shares + cost), so it wins; the weight-only
-  // legacy store is the fallback so a user without a PM book still gets markers.
+  // ---- the book: positions from the Portfolio Manager. Which book is a choice,
+  // not an assumption — ACTIVE_BOOK follows whatever the PM has active (and the
+  // combined overview when several are selected), and the picker can pin any
+  // saved portfolio instead. The weight-only legacy store is the fallback so a
+  // user without a PM book still gets markers.
+  const [pmBooks, setPmBooks] = useState<PMPortfolio[]>(() => readPMBooks())
+  const [bookId, setBookId] = useState<string>(ACTIVE_BOOK)
   const [positions, setPositions] = useState<Position[]>([])
   useEffect(() => {
     const read = () => {
-      const ctx = readActivePortfolioContext()
-      const held = (ctx.holdings as PMHolding[])
+      const books = readPMBooks()
+      setPmBooks(books)
+      const picked = bookId === ACTIVE_BOOK ? null : books.find(b => b.id === bookId)
+      if (bookId !== ACTIVE_BOOK && !picked) setBookId(ACTIVE_BOOK)
+      const holdings = (picked?.holdings ?? readActivePortfolioContext().holdings) as PMHolding[]
+      const held = holdings
         .map(h => ({ ticker: normalizeTicker(h.ticker), shares: h.shares, avgCost: h.avgCost }))
         .filter(p => p.ticker && p.ticker !== 'CASH' && p.shares)
       if (held.length) { setPositions(held); return }
-      setPositions(legacyTickers.map(t => ({ ticker: t.toUpperCase(), shares: 0, avgCost: 0 })))
+      // A pinned book that is genuinely empty must read as empty, not silently
+      // fall back to the legacy weights of a different book.
+      setPositions(picked ? [] : legacyTickers.map(t => ({ ticker: t.toUpperCase(), shares: 0, avgCost: 0 })))
     }
     read()
     window.addEventListener(PORTFOLIO_CONTEXT_EVENT, read)
     return () => window.removeEventListener(PORTFOLIO_CONTEXT_EVENT, read)
-  }, [legacyTickers])
+  }, [legacyTickers, bookId])
 
   const [watchlist, setWatchlist] = useState<string[]>(() => readWatchlist())
   const watchSet = useMemo(() => new Set(watchlist), [watchlist])
@@ -417,19 +475,14 @@ export function EarningsScannerContent() {
   const profilingRef = useRef<Set<string>>(new Set())   // phase 1: cheap name/cap/sector, in flight
   const enrichingRef = useRef<Set<string>>(new Set())   // phase 2: full enrichment, in flight
 
-  // ---- book data, loaded once per name for the union of holdings + watchlist.
-  // A held name that turns up in the universe calendar gets the same context as
-  // it does in the book scopes — that is the whole point of the merge.
+  // ---- book data, loaded once per held name. A held name that turns up in the
+  // universe calendar gets the same context as it does in the holdings scope —
+  // that is the whole point of the merge.
   const [book, setBook] = useState<Record<string, BookInfo>>({})
   const [bookLoading, setBookLoading] = useState(false)
   const bookRef = useRef<Set<string>>(new Set())
 
-  const bookNames = useMemo(() => {
-    const set = new Set<string>()
-    for (const p of positions) set.add(p.ticker)
-    for (const w of watchlist) set.add(w)
-    return [...set]
-  }, [positions, watchlist])
+  const bookNames = useMemo(() => [...new Set(positions.map(p => p.ticker))], [positions])
 
   const loadBook = useCallback((names: string[]) => {
     const fresh = names.filter(n => !bookRef.current.has(n))
@@ -443,7 +496,7 @@ export function EarningsScannerContent() {
       const [shortPct, detail, insider] = await Promise.all([
         fetchShort(tk), fetchEarnDetail(tk), fetchInsider(tk),
       ])
-      setBook(prev => ({ ...prev, [tk]: { ...(prev[tk] ?? emptyBook(tk)), shortPct, detail, insider } }))
+      setBook(prev => ({ ...prev, [tk]: { ...(prev[tk] ?? emptyBook(tk)), shortPct, detail, insider, extrasLoaded: true } }))
     })).finally(() => setBookLoading(false))
   }, [])
 
@@ -467,7 +520,16 @@ export function EarningsScannerContent() {
     axios.get('/api/earnings/calendar', { params: { date, days } })
       .then(r => {
         if (loadIdRef.current !== id) return
-        setRows(r.data.rows || [])
+        // The calendar merges two sources, so a name can arrive twice for the
+        // same date. That collides the row key (symbol|date), which React warns
+        // about and which makes both copies expand as one.
+        const seen = new Set<string>()
+        setRows((r.data.rows || []).filter((row: Row) => {
+          const k = `${row.symbol}|${row.date}`
+          if (seen.has(k)) return false
+          seen.add(k)
+          return true
+        }))
         setCovered(r.data.covered || 0)
         setRangeTo(r.data.to || null)
       })
@@ -481,7 +543,7 @@ export function EarningsScannerContent() {
   // date rather than the window calendar, so a holding reporting in six weeks is
   // still on the agenda. Same Row shape, so everything downstream is shared.
   const bookRows = useMemo<Row[]>(() => {
-    const names = scope === 'holdings' ? positions.map(p => p.ticker) : watchlist
+    const names = positions.map(p => p.ticker)
     const limit = HORIZONS.find(h => h.key === horizonKey)?.limit ?? Infinity
     return names
       .map(tk => {
@@ -498,7 +560,7 @@ export function EarningsScannerContent() {
         } as Row
       })
       .filter((r): r is Row => r != null)
-  }, [scope, positions, watchlist, book, horizonKey])
+  }, [positions, book, horizonKey])
 
   const scopeRows = isBookScope(scope) ? bookRows : rows
 
@@ -798,44 +860,6 @@ export function EarningsScannerContent() {
   const anyFilter = !!(query || minCapStr || hourFilter || sort)
   const clearFilters = () => { setQuery(''); setMinCapStr(''); setHourFilter(''); setSort(null) }
 
-  // ---- AI desk brief across whatever is on screen (the old rail, now a band).
-  const [aiBrief, setAiBrief] = useState<{ bullets: string[]; tone: string } | null>(null)
-  const [aiBriefPending, setAiBriefPending] = useState(false)
-  const [aiBriefError, setAiBriefError] = useState<string | null>(null)
-  const [briefOpen, setBriefOpen] = useState(false)
-
-  const fetchAiBrief = async () => {
-    if (!visible.length) return
-    setAiBriefPending(true); setAiBriefError(null)
-    try {
-      const top = visible.slice(0, 25)
-      const payload = {
-        tickers: top.map(r => r.symbol),
-        rows: top.map(r => {
-          const e = enriched[r.symbol]
-          const b = book[r.symbol]
-          return {
-            ticker: r.symbol, daysToReport: daysUntil(r.date),
-            impliedMove: e?.impliedMove ?? null,
-            shortPct: b?.shortPct != null ? `${b.shortPct.toFixed(1)}%` : null,
-            pctChange: b?.pctChange ?? null,
-            marketCap: e?.marketCap ?? b?.marketCap ?? null,
-            consensus: b?.consensus ?? null,
-            pe: b?.pe ?? null,
-            news: (b?.news ?? []).slice(0, 2).map(n => ({ title: n.title })),
-          }
-        }),
-      }
-      const { data: res } = await axios.post('/api/ai/corporate-brief', payload)
-      if (res.bullets?.length) setAiBrief(res)
-      else setAiBriefError('Unexpected response from AI')
-    } catch (err: any) {
-      const msg = err?.response?.data?.detail ?? err?.message ?? 'Request failed'
-      setAiBriefError(typeof msg === 'string' ? msg : JSON.stringify(msg))
-    }
-    setAiBriefPending(false)
-  }
-
   // ---- per-row AI filing summary (the old Earnings Summarizer, streamed)
   const [summaries, setSummaries] = useState<Record<string, SummaryState>>({})
   // filingDate targets one past filing; omitted, the backend keeps its default
@@ -886,12 +910,10 @@ export function EarningsScannerContent() {
 
   // ---- row-level popovers. Both are single-open across every date group, so
   // they live here rather than inside a GroupBody.
-  const [hoverSym, setHoverSym] = useState<string | null>(null)
+  const [hover, setHover] = useState<{ sym: string; rect: DOMRect } | null>(null)
   const hoverTimer = useRef<number | null>(null)
-  const [filingsFor, setFilingsFor] = useState<string | null>(null)
-  const [filings, setFilings] = useState<Record<string, Filing[] | 'loading' | 'error'>>({})
-  // Which filing each ticker's summary should read, set from the archive or the
-  // track record. Keyed by symbol so it survives collapsing the row.
+  // Which filing each ticker's summary should read, set from the Source picker
+  // or the track record. Keyed by symbol so it survives collapsing the row.
   const [aiTargets, setAiTargets] = useState<Record<string, AiTarget | null>>({})
 
   const clearHoverTimer = () => {
@@ -901,41 +923,31 @@ export function EarningsScannerContent() {
 
   // 400ms dwell: brushing across the table on the way somewhere else should not
   // flash a card on every row it passes.
-  const onHoverSym = useCallback((sym: string | null) => {
+  // The card is anchored off the row's own rect and portalled to the body: the
+  // table scrolls horizontally, which clips any absolutely positioned child at
+  // its bottom edge.
+  const onHoverSym = useCallback((sym: string | null, rect?: DOMRect | null) => {
     clearHoverTimer()
-    if (sym == null) { setHoverSym(null); return }
-    hoverTimer.current = window.setTimeout(() => setHoverSym(sym), 400)
+    if (sym == null || !rect) { setHover(null); return }
+    hoverTimer.current = window.setTimeout(() => setHover({ sym, rect }), 400)
   }, [])
 
-  const openFilings = useCallback((sym: string) => {
-    clearHoverTimer(); setHoverSym(null)
-    setFilingsFor(cur => (cur === sym ? null : sym))
-    setFilings(prev => {
-      if (prev[sym] && prev[sym] !== 'error') return prev
-      axios.get(`/api/filings/filings/${sym}`)
-        .then(r => setFilings(p => ({ ...p, [sym]: r.data.filings ?? [] })))
-        .catch(() => setFilings(p => ({ ...p, [sym]: 'error' })))
-      return { ...prev, [sym]: 'loading' }
-    })
-  }, [])
-
-  // Escape closes the archive, matching TickerLink / ColumnFilterMenu.
+  // The card is placed in viewport coordinates, so any scroll strands it next
+  // to a row that has moved. Dismiss instead of chasing the anchor.
   useEffect(() => {
-    if (!filingsFor) return
-    const onKey = (ev: KeyboardEvent) => { if (ev.key === 'Escape') setFilingsFor(null) }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [filingsFor])
-
-  const onToggleWatch = useCallback((sym: string) => { setWatchlist(toggleWatchlist(sym)) }, [])
-  const addWatch = useCallback((syms: string[]) => {
-    let next = watchlist
-    for (const s of syms) {
-      const u = s.trim().toUpperCase()
-      if (u && !next.includes(u)) next = toggleWatchlist(u)
+    if (!hover) return
+    const drop = () => setHover(null)
+    window.addEventListener('scroll', drop, true)
+    window.addEventListener('resize', drop)
+    return () => {
+      window.removeEventListener('scroll', drop, true)
+      window.removeEventListener('resize', drop)
     }
-    setWatchlist(next)
-  }, [watchlist])
+  }, [hover])
+
+  // The row star still writes the app-wide watchlist (pe_wl) that the ticker
+  // drawer and Morning Brief read — this tool just no longer scopes to it.
+  const onToggleWatch = useCallback((sym: string) => { setWatchlist(toggleWatchlist(sym)) }, [])
 
   const windowLabel = isBookScope(scope)
     ? (HORIZONS.find(h => h.key === horizonKey)?.label ?? 'All')
@@ -975,9 +987,6 @@ export function EarningsScannerContent() {
         ]
       }),
     ))
-    if (aiBrief?.bullets?.length) {
-      pieces.push(textClip('Earnings Scanner', 'AI Desk Brief', aiBrief.bullets.map(b => `• ${b}`).join('\n')))
-    }
     // Whatever row is open goes into the report with the calendar it came from.
     const openSym = expanded?.split('|')[0]
     const openSummary = openSym ? summaries[openSym]?.result : null
@@ -1019,7 +1028,7 @@ export function EarningsScannerContent() {
     <ColumnFilterMenu align={align} sortKey={SORT_KEY[c]} sort={sort} onSort={setSort} filter={colFilterSpec(c)} />
   )
 
-  const bookEmpty = isBookScope(scope) && (scope === 'holdings' ? positions.length === 0 : watchlist.length === 0)
+  const bookEmpty = isBookScope(scope) && positions.length === 0
 
   return (
     <>
@@ -1030,19 +1039,20 @@ export function EarningsScannerContent() {
         @media (prefers-reduced-motion: reduce) { .ec-spinner { animation: none; } }
       `}</style>
 
-      {/* Controls — one toolbar line, parameter groups separated by hairlines,
-          with the run counts on a meta strip inside the same panel. */}
+      {/* Controls — a single toolbar line, parameter groups separated by
+          hairlines, with the run counts on a meta strip inside the same panel.
+          It never wraps: a narrow viewport scrolls the row instead of stacking
+          it, so the control order stays the same at every width. */}
       <div style={{ background: C.header, border: `1px solid ${C.border}`, marginBottom: 14 }}>
         <div style={{
-          display: 'flex', alignItems: 'center', flexWrap: 'wrap', rowGap: 8,
-          padding: '0 14px', minHeight: 48,
+          display: 'flex', alignItems: 'center', flexWrap: 'nowrap',
+          overflowX: 'auto', padding: '0 14px', minHeight: 48,
         }}>
           <GroupLabel>Scope</GroupLabel>
           <Segmented
             items={SCOPES.map(s => ({
               key: s.key, label: s.label,
               title: s.key === 'holdings' ? 'Only names in your Portfolio Manager book'
-                : s.key === 'watchlist' ? 'Only names on your watchlist'
                 : s.key === 'covered' ? 'Only names with a published consensus estimate'
                 : 'Every name reporting in this window',
             }))}
@@ -1054,6 +1064,20 @@ export function EarningsScannerContent() {
 
           {isBookScope(scope) ? (
             <>
+              <GroupLabel htmlFor="ec-book">Book</GroupLabel>
+              <select id="ec-book" value={bookId} onChange={e => setBookId(e.target.value)}
+                title="Which Portfolio Manager book this agenda reads"
+                style={{
+                  background: C.inset, border: `1px solid ${C.border}`, color: C.text,
+                  fontFamily: C.mono, fontSize: 12, padding: '6px 8px', outline: 'none',
+                  maxWidth: 190, flexShrink: 0, colorScheme: 'var(--theme-color-scheme, dark)' as React.CSSProperties['colorScheme'],
+                }}>
+                <option value={ACTIVE_BOOK}>Active book</option>
+                {pmBooks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+
+              <Divider />
+
               <GroupLabel>Horizon</GroupLabel>
               <Segmented
                 items={HORIZONS.map(h => ({ key: h.key, label: h.label }))}
@@ -1064,14 +1088,13 @@ export function EarningsScannerContent() {
           ) : (
             <>
               <GroupLabel htmlFor="ec-date">Date</GroupLabel>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7, border: `1px solid ${C.border}`, background: C.inset, padding: '0 10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, border: `1px solid ${C.border}`, background: C.inset, padding: '0 10px', flexShrink: 0 }}>
                 <input id="ec-date" type="date" value={date} onChange={e => setDate(e.target.value || today())}
                   style={{
                     background: 'transparent', border: 'none', color: C.text, fontFamily: C.mono,
                     fontSize: 12.5, fontVariantNumeric: 'tabular-nums', padding: '6px 0', outline: 'none',
                     colorScheme: 'var(--theme-color-scheme, dark)' as React.CSSProperties['colorScheme'],
                   }} />
-                <Calendar size={12} style={{ color: C.dim, flexShrink: 0 }} aria-hidden />
               </div>
 
               <Divider />
@@ -1097,7 +1120,7 @@ export function EarningsScannerContent() {
             title="Filtered results are matched against a curated list of ~1,000 major US names, IPOs, and large ADRs — a name outside that list won't appear while a cap filter is set, even if it would qualify.">
             Cap ≥
           </GroupLabel>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, border: `1px solid ${C.border}`, background: C.inset, padding: '0 10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, border: `1px solid ${C.border}`, background: C.inset, padding: '0 10px', flexShrink: 0 }}>
             <span style={{ fontFamily: C.mono, fontSize: 12, color: C.muted }}>$</span>
             <input id="ec-mincap" type="number" min={0} step="1" value={minCapStr} onChange={e => setMinCapStr(e.target.value)}
               placeholder="0" style={{
@@ -1109,24 +1132,16 @@ export function EarningsScannerContent() {
 
           <div style={{ flex: 1, minWidth: 12 }} />
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button onClick={() => setBriefOpen(v => !v)} aria-expanded={briefOpen} style={{
-              background: briefOpen ? gold(14) : 'transparent',
-              border: `1px solid ${briefOpen ? C.gold : C.border}`, color: briefOpen ? C.gold : C.muted,
-              cursor: 'pointer', fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
-              textTransform: 'uppercase', padding: '8px 12px', whiteSpace: 'nowrap',
-            }}>Desk brief</button>
-            {/* Book scopes read the book rather than screening, so there is nothing to run. */}
-            {!isBookScope(scope) && (
-              <button type="button" onClick={loadCalendar} disabled={loading}
-                title="Screen the universe for the parameters above"
-                style={{
-                  background: C.gold, border: 'none', color: C.header, cursor: loading ? 'default' : 'pointer',
-                  fontFamily: C.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-                  padding: '9px 20px', whiteSpace: 'nowrap', opacity: loading ? 0.6 : 1,
-                }}>{loading ? 'Scanning…' : 'Scan'}</button>
-            )}
-          </div>
+          {/* The holdings scope reads the book rather than screening, so there is nothing to run. */}
+          {!isBookScope(scope) && (
+            <button type="button" onClick={loadCalendar} disabled={loading}
+              title="Screen the universe for the parameters above"
+              style={{
+                background: C.gold, border: 'none', color: C.header, cursor: loading ? 'default' : 'pointer',
+                fontFamily: C.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+                padding: '9px 20px', whiteSpace: 'nowrap', opacity: loading ? 0.6 : 1, flexShrink: 0,
+              }}>{loading ? 'Scanning…' : 'Scan'}</button>
+          )}
         </div>
 
         {/* Meta strip — what the current run actually returned. */}
@@ -1162,87 +1177,12 @@ export function EarningsScannerContent() {
         ) : null}
       </div>
 
-      {/* Watchlist management — chips live with the scope that uses them */}
-      {scope === 'watchlist' && (
-        <div style={{
-          background: C.header, border: `1px solid ${C.border}`, padding: '11px 16px', marginBottom: 14,
-          display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap',
-        }}>
-          <span style={{ ...LABEL, display: 'inline', marginRight: 3 }}>Watchlist</span>
-          {watchlist.map(tk => (
-            <span key={tk} style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: C.mono, fontWeight: 700,
-              fontSize: 10, color: C.muted, border: `1px solid ${gold(22)}`, background: gold(5), padding: '3px 4px 3px 8px',
-            }}>
-              {tk}
-              <button onClick={() => onToggleWatch(tk)} title={`Remove ${tk}`} aria-label={`Remove ${tk}`}
-                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: C.dim, fontSize: 12, lineHeight: 1, padding: '0 2px' }}>×</button>
-            </span>
-          ))}
-          {watchlist.length === 0 && (
-            <span style={{ fontFamily: C.sans, fontSize: 10.5, color: C.dim }}>
-              Empty. Star any row in the calendar, or import a book below.
-            </span>
-          )}
-          <WatchlistAdd onAdd={tk => addWatch([tk])} existing={watchSet} />
-          <PmBookImport onImport={addWatch} />
-          <UniversePicker
-            mode="tickers"
-            onImportTickers={list => addWatch(list)}
-            style={{ fontFamily: C.mono, fontWeight: 700, fontSize: 9.5, letterSpacing: '0.05em', padding: '4px 9px' }}
-          />
-        </div>
-      )}
-
-      {/* AI desk brief across the visible rows */}
-      {briefOpen && (
-        <div style={{ background: C.header, border: `1px solid ${gold(28)}`, marginBottom: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '9px 14px', background: gold(6), borderBottom: `1px solid ${gold(16)}` }}>
-            <span style={{ fontFamily: C.sans, fontWeight: 700, fontSize: 9.5, letterSpacing: '0.16em', textTransform: 'uppercase', color: C.gold }}>AI Desk Brief</span>
-            {aiBrief && !aiBriefPending && (
-              <span style={{ fontFamily: C.mono, fontWeight: 700, fontSize: 8.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--theme-positive-strong, #4fd39a)', border: '1px solid rgba(79,211,154,0.5)', padding: '2px 6px' }}>{aiBrief.tone}</span>
-            )}
-          </div>
-          <div style={{ padding: '13px 14px' }}>
-            {aiBriefPending ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                <span className="ec-spinner" style={{ width: 13, height: 13, borderRadius: '50%', border: `2px solid ${gold(30)}`, borderTopColor: C.gold, flexShrink: 0 }} />
-                <span style={{ fontFamily: C.sans, fontSize: 11, color: C.gold }}>Reading the tape…</span>
-              </div>
-            ) : aiBrief ? (
-              <>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-                  {aiBrief.bullets.map((b, i) => (
-                    <div key={i} style={{ fontFamily: C.sans, fontSize: 11.5, lineHeight: 1.55, color: C.text, paddingLeft: 10, borderLeft: `2px solid ${gold(32)}` }}>{b}</div>
-                  ))}
-                </div>
-                <button onClick={fetchAiBrief} style={{ marginTop: 12, background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.muted, padding: 0 }}>
-                  Regenerate
-                </button>
-              </>
-            ) : (
-              <div>
-                <p style={{ margin: '0 0 11px', fontFamily: C.sans, fontSize: 11, lineHeight: 1.55, color: C.muted }}>
-                  Synthesize a desk brief across the {Math.min(visible.length, 25)} names on screen: timing, implied-move outliers, short-interest risk.
-                </p>
-                {aiBriefError && <p style={{ margin: '0 0 9px', fontFamily: C.mono, fontSize: 9.5, color: C.neg }}>{aiBriefError}</p>}
-                <button onClick={fetchAiBrief} disabled={!visible.length} style={{
-                  fontFamily: C.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-                  color: C.header, background: C.gold, border: 'none', padding: '8px 16px',
-                  cursor: visible.length ? 'pointer' : 'default', opacity: visible.length ? 1 : 0.5,
-                }}>RUN BRIEF</button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {bookEmpty && (
         <EmptyState
-          title={scope === 'holdings' ? 'No Holdings' : 'Empty Watchlist'}
-          hint={scope === 'holdings'
+          title="No Holdings"
+          hint={bookId === ACTIVE_BOOK
             ? 'Add positions in the Portfolio Manager, or switch scope to All to screen the market.'
-            : 'Star a row in the All scope, or import a book, to build your watchlist.'}
+            : 'That book has no positions. Pick another book, or switch scope to All to screen the market.'}
           kpis={['Next Report', 'Implied Move', 'Short Interest', 'Consensus']}
           preview="table" previewLabel="Earnings Agenda" columns={['Ticker', 'Report Date', 'Implied Move', 'Consensus']} />
       )}
@@ -1291,18 +1231,15 @@ export function EarningsScannerContent() {
                   showHeader={!sort && (isBookScope(scope) || days > 1)}
                   showBookCols={showBookCols} showPosCol={showPosCol}
                   watch={watchSet} posMap={posMap} positionValue={positionValue}
-                  expanded={expanded} onToggleExpand={k => setExpanded(cur => (cur === k ? null : k))}
+                  expanded={expanded}
+                  onToggleExpand={k => {
+                    setExpanded(cur => (cur === k ? null : k))
+                    loadBook([k.split('|')[0]])
+                  }}
                   onToggleWatch={onToggleWatch}
                   summaries={summaries} onFetchSummary={fetchSummary}
                   registerRow={registerRow}
-                  pop={{
-                    hoverSym, onHover: onHoverSym, filingsFor, onOpenFilings: openFilings, filings,
-                    onPickFiling: (sym, f, rowKey) => {
-                      setAiTargets(p => ({ ...p, [sym]: { form: f.form, period: f.date.slice(0, 7), filed: f.date } }))
-                      setFilingsFor(null)
-                      setExpanded(rowKey)   // so the AI band showing the new source is on screen
-                    },
-                  }}
+                  pop={{ hover, onHover: onHoverSym }}
                   aiTargets={aiTargets}
                   onSetAiTarget={(sym, t) => setAiTargets(p => ({ ...p, [sym]: t }))} />
               ))}
@@ -1321,112 +1258,6 @@ export function EarningsScannerContent() {
         </div>
       )}
     </>
-  )
-}
-
-// Ticker search for the watchlist strip — same /api/corporate/search the old
-// Portfolio Earnings add menu used.
-function WatchlistAdd({ onAdd, existing }: { onAdd: (tk: string) => void; existing: Set<string> }) {
-  const [open, setOpen] = useState(false)
-  const [q, setQ] = useState('')
-  const [results, setResults] = useState<{ ticker: string; name: string }[]>([])
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (open) inputRef.current?.focus()
-    else { setQ(''); setResults([]) }
-  }, [open])
-
-  useEffect(() => {
-    const term = q.trim()
-    if (term.length < 2) { setResults([]); return }
-    const t = setTimeout(async () => {
-      try {
-        const { data } = await axios.get(`/api/corporate/search?q=${encodeURIComponent(term)}`, { timeout: 8000 })
-        setResults((data.results || []).slice(0, 8))
-      } catch { setResults([]) }
-    }, 250)
-    return () => clearTimeout(t)
-  }, [q])
-
-  const suggestions = results.filter(r => !existing.has(r.ticker)).slice(0, 6)
-  const commit = (tk: string) => { if (tk.trim()) onAdd(tk); setOpen(false) }
-
-  return (
-    <span style={{ position: 'relative' }}>
-      <button onClick={() => setOpen(v => !v)} style={{
-        fontFamily: C.mono, fontWeight: 700, fontSize: 9.5, letterSpacing: '0.06em', color: C.muted,
-        border: `1px dashed ${gold(34)}`, background: 'transparent', padding: '4px 9px', cursor: 'pointer',
-      }}>+ ADD</button>
-      {open && (
-        <>
-          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
-          <div style={{
-            position: 'absolute', zIndex: 50, top: 'calc(100% + 5px)', left: 0, minWidth: 240,
-            background: C.bg, border: `1px solid ${gold(34)}`, boxShadow: '0 12px 30px rgba(0,0,0,0.5)', padding: 5,
-          }}>
-            <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') commit(suggestions[0]?.ticker ?? q); if (e.key === 'Escape') setOpen(false) }}
-              placeholder="Ticker or company" aria-label="Add a ticker to your watchlist"
-              style={{
-                width: '100%', boxSizing: 'border-box', margin: '0 0 4px', background: C.header,
-                border: `1px solid ${gold(22)}`, color: C.text, fontFamily: C.mono, fontSize: 11, padding: '6px 8px', outline: 'none',
-              }} />
-            {suggestions.map(r => (
-              <button key={r.ticker} onClick={() => commit(r.ticker)} style={{
-                display: 'flex', width: '100%', textAlign: 'left', alignItems: 'baseline', gap: 8,
-                background: 'transparent', border: 'none', cursor: 'pointer', padding: '6px 8px',
-              }}>
-                <span style={{ fontFamily: C.mono, fontWeight: 700, fontSize: 11, color: C.gold, minWidth: 46 }}>{r.ticker}</span>
-                <span style={{ fontFamily: C.sans, fontSize: 10.5, color: C.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</span>
-              </button>
-            ))}
-            {q.trim().length >= 2 && suggestions.length === 0 && (
-              <div style={{ fontFamily: C.sans, fontSize: 10.5, color: C.dim, padding: '6px 8px' }}>
-                Press Enter to add "{q.trim().toUpperCase()}"
-              </div>
-            )}
-          </div>
-        </>
-      )}
-    </span>
-  )
-}
-
-function PmBookImport({ onImport }: { onImport: (tickers: string[]) => void }) {
-  const [open, setOpen] = useState(false)
-  const books = useMemo(() => readPMBooks().filter(p => p.holdings.some(h => h.ticker && h.shares)), [open])
-  if (!books.length) return null
-  return (
-    <span style={{ position: 'relative' }}>
-      <button onClick={() => setOpen(v => !v)} style={{
-        fontFamily: C.mono, fontWeight: 700, fontSize: 9.5, letterSpacing: '0.06em', color: C.muted,
-        border: `1px dashed ${gold(34)}`, background: 'transparent', padding: '4px 9px', cursor: 'pointer',
-      }}>IMPORT BOOK</button>
-      {open && (
-        <>
-          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
-          <div style={{
-            position: 'absolute', zIndex: 50, top: 'calc(100% + 5px)', left: 0, minWidth: 210,
-            background: C.bg, border: `1px solid ${gold(34)}`, boxShadow: '0 12px 30px rgba(0,0,0,0.5)', padding: 5,
-          }}>
-            {books.map(b => {
-              const syms = [...new Set(b.holdings.map(h => normalizeTicker(h.ticker)).filter(t => t && t !== 'CASH'))]
-              return (
-                <button key={b.id} onClick={() => { onImport(syms); setOpen(false) }} style={{
-                  display: 'flex', width: '100%', justifyContent: 'space-between', gap: 12, alignItems: 'baseline',
-                  background: 'transparent', border: 'none', cursor: 'pointer', padding: '7px 9px',
-                  fontFamily: C.mono, fontSize: 10, fontWeight: 700, color: C.muted, textAlign: 'left',
-                }}>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.name}</span>
-                  <span style={{ fontSize: 9, color: C.dim, flexShrink: 0 }}>{syms.length}</span>
-                </button>
-              )
-            })}
-          </div>
-        </>
-      )}
-    </span>
   )
 }
 
@@ -1498,11 +1329,11 @@ function GroupBody({
                 background: isOpen ? gold(6) : held ? gold(3) : undefined,
               }}>
               <td style={{ padding: '10px 14px', position: 'relative' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-                  <span
-                    onMouseEnter={() => pop.onHover(r.symbol)}
-                    onMouseLeave={() => pop.onHover(null)}
-                    style={{ display: 'flex', flexShrink: 0 }}>
+                <div
+                  onMouseEnter={ev => pop.onHover(r.symbol, ev.currentTarget.getBoundingClientRect())}
+                  onMouseLeave={() => pop.onHover(null)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+                  <span style={{ display: 'flex', flexShrink: 0 }}>
                     <TickerLogo ticker={r.symbol} size={22} />
                   </span>
                   <div style={{ minWidth: 0 }}>
@@ -1527,35 +1358,19 @@ function GroupBody({
                       </button>
                     </div>
                     {!isMobile && (
-                      // The name line opens the filings archive. TickerLink keeps
-                      // its own click (the global ticker drawer), so the two
-                      // affordances don't fight over the same target.
-                      <button
-                        onClick={ev => { ev.stopPropagation(); pop.onOpenFilings(r.symbol) }}
-                        onMouseEnter={() => pop.onHover(r.symbol)}
-                        onMouseLeave={() => pop.onHover(null)}
-                        title={`Past filings for ${r.symbol}`}
-                        style={{
-                          display: 'block', background: 'none', border: 'none', padding: 0, textAlign: 'left',
-                          cursor: 'pointer', fontFamily: C.sans, fontSize: 9,
-                          color: pop.filingsFor === r.symbol ? C.gold : C.muted, whiteSpace: 'nowrap',
-                          overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200,
-                          transition: 'color 0.12s',
-                        }}>{pending ? (b?.name ?? '') : (e?.companyName || b?.name || '—')}</button>
+                      // Plain text: the ticker itself already carries a menu
+                      // (TickerLink), and picking a filing now lives on the
+                      // summary's Source control inside the expanded row.
+                      <span style={{
+                        display: 'block', fontFamily: C.sans, fontSize: 9, color: C.muted,
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200,
+                      }}>{pending ? (b?.name ?? '') : (e?.companyName || b?.name || '—')}</span>
                     )}
                   </div>
                 </div>
 
-                {pop.filingsFor === r.symbol && (
-                  <FilingsArchive
-                    symbol={r.symbol}
-                    filings={pop.filings[r.symbol]}
-                    onClose={() => pop.onOpenFilings(r.symbol)}
-                    onPick={f => pop.onPickFiling(r.symbol, f, key)}
-                  />
-                )}
-                {pop.hoverSym === r.symbol && pop.filingsFor !== r.symbol && (
-                  <HoverPreview symbol={r.symbol} e={e} b={b} />
+                {pop.hover?.sym === r.symbol && !isOpen && (
+                  <HoverPreview symbol={r.symbol} e={e} b={b} anchor={pop.hover.rect} />
                 )}
               </td>
               {!isMobile && (
@@ -1659,11 +1474,12 @@ const FORM_PURPOSE: Record<string, string> = {
   'DEF 14A': 'Proxy statement', '4': 'Insider transaction',
 }
 
-function FilingsArchive({ symbol, filings, onClose, onPick }: {
+function FilingsArchive({ symbol, filings, onClose, onPick, style }: {
   symbol: string
   filings: Filing[] | 'loading' | 'error' | undefined
   onClose: () => void
   onPick: (f: Filing) => void
+  style?: React.CSSProperties
 }) {
   const [form, setForm] = useState('All')
   const list = Array.isArray(filings) ? filings : []
@@ -1671,7 +1487,7 @@ function FilingsArchive({ symbol, filings, onClose, onPick }: {
   const shown = form === 'All' ? list : list.filter(f => f.form === form)
 
   return (
-    <div onClick={ev => ev.stopPropagation()} style={{ ...popShell, width: 272 }}>
+    <div onClick={ev => ev.stopPropagation()} style={{ ...popShell, width: 272, ...style }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 12px', background: gold(6), borderBottom: `1px solid ${gold(16)}` }}>
         <span style={{ ...LABEL, fontSize: 8.5, color: C.gold, display: 'inline' }}>{symbol} filings</span>
         <button onClick={onClose} style={ghostBtn}>Close</button>
@@ -1690,7 +1506,12 @@ function FilingsArchive({ symbol, filings, onClose, onPick }: {
       )}
 
       <div style={{ maxHeight: 252, overflowY: 'auto' }}>
-        {filings === 'loading' && <div style={popNote}>Loading filings…</div>}
+        {filings === 'loading' && (
+          <div style={{ ...popNote, display: 'flex', alignItems: 'center', gap: 9 }}>
+            <span className="ec-spinner" style={{ width: 12, height: 12, borderRadius: '50%', border: `2px solid ${gold(30)}`, borderTopColor: C.gold, flexShrink: 0 }} />
+            Loading filings…
+          </div>
+        )}
         {filings === 'error' && <div style={{ ...popNote, color: C.warn }}>Could not reach SEC EDGAR.</div>}
         {Array.isArray(filings) && shown.length === 0 && <div style={popNote}>No filings of this type.</div>}
         {shown.map((f, i) => (
@@ -1724,16 +1545,36 @@ function FilingsArchive({ symbol, filings, onClose, onPick }: {
 
 const popNote: React.CSSProperties = { padding: '12px', fontFamily: C.sans, fontSize: 10.5, color: C.muted }
 
-/** Dwell-triggered peek at a row. pointer-events:none so it never eats the click. */
-function HoverPreview({ symbol, e, b }: { symbol: string; e?: Enriched; b?: BookInfo }) {
+/** Dwell-triggered peek at a row. Portalled to the body and anchored off the
+ *  row's rect: the table is a horizontal scroll container, which clips any
+ *  absolutely positioned child at its own bottom edge. pointer-events:none so
+ *  it never eats the click. */
+function HoverPreview({ symbol, e, b, anchor }: { symbol: string; e?: Enriched; b?: BookInfo; anchor: DOMRect }) {
   const cells: { label: string; value: string; color?: string }[] = [
     { label: 'Implied move', value: e?.impliedMove != null ? `${e.impliedMove.toFixed(1)}%` : '—', color: e?.impliedMove != null ? C.gold : C.dim },
     { label: 'Hist. move', value: b?.detail?.histAvgMovePct != null ? `±${b.detail.histAvgMovePct.toFixed(1)}%` : '—' },
     { label: 'Beat rate', value: b?.detail?.beatRatePct != null ? `${b.detail.beatRatePct}%` : '—', color: b?.detail?.beatRatePct != null ? C.pos : C.dim },
     { label: 'Fwd P/E', value: b?.pe != null ? `${b.pe.toFixed(2)}x` : '—' },
   ]
-  return (
-    <div style={{ ...popShell, width: 308, zIndex: 20, pointerEvents: 'none' }}>
+  const W = 308
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 800
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1200
+  const below = vh - anchor.bottom
+  // Flip above when the room below can't hold the card and there is more of it
+  // overhead. Anchoring the flipped card by its bottom edge means the height
+  // never has to be measured.
+  const flip = below < 250 && anchor.top > below
+  const pos: React.CSSProperties = flip
+    ? { bottom: vh - anchor.top + 6, maxHeight: anchor.top - 14 }
+    : { top: anchor.bottom + 6, maxHeight: below - 14 }
+
+  const card = (
+    <div style={{
+      position: 'fixed', left: Math.min(Math.max(8, anchor.left), vw - W - 8), width: W,
+      zIndex: 1200, pointerEvents: 'none', overflow: 'hidden',
+      background: C.header, border: `1px solid ${gold(34)}`, boxShadow: '0 14px 34px rgba(0,0,0,0.5)',
+      ...pos,
+    }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '10px 12px', background: C.inset, borderBottom: `1px solid ${C.border}` }}>
         <TickerLogo ticker={symbol} size={20} />
         <span style={{ minWidth: 0 }}>
@@ -1758,10 +1599,11 @@ function HoverPreview({ symbol, e, b }: { symbol: string; e?: Enriched; b?: Book
         </div>
       )}
       <div style={{ padding: '0 12px 11px', fontFamily: C.sans, fontSize: 9.5, color: C.dim, lineHeight: 1.4 }}>
-        Click the company name for past filings · click the row for the full report.
+        Click the row for the full report · the ticker for its tools.
       </div>
     </div>
   )
+  return typeof document !== 'undefined' ? createPortal(card, document.body) : card
 }
 
 function DetailRow({ label, value, color }: { label: string; value: React.ReactNode; color?: string }) {
@@ -1780,12 +1622,8 @@ interface AiTarget { form: string; period: string; filed: string }
 
 /** Row-level popover wiring, owned by the page so only one is ever open. */
 interface PopoverBus {
-  hoverSym: string | null
-  onHover: (sym: string | null) => void
-  filingsFor: string | null
-  onOpenFilings: (sym: string) => void
-  filings: Record<string, Filing[] | 'loading' | 'error'>
-  onPickFiling: (sym: string, f: Filing, rowKey: string) => void
+  hover: { sym: string; rect: DOMRect } | null
+  onHover: (sym: string | null, rect?: DOMRect | null) => void
 }
 
 // Estimate-vs-actual EPS bars for the last n reports, oldest first — two bars
@@ -1960,6 +1798,10 @@ function RowDetail({ row, e, b, position, pos, isMobile, summary, onFetchSummary
 
   const held = position && position.shares > 0
   const picked = barPick != null && history ? history[barPick] : null
+  // Expanding a row kicks off its book fetch, so these panels open empty. A
+  // dash there reads as "no data"; a skeleton reads as "still coming".
+  const hubPending = !b?.loaded
+  const extrasPending = !b?.extrasLoaded
 
   return (
     <div style={{ padding: isMobile ? '14px 14px 18px' : '16px 18px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1974,17 +1816,17 @@ function RowDetail({ row, e, b, position, pos, isMobile, summary, onFetchSummary
             {fmtFullDate(row.date)}
           </BandCell>
           <BandCell label="EPS estimate" sub={det?.epsPriorYear != null ? `vs ${fmtEps(det.epsPriorYear)} yr ago` : undefined}>
-            {fmtEps(row.epsEstimate ?? det?.epsEst ?? null)}
+            {row.epsEstimate == null && extrasPending ? <Skeleton w={62} h={13} /> : fmtEps(row.epsEstimate ?? det?.epsEst ?? null)}
           </BandCell>
           <BandCell label="Revenue estimate" sub={det?.revEst != null ? 'consensus' : undefined}>
-            {fmtRev(det?.revEst ?? null)}
+            {extrasPending ? <Skeleton w={72} h={13} /> : fmtRev(det?.revEst ?? null)}
           </BandCell>
           <BandCell label="Implied move" color={e?.impliedMove != null ? C.gold : C.dim}
             sub={e?.impliedMove == null ? 'no chain spanning' : e?.impliedMoveExpiry ? `by ${e.impliedMoveExpiry}` : undefined}>
             {e?.impliedMove != null ? `${e.impliedMove.toFixed(1)}%` : '—'}
           </BandCell>
           <BandCell label="Hist. move" sub={det?.histAvgMovePct != null ? 'last reports' : undefined}>
-            {det?.histAvgMovePct != null ? `±${det.histAvgMovePct.toFixed(1)}%` : '—'}
+            {extrasPending ? <Skeleton w={62} h={13} /> : det?.histAvgMovePct != null ? `±${det.histAvgMovePct.toFixed(1)}%` : '—'}
           </BandCell>
           {reported ? (
             <BandCell label="Result" sub={e?.reactionPct != null ? `${fmtPct(e.reactionPct)} 1-day` : undefined}
@@ -1994,7 +1836,7 @@ function RowDetail({ row, e, b, position, pos, isMobile, summary, onFetchSummary
           ) : (
             <BandCell label="Beat rate" color={det?.beatRatePct != null ? C.pos : C.dim}
               sub={det?.beatRatePct != null ? 'beat consensus' : undefined}>
-              {det?.beatRatePct != null ? `${det.beatRatePct}%` : '—'}
+              {extrasPending ? <Skeleton w={54} h={13} /> : det?.beatRatePct != null ? `${det.beatRatePct}%` : '—'}
             </BandCell>
           )}
         </Band>
@@ -2010,17 +1852,21 @@ function RowDetail({ row, e, b, position, pos, isMobile, summary, onFetchSummary
       </div>
 
       {/* POSITIONING */}
-      {b && (
+      {(b || hubPending) && (
         <div>
           <span style={sectionLabel}>Positioning</span>
           <Band cols={isMobile ? 2 : 4}>
-            <BandCell label="Analyst consensus" size={14.5} color={b.consensus ? CONSENSUS_COLOR[b.consensus] ?? C.text : C.dim}>
-              {b.consensus ?? '—'}
+            <BandCell label="Analyst consensus" size={14.5} color={b?.consensus ? CONSENSUS_COLOR[b.consensus] ?? C.text : C.dim}>
+              {hubPending ? <Skeleton w={92} h={13} /> : b?.consensus ?? '—'}
             </BandCell>
-            <BandCell label="Forward P/E" size={14.5}>{b.pe != null ? `${b.pe.toFixed(2)}x` : '—'}</BandCell>
-            <BandCell label="Short % of float" size={14.5}>{b.shortPct != null ? `${b.shortPct.toFixed(1)}%` : '—'}</BandCell>
-            <BandCell label="1-day move" size={14.5} color={pctColor(b.pctChange)}>
-              {b.pctChange != null ? fmtPct(b.pctChange) : '—'}
+            <BandCell label="Forward P/E" size={14.5}>
+              {hubPending ? <Skeleton w={62} h={13} /> : b?.pe != null ? `${b.pe.toFixed(2)}x` : '—'}
+            </BandCell>
+            <BandCell label="Short % of float" size={14.5}>
+              {extrasPending ? <Skeleton w={62} h={13} /> : b?.shortPct != null ? `${b.shortPct.toFixed(1)}%` : '—'}
+            </BandCell>
+            <BandCell label="1-day move" size={14.5} color={pctColor(b?.pctChange)}>
+              {hubPending ? <Skeleton w={62} h={13} /> : b?.pctChange != null ? fmtPct(b.pctChange) : '—'}
             </BandCell>
             <BandCell label="Your position" size={14.5} color={held ? C.text : C.dim}>
               {held ? `${position!.shares.toLocaleString()} sh` : '—'}
@@ -2043,8 +1889,10 @@ function RowDetail({ row, e, b, position, pos, isMobile, summary, onFetchSummary
               </div>
             </BandCell>
             <BandCell label="Insider 90d" span={2} plain>
-              <span style={{ fontFamily: C.sans, fontSize: 11, color: ins.color }}>{ins.text}</span>
-              {(b.insider?.length ?? 0) > 0 && (
+              {extrasPending
+                ? <Skeleton w={150} h={11} mt={3} />
+                : <span style={{ fontFamily: C.sans, fontSize: 11, color: ins.color }}>{ins.text}</span>}
+              {(b?.insider?.length ?? 0) > 0 && (
                 <button onClick={() => setShowTrades(v => !v)} style={{
                   marginLeft: 10, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
                   fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
@@ -2053,7 +1901,7 @@ function RowDetail({ row, e, b, position, pos, isMobile, summary, onFetchSummary
               )}
             </BandCell>
           </Band>
-          {showTrades && b.insider && b.insider.length > 0 && <InsiderTable txs={b.insider} />}
+          {showTrades && b?.insider && b.insider.length > 0 && <InsiderTable txs={b.insider} />}
         </div>
       )}
 
@@ -2067,8 +1915,10 @@ function RowDetail({ row, e, b, position, pos, isMobile, summary, onFetchSummary
             )}
           </div>
           {historyLoading ? (
-            <div style={{ height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={shimmer} />
+            <div aria-label="Loading report history" style={{ height: 140, display: 'flex', alignItems: 'flex-end', gap: 10, padding: '0 4px' }}>
+              {[46, 62, 38, 54, 30, 48, 58, 70, 42, 66].map((h, i) => (
+                <span key={i} style={{ ...shimmer, display: 'block', flex: 1, width: 'auto', height: `${h}%`, borderRadius: 0 }} />
+              ))}
             </div>
           ) : history && history.length ? (
             <EstActualBars reports={history} picked={barPick} onPick={i => setBarPick(p => (p === i ? null : i))} />
@@ -2098,23 +1948,32 @@ function RowDetail({ row, e, b, position, pos, isMobile, summary, onFetchSummary
         </div>
 
         <div style={{ ...panel, flex: '1 1 200px', display: 'flex', flexDirection: 'column' }}>
-          <span style={{ ...LABEL, marginBottom: 10 }}>Recent price</span>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
-            {b && b.sparkline.length > 1
-              ? <Sparkline data={b.sparkline} positive={(b.pctChange ?? 0) >= 0} />
-              : <span style={{ fontFamily: C.sans, fontSize: 11, color: C.dim }}>No recent price series.</span>}
+          <span style={{ ...LABEL, marginBottom: 10 }}>Recent price · 30d</span>
+          <div style={{ flex: 1, minHeight: 112, position: 'relative' }}>
+            {hubPending
+              ? <Skeleton h={112} />
+              : b && b.sparkline.length > 1
+                ? <Sparkline data={b.sparkline} positive={(b.pctChange ?? 0) >= 0} fill />
+                : <span style={{
+                    position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+                    fontFamily: C.sans, fontSize: 11, color: C.dim,
+                  }}>No price series for this symbol.</span>}
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, borderTop: `1px solid ${C.borderFaint}`, marginTop: 10, paddingTop: 9 }}>
             <span style={{ ...LABEL, display: 'inline' }}>1-day move</span>
-            <span style={{ fontFamily: C.mono, fontSize: 13, fontWeight: 700, color: pctColor(b?.pctChange) }}>
-              {b?.pctChange != null ? fmtPct(b.pctChange) : '—'}
-            </span>
+            {hubPending
+              ? <Skeleton w={54} h={12} />
+              : <span style={{ fontFamily: C.mono, fontSize: 13, fontWeight: 700, color: pctColor(b?.pctChange) }}>
+                  {b?.pctChange != null ? fmtPct(b.pctChange) : '—'}
+                </span>}
           </div>
         </div>
 
         <div style={{ ...panel, flex: '1.3 1 240px' }}>
           <span style={{ ...LABEL, marginBottom: 10 }}>{row.symbol} wire</span>
-          {b && b.news.length > 0 ? (
+          {hubPending ? (
+            <SkeletonLines n={4} h={11} gap={12} widths={['100%', '78%', '100%', '64%']} />
+          ) : b && b.news.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
               {b.news.map((n, i) => (
                 <div key={i}>
@@ -2134,7 +1993,8 @@ function RowDetail({ row, e, b, position, pos, isMobile, summary, onFetchSummary
 
       {/* The deep dive: the AI filing summary for this one name */}
       <SummarySection ticker={row.symbol} state={summary} aiTarget={aiTarget}
-        onFetch={() => onFetchSummary(aiTarget?.filed)} onClearTarget={() => setAiTarget(null)} />
+        onFetch={() => onFetchSummary(aiTarget?.filed)} onClearTarget={() => setAiTarget(null)}
+        onPickFiling={f => setAiTarget({ form: f.form, period: f.date.slice(0, 7), filed: f.date })} />
     </div>
   )
 }
@@ -2184,22 +2044,22 @@ function BandCell({ label, children, sub, subColor, color, span, size, plain, af
   return (
     <div style={{
       gridColumn: span ? `span ${span}` : undefined,
-      background: C.bg, padding: '11px 14px 13px', minWidth: 0,
+      background: C.bg, padding: '8px 12px 9px', minWidth: 0,
     }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 7 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
         <span style={{ ...LABEL, fontSize: 8.5, display: 'inline' }}>{label}</span>
         {headerRight}
       </div>
       {plain ? children : (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
           <span style={{
-            fontFamily: C.mono, fontSize: size ?? 16, fontWeight: 700, color: color ?? C.text,
+            fontFamily: C.mono, fontSize: size ?? 15, fontWeight: 700, color: color ?? C.text,
             fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>{children}</span>
           {after}
         </div>
       )}
-      {sub && <div style={{ fontFamily: C.mono, fontSize: 11, color: subColor ?? C.dim, marginTop: 7 }}>{sub}</div>}
+      {sub && <div style={{ fontFamily: C.mono, fontSize: 10.5, color: subColor ?? C.dim, marginTop: 3 }}>{sub}</div>}
     </div>
   )
 }
@@ -2302,28 +2162,31 @@ function Pill({ label, color = C.muted }: { label: string; color?: string }) {
   return <span style={{ fontFamily: C.sans, fontSize: 9, color, background: `color-mix(in srgb, ${color} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${color} 30%, transparent)`, padding: '2px 7px', whiteSpace: 'nowrap' }}>{label}</span>
 }
 
-function SummarySection({ ticker, state, onFetch, aiTarget, onClearTarget }: {
+function SummarySection({ ticker, state, onFetch, aiTarget, onClearTarget, onPickFiling }: {
   ticker: string; state: SummaryState | null; onFetch: () => void
   aiTarget?: AiTarget | null; onClearTarget?: () => void
+  onPickFiling: (f: Filing) => void
 }) {
-  const [filings, setFilings] = useState<Filing[] | null>(null)
-  const [loadingFilings, setLoadingFilings] = useState(false)
-  const [filingsErr, setFilingsErr] = useState<string | null>(null)
+  // The archive lives here, on the control that says which filing gets read,
+  // rather than on the company name — the ticker already owns a click.
+  const [filings, setFilings] = useState<Filing[] | 'loading' | 'error' | undefined>()
+  const [pickerOpen, setPickerOpen] = useState(false)
 
-  const fetchFilings = async () => {
-    setLoadingFilings(true); setFilings(null); setFilingsErr(null)
-    try {
-      const res = await axios.get(`/api/filings/filings/${ticker}`)
-      const list: Filing[] = res.data.filings ?? []
-      setFilings(list)
-      if (list.length === 0) setFilingsErr('No recent filings found on EDGAR')
-    } catch {
-      setFilings([])
-      setFilingsErr('Could not reach SEC EDGAR — try again')
-    } finally {
-      setLoadingFilings(false)
-    }
+  const openPicker = () => {
+    setPickerOpen(o => !o)
+    if (Array.isArray(filings)) return
+    setFilings('loading')
+    axios.get(`/api/filings/filings/${ticker}`)
+      .then(r => setFilings(r.data.filings ?? []))
+      .catch(() => setFilings('error'))
   }
+
+  useEffect(() => {
+    if (!pickerOpen) return
+    const onKey = (ev: KeyboardEvent) => { if (ev.key === 'Escape') setPickerOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [pickerOpen])
 
   const running = !!state && !state.result && !state.error
   const result = state?.result
@@ -2353,22 +2216,43 @@ function SummarySection({ ticker, state, onFetch, aiTarget, onClearTarget }: {
             padding: '6px 12px',
           }}>Re-run</button>
         )}
-        {/* Which filing FETCH SUMMARY will actually read. */}
+        {/* Which filing FETCH SUMMARY will read — and where you change it. */}
         <span style={{
           display: 'inline-flex', alignItems: 'baseline', gap: 8,
           border: `1px solid ${gold(34)}`, background: gold(6), padding: '6px 11px',
         }}>
           <span style={{ ...LABEL, fontSize: 8, display: 'inline' }}>Source</span>
-          <span style={{ fontFamily: C.mono, fontSize: 11, fontWeight: 700, color: C.gold }}>
+          <button onClick={openPicker} aria-expanded={pickerOpen}
+            title={`Pick which ${ticker} filing the summary reads`}
+            style={{
+              background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
+              fontFamily: C.mono, fontSize: 11, fontWeight: 700, color: C.gold,
+              textDecoration: 'underline', textUnderlineOffset: 3,
+              textDecorationColor: gold(45),
+            }}>
             {aiTarget
               ? `${aiTarget.form} · ${aiTarget.period} · filed ${fmtDate(aiTarget.filed)}`
               : 'Latest 10-Q'}
-          </span>
+            <span style={{ marginLeft: 6, fontSize: 9 }}>{pickerOpen ? '▲' : '▼'}</span>
+          </button>
           {aiTarget && onClearTarget && (
             <button onClick={onClearTarget} style={ghostBtn} title="Back to the latest 10-Q">Reset</button>
           )}
         </span>
       </div>
+
+      {/* In flow, not floated — the table scroll container clips a popover. */}
+      {pickerOpen && (
+        <div style={{ marginTop: 10, maxWidth: 420 }}>
+          <FilingsArchive
+            symbol={ticker}
+            filings={filings}
+            onClose={() => setPickerOpen(false)}
+            onPick={f => { onPickFiling(f); setPickerOpen(false) }}
+            style={{ position: 'static', width: '100%' }}
+          />
+        </div>
+      )}
 
       {!state && (
         <p style={{ margin: '9px 0 0', fontFamily: C.sans, fontSize: 11, color: C.muted, lineHeight: 1.55, maxWidth: 620 }}>
@@ -2486,7 +2370,8 @@ function SummarySection({ ticker, state, onFetch, aiTarget, onClearTarget }: {
               </div>
             )}
 
-            {/* SEC filings — this summary's own filing links directly; the button pulls the rest */}
+            {/* This summary's own filing links directly; the archive itself
+                lives on the Source control at the top of the section. */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               {result.url && (
                 <a href={safeUrl(result.url)} target="_blank" rel="noopener noreferrer"
@@ -2494,21 +2379,10 @@ function SummarySection({ ticker, state, onFetch, aiTarget, onClearTarget }: {
                   View {result.form ?? 'filing'} on SEC →
                 </a>
               )}
-              <button onClick={fetchFilings} disabled={loadingFilings}
-                style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.muted, fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '5px 12px', cursor: loadingFilings ? 'default' : 'pointer', opacity: loadingFilings ? 0.6 : 1 }}>
-                {loadingFilings ? 'Loading…' : filings && filings.length > 0 ? 'Refresh SEC filings' : 'All SEC filings'}
+              <button onClick={() => { if (!pickerOpen) openPicker() }}
+                style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.muted, fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '5px 12px', cursor: 'pointer' }}>
+                Summarize a different filing
               </button>
-              {filings && filings.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {filings.map((f, i) => (
-                    <a key={i} href={safeUrl(f.url)} target="_blank" rel="noopener noreferrer"
-                      style={{ fontFamily: C.sans, fontSize: 9, color: C.blue, border: `1px solid color-mix(in srgb, ${C.blue} 30%, transparent)`, padding: '3px 8px', textDecoration: 'none' }}>
-                      {f.form} · {f.date.slice(0, 7)} →
-                    </a>
-                  ))}
-                </div>
-              )}
-              {filingsErr && <span style={{ fontFamily: C.sans, fontSize: 9, color: C.warn }}>{filingsErr}</span>}
             </div>
           </div>
         </div>
