@@ -134,6 +134,15 @@ function GroupStat({ label, value, color }: { label: string; value: string; colo
   )
 }
 
+function HistoryLegend({ label, color, pattern = 'solid' }: { label: string; color: string; pattern?: 'solid' | 'dashed' | 'dotted' }) {
+  return (
+    <span className="vol-history-legend">
+      <i aria-hidden="true" style={{ borderTopColor: color, borderTopStyle: pattern === 'solid' ? 'solid' : pattern }} />
+      <span>{label}</span>
+    </span>
+  )
+}
+
 function MiniSparkline({ values }: { values: number[] }) {
   if (values.length < 2) return <div className="vol-mini-sparkline" />
   return (
@@ -605,7 +614,9 @@ export function VolatilityScannerContent() {
 
           <section className="vol-band">
             <SectionStrip title="Implied vs realized">
-              <span style={{ color: GOLD }}>- implied</span><span style={{ color: BLUE }}>- realized 30d</span><span>- stock price</span>
+              <HistoryLegend label="implied" color={GOLD} />
+              <HistoryLegend label="realized 30d" color={BLUE} pattern="dashed" />
+              <HistoryLegend label="stock price" color={T.chartNeutral} pattern="dotted" />
               <Provenance kind="live" source="Yahoo option chains · daily" />
             </SectionStrip>
             <div className="vol-history-body">
@@ -622,8 +633,8 @@ export function VolatilityScannerContent() {
                     <YAxis yAxisId="vol" domain={paddedDomain(histSeries.flatMap(point => [point.iv, point.hv_30d]), 10)} tick={{ fontFamily: MONO, fontSize: 11, fill: SEC }} tickLine={false} axisLine={false} width={48} tickFormatter={(value: number) => `${value.toFixed(0)}%`} />
                     <YAxis yAxisId="px" orientation="right" domain={paddedDomain(histSeries.map(point => point.stock_price), 10)} tick={{ fontFamily: MONO, fontSize: 11, fill: FAINT }} tickLine={false} axisLine={false} width={52} tickFormatter={(value: number) => `$${value.toFixed(0)}`} />
                     <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: number, name: string) => [name === 'stock_price' ? `$${value.toFixed(2)}` : `${value.toFixed(1)}%`, name === 'iv' ? 'Implied' : name === 'hv_30d' ? 'Realized 30d' : 'Stock price']} />
-                    <Line yAxisId="px" type="monotone" dataKey="stock_price" stroke="color-mix(in srgb, var(--theme-text) 28%, transparent)" strokeWidth={1.1} dot={false} isAnimationActive={false} connectNulls />
-                    <Line yAxisId="vol" type="monotone" dataKey="hv_30d" stroke={BLUE} strokeWidth={1.7} dot={false} isAnimationActive={false} connectNulls />
+                    <Line yAxisId="px" type="monotone" dataKey="stock_price" stroke={T.chartNeutral} strokeWidth={1.35} strokeDasharray="1 5" strokeLinecap="round" dot={false} isAnimationActive={false} connectNulls />
+                    <Line yAxisId="vol" type="monotone" dataKey="hv_30d" stroke={BLUE} strokeWidth={1.7} strokeDasharray="7 5" dot={false} isAnimationActive={false} connectNulls />
                     <Line yAxisId="vol" type="monotone" dataKey="iv" stroke={GOLD} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
                   </LineChart>
                 </ResponsiveContainer>

@@ -1373,6 +1373,8 @@ textarea.ft-control {
 }
 .vol-section-meta > i { width: 1px; height: 11px; background: color-mix(in srgb, var(--theme-text, #d7e3fc) 12%, transparent); }
 .vol-section-meta > label { color: var(--theme-secondary, #8099b0); font-size: 9px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+.vol-history-legend { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.vol-history-legend > i { width: 19px; height: 0; border-top-width: 2px; }
 .vol-surface-swatch { width: 72px; height: 9px; border: 1px solid var(--theme-border, rgba(255,255,255,0.08)); }
 .vol-surface-scroll { overflow-x: auto; padding: 16px 22px 20px; }
 .vol-surface-grid {
