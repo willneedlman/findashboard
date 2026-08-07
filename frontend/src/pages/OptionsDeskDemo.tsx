@@ -6,6 +6,7 @@ import PageWrapper from '../components/PageWrapper'
 import EmptyState from '../components/EmptyState'
 import { KpiCell } from '../components/mmCockpit'
 import { fetchOptionsChain } from '../hooks/useApi'
+import { syntheticChains } from '../lib/syntheticChain'
 import { useChartColors } from '../hooks/useChartColors'
 import { T } from '../lib/theme'
 import { MONO, SANS, mix } from './cockpitKit'
@@ -96,6 +97,11 @@ function deriveFlow(chains: Chain[], minVolume: number, minVolOi: number): FlowR
 
 export function OptionsDeskDemoContent() {
   const cc = useChartColors()
+  // Synthetic mode manufactures the chains locally so the layout can be
+  // reviewed with a vendor down or the market shut. It is never the default —
+  // the live path works on the yfinance fallback — and the whole surface is
+  // labelled while it is on.
+  const [synthetic, setSynthetic] = useState(false)
   const [tickersDraft, setTickersDraft] = useState('SPY, NVDA')
   const [expiries, setExpiries] = useState(2)
   const [minVolume, setMinVolume] = useState(300)
@@ -114,6 +120,14 @@ export function OptionsDeskDemoContent() {
     )].slice(0, TICKER_CAP)
     if (!syms.length) return
     setLoading(true); setError(null); setRan(true); setSel(null)
+    if (synthetic) {
+      setChains(syms.flatMap(sym => syntheticChains(sym, Math.max(1, expiries)).map(c => ({
+        ticker: c.ticker, expiry: c.expiry, expirations: c.expirations,
+        spot: c.spot, calls: c.calls, puts: c.puts,
+      } as Chain))))
+      setLoading(false)
+      return
+    }
     try {
       // One chain load per ticker/expiry, and it serves BOTH panes — the flow
       // screen on the left and the ladder on the right read the same objects.
@@ -204,14 +218,25 @@ export function OptionsDeskDemoContent() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{
-        background: T.surface, border: `1px solid ${T.border}`, borderLeft: `2px solid ${T.gold}`,
-        padding: '8px 12px', fontFamily: SANS, fontSize: 10.5, color: T.muted, lineHeight: 1.5,
-      }}>
-        <b style={{ color: T.gold, letterSpacing: '0.1em' }}>DEMO</b> — Chain Scanner + Options Flow as one surface.
-        One chain load per ticker/expiry feeds both panes: the screen on the left, the ladder on the right.
-        Click any flow row to drop into its chain. Both original tools are untouched.
-      </div>
+      {synthetic ? (
+        <div style={{
+          background: T.surface, border: `1px solid ${T.warn}`, borderLeft: `3px solid ${T.warn}`,
+          padding: '8px 12px', fontFamily: SANS, fontSize: 10.5, color: T.text, lineHeight: 1.5,
+        }}>
+          <b style={{ color: T.warn, letterSpacing: '0.1em' }}>SYNTHETIC DATA</b> — every strike, quote, volume
+          and open-interest figure below is manufactured for layout review. None of it is a market quote and none
+          of it is tradeable. Switch to LIVE for real chains.
+        </div>
+      ) : (
+        <div style={{
+          background: T.surface, border: `1px solid ${T.border}`, borderLeft: `2px solid ${T.gold}`,
+          padding: '8px 12px', fontFamily: SANS, fontSize: 10.5, color: T.muted, lineHeight: 1.5,
+        }}>
+          <b style={{ color: T.gold, letterSpacing: '0.1em' }}>DEMO</b> — Chain Scanner + Options Flow as one surface.
+          One chain load per ticker/expiry feeds both panes: the screen on the left, the ladder on the right.
+          Click any flow row to drop into its chain. Both original tools are untouched.
+        </div>
+      )}
 
       {/* Scan controls — one input set for both halves */}
       <div style={{
@@ -239,6 +264,23 @@ export function OptionsDeskDemoContent() {
           <label style={lbl} htmlFor="od-voloi">Min vol/OI</label>
           <input id="od-voloi" type="number" min={0} step={0.5} value={minVolOi}
             onChange={e => setMinVolOi(+e.target.value)} style={{ ...inp, width: '100%' }} />
+        </div>
+        <div style={{ width: 132 }}>
+          <label style={lbl}>Data</label>
+          <div style={{ display: 'flex' }}>
+            {([['live', 'Live'], ['synthetic', 'Fake']] as const).map(([k, label]) => {
+              const on = (k === 'synthetic') === synthetic
+              return (
+                <button key={k} onClick={() => setSynthetic(k === 'synthetic')} style={{
+                  flex: 1, fontFamily: SANS, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.08em',
+                  textTransform: 'uppercase', padding: '7px 0', cursor: 'pointer',
+                  background: on ? (k === 'synthetic' ? T.warn : T.gold) : 'transparent',
+                  color: on ? T.bg : T.muted,
+                  border: `1px solid ${on ? (k === 'synthetic' ? T.warn : T.gold) : T.border}`,
+                }}>{label}</button>
+              )
+            })}
+          </div>
         </div>
         <button onClick={() => void scan()} disabled={loading} style={{
           background: T.goldTint(16), border: `1px solid ${T.gold}`, color: T.gold,
@@ -281,7 +323,11 @@ export function OptionsDeskDemoContent() {
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
 
           <div style={{ flex: '1 1 460px', minWidth: 340, border: `1px solid ${T.border}` }}>
-            <div style={paneHead}>Unusual flow · {flow.length} contracts <span style={{ color: mix(T.muted, 70), fontWeight: 400, letterSpacing: 0 }}>· click a row for its chain</span></div>
+            <div style={paneHead}>
+              Unusual flow · {flow.length} contracts
+              <span style={{ color: mix(T.muted, 70), fontWeight: 400, letterSpacing: 0 }}> · click a row for its chain</span>
+              {synthetic && <span style={syntheticTag}>Synthetic</span>}
+            </div>
             <div style={{ overflowX: 'auto', maxHeight: 520, overflowY: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: MONO, fontSize: 11 }}>
                 <thead>
@@ -337,6 +383,7 @@ export function OptionsDeskDemoContent() {
               <>
                 <div style={paneHead}>
                   {sel.ticker} · {sel.expiry} · {sel.type.toUpperCase()} {sel.strike}
+                  {synthetic && <span style={syntheticTag}>Synthetic</span>}
                   {selChain.spot != null && (
                     <span style={{ color: T.gold, fontWeight: 400, letterSpacing: 0 }}> · spot {usd(selChain.spot)}</span>
                   )}
@@ -421,6 +468,7 @@ export function OptionsDeskDemoContent() {
       )}
 
       <div style={{ fontFamily: MONO, fontSize: 9, color: T.muted, opacity: 0.75, lineHeight: 1.6 }}>
+        {synthetic && 'Synthetic mode: chains are generated locally from a seed of ticker + expiry, so the same inputs always render the same book. '}
         Flow is derived from the same chain rows the ladder shows: volume ≥ min, and vol/OI ≥ min unless open
         interest is zero (a freshly opened position, marked "+"). Premium = volume × mid × 100. The FLOW column
         marks every strike in this expiry that cleared the screen, so the ladder shows where today's positioning went.
@@ -436,6 +484,10 @@ const lbl: React.CSSProperties = {
 const inp: React.CSSProperties = {
   background: T.bg, border: `1px solid ${T.goldTint(35)}`, color: T.text,
   fontFamily: MONO, fontSize: 11.5, padding: '6px 8px', outline: 'none', boxSizing: 'border-box',
+}
+const syntheticTag: React.CSSProperties = {
+  marginLeft: 8, fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.1em',
+  textTransform: 'uppercase', color: T.warn, border: `1px solid ${T.warn}`, padding: '1px 6px',
 }
 const paneHead: React.CSSProperties = {
   padding: '7px 10px', background: T.surface, borderBottom: `1px solid ${T.border}`,
