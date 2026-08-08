@@ -724,12 +724,18 @@
    except Hanken Grotesk, whose figures are drawn tight enough that "$13,666"
    runs its comma into the digits at display sizes.
 
-   The attribute selector is not a hack of convenience: this codebase styles
+   The attribute selectors are not a hack of convenience: this codebase styles
    with inline styles, so `fontFamily: var(--theme-mono)` renders the variable
    name into the element's own style attribute. Matching on it reaches all
-   ~1,300 mono call sites without touching one of them. The class list below
-   covers the handful that take the font from a stylesheet instead. */
+   ~1,300 mono call sites without touching one of them.
+
+   SVG needs its own selector. React renders `fontFamily` on an <svg> child as
+   the font-family *presentation attribute*, so the style attribute is empty and
+   the first selector misses it entirely — which is why the market-clock dial
+   kept its cramped figures after the first attempt. The class list covers the
+   handful that take the font from a stylesheet instead. */
 [style*="--theme-mono"],
+[font-family*="--theme-mono"],
 .ft-metric-value,
 .ft-input,
 .ft-control,

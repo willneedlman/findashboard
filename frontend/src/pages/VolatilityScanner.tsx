@@ -84,7 +84,7 @@ function IVRankVerdict({ value }: { value: number | null }) {
     <div className="vol-rank-cell">
       <div className="vol-kicker">IV rank · trailing 52 weeks</div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-        <span style={{ fontFamily: MONO, fontSize: 42, lineHeight: 0.95, letterSpacing: '-0.02em', fontWeight: 700, color }}>{value == null ? '—' : value.toFixed(0)}</span>
+        <span style={{ fontFamily: MONO, fontSize: 42, lineHeight: 0.95, letterSpacing: 'var(--theme-num-tracking, normal)', fontWeight: 700, color }}>{value == null ? '—' : value.toFixed(0)}</span>
         <span style={{ fontFamily: MONO, fontSize: 12, color: SEC }}>/ 100</span>
         {value != null && (
           <span style={{ fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', color, border: `1px solid color-mix(in srgb, ${color} 45%, transparent)`, background: `color-mix(in srgb, ${color} 10%, transparent)`, padding: '4px 9px' }}>

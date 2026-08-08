@@ -640,7 +640,7 @@ function HeroBand(props: {
       }}>
         <span style={eyebrow}>Book Value</span>
         <div style={{
-          fontFamily: MONO, fontSize: 34, fontWeight: 700, lineHeight: 1, letterSpacing: '-0.02em',
+          fontFamily: MONO, fontSize: 34, fontWeight: 700, lineHeight: 1, letterSpacing: 'var(--theme-num-tracking, normal)',
           fontVariantNumeric: 'tabular-nums', color: T.text, marginTop: 8,
         }}>{value == null ? '—' : usd(value)}</div>
 

@@ -485,7 +485,7 @@ function TickerDashboard({ sym }: { sym: string }) {
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontFamily: F.mono, fontSize: 34, fontWeight: 400, color: F.bright, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtPrice(price)}</div>
+            <div style={{ fontFamily: F.mono, fontSize: 34, fontWeight: 400, color: F.bright, letterSpacing: 'var(--theme-num-tracking, normal)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtPrice(price)}</div>
             {pct != null && (
               <div style={{ display: 'inline-flex', alignItems: 'center', marginTop: 8, fontFamily: F.mono, fontSize: 13, fontWeight: 400, color: chg, background: up ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)', border: `1px solid ${up ? 'rgba(34,197,94,0.32)' : 'rgba(239,68,68,0.32)'}`, padding: '4px 10px' }}>
                 {up ? '↑' : '↓'}&nbsp;{chgAbs != null ? `${up ? '+' : '-'}${Math.abs(chgAbs).toFixed(2)}` : '—'}&nbsp;&nbsp;{up ? '+' : '-'}{Math.abs(pct).toFixed(2)}%
@@ -819,7 +819,7 @@ export default function Home() {
                   {hasPM ? (
                     <>
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 10 }}>
-                        <span style={{ fontFamily: F.mono, fontSize: 34, fontWeight: 700, color: F.bright, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em' }}>{money(totalValue)}</span>
+                        <span style={{ fontFamily: F.mono, fontSize: 34, fontWeight: 700, color: F.bright, fontVariantNumeric: 'tabular-nums', letterSpacing: 'var(--theme-num-tracking, normal)' }}>{money(totalValue)}</span>
                         <span style={{ fontFamily: F.mono, fontSize: 13, color: dayPnl >= 0 ? F.pos : F.neg }}>{dayPct >= 0 ? '▲' : '▼'} {Math.abs(dayPct).toFixed(2)}%</span>
                       </div>
                       <div style={{ marginTop: 12, height: 80 }}>
