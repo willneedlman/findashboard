@@ -945,7 +945,15 @@ textarea.ft-control {
   color: var(--theme-text, #d7e3fc);
   background: var(--theme-bg, #101c2e);
   border: 1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent);
+  /* Type and inset, not just the box. The base layer sets `font: inherit` on
+     inputs, so a control that only pins its height renders body copy at 16px
+     inside a 32px frame and towers over the buttons beside it. */
+  font-family: var(--theme-mono, ui-monospace, monospace);
+  font-size: 12px;
+  padding: 6px 8px;
+  outline: none;
 }
+.ft-control:focus { border-color: color-mix(in srgb, var(--theme-primary) 45%, transparent); }
 
 @page {
   size: 16in 9in;

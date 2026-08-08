@@ -80,8 +80,10 @@ export default function Seasonality() {
     <PageWrapper title="Seasonality"
       meta={d?.available ? `${d.ticker} · ${d.years_covered}y · ${d.first_date} to ${d.last_date}` : undefined}>
 
-      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 14 }}>
-        <div style={{ minWidth: 190 }}>
+      {/* One control row on one baseline. Each field owns its own column so the
+          labels line up and the three inputs share the 32px control height. */}
+      <div style={{ display: 'flex', gap: 14, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 16 }}>
+        <div style={{ width: 150 }}>
           <span style={LABEL}>Symbol</span>
           <TickerInput value={draft} onChange={setDraft}
             onEnter={() => setTicker(draft.toUpperCase())}
@@ -90,15 +92,20 @@ export default function Seasonality() {
         <div>
           <span style={LABEL}>History</span>
           <div style={{ display: 'flex' }}>
-            {[10, 20, 30, 40].map(y => {
+            {[10, 20, 30, 40].map((y, i) => {
               const on = y === years
               return (
                 <button key={y} onClick={() => setYears(y)}
                   style={{
-                    fontFamily: MONO, fontSize: 11, fontWeight: 700, padding: '0 12px', minHeight: 32,
-                    cursor: 'pointer', background: on ? mix(T.gold, 14) : 'transparent',
-                    border: `1px solid ${on ? T.gold : T.border}`, color: on ? T.gold : T.muted,
-                    marginLeft: -1,
+                    fontFamily: MONO, fontSize: 11.5, fontWeight: 700, padding: '0 13px',
+                    height: 32, boxSizing: 'border-box', cursor: 'pointer',
+                    background: on ? mix(T.gold, 14) : 'transparent',
+                    border: `1px solid ${on ? T.gold : T.border}`,
+                    color: on ? T.gold : T.muted,
+                    // Collapse the shared edge, and keep the selected cell's
+                    // gold border on top of its neighbours.
+                    marginLeft: i ? -1 : 0,
+                    position: 'relative', zIndex: on ? 1 : 0,
                   }}>{y}y</button>
               )
             })}
@@ -106,8 +113,9 @@ export default function Seasonality() {
         </div>
         <button onClick={() => setTicker(draft.toUpperCase())}
           style={{
-            minHeight: 32, padding: '6px 16px', cursor: 'pointer', fontFamily: SANS, fontSize: 12, fontWeight: 700,
-            letterSpacing: '0.1em', textTransform: 'uppercase', color: T.gold,
+            height: 32, boxSizing: 'border-box', padding: '0 18px', cursor: 'pointer',
+            fontFamily: SANS, fontSize: 11, fontWeight: 700, letterSpacing: '0.12em',
+            textTransform: 'uppercase', color: T.gold,
             background: mix(T.gold, 8), border: `1px solid ${T.gold}`,
           }}>Run</button>
       </div>
