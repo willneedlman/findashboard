@@ -14,15 +14,15 @@ export default function MetricCard({ label, value, delta, deltaPositive, classNa
   const [visible, setVisible] = useState(false)
 
   return (
-    <div className={clsx('metric-card ft-metric-tile relative', className)}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+    <div className={clsx('ft-metric relative', className)}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
         <p style={{
           fontSize: 9,
           fontWeight: 700,
           letterSpacing: '0.14em',
           textTransform: 'uppercase',
-          color: 'var(--theme-text-muted, #8099b0)',
-          fontFamily: 'var(--theme-mono, ui-monospace, monospace)',
+          color: 'var(--theme-secondary, #8099b0)',
+          fontFamily: 'var(--theme-sans, Sora, sans-serif)',
           margin: 0,
         }}>{label}</p>
         {help && (
@@ -30,7 +30,7 @@ export default function MetricCard({ label, value, delta, deltaPositive, classNa
             onMouseEnter={() => setVisible(true)}
             onMouseLeave={() => setVisible(false)}>
             <span style={{
-              color: 'var(--theme-secondary, #5e768f)',
+              color: 'var(--theme-secondary, #8099b0)',
               cursor: 'help',
               fontSize: 10,
               lineHeight: 1,
@@ -64,11 +64,11 @@ export default function MetricCard({ label, value, delta, deltaPositive, classNa
       <p style={{
         color: 'var(--theme-text, #d7e3fc)',
         fontSize: 20,
-        fontWeight: 600,
+        fontWeight: 700,
         fontFamily: 'var(--theme-mono, ui-monospace, monospace)',
         fontVariantNumeric: 'tabular-nums',
         margin: 0,
-        lineHeight: 1.2,
+        lineHeight: 1.1,
       }}>{value}</p>
       {delta !== undefined && (
         <p style={{

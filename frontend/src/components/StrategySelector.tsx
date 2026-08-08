@@ -12,7 +12,7 @@ export const STRATEGIES = [
   "6-Month Price Momentum",
   "Bollinger Breakout (20,2)",
   "MACD Crossover (12,26,9)",
-  "Value — Trailing P/E",
+  "Value: Trailing P/E",
   "Earnings Growth Momentum",
   "EMA Micro-Scalp (3/8)",
   CUSTOM_STRATEGY_KEY,
@@ -38,7 +38,7 @@ const STRATEGY_DESC: Record<string, string> = {
   "6-Month Price Momentum":        "Momentum — adjust drift proportionally to 6-month price return. Ride winners, step out of losers.",
   "Bollinger Breakout (20,2)":     "Enter long on upper-band breakout (price > BB+2σ). Exit when price falls below lower band. Drift boost while in trade.",
   "MACD Crossover (12,26,9)":      "MACD crossover — buy when MACD line crosses above signal line, sell on cross below. Trend + momentum.",
-  "Value — Trailing P/E":          "Value — full drift when P/E is cheap, step to cash and penalise when P/E is expensive.",
+  "Value: Trailing P/E":          "Value — full drift when P/E is cheap, step to cash and penalise when P/E is expensive.",
   "Earnings Growth Momentum":      "Earnings — stay invested when EPS grows YoY, exit and penalise when earnings decline.",
   "EMA Micro-Scalp (3/8)":          "Very short-term EMA(3)/EMA(8) crossover scalp. Enter on bullish cross, exit on bearish cross. Generates many signals — best on volatile assets.",
   [CUSTOM_STRATEGY_KEY]:           "Build your own strategy using visual indicator rules — RSI, SMA, EMA, MACD, Bollinger Bands, ATR, and more.",
@@ -50,7 +50,7 @@ const DEFAULT_PARAMS: Record<string, StrategyParams> = {
   "6-Month Price Momentum":         { lookback_days: 126, threshold_pct: 0, adj_scale: 0.25, adj_cap: 8 },
   "Bollinger Breakout (20,2)":      { bb_period: 20, bb_std: 2.0, bull_drift_adj: 5, bear_drift_adj: -3 },
   "MACD Crossover (12,26,9)":       { macd_fast: 12, macd_slow: 26, macd_signal: 9, bull_drift_adj: 5, bear_drift_adj: -4 },
-  "Value — Trailing P/E":           { pe_deep_value: 12, pe_fair_value: 20, pe_in_threshold: 35, pe_expensive: 50, bull_drift_adj: 6, bear_drift_adj: -6 },
+  "Value: Trailing P/E":           { pe_deep_value: 12, pe_fair_value: 20, pe_in_threshold: 35, pe_expensive: 50, bull_drift_adj: 6, bear_drift_adj: -6 },
   "Earnings Growth Momentum":       { exit_threshold_pct: -5, adj_scale: 60, adj_cap: 10 },
   "EMA Micro-Scalp (3/8)":           { ema_fast: 3, ema_slow: 8, atr_period: 5, atr_mult: 0.3, bull_drift_adj: 8, bear_drift_adj: -5 },
 }
@@ -72,7 +72,7 @@ function Num({ label, value, step, min, max, help, onChange }: {
   return (
     <div>
       <label className="label-sm block mb-1">{label}</label>
-      <input type="number" className="input-field" value={value} step={step} min={min} max={max}
+      <input type="number" className="ft-input" value={value} step={step} min={min} max={max}
         onChange={e => onChange(+e.target.value)} />
       {help && <p className="text-slate-terminal text-[10px] mt-1 leading-snug">{help}</p>}
     </div>
@@ -113,7 +113,7 @@ const C_INPUT: React.CSSProperties = {
 }
 const C_LABEL: React.CSSProperties = {
   fontSize: 9, fontWeight: 700, letterSpacing: '0.12em',
-  textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 3, display: 'block',
+  textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', marginBottom: 3, display: 'block',
 }
 
 function CNum({ label, value, step, min, max, help, onChange }: {
@@ -126,7 +126,7 @@ function CNum({ label, value, step, min, max, help, onChange }: {
   return (
     <div style={{ position: 'relative' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
-        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }}>
+        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)' }}>
           {label}
         </span>
         {help && (
@@ -161,7 +161,7 @@ function CRule({ tag, children }: { tag: string; children: React.ReactNode }) {
       <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: color[tag] ?? '#4d4637', flexShrink: 0 }}>
         [{tag}]
       </span>
-      <span style={{ fontSize: 10, color: 'var(--theme-secondary, #99907e)', lineHeight: '13px' }}>{children}</span>
+      <span style={{ fontSize: 10, color: 'var(--theme-secondary, #8099b0)', lineHeight: '13px' }}>{children}</span>
     </div>
   )
 }
@@ -255,7 +255,7 @@ export default function StrategySelector({ value, params, onChange, compact, hid
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
               {value === CUSTOM_STRATEGY_KEY && activeSavedName ? activeSavedName : value}
             </span>
-            <ChevronDown size={11} style={{ flexShrink: 0, color: 'var(--theme-secondary, #99907e)' }} />
+            <ChevronDown size={11} style={{ flexShrink: 0, color: 'var(--theme-secondary, #8099b0)' }} />
           </button>
 
           {dropdownOpen && (
@@ -360,15 +360,15 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                   <GNum label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-15} onChange={v => setParam('bear_drift_adj', v)}
                     help="Drift penalty during a Death Cross (fast SMA below slow SMA). Keep this negative." />
                   <div style={{ borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', paddingTop: 6 }}>
-                    <CRule tag="ENTER">Price above both SMAs — drift +{p.bull_drift_adj}%/yr.</CRule>
-                    <CRule tag="EXIT">Death Cross — drift {p.bear_drift_adj}%/yr.</CRule>
+                    <CRule tag="ENTER">Price above both SMAs. Drift +{p.bull_drift_adj}%/yr.</CRule>
+                    <CRule tag="EXIT">Death Cross. Drift {p.bear_drift_adj}%/yr.</CRule>
                     <CRule tag="NOTE">Weak signals get a partial adjustment.</CRule>
                   </div>
                 </>)}
 
                 {value === "RSI Mean Reversion (14)" && (<>
                   <GNum label="RSI period (days)" value={p.rsi_period!} step={1} min={5} max={30} onChange={v => setParam('rsi_period', v)}
-                    help="Lookback window for RSI calculation. 14 is standard. Lower = noisier signals; higher = smoother." />
+                    help="Lookback window for RSI calculation. 14 is standard. Lower = noisier signals, higher = smoother." />
                   <GNum label="Overbought level" value={p.overbought!} step={1} min={55} max={90} onChange={v => setParam('overbought', v)}
                     help="RSI above this signals the asset has risen too fast — drift penalty is applied to reflect likely pullback." />
                   <GNum label="Oversold level" value={p.oversold!} step={1} min={10} max={45} onChange={v => setParam('oversold', v)}
@@ -380,7 +380,7 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                   <div style={{ borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', paddingTop: 6 }}>
                     <CRule tag="ENTER">RSI &lt; {p.oversold} → +{p.os_drift_adj}% drift.</CRule>
                     <CRule tag="EXIT">RSI &gt; {p.overbought} → {p.ob_drift_adj}% drift.</CRule>
-                    <CRule tag="HOLD">RSI {p.oversold}–{p.overbought} — no adjustment.</CRule>
+                    <CRule tag="HOLD">RSI {p.oversold}–{p.overbought}. No adjustment.</CRule>
                   </div>
                 </>)}
 
@@ -431,7 +431,7 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                   </div>
                 </>)}
 
-                {value === "Value — Trailing P/E" && (<>
+                {value === "Value: Trailing P/E" && (<>
                   <GNum label="Deep value P/E" value={p.pe_deep_value!} step={1} min={1} max={25} onChange={v => setParam('pe_deep_value', v)}
                     help="P/E below this is considered deep value — maximum bullish drift is applied. Historically below 10–15 is cheap." />
                   <GNum label="Fair value P/E" value={p.pe_fair_value!} step={1} min={5} max={50} onChange={v => setParam('pe_fair_value', v)}
@@ -479,16 +479,16 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                   <GNum label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-15} onChange={v => setParam('bear_drift_adj', v)}
                     help="Drift penalty when EMA(fast) is below EMA(slow). Keep negative." />
                   <div style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.06))', paddingTop: 6 }}>
-                    <CRule tag="ENTER">EMA({p.ema_fast}) crosses above EMA({p.ema_slow}) — enter, drift +{p.bull_drift_adj}%.</CRule>
-                    <CRule tag="EXIT">EMA({p.ema_fast}) crosses below EMA({p.ema_slow}) — exit, drift {p.bear_drift_adj}%.</CRule>
-                    <CRule tag="NOTE">ATR filter active when Min ATR &gt; 0. Very active strategy — many round trips.</CRule>
+                    <CRule tag="ENTER">EMA({p.ema_fast}) crosses above EMA({p.ema_slow}) . Enter, drift +{p.bull_drift_adj}%.</CRule>
+                    <CRule tag="EXIT">EMA({p.ema_fast}) crosses below EMA({p.ema_slow}) . Exit, drift {p.bear_drift_adj}%.</CRule>
+                    <CRule tag="NOTE">ATR filter active when Min ATR &gt; 0. Very active strategy, many round trips.</CRule>
                   </div>
                 </>)}
 
                 {value === CUSTOM_STRATEGY_KEY && (
                   <div>
                     {currentCustomDef ? (
-                      <div style={{ fontSize: 9, fontFamily: 'var(--theme-mono)', color: 'var(--theme-secondary, #99907e)', marginBottom: 6, lineHeight: '14px' }}>
+                      <div style={{ fontSize: 9, fontFamily: 'var(--theme-mono)', color: 'var(--theme-secondary, #8099b0)', marginBottom: 6, lineHeight: '14px' }}>
                         <span style={{ color: 'var(--theme-primary, #c9a84c)', fontWeight: 700 }}>{currentCustomDef.name}</span>
                         {' · '}BUY: {currentCustomDef.buy.groups.reduce((s, g) => s + g.conditions.length, 0)} condition{currentCustomDef.buy.groups.reduce((s, g) => s + g.conditions.length, 0) !== 1 ? 's' : ''} in {currentCustomDef.buy.groups.length} group{currentCustomDef.buy.groups.length !== 1 ? 's' : ''}
                         {' · '}SELL: {currentCustomDef.sell.groups.reduce((s, g) => s + g.conditions.length, 0)} condition{currentCustomDef.sell.groups.reduce((s, g) => s + g.conditions.length, 0) !== 1 ? 's' : ''} in {currentCustomDef.sell.groups.length} group{currentCustomDef.sell.groups.length !== 1 ? 's' : ''}
@@ -496,7 +496,7 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                       </div>
                     ) : (
                       <div style={{ fontSize: 9, fontFamily: 'var(--theme-mono)', color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', marginBottom: 6 }}>
-                        No rules defined yet — click Edit to build your strategy.
+                        No rules defined yet. Click Edit to build your strategy.
                       </div>
                     )}
                     <button
@@ -527,7 +527,7 @@ export default function StrategySelector({ value, params, onChange, compact, hid
     <div>
       <label className="label-sm block mb-1">Strategy Overlay</label>
       <select
-        className="input-field mb-2"
+        className="ft-input mb-2"
         value={value === CUSTOM_STRATEGY_KEY && activeSavedName ? SAVED_PREFIX + activeSavedName : value}
         onChange={e => setStrategy(e.target.value)}
       >
@@ -557,7 +557,7 @@ export default function StrategySelector({ value, params, onChange, compact, hid
           </button>
 
           {open && (
-            <div className="space-y-4 border-t border-white/7 pt-3">
+            <div className="space-y-4 pt-3" style={{ borderTop: '1px solid var(--theme-border)' }}>
 
               {value === "SMA Trend Following (50/200)" && (<>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -601,9 +601,9 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                     onChange={v => setParam('os_drift_adj', v)} />
                 </div>
                 <InfoBox>
-                  <Rule tag="HOLD">RSI between {p.oversold} and {p.overbought} — neutral zone, no drift adjustment applied.</Rule>
+                  <Rule tag="HOLD">RSI between {p.oversold} and {p.overbought}. Neutral zone, no drift adjustment applied.</Rule>
                   <Rule tag="ENTER">RSI drops below {p.oversold} (oversold): +{p.os_drift_adj}% drift boost. Works best in range-bound markets.</Rule>
-                  <Rule tag="EXIT">RSI rises above {p.overbought} (overbought): {p.ob_drift_adj}% drift penalty. Severely overbought gets the full penalty; mildly overbought gets 43%.</Rule>
+                  <Rule tag="EXIT">RSI rises above {p.overbought} (overbought). {p.ob_drift_adj}% drift penalty. Severely overbought gets the full penalty, mildly overbought gets 43%.</Rule>
                 </InfoBox>
               </>)}
 
@@ -625,7 +625,7 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                 <InfoBox>
                   <Rule tag="ENTER">{p.lookback_days}-day return above {p.threshold_pct}%. Drift boosted proportionally, capped at +{p.adj_cap}%/yr.</Rule>
                   <Rule tag="EXIT">{p.lookback_days}-day return below {p.threshold_pct}%. Drift penalised symmetrically, capped at -{p.adj_cap}%/yr.</Rule>
-                  <Rule tag="NOTE">Signal resets daily — switches back as soon as momentum recovers above the threshold.</Rule>
+                  <Rule tag="NOTE">Signal resets daily. It switches back as soon as momentum recovers above the threshold.</Rule>
                 </InfoBox>
               </>)}
 
@@ -647,7 +647,7 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                 <InfoBox>
                   <Rule tag="ENTER">Price closes above upper band ({p.bb_period}-day SMA +{p.bb_std}σ) → enter long. Drift +{p.bull_drift_adj}%/yr.</Rule>
                   <Rule tag="EXIT">Price falls below lower band → exit to cash. Drift {p.bear_drift_adj}%/yr.</Rule>
-                  <Rule tag="NOTE">Trade persists until lower-band breach — no stop-loss unless you add one via risk controls.</Rule>
+                  <Rule tag="NOTE">Trade persists until lower-band breach. No stop-loss unless you add one via risk controls.</Rule>
                 </InfoBox>
               </>)}
 
@@ -672,11 +672,11 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                 <InfoBox>
                   <Rule tag="ENTER">MACD(EMA{p.macd_fast}–EMA{p.macd_slow}) crosses above Signal(EMA{p.macd_signal}). Drift +{p.bull_drift_adj}%/yr.</Rule>
                   <Rule tag="EXIT">MACD crosses below Signal line. Drift {p.bear_drift_adj}%/yr.</Rule>
-                  <Rule tag="NOTE">Histogram = MACD − Signal. Positive histogram = bullish; negative = bearish.</Rule>
+                  <Rule tag="NOTE">Histogram = MACD − Signal. Positive histogram = bullish, negative = bearish.</Rule>
                 </InfoBox>
               </>)}
 
-              {value === "Value — Trailing P/E" && (<>
+              {value === "Value: Trailing P/E" && (<>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <Num label="Deep value P/E (below)" value={p.pe_deep_value!} step={1} min={1} max={25}
                     help="P/E below this is deep value. Maximum bullish drift applied."
@@ -722,7 +722,7 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                 <InfoBox>
                   <Rule tag="ENTER">Quarterly EPS growth above {p.exit_threshold_pct}%. Drift boosted proportionally, capped at +{p.adj_cap}%/yr.</Rule>
                   <Rule tag="EXIT">EPS growth falls below {p.exit_threshold_pct}%. Drift penalised, capped at -{p.adj_cap}%/yr.</Rule>
-                  <Rule tag="NOTE">Uses live Yahoo Finance data — reflects the most recently reported quarter.</Rule>
+                  <Rule tag="NOTE">Uses live Yahoo Finance data. It reflects the most recently reported quarter.</Rule>
                 </InfoBox>
               </>)}
 
@@ -748,10 +748,10 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                     onChange={v => setParam('bear_drift_adj', v)} />
                 </div>
                 <InfoBox>
-                  <Rule tag="ENTER">EMA({p.ema_fast}) crosses above EMA({p.ema_slow}) — enter long, drift +{p.bull_drift_adj}%/yr.</Rule>
-                  <Rule tag="EXIT">EMA({p.ema_fast}) crosses below EMA({p.ema_slow}) — exit to cash, drift {p.bear_drift_adj}%/yr.</Rule>
+                  <Rule tag="ENTER">EMA({p.ema_fast}) crosses above EMA({p.ema_slow}) . Enter long, drift +{p.bull_drift_adj}%/yr.</Rule>
+                  <Rule tag="EXIT">EMA({p.ema_fast}) crosses below EMA({p.ema_slow}) . Exit to cash, drift {p.bear_drift_adj}%/yr.</Rule>
                   <Rule tag="NOTE">ATR({p.atr_period}) filter: signals suppressed when daily move &lt; {p.atr_mult}% of price{p.atr_mult === 0 ? ' (disabled)' : ''}.</Rule>
-                  <Rule tag="NOTE">Very active — frequent round trips. Best on volatile, trending assets (e.g. high-beta equities or ETFs).</Rule>
+                  <Rule tag="NOTE">Very active, with frequent round trips. Best on volatile, trending assets (e.g. high-beta equities or ETFs).</Rule>
                 </InfoBox>
               </>)}
 
@@ -764,7 +764,7 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                       <Rule tag="EXIT">{currentCustomDef.sell.groups.reduce((s, g) => s + g.conditions.length, 0)} cond{currentCustomDef.sell.groups.length > 1 ? ` in ${currentCustomDef.sell.groups.length} groups (${currentCustomDef.sell.logic})` : ` (${currentCustomDef.sell.groups[0]?.logic ?? 'AND'})`}</Rule>
                     </InfoBox>
                   ) : (
-                    <p className="text-slate-terminal text-xs">No rules defined yet — click Build to create your strategy.</p>
+                    <p className="text-slate-terminal text-xs">No rules defined yet. Click Build to create your strategy.</p>
                   )}
                   <div className="flex gap-2">
                     <button

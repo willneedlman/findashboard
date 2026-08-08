@@ -62,8 +62,9 @@ design against the defaults. Labels and eyebrows are small, uppercase, letter-sp
 
 ## Layout
 
-- **App shell** (`components/Layout.tsx`): collapsible left sidebar (220px, 56px
-  collapsed) with grouped `NAV_SECTIONS`, plus a Workspaces block (Home / My
+- **App shell** (`components/Layout.tsx`): collapsible left sidebar
+  (`SIDEBAR_WIDTH` 220px, `SIDEBAR_COLLAPSED_WIDTH` 64px, both exported from
+  `Layout.tsx`) with grouped `NAV_SECTIONS`, plus a Workspaces block (Home / My
   Dashboard / Portfolio Manager). Main content is `max-w-7xl` centered, except the
   custom dashboard which is full-width.
 - **Home** (`pages/Home.tsx`): bento grid of tool tiles (`BENTO_CARDS`), gold

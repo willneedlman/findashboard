@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 
 export interface Theme {
   primaryColor:        string   // gold accent       default #c9a84c
-  secondaryColor:      string   // muted text        default #5e768f
+  secondaryColor:      string   // muted text
   tertiaryColor:       string   // blue accent       default #60a5fa
   bgColor:             string   // app bg            default #101c2e
   surfaceColor:        string   // card/panel        default #0d1826
@@ -152,6 +152,10 @@ export function applyTheme(t: Theme) {
   const borderColor  = isLight ? 'rgba(0,0,0,0.10)'  : 'rgba(255,255,255,0.08)'
   const borderFaint  = isLight ? 'rgba(0,0,0,0.06)'  : 'rgba(255,255,255,0.05)'
   const surfaceHover = isLight ? 'rgba(0,0,0,0.04)'  : 'rgba(255,255,255,0.04)'
+  // Recessed strip behind panel headers, chart labels and rail titles. Separate
+  // from --theme-hover so hover stays transient: a persistent fill built from
+  // the hover token makes a header and a hovered row read as the same state.
+  const stripFill    = isLight ? 'rgba(0,0,0,0.05)'  : 'rgba(0,0,0,0.16)'
   // Semantic positive/negative: the terminal's standard vivid green/red on dark
   // (matches the original hardcoded #22c55e/#ef4444), darker high-contrast
   // variants on light backgrounds — WCAG AA on both.
@@ -210,6 +214,7 @@ export function applyTheme(t: Theme) {
       --theme-border:      ${borderColor};
       --theme-border-faint:${borderFaint};
       --theme-hover:       ${surfaceHover};
+      --theme-strip:       ${stripFill};
       --theme-positive:        ${posSoft};
       --theme-positive-strong: ${posStrong};
       --theme-negative:        ${negSoft};
@@ -255,6 +260,7 @@ export function applyTheme(t: Theme) {
   root.style.setProperty('--theme-border',      borderColor)
   root.style.setProperty('--theme-border-faint',borderFaint)
   root.style.setProperty('--theme-hover',       surfaceHover)
+  root.style.setProperty('--theme-strip',       stripFill)
   root.style.setProperty('--theme-positive',         posSoft)
   root.style.setProperty('--theme-positive-strong',  posStrong)
   root.style.setProperty('--theme-negative',         negSoft)

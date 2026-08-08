@@ -13,7 +13,10 @@ const ADMIN_USERS = [
 
 // ── Palette of preset color schemes ──────────────────────────────────────────
 const PRESETS: { name: string; theme: Partial<Theme> }[] = [
-  { name: 'Terminal Gold',  theme: { primaryColor: '#c9a84c', secondaryColor: '#5e768f', tertiaryColor: '#60a5fa', bgColor: '#101c2e', surfaceColor: '#0d1826', chartNeutralColor: '#4a7fa5', primaryFont: 'San Francisco', secondaryFont: 'Sora', primaryFontUrl: '', secondaryFontUrl: '' } },
+  // Built from DEFAULT_THEME, not a copy of it: users read this preset as "put
+  // it back how it was", so any literal that drifts from the default silently
+  // changes the theme instead of restoring it.
+  { name: 'Terminal Gold',  theme: { ...DEFAULT_THEME } },
   { name: 'Bloomberg',      theme: { primaryColor: '#ff6600', secondaryColor: '#888888', tertiaryColor: '#ffb800', bgColor: '#000000', surfaceColor: '#0d0d0d', chartNeutralColor: '#668099', primaryFont: 'San Francisco', secondaryFont: 'Sora', primaryFontUrl: '', secondaryFontUrl: '' } },
   { name: 'Emerald Dark',   theme: { primaryColor: '#059669', secondaryColor: '#31aa8a', tertiaryColor: '#6ee7b7', bgColor: '#092f1c', surfaceColor: '#031c0f', chartNeutralColor: '#3a7a5f', primaryFont: 'San Francisco', secondaryFont: 'Sora', primaryFontUrl: '', secondaryFontUrl: '' } },
   { name: 'Crimson Night',  theme: { primaryColor: '#e11d48', secondaryColor: '#c99caa', tertiaryColor: '#fda4af', bgColor: '#2c0216', surfaceColor: '#160310', chartNeutralColor: '#7a4870', primaryFont: 'San Francisco', secondaryFont: 'Sora', primaryFontUrl: '', secondaryFontUrl: '' } },
@@ -31,7 +34,7 @@ const PRESETS: { name: string; theme: Partial<Theme> }[] = [
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 32 }}>
-      <div style={{ fontFamily: 'var(--theme-sans, Sora, sans-serif)', fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', marginBottom: 12, paddingBottom: 6, borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))' }}>
+      <div style={{ fontFamily: 'var(--theme-sans, Sora, sans-serif)', fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', marginBottom: 12, paddingBottom: 6, borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))' }}>
         {title}
       </div>
       {children}
@@ -625,7 +628,7 @@ export default function Settings() {
                 fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700,
                 letterSpacing: '0.12em', textTransform: 'uppercase',
                 padding: '6px 20px', cursor: dirty ? 'pointer' : 'default',
-                transition: 'all 0.15s',
+                transition: 'background 0.15s var(--ease-out), border-color 0.15s var(--ease-out), color 0.15s var(--ease-out)',
               }}
             >
               {saved ? 'Saved' : 'Save'}

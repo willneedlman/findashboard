@@ -16,7 +16,7 @@
   html, body, #root {
     @apply bg-navy-900;
     font-family: var(--theme-sans, 'Sora', sans-serif);
-    color: var(--theme-secondary, #5e768f);
+    color: var(--theme-secondary, #8099b0);
     height: 100%;
     width: 100%;
     max-width: 100%;
@@ -32,7 +32,7 @@
   /* Placeholders follow the theme's muted colour so they stay legible on light
      presets (the UA default washed out against tinted backgrounds). */
   input::placeholder, textarea::placeholder {
-    color: var(--theme-secondary, #5e768f);
+    color: var(--theme-secondary, #8099b0);
     opacity: 0.8;
   }
 
@@ -77,8 +77,7 @@
 
   .ft-panel {
     background: var(--theme-surface, #0d1826);
-    border: 1px solid var(--theme-border, rgba(255,255,255,0.06));
-    box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+    border: 1px solid var(--theme-border, rgba(255,255,255,0.08));
   }
 
   .ft-panel-header {
@@ -86,14 +85,14 @@
     align-items: center;
     justify-content: space-between;
     padding: 8px 14px;
-    background: var(--theme-hover, rgba(0,0,0,0.12));
+    background: var(--theme-strip, rgba(0,0,0,0.16));
     border-bottom: 1px solid var(--theme-border-faint, rgba(255,255,255,0.05));
     font-family: var(--theme-sans, 'Sora', sans-serif);
     font-size: 9px;
     font-weight: 700;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: var(--theme-secondary, #5e768f);
+    color: var(--theme-secondary, #8099b0);
   }
 
   .ft-panel-body {
@@ -112,7 +111,7 @@
   }
 
   .ft-page-title {
-    font-family: var(--theme-mono, ui-monospace, monospace);
+    font-family: var(--theme-sans, 'Sora', sans-serif);
     font-size: 14px;
     font-weight: 700;
     letter-spacing: 0.18em;
@@ -125,7 +124,7 @@
   .ft-page-subtitle {
     font-family: var(--theme-sans, 'Sora', sans-serif);
     font-size: 11px;
-    color: var(--theme-secondary, #5e768f);
+    color: var(--theme-secondary, #8099b0);
     margin: 0;
     letter-spacing: 0.02em;
     line-height: 1.5;
@@ -134,8 +133,7 @@
   /* ── Metric card — no gold cap, consistent depth ──────────────────────── */
   .ft-metric {
     background: var(--theme-surface, #0d1826);
-    border: 1px solid var(--theme-border, rgba(255,255,255,0.06));
-    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    border: 1px solid var(--theme-border, rgba(255,255,255,0.08));
     padding: 12px 14px;
   }
 
@@ -145,7 +143,7 @@
     font-weight: 700;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: var(--theme-secondary, #5e768f);
+    color: var(--theme-secondary, #8099b0);
     margin-bottom: 6px;
   }
 
@@ -160,39 +158,38 @@
   /* ── Chart panel ──────────────────────────────────────────────────────── */
   .ft-chart-panel {
     background: var(--theme-surface, #0d1826);
-    border: 1px solid var(--theme-border, rgba(255,255,255,0.06));
-    box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+    border: 1px solid var(--theme-border, rgba(255,255,255,0.08));
   }
 
   .ft-chart-label {
-    padding: 7px 12px;
-    background: var(--theme-hover, rgba(0,0,0,0.12));
+    padding: 8px 14px;
+    background: var(--theme-strip, rgba(0,0,0,0.16));
     border-bottom: 1px solid var(--theme-border-faint, rgba(255,255,255,0.05));
     font-family: var(--theme-sans, 'Sora', sans-serif);
     font-size: 9px;
     font-weight: 700;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: var(--theme-secondary, #5e768f);
+    color: var(--theme-secondary, #8099b0);
   }
 
   /* ── Sidebar layout ───────────────────────────────────────────────────── */
   .ft-sidebar-panel {
     background: var(--theme-surface, #0d1826);
-    border-right: 1px solid var(--theme-border, rgba(255,255,255,0.06));
+    border-right: 1px solid var(--theme-border, rgba(255,255,255,0.08));
     display: flex;
     flex-direction: column;
     min-height: 0;
   }
 
   .ft-sidebar-title {
-    padding: 10px 14px;
-    background: var(--theme-hover, rgba(0,0,0,0.12));
-    border-bottom: 1px solid var(--theme-border, rgba(255,255,255,0.06));
+    padding: 8px 14px;
+    background: var(--theme-strip, rgba(0,0,0,0.16));
+    border-bottom: 1px solid var(--theme-border-faint, rgba(255,255,255,0.05));
     font-family: var(--theme-sans, 'Sora', sans-serif);
     font-size: 9px;
     font-weight: 700;
-    letter-spacing: 0.16em;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--theme-primary, #c9a84c);
     display: flex;
@@ -215,28 +212,9 @@
     font-weight: 700;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: var(--theme-secondary, #5e768f);
+    color: var(--theme-secondary, #8099b0);
     margin-bottom: 5px;
     display: block;
-  }
-
-  /* ── Legacy card ─────────────────────────────────────────────────────── */
-  .card {
-    background: var(--theme-surface, #0d1826);
-    border: 1px solid var(--theme-border, rgba(255,255,255,0.07));
-    border-left: 2px solid color-mix(in srgb, var(--theme-primary) 28%, transparent);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-  }
-  .card-blue  { border-left: 2px solid var(--theme-tertiary, #60a5fa) !important; }
-  .card-purple{ border-left: 2px solid #7b5ea7 !important; }
-  .card-green { border-left: 2px solid #2e9a62 !important; }
-
-  .metric-card {
-    background: var(--theme-surface, #0d1826);
-    border: 1px solid var(--theme-border, rgba(255,255,255,0.07));
-    border-left: 2px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 28%, transparent);
-    @apply px-4 py-3;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
   }
 
   .ft-metric-tile {
@@ -244,17 +222,21 @@
   }
 
   /* ── Shared form elements ─────────────────────────────────────────────── */
+  /* One text-control geometry: 32px tall, square, gold-30% hairline. .ft-control
+     below is the same box for elements that cannot take these classes. */
   .ft-input {
     background: var(--theme-bg, #101c2e);
-    border: 1px solid var(--theme-border, rgba(255,255,255,0.09));
+    border: 1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent);
     color: var(--theme-text, #d7e3fc);
     font-family: var(--theme-mono, ui-monospace, monospace);
-    font-size: 11px;
-    padding: 5px 8px;
+    font-size: 12px;
+    padding: 6px 8px;
+    min-height: 32px;
+    border-radius: 0;
     outline: none;
     width: 100%;
     box-sizing: border-box;
-    transition: border-color 0.15s;
+    transition: border-color 0.15s var(--ease-out);
   }
   .ft-input:focus { border-color: color-mix(in srgb, var(--theme-primary) 45%, transparent); }
 
@@ -262,13 +244,16 @@
     background: color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent);
     border: 1px solid color-mix(in srgb, var(--theme-primary) 45%, transparent);
     color: var(--theme-primary, #c9a84c);
-    font-family: var(--theme-mono, ui-monospace, monospace);
-    font-size: 10px;
+    font-family: var(--theme-sans, 'Sora', sans-serif);
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.1em;
-    padding: 5px 16px;
+    padding: 6px 14px;
+    min-height: 32px;
+    border-radius: 0;
+    box-sizing: border-box;
     cursor: pointer;
-    transition: background 0.15s;
+    transition: background 0.15s var(--ease-out);
     outline: none;
   }
   .ft-btn-primary:hover { background: color-mix(in srgb, var(--theme-primary, #c9a84c) 26%, transparent); }
@@ -277,17 +262,17 @@
   /* ── Labels & typography ──────────────────────────────────────────────── */
   .label-sm {
     @apply text-xs font-bold tracking-widest uppercase;
-    color: var(--theme-secondary, #5e768f);
-    font-family: var(--theme-mono, ui-monospace, monospace);
+    color: var(--theme-secondary, #8099b0);
+    font-family: var(--theme-sans, 'Sora', sans-serif);
   }
 
   .section-header {
-    font-family: var(--theme-mono, ui-monospace, monospace);
+    font-family: var(--theme-sans, 'Sora', sans-serif);
     font-size: 9px;
     font-weight: 700;
-    letter-spacing: 0.18em;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
-    color: color-mix(in srgb, var(--theme-secondary, #5e768f) 70%, transparent);
+    color: var(--theme-secondary, #8099b0);
     border-bottom: 1px solid var(--theme-border-faint, rgba(255,255,255,0.05));
     padding-bottom: 6px;
     margin-bottom: 14px;
@@ -295,40 +280,31 @@
   }
 
   .section-label {
-    font-family: var(--theme-mono, ui-monospace, monospace);
+    font-family: var(--theme-sans, 'Sora', sans-serif);
     font-size: 10px;
     font-weight: 600;
     letter-spacing: 0.16em;
     text-transform: uppercase;
-    color: var(--theme-secondary, #5e768f);
+    color: var(--theme-secondary, #8099b0);
   }
 
   /* ── Buttons ──────────────────────────────────────────────────────────── */
   .btn-gold {
-    @apply text-xs tracking-widest font-medium px-4 py-2 transition-all duration-200;
+    @apply text-xs tracking-widest font-medium px-4 py-2;
     border: 1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent);
     color: var(--theme-primary, #c9a84c);
     font-family: var(--theme-sans, 'Sora', sans-serif);
+    transition: background 0.15s var(--ease-out), border-color 0.15s var(--ease-out);
   }
   .btn-gold:hover   { background: color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent); border-color: var(--theme-primary, #c9a84c); }
   .btn-gold:active  { background: color-mix(in srgb, var(--theme-primary, #c9a84c) 20%, transparent); }
 
   .tab-active   { border-bottom: 2px solid var(--theme-primary, #c9a84c); color: var(--theme-primary, #c9a84c); font-weight: 600; }
-  .tab-inactive { color: var(--theme-secondary, #5e768f); border-bottom: 2px solid transparent; transition: color 0.15s; }
-  .tab-inactive:hover { color: #d7e3fc; }
-
-  .input-field {
-    @apply border border-white/9 px-3 py-2 text-sm w-full focus:outline-none;
-    font-family: var(--theme-sans, 'Sora', sans-serif);
-    background: var(--theme-bg, #101c2e);
-    color: var(--theme-text, #d7e3fc);
-  }
-  .input-field:focus { border-color: color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent); }
+  .tab-inactive { color: var(--theme-secondary, #8099b0); border-bottom: 2px solid transparent; transition: color 0.15s var(--ease-out); }
+  .tab-inactive:hover { color: var(--theme-text, #d7e3fc); }
 }
 
 @layer utilities {
-  .border-white\/7 { border-color: rgba(255,255,255,0.07); }
-  .border-white\/9 { border-color: rgba(255,255,255,0.09); }
   .text-positive { color: var(--theme-positive, #22c55e); }
   .text-negative { color: var(--theme-negative, #ef4444); }
 }
@@ -464,16 +440,18 @@
 }
 
 .portfolio-inspectable {
-  transition: background-color 140ms ease-out, border-color 140ms ease-out;
+  transition: background-color 140ms var(--ease-out), border-color 140ms var(--ease-out);
 }
 
 .portfolio-inspectable:hover {
   background-color: var(--theme-hover, rgba(255, 255, 255, 0.04)) !important;
 }
 
-.portfolio-inspectable:focus-visible {
-  outline: 1px solid var(--theme-primary, #c9a84c);
-  outline-offset: 2px;
+.portfolio-inspectable:focus-visible,
+.portfolio-popover-close:focus-visible,
+.portfolio-sector-chart:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--theme-bg, #101c2e), 0 0 0 4px color-mix(in srgb, var(--theme-primary) 55%, transparent);
 }
 
 .portfolio-chart-hit {
@@ -519,11 +497,6 @@
   border-color: var(--theme-primary, #c9a84c);
 }
 
-.portfolio-popover-close:focus-visible {
-  outline: 1px solid var(--theme-primary, #c9a84c);
-  outline-offset: 2px;
-}
-
 @keyframes portfolio-popover-in {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -539,14 +512,14 @@
   .portfolio-chart-popover { animation: none; }
 }
 
-.portfolio-sector-chart,
 .portfolio-sector-chart .recharts-wrapper,
 .portfolio-sector-chart svg,
 .portfolio-sector-chart path,
 .portfolio-sector-chart g {
-  outline: none !important;
+  outline: none;
   -webkit-tap-highlight-color: transparent;
 }
+.portfolio-sector-chart { -webkit-tap-highlight-color: transparent; }
 
 .portfolio-sector-row[aria-pressed="true"] {
   box-shadow: inset 2px 0 0 var(--theme-primary, #c9a84c);
@@ -735,6 +708,15 @@
    where columns need alignment. */
 :root {
   --font-mono: 'Hanken Grotesk', sans-serif;
+
+  /* Categorical series fills — sector, segment and multi-line chart colours.
+     Fixed rather than theme-derived: a category has to keep the same colour
+     across screens for a legend to mean anything. */
+  --at-series-blue:   #1f5673;
+  --at-series-purple: #7b5ea7;
+  --at-series-green:  #2f6b4b;
+  --at-series-orange: #d97736;
+  --at-series-red:    #8c2e36;
 }
 
 /* ── Recharts — consistent font + grid ──────────────────────────────────── */
@@ -742,7 +724,7 @@
 .recharts-cartesian-axis-tick-value,
 .recharts-label {
   font-family: var(--theme-mono, var(--font-mono)) !important;
-  fill: var(--theme-secondary, #5e768f) !important;
+  fill: var(--theme-secondary, #8099b0) !important;
   font-size: 9px !important;
 }
 .recharts-cartesian-grid line { stroke: rgba(255,255,255,0.05) !important; }
@@ -769,13 +751,20 @@
 /* Legend text inherits theme secondary color */
 .recharts-legend-wrapper,
 .recharts-legend-item-text {
-  color: var(--theme-secondary, #5e768f) !important;
+  color: var(--theme-secondary, #8099b0) !important;
 }
 
 /* ── iOS Safari zoom prevention — inputs must be ≥16px on mobile ─────────── */
+/* 16px stops the zoom-on-focus; 44px is the touch minimum already applied to
+   buttons in the pointer:coarse block below. Raising the type without raising
+   the box left every field short of it. */
 @media (max-width: 768px) {
   input, textarea, select, .ft-input {
     font-size: 16px !important;
+    min-height: 44px;
+  }
+  input[type="checkbox"], input[type="radio"], input[type="range"], input[type="color"] {
+    min-height: 0;
   }
 }
 
@@ -916,9 +905,9 @@ textarea:focus:not(:focus-visible) {
 }
 
 /* Screener Screen Library rail collapse/expand */
-.ft-rail { transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1); }
-.ft-screen-row:hover { background: color-mix(in srgb, var(--theme-primary, #c9a84c) 5%, transparent) !important; }
-.ft-row-actions { opacity: 0; transition: opacity 0.12s ease-out; }
+.ft-rail { transition: width 0.22s var(--ease-out); }
+.ft-screen-row:hover { background: color-mix(in srgb, var(--theme-primary, #c9a84c) 7%, transparent) !important; }
+.ft-row-actions { opacity: 0; transition: opacity 0.12s var(--ease-out); }
 .ft-screen-row:hover .ft-row-actions { opacity: 1; }
 @media (hover: none) { .ft-row-actions { opacity: 1; } }
 .fdb-tooltip { animation: fdb-tip-in 0.12s ease-out; }
