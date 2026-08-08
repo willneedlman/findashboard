@@ -50,7 +50,8 @@ interface Stats {
   max_drawdown_1y: number | null
   vs_benchmark: { benchmark: string; correlation: number; beta: number } | null
 }
-interface Profile { ticker: string; stats: Stats | null; constituents: Constituents }
+interface StatsResponse { ticker: string; stats: Stats | null }
+interface ConstituentsResponse { ticker: string; constituents: Constituents }
 
 const RETURN_ORDER: { key: string; label: string }[] = [
   { key: '1w', label: '1W' }, { key: '1m', label: '1M' }, { key: '3m', label: '3M' },
@@ -291,15 +292,24 @@ function Members({ rows, weighting }: { rows: Member[]; weighting?: 'cap' | 'pri
 
 // ── Panel ────────────────────────────────────────────────────────────────────
 export default function AssetFacts({ ticker, label, yields }: { ticker: string; label: string; yields?: boolean }) {
-  const q = useQuery<Profile>({
-    queryKey: ['asset-profile', ticker],
+  // Two requests, not one. The stats land in about a second; pricing the S&P's
+  // 500 members takes Yahoo fifteen. Behind one request the range and the
+  // return ladder would wait on the member table for no reason.
+  const statsQ = useQuery<StatsResponse>({
+    queryKey: ['asset-stats', ticker],
     queryFn: () => axios.get('/api/market/asset-profile', { params: { ticker } }).then(r => r.data),
     staleTime: 10 * 60_000,
     retry: 0,
   })
+  const constQ = useQuery<ConstituentsResponse>({
+    queryKey: ['index-constituents', ticker],
+    queryFn: () => axios.get('/api/market/index-constituents', { params: { ticker } }).then(r => r.data),
+    staleTime: 25 * 60_000,
+    retry: 0,
+  })
 
-  const c = q.data?.constituents
-  const stats = q.data?.stats
+  const c = constQ.data?.constituents
+  const stats = statsQ.data?.stats
   // A price-weighted index is moved by its highest-priced share, not its
   // biggest company, so the member table is ordered by cap but the caption has
   // to say which of the two the reader is looking at.
@@ -309,17 +319,17 @@ export default function AssetFacts({ ticker, label, yields }: { ticker: string; 
     return 'Cap weighted'
   }, [c])
 
-  if (q.isLoading) return <div style={{ padding: 20 }}><EmptyState variant="loading" size="compact" title={`Loading ${label} detail`} /></div>
-  if (q.isError || !q.data) {
-    return (
-      <div style={{ padding: '16px 14px', fontFamily: SANS, fontSize: 11, color: SEC }}>
-        Detail is unavailable for this asset right now.
-      </div>
-    )
+  if (statsQ.isLoading && constQ.isLoading) {
+    return <div style={{ padding: 20 }}><EmptyState variant="loading" size="compact" title={`Loading ${label} detail`} /></div>
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '10px 14px 16px' }}>
+      {statsQ.isError && (
+        <div style={{ padding: '4px 0', fontFamily: SANS, fontSize: 11, color: SEC }}>
+          Range and performance are unavailable for this asset right now.
+        </div>
+      )}
       {stats && (
         <>
           <Section title="52-week range">
@@ -332,6 +342,12 @@ export default function AssetFacts({ ticker, label, yields }: { ticker: string; 
             <RiskRow stats={stats} />
           </Section>
         </>
+      )}
+
+      {constQ.isLoading && (
+        <Section title="Constituents">
+          <EmptyState variant="loading" size="compact" title="Pricing the members" />
+        </Section>
       )}
 
       {c?.available ? (
@@ -372,6 +388,12 @@ export default function AssetFacts({ ticker, label, yields }: { ticker: string; 
       ) : c?.reason ? (
         <Section title="Constituents">
           <div style={{ fontFamily: SANS, fontSize: 11, color: SEC, lineHeight: 1.5 }}>{c.reason}</div>
+        </Section>
+      ) : constQ.isError ? (
+        <Section title="Constituents">
+          <div style={{ fontFamily: SANS, fontSize: 11, color: SEC, lineHeight: 1.5 }}>
+            The member list did not load. Close and reopen to retry.
+          </div>
         </Section>
       ) : null}
     </div>

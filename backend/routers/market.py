@@ -1660,16 +1660,21 @@ def macro_dashboard():
 
 @router.get("/asset-profile")
 def asset_profile(ticker: str):
-    """Everything the Global Markets popup shows beneath the chart.
+    """Range, return ladder and realised risk for one row of the board.
 
-    One endpoint rather than two: the popup opens on a click and a second
-    round-trip would show the stats and the member table arriving at different
-    moments on the same panel.
+    Split from the constituent table on purpose. This is one download of one
+    symbol and lands in about a second; pricing the S&P's 500 members takes
+    Yahoo fifteen. Behind a single endpoint the fast half waits on the slow
+    half and the whole panel sits empty.
     """
     validate_ticker(ticker)
-    stats = _index_profile.asset_stats(ticker)
-    return {
-        "ticker": ticker,
-        "stats": stats or None,
-        "constituents": _index_profile.index_profile(ticker),
-    }
+    return {"ticker": ticker, "stats": _index_profile.asset_stats(ticker) or None}
+
+
+@router.get("/index-constituents")
+def index_constituents(ticker: str):
+    """Members of an index priced live, with sector mix, breadth and
+    concentration. Empty-but-explained for an index with no free member list,
+    and silent for anything that is not an index."""
+    validate_ticker(ticker)
+    return {"ticker": ticker, "constituents": _index_profile.index_profile(ticker)}
