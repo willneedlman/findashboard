@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Cell } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
+import RotationGraph from '../components/RotationGraph'
 import { TICK, TOOLTIP_STYLE, TOOLTIP_CURSOR } from './valuationShared'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
@@ -52,7 +53,7 @@ function MomentumArrow({ val }: { val: number | null }) {
 export function SectorRotationContent() {
   const [activePeriod, setActivePeriod] = useState<Period>('1M')
   const [sortBy, setSortBy] = useState<'return' | 'momentum'>('return')
-  const [view, setView] = useState<'heatmap' | 'chart'>('heatmap')
+  const [view, setView] = useState<'heatmap' | 'chart' | 'rrg'>('heatmap')
   const [showHelp, setShowHelp] = useState(false)
 
   const { data, isLoading, isError } = useQuery<RotationResponse>({
@@ -215,7 +216,7 @@ export function SectorRotationContent() {
 
             {/* View toggle */}
             <div style={{ display: 'flex', gap: 1 }}>
-              {(['heatmap', 'chart'] as const).map(v => (
+              {(['heatmap', 'chart', 'rrg'] as const).map(v => (
                 <button key={v} onClick={() => setView(v)} style={{
                   fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
                   textTransform: 'uppercase', padding: '4px 10px', cursor: 'pointer',
@@ -367,6 +368,15 @@ export function SectorRotationContent() {
               })}
             </div>
           </>
+        )}
+
+        {view === 'rrg' && (
+          <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: '16px' }}>
+            <div style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.gold, marginBottom: 16 }}>
+              Relative Rotation · Sectors vs SPY
+            </div>
+            <RotationGraph names={Object.fromEntries((data?.sectors ?? []).map(s => [s.ticker, s.name]))} />
+          </div>
         )}
 
         {data && view === 'chart' && (

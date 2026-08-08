@@ -100,6 +100,8 @@ const CurrencyMatrix     = lazyWithReload(() => import('./pages/CurrencyMatrix')
 const MaritimeMap        = lazyWithReload(() => import('./pages/MaritimeMap'))
 const RelativeValuation  = lazyWithReload(() => import('./pages/RelativeValuation'))
 const MoverRadar         = lazyWithReload(() => import('./pages/MoverRadar'))
+const MarketBreadth      = lazyWithReload(() => import('./pages/MarketBreadth'))
+const Seasonality        = lazyWithReload(() => import('./pages/Seasonality'))
 const SupplyChain        = lazyWithReload(() => import('./pages/SupplyChain'))
 const SupplyChainMap     = lazyWithReload(() => import('./pages/SupplyChainPeers'))
 const TradeJournal       = lazyWithReload(() => import('./pages/TradeJournal'))
@@ -259,6 +261,8 @@ export default function App() {
               <Route path="/hub/:slug"  element={<HubLanding />} />
               <Route path="/market"     element={<RedirectWithSearch to="/company-profile" />} />
               <Route path="/global-markets" element={<GlobalMarkets />} />
+              <Route path="/breadth" element={<MarketBreadth />} />
+              <Route path="/seasonality" element={<Seasonality />} />
               <Route path="/report-creator" element={<ReportCreator />} />
               <Route path="/chart-studio" element={<ChartStudio />} />
               <Route path="/options"    element={<OptionsPricer />} />

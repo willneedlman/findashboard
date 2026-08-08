@@ -14,6 +14,9 @@ import factor_models as fm
 from market_hours import is_market_open, is_overnight_session, session_status, session_label, now_et
 import extended_quotes
 import index_profile as _index_profile
+import breadth as _breadth
+import seasonality as _seasonality
+import rrg as _rrg
 
 
 router = APIRouter()
@@ -1678,3 +1681,34 @@ def index_constituents(ticker: str):
     and silent for anything that is not an index."""
     validate_ticker(ticker)
     return {"ticker": ticker, "constituents": _index_profile.index_profile(ticker)}
+
+
+@router.get("/breadth")
+def market_breadth(index: str = "^GSPC"):
+    """Participation behind an index move: advancers against decliners, new
+    52-week extremes, the share of members above their 50 and 200-day averages,
+    and the cumulative A/D line plotted against the index itself."""
+    validate_ticker(index)
+    return _breadth.breadth(index)
+
+
+@router.get("/breadth/indices")
+def market_breadth_indices():
+    return {"indices": _breadth.tracked_indices()}
+
+
+@router.get("/seasonality")
+def market_seasonality(ticker: str, years: int = 20):
+    """Month, weekday and turn-of-month patterns for one symbol, each reported
+    with the sample size behind it."""
+    validate_ticker(ticker)
+    return _seasonality.seasonality(ticker.strip().upper(), max(2, min(int(years), 40)))
+
+
+@router.get("/rrg")
+def market_rrg(tickers: str = "", benchmark: str = "SPY", tail: int = 8):
+    """Relative Rotation Graph coordinates. Defaults to the GICS sector ETFs,
+    which is what the Sector Rotation screen plots."""
+    syms = tuple(validate_tickers(tickers)) if tickers.strip() else tuple(t for t, _ in SECTORS)
+    validate_ticker(benchmark)
+    return _rrg.rrg(syms, benchmark.strip().upper(), max(2, min(int(tail), 20)))

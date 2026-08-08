@@ -1,4 +1,5 @@
 import {
+  CalendarRange,
   Search, Calculator, Layers, Compass, Briefcase, Terminal,
   Filter, Brain, CalendarDays, Activity,
   GitCompare, GitMerge, PieChart, Globe, Scale, Coins, Boxes, RotateCcw, Gem,
@@ -94,6 +95,8 @@ export const HUBS: Hub[] = [
     tools: [
       { title: 'Global Markets',  chip: 'Global Markets',  desc: 'World indices, FX, commodities, yields, and crypto on one board', route: '/global-markets', icon: Globe },
       { title: 'Market Hours',    chip: 'Market Hours',    desc: 'Live global session clock across futures, US, Europe, Asia', route: '/market-hours',       icon: Clock },
+      { title: 'Market Breadth',  chip: 'Market Breadth',  desc: 'Advance/decline, new highs-lows, and how many members are above their moving averages', route: '/breadth', icon: Activity },
+      { title: 'Seasonality',     chip: 'Seasonality',     desc: 'Month, weekday and turn-of-month patterns, each shown with its sample size', route: '/seasonality', icon: CalendarRange },
       { title: 'Sector Rotation', chip: 'Sector Rotation', desc: 'GICS sector performance heatmap over time',                  route: '/sector-rotation',    icon: PieChart },
       { title: 'Chart Studio',    chip: 'Chart Studio',    desc: 'Every time-series feed in the app on one candlestick chart', route: '/chart-studio', icon: CandlestickChart },
       { title: 'Asset Overlay',   chip: 'Asset Overlay',   desc: 'Overlay any set of assets on a single chart',                route: '/asset-overlay',      icon: GitCompare },
