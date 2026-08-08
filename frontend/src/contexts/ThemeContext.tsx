@@ -173,11 +173,15 @@ export function applyTheme(t: Theme) {
     ? 'ui-monospace, monospace'
     : `'${t.primaryFont}', sans-serif`
 
-  // Hanken Grotesk sets its figures tighter than the other data faces, and at
-  // display sizes the digits and the thousands comma run into each other. A
-  // touch of tracking fixes it. Per-font on purpose: applying this to every
-  // face would loosen the ones that are already correctly spaced.
-  const numTracking = t.primaryFont === 'Hanken Grotesk' ? '0.02em' : 'normal'
+  // Hanken Grotesk sets its figures markedly tighter than the other data faces:
+  // at display sizes the digits crowd and the thousands comma collides with the
+  // numerals either side of it. Tracking is authored in em so one value works
+  // from a 9px table cell up to a 40px hero figure.
+  //
+  // Per-font on purpose. Every other face here is already spaced correctly and
+  // would read loose under the same value, so this is the single knob to turn
+  // if the figures still look wrong.
+  const numTracking = t.primaryFont === 'Hanken Grotesk' ? '0.045em' : 'normal'
 
   // Load Google Fonts if no custom URL provided
   const monoSrc = t.primaryFontUrl   || gfUrl(t.primaryFont)
