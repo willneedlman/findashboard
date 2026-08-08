@@ -12,6 +12,7 @@ import type { CustomStrategyDef } from '../components/CustomStrategyModal'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip } from '../lib/reportCaptureRegistry'
+import EmptyState from '../components/EmptyState'
 
 const CONDITIONS = [
   { value: 'price_above',           label: 'Price above $' },
@@ -314,7 +315,7 @@ export default function Alerts() {
       )}
       {notifState === 'denied' && (
         <div style={{ background: T.negTint(7), border: `1px solid ${T.negTint(25)}`, padding: '10px 16px', marginBottom: 20, fontSize: 10, color: T.neg, fontFamily: T.mono }}>
-          Browser notifications are blocked — enable them in your browser settings to receive alerts.
+          Browser notifications are blocked. Enable them in your browser settings to receive alerts.
         </div>
       )}
 
@@ -430,7 +431,7 @@ export default function Alerts() {
               </div>
 
               {isLoading ? (
-                <div style={{ padding: 40, textAlign: 'center', color: T.muted, fontFamily: T.mono, fontSize: 11 }}>Loading…</div>
+                <div style={{ padding: 40 }}><EmptyState variant="loading" size="compact" title="Loading alerts" /></div>
               ) : alerts.length === 0 ? (
                 <div style={{ padding: 48, textAlign: 'center', color: T.muted, fontFamily: T.mono, fontSize: 11 }}>No alerts yet. Create one to get started.</div>
               ) : shown.length === 0 ? (

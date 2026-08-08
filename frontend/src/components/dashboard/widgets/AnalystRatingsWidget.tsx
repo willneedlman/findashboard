@@ -6,7 +6,7 @@ const T = {
   bg:    'var(--theme-bg, #101c2e)',
   border: 'rgba(255,255,255,0.06)',
   gold:  'var(--theme-primary, #c9a84c)',
-  muted: 'var(--theme-secondary, #5e768f)',
+  muted: 'var(--theme-secondary, #8099b0)',
   sub:   'var(--theme-secondary, #8a9ab0)',
   text:  'var(--theme-text, #d7e3fc)',
   mono:  'var(--theme-mono)',

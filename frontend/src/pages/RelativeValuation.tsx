@@ -365,7 +365,7 @@ export function RelativeValuationContent() {
               padding: '6px 16px', cursor: loading ? 'not-allowed' : 'pointer', outline: 'none',
             }}
           >
-            {loading ? 'LOADING…' : 'FETCH'}
+            {loading ? 'FETCHING PEERS' : 'FETCH PEERS'}
           </button>
           {data && (
             <button
@@ -544,10 +544,6 @@ export function RelativeValuationContent() {
               title="Peer Comparison"
               hint="Search a ticker or company to compare valuation, growth, and analyst expectations."
               keys={['Enter']}
-              kpis={['Target', 'Peer Median', 'Sector', 'Analyst View', 'Upside']}
-              preview="table"
-              previewLabel="Valuation Comparison"
-              columns={['Company', 'P/E', 'EV/EBITDA', 'P/S', 'ROE']}
               action="FETCH"
             />
           </>

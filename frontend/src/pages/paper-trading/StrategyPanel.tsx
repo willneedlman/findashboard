@@ -831,7 +831,7 @@ export function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy
                     Strategy Library
                   </div>
                   <div style={{ fontSize: 8, color: T.muted, fontFamily: T.mono, marginBottom: 8 }}>
-                    Strategies built in Monte Carlo / Backtester — click Register to add to paper trading
+                    Strategies built in Monte Carlo / Backtester. Click Register to add to paper trading
                   </div>
                   {unregistered.map(def => {
                     const buyCount  = def.buy.groups.reduce((s, g) => s + g.conditions.length, 0)
@@ -996,7 +996,7 @@ export function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy
               {schedulerJobs.length > 0 && (
                 <div style={{ marginBottom: 6 }}>
                   <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', color: T.muted, textTransform: 'uppercase', marginBottom: 4 }}>
-                    Active Jobs — All Tickers
+                    Active Jobs · All Tickers
                   </div>
                   {allTickers.map(ticker => {
                     const jobs = schedulerJobs.filter(j => j.ticker === ticker)

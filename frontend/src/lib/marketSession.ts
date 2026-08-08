@@ -1,6 +1,6 @@
 export interface MarketSession { key: string; label: string; color: string }
 
-const GREEN = '#22c55e', BLUE = '#60a5fa', AMBER = '#f59e0b', GREY = '#5e768f'
+const GREEN = '#22c55e', BLUE = '#60a5fa', AMBER = '#f59e0b', GREY = '#8099b0'
 
 // Current trading session for a symbol, in America/New_York. The asset class is
 // inferred from the symbol so a 24/7 crypto pair never reads "overnight" and

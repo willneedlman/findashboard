@@ -114,7 +114,7 @@ const S = {
   bg:     'var(--theme-surface, #0d1826)',
   border: 'rgba(255,255,255,0.08)',
   gold:   'var(--theme-primary, #c9a84c)',
-  muted:  'var(--theme-secondary, #5e768f)',
+  muted:  'var(--theme-secondary, #8099b0)',
   text:   'var(--theme-text, #d7e3fc)',
   mono:   'var(--theme-mono)',
   label:  'var(--theme-sans)',
@@ -182,7 +182,7 @@ function YieldCheckboxes({
                   border: `1px solid ${checked ? S.gold : S.border}`,
                   background: checked ? 'color-mix(in srgb, var(--theme-primary) 35%, transparent)' : 'transparent',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'all 0.1s',
+                  transition: 'background 0.1s var(--ease-out), border-color 0.1s var(--ease-out), color 0.1s var(--ease-out)',
                 }}
               >
                 {checked && (
@@ -239,7 +239,7 @@ function ColorCheckboxes({
               width: 12, height: 12, flexShrink: 0,
               border: `1px solid ${checked ? color : S.border}`,
               background: checked ? `color-mix(in srgb, ${color} 35%, transparent)` : 'transparent',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.1s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.1s var(--ease-out), border-color 0.1s var(--ease-out), color 0.1s var(--ease-out)',
             }}>
               {checked && <div style={{ width: 6, height: 6, background: color }} />}
             </div>
@@ -286,7 +286,7 @@ function CreditSpreadsSettings({
             border: lookback === val ? `1px solid ${S.gold}` : `1px solid ${S.border}`,
             background: lookback === val ? `color-mix(in srgb, var(--theme-primary) 30%, transparent)` : 'transparent',
             color: lookback === val ? 'var(--theme-bg, #0a1628)' : S.muted,
-            cursor: 'pointer', letterSpacing: '0.08em', transition: 'all 0.1s',
+            cursor: 'pointer', letterSpacing: '0.08em', transition: 'background 0.1s var(--ease-out), border-color 0.1s var(--ease-out), color 0.1s var(--ease-out)',
           }}>{label}</button>
         ))}
       </div>
@@ -419,7 +419,7 @@ export default function WidgetFrame({ config, editMode, onRemove, onDuplicate, o
             width: 20, height: 20, padding: 0, display: 'grid', placeItems: 'center',
             border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
             background: 'color-mix(in srgb, var(--theme-bg) 88%, transparent)',
-            color: 'var(--theme-secondary, #5e768f)', cursor: 'pointer',
+            color: 'var(--theme-secondary, #8099b0)', cursor: 'pointer',
           }}
         >
           <Settings size={10} />
@@ -453,7 +453,7 @@ export default function WidgetFrame({ config, editMode, onRemove, onDuplicate, o
                         fontFamily: S.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
                         padding: '2px 7px', cursor: 'pointer', border: 'none',
                         background: active ? 'var(--theme-primary, #c9a84c)' : 'transparent',
-                        color: active ? 'var(--theme-bg, #0a1628)' : 'var(--theme-secondary, #5e768f)',
+                        color: active ? 'var(--theme-bg, #0a1628)' : 'var(--theme-secondary, #8099b0)',
                       }}>
                       {mode === 'clock' ? 'Clock' : 'Rows'}
                     </button>
@@ -468,9 +468,9 @@ export default function WidgetFrame({ config, editMode, onRemove, onDuplicate, o
                   background: configOpen ? 'var(--theme-primary, #c9a84c)' : 'transparent',
                   border: configOpen ? '1px solid var(--theme-primary, #c9a84c)' : '1px solid transparent',
                   borderRadius: 3, padding: '3px 4px',
-                  cursor: 'pointer', color: configOpen ? 'var(--theme-bg, #0a1628)' : 'var(--theme-secondary, #5e768f)',
+                  cursor: 'pointer', color: configOpen ? 'var(--theme-bg, #0a1628)' : 'var(--theme-secondary, #8099b0)',
                   display: 'flex', alignItems: 'center',
-                  transition: 'all 0.15s',
+                  transition: 'background 0.15s var(--ease-out), border-color 0.15s var(--ease-out), color 0.15s var(--ease-out)',
                 }}
               >
                 <Settings size={11} />

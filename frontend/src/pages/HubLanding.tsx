@@ -9,7 +9,7 @@ const F = {
   text: 'var(--theme-text, #d7e3fc)',
   bright: 'var(--theme-text, #eef3fb)',
   sec: 'var(--theme-secondary, #8099b0)',
-  muted: 'var(--theme-secondary, #5e768f)',
+  muted: 'var(--theme-secondary, #8099b0)',
   surface: 'var(--theme-surface, #101c2e)',
   panel: 'var(--theme-bg, #0d1826)',
   topbar: 'color-mix(in srgb, var(--theme-bg, #0d1826) 88%, #000)',

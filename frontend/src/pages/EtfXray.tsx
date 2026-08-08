@@ -13,7 +13,7 @@ import { kpiClip, tableClip } from '../lib/reportCaptureRegistry'
 const GOLD = 'var(--theme-primary, #c9a84c)'
 const SEC = 'var(--theme-secondary, #8099b0)'
 const BODY = 'var(--theme-text, #d7e3fc)'
-const FAINT = 'var(--theme-text-faint, #5e768f)'
+const FAINT = 'var(--theme-text-faint, #8099b0)'
 const MONO = 'var(--theme-mono, monospace)'
 const SANS = 'var(--theme-sans, sans-serif)'
 const HAIR = 'rgba(255,255,255,0.06)'
@@ -288,7 +288,6 @@ export function EtfXrayContent() {
             {/* Left — Look-through holdings */}
             <Panel title="Look-Through Holdings" right={`10-session spark · 1-day change · ${fundFilter.length === 0 ? `all ${rows.length}` : fundFilter.length === 1 ? `${rows.length} in ${fundFilter[0]}` : `${rows.length} ${filterMode === 'union' ? 'in any of' : filterMode === 'only' ? 'in only one of' : 'held by all of'} ${fundFilter.join(' + ')}`}`} style={{ flex: '1.55 1 460px' }} bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 9, flex: 1, minHeight: 0 }}>
-                <style>{'@keyframes etfspin{to{transform:rotate(360deg)}}'}</style>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ ...EYEBROW, fontSize: 8, color: SEC }}>Sort</span>
                   <div style={{ display: 'flex', border: `1px solid ${BORDER}` }}>
@@ -358,8 +357,10 @@ export function EtfXrayContent() {
                         {q?.change_pct != null
                           ? `${up ? '+' : ''}${q.change_pct.toFixed(2)}%`
                           : quotesLoading
-                          ? <span aria-label="loading" style={{ display: 'inline-block', width: 9, height: 9, border: `1.5px solid ${HAIR}`, borderTopColor: GOLD, borderRadius: '50%', animation: 'etfspin 0.7s linear infinite' }} />
-                          : '—'}
+                          ? <span aria-label="Loading quote" className="es-load-track" style={{ display: 'inline-block', width: 22, height: 2, background: HAIR, overflow: 'hidden', verticalAlign: 'middle' }}>
+                              <span className="es-load-fill" style={{ display: 'block', width: '40%', height: '100%', background: GOLD, animation: 'es-load-slide 1.1s ease-in-out infinite' }} />
+                            </span>
+                          : '-'}
                       </span>
                       <span style={{ display: 'flex', gap: 3, flexShrink: 0 }}>{a.funds.map(tag)}</span>
                     </div>
@@ -405,7 +406,7 @@ export function EtfXrayContent() {
               <Panel title={`Shared · ${activePair[0]} × ${activePair[1]}`} right={<span style={{ color: GOLD }}>{(ov[activePair[0]]?.[activePair[1]] ?? 0).toFixed(1)}%</span>} style={{ background: ACCENT, border: '1px solid rgba(201,168,76,0.3)' }}>
                 <div style={{ padding: 8 }}>
                   {sharedNames.length === 0 ? (
-                    <div style={{ fontSize: 10, color: SEC, fontFamily: SANS, padding: '12px 4px', lineHeight: 1.5 }}>No shared names — these funds are fully diversified against each other.</div>
+                    <div style={{ fontSize: 10, color: SEC, fontFamily: SANS, padding: '12px 4px', lineHeight: 1.5 }}>No shared names. These funds are fully diversified against each other.</div>
                   ) : (
                     <>
                       <div style={{ maxHeight: 180, overflowY: 'auto' }}>

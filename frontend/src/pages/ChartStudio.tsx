@@ -403,7 +403,7 @@ function Row({ label, on, src, color, style, onToggle }: {
       <span style={{ width: 13, height: 13, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', background: on ? color : 'transparent', border: on ? `1px solid ${color}` : '1px solid var(--theme-border, rgba(255,255,255,0.22))', color: 'var(--theme-bg, #0a0e16)', fontSize: 9, fontWeight: 800 }}>{on ? '✓' : ''}</span>
       <span style={{ width: 18, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Glyph style={style} color={color} /></span>
       <span style={{ fontFamily: SANS, fontSize: 11, color: on ? 'var(--theme-text, #d7e3fc)' : 'var(--theme-secondary, #8099b0)' }}>{label}</span>
-      <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 8, color: 'var(--theme-secondary, #8099b0)' }}>{src}</span>
+      <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 9.5, color: 'var(--theme-secondary, #8099b0)' }}>{src}</span>
     </div>
   )
 }
@@ -442,7 +442,7 @@ function NumParam({ label, value, min, max, step, onChange }: {
 }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-      <span style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--theme-secondary, #8099b0)' }}>{label}</span>
+      <span style={{ fontFamily: MONO, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--theme-secondary, #8099b0)' }}>{label}</span>
       <input type="number" value={value} min={min} max={max} step={step ?? 1} aria-label={`${label} parameter`}
         onChange={e => {
           const v = +e.target.value
@@ -475,7 +475,7 @@ function LiveClock() {
   useEffect(() => { const id = setInterval(() => setClock(fmtClockLocal()), 1000); return () => clearInterval(id) }, [])
   return (
     <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#2e9a62', boxShadow: '0 0 6px #2e9a62' }} />
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--theme-positive)', boxShadow: '0 0 6px var(--theme-positive)' }} />
       <span style={{ fontFamily: MONO, fontSize: 9, color: 'var(--theme-secondary, #8099b0)' }}>LIVE · {clock}</span>
     </span>
   )
@@ -1327,7 +1327,7 @@ export function ChartStudioContent() {
           <input value={tickerDraft} onChange={e => setTickerDraft(e.target.value.toUpperCase())}
             onKeyDown={e => e.key === 'Enter' && submitTicker()} spellCheck={false} aria-label="Chart symbol"
             style={{ width: 96, height: 32, boxSizing: 'border-box', background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))', color: 'var(--theme-primary, #c9a84c)', fontFamily: MONO, fontSize: 15, fontWeight: 400, padding: '0 8px' }} />
-          <button className="cs-chip" onClick={submitTicker} style={{ height: 32, boxSizing: 'border-box', fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', padding: '0 10px', cursor: 'pointer', background: 'transparent', color: 'var(--theme-secondary, #8099b0)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))' }}>LOAD</button>
+          <button className="cs-chip" onClick={submitTicker} style={{ height: 32, boxSizing: 'border-box', fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', padding: '0 10px', cursor: 'pointer', background: 'transparent', color: 'var(--theme-secondary, #8099b0)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))' }}>LOAD TICKER</button>
         </span>
         <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
           <span style={{ display: 'flex', gap: 4 }}>
@@ -1395,7 +1395,7 @@ export function ChartStudioContent() {
                 onChange={e => setMaDraft(d => ({ ...d, period: Math.round(+e.target.value) }))}
                 onKeyDown={e => e.key === 'Enter' && addMA()}
                 style={{ width: 48, background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))', color: 'var(--theme-text, #d7e3fc)', fontFamily: MONO, fontSize: 10, padding: '2px 4px' }} />
-              <button className="cs-chip" onClick={addMA} style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, padding: '0 8px', cursor: 'pointer', background: 'transparent', color: 'var(--theme-secondary, #8099b0)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))' }}>ADD</button>
+              <button className="cs-chip" onClick={addMA} style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, padding: '0 8px', cursor: 'pointer', background: 'transparent', color: 'var(--theme-secondary, #8099b0)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))' }}>ADD AVERAGE</button>
             </div>
             <Row label={`Bollinger ${params.bbP}·${params.bbK}`} on={ind.bb} src="computed" color="#8099b0" style="dash" onToggle={() => dispatch({ type: 'ind', k: 'bb' })} />
             {ind.bb && (
@@ -1482,7 +1482,7 @@ export function ChartStudioContent() {
                 spellCheck={false} aria-label="Add comparison ticker"
                 style={{ flex: 1, minWidth: 0, background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))', color: 'var(--theme-text, #d7e3fc)', fontFamily: MONO, fontSize: 11, padding: '3px 6px' }} />
               <button className="cs-chip" onClick={() => { if (compareDraft.trim()) { dispatch({ type: 'addCompare', sym: compareDraft.trim() }); setCompareDraft('') } }}
-                style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, padding: '0 8px', cursor: 'pointer', background: 'transparent', color: 'var(--theme-secondary, #8099b0)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))' }}>ADD</button>
+                style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, padding: '0 8px', cursor: 'pointer', background: 'transparent', color: 'var(--theme-secondary, #8099b0)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))' }}>ADD AVERAGE</button>
             </div>
             {compares.map((s, i) => (
               <div key={s} className="cs-row" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>

@@ -15,6 +15,11 @@ import useIsMobile from '../hooks/useIsMobile'
 import { useTheme } from '../contexts/ThemeContext'
 import { HUBS, ALL_TOOLS, hubForLocation, type Hub, type HubTool } from '../lib/hubs'
 
+// One source for the shell's two widths. DESIGN.md and the print stylesheet both
+// restated them, and the doc had drifted to a value the shell never animates to.
+export const SIDEBAR_WIDTH = 220
+export const SIDEBAR_COLLAPSED_WIDTH = 64
+
 const ADMIN_USERS = ['wneedlman']
 
 interface LayoutProps { children: React.ReactNode }
@@ -119,7 +124,7 @@ export default function Layout({ children }: LayoutProps) {
           <Link to="/app" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
             <AlphaMark size={24} />
             <div className="ft-mobile-brand" style={{ fontFamily: 'Cinzel, Georgia, serif', color: 'var(--theme-primary, #c9a84c)', fontSize: 15, fontWeight: 700, letterSpacing: '0.08em' }}>
-              ALPHATAPE <span className="ft-mobile-brand-suffix" style={{ color: 'var(--theme-secondary, #5e768f)', fontSize: 10, letterSpacing: '0.2em', fontFamily: 'var(--theme-sans)', fontWeight: 600 }}>TERMINAL</span>
+              ALPHATAPE <span className="ft-mobile-brand-suffix" style={{ color: 'var(--theme-secondary, #8099b0)', fontSize: 10, letterSpacing: '0.2em', fontFamily: 'var(--theme-sans)', fontWeight: 600 }}>TERMINAL</span>
             </div>
           </Link>
           <button onClick={() => setDrawerOpen(true)} aria-label="Open menu" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-primary, #c9a84c)', padding: 0, minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -148,7 +153,7 @@ export default function Layout({ children }: LayoutProps) {
             <motion.div key="drawer" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ duration: 0.25, ease: 'easeInOut' }} style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 264, zIndex: 50, background: 'var(--theme-bg, #060e1c)', borderLeft: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary) 12%, transparent)' }}>
                 <div style={{ fontFamily: 'Cinzel, Georgia, serif', color: 'var(--theme-primary, #c9a84c)', fontSize: 14, fontWeight: 700, letterSpacing: '0.08em' }}>MENU</div>
-                <button onClick={() => setDrawerOpen(false)} aria-label="Close menu" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-secondary, #99907e)', minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button>
+                <button onClick={() => setDrawerOpen(false)} aria-label="Close menu" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-secondary, #8099b0)', minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button>
               </div>
 
               <div style={{ margin: '8px 12px 4px', padding: '6px 0 8px', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 5%, var(--theme-surface, #0d1826))', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' }}>
@@ -198,7 +203,7 @@ export default function Layout({ children }: LayoutProps) {
       <a href="#main-content" className="skip-link">Skip to content</a>
       <AlertToastQueue alerts={pendingAlerts} />
       <motion.aside
-        animate={{ width: collapsed ? 64 : 220 }}
+        animate={{ width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH }}
         transition={{ duration: 0.22, ease: 'easeInOut' }}
         className="ft-app-nav flex-shrink-0 flex flex-col overflow-hidden"
         style={{ minWidth: 0, background: 'var(--theme-bg, #060e1c)', borderRightWidth: 1, borderRightStyle: 'solid', borderRightColor: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 19%, transparent)' }}
@@ -210,7 +215,7 @@ export default function Layout({ children }: LayoutProps) {
             {!collapsed && (
               <span style={{ display: 'block', paddingLeft: 6, borderLeft: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 42%, transparent)', textAlign: 'left' }}>
                 <span style={{ fontFamily: 'Cinzel, Georgia, serif', fontSize: 16, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--theme-primary, #c9a84c)', display: 'block', lineHeight: 1.05 }}>ALPHATAPE</span>
-                <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', display: 'block' }}>Terminal</span>
+                <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', display: 'block' }}>Terminal</span>
               </span>
             )}
           </button>
@@ -218,7 +223,7 @@ export default function Layout({ children }: LayoutProps) {
             onClick={() => setCollapsed(c => !c)}
             aria-label={collapsed ? 'Open sidebar' : 'Close sidebar'}
             title={collapsed ? 'Open sidebar' : 'Close sidebar'}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: collapsed ? 0 : 4, marginLeft: collapsed ? 0 : 'auto', display: 'flex', alignItems: 'center', color: 'var(--theme-secondary, #5e768f)' }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: collapsed ? 0 : 4, marginLeft: collapsed ? 0 : 'auto', display: 'flex', alignItems: 'center', color: 'var(--theme-secondary, #8099b0)' }}
           >
             {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={16} />}
           </button>
@@ -373,7 +378,7 @@ function ToolRow({ label, active, fav, onClick, onStar }: { label: string; activ
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '4px 8px', cursor: 'pointer', color: active ? 'var(--theme-primary, #c9a84c)' : (hover ? 'var(--theme-text, #dce3ed)' : 'var(--theme-secondary, #7e93a8)'), background: hover || active ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 7%, transparent)' : 'transparent', fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: active ? 600 : 400, transition: 'color 0.12s ease, background 0.12s ease' }}
+      style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '4px 8px', cursor: 'pointer', color: active ? 'var(--theme-primary, #c9a84c)' : (hover ? 'var(--theme-text, #dce3ed)' : 'var(--theme-secondary, #7e93a8)'), background: hover || active ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 7%, transparent)' : 'transparent', fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: active ? 600 : 400, transition: 'color 0.12s var(--ease-out), background 0.12s var(--ease-out)' }}
     >
       <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
       {(hover || fav) && (
@@ -392,7 +397,7 @@ function Row({ icon: Icon, label, collapsed, active, onClick, chevron, onChevron
 }) {
   const [hover, setHover] = useState(false)
   const accent = danger ? 'var(--theme-negative)' : 'var(--theme-primary, #c9a84c)'
-  const color = active ? accent : danger ? 'color-mix(in srgb, var(--theme-negative) 55%, transparent)' : (hover ? 'var(--theme-text, #cdd9ef)' : 'var(--theme-secondary, #5e768f)')
+  const color = active ? accent : danger ? 'color-mix(in srgb, var(--theme-negative) 55%, transparent)' : (hover ? 'var(--theme-text, #cdd9ef)' : 'var(--theme-secondary, #8099b0)')
   return (
     <div
       role="button"
@@ -408,7 +413,7 @@ function Row({ icon: Icon, label, collapsed, active, onClick, chevron, onChevron
         color, background: active ? `color-mix(in srgb, ${accent} 10%, transparent)` : (hover ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 7%, transparent)' : 'transparent'),
         borderLeft: `2px solid ${active ? accent : 'transparent'}`,
         fontFamily: 'var(--theme-sans)', fontSize: 12, fontWeight: active ? 600 : 400,
-        transition: 'color 0.13s ease, background 0.13s ease',
+        transition: 'color 0.13s var(--ease-out), background 0.13s var(--ease-out)',
       }}
     >
       <Icon size={15} style={{ flexShrink: 0 }} />
@@ -417,7 +422,7 @@ function Row({ icon: Icon, label, collapsed, active, onClick, chevron, onChevron
         <button
           onClick={e => { e.stopPropagation(); onChevron?.() }}
           aria-label={chevron === 'open' ? 'Collapse' : 'Expand'}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0 2px 6px', display: 'flex', alignItems: 'center', color: 'var(--theme-secondary, #5e768f)', flexShrink: 0 }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0 2px 6px', display: 'flex', alignItems: 'center', color: 'var(--theme-secondary, #8099b0)', flexShrink: 0 }}
         >
           <ChevronRight size={13} style={{ transform: chevron === 'open' ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.16s ease' }} />
         </button>
@@ -435,11 +440,13 @@ function Row({ icon: Icon, label, collapsed, active, onClick, chevron, onChevron
 function MobileLink({ to, icon: Icon, label, active, isFav, onFavToggle, favKey }: { to: string; icon: React.ElementType; label: string; active: boolean; isFav?: boolean; onFavToggle?: (path: string) => void; favKey?: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center' }}>
-      <Link to={to} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: '11px 10px', minHeight: 44, marginBottom: 2, textDecoration: 'none', background: active ? 'color-mix(in srgb, var(--theme-primary) 8%, transparent)' : 'transparent', borderLeft: active ? '2px solid var(--theme-primary, #c9a84c)' : '2px solid transparent', color: active ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #5e768f)', fontSize: 13, fontFamily: 'var(--theme-sans)' }}>
+      <Link to={to} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: '11px 10px', minHeight: 44, marginBottom: 2, textDecoration: 'none', background: active ? 'color-mix(in srgb, var(--theme-primary) 8%, transparent)' : 'transparent', borderLeft: active ? '2px solid var(--theme-primary, #c9a84c)' : '2px solid transparent', color: active ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)', fontSize: 13, fontFamily: 'var(--theme-sans)' }}>
         <Icon size={15} style={{ flexShrink: 0 }} /><span style={{ flex: 1 }}>{label}</span>
       </Link>
       {onFavToggle && favKey && (
-        <button onClick={() => onFavToggle(favKey)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '11px 10px', color: isFav ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-text-dim, rgba(255,255,255,0.35))', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+        <button onClick={() => onFavToggle(favKey)} aria-label={isFav ? `Unfavourite ${label}` : `Favourite ${label}`}
+          title={isFav ? 'Remove from favourites' : 'Add to favourites'}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '11px 10px', color: isFav ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-text-dim, rgba(255,255,255,0.35))', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
           <Star size={12} fill={isFav ? 'currentColor' : 'none'} />
         </button>
       )}

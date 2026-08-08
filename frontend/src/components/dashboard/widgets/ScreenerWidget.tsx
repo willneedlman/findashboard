@@ -10,7 +10,7 @@ const T = {
   border:  'var(--theme-border, rgba(255,255,255,0.08))',
   faint:   'rgba(255,255,255,0.05)',
   gold:    'var(--theme-primary, #c9a84c)',
-  muted:   'var(--theme-secondary, #5e768f)',
+  muted:   'var(--theme-secondary, #8099b0)',
   text:    'var(--theme-text, #d7e3fc)',
   mono:    'var(--theme-mono)',
   label:   'var(--theme-sans)',
@@ -172,7 +172,7 @@ export default function ScreenerWidget({ config: _config }: { config: WidgetConf
           </div>
         )
       })()}
-      {isError && <div style={{ padding: 12, fontFamily: T.mono, fontSize: 10, color: T.neg }}>Screen failed — check FMP key</div>}
+      {isError && <div style={{ padding: 12, fontFamily: T.mono, fontSize: 10, color: T.neg }}>Screen failed. Check the FMP key.</div>}
 
       {data && (rows.length === 0 ? (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.muted, fontFamily: T.label, fontSize: 11 }}>No matches.</div>

@@ -40,7 +40,7 @@ export const T = {
   surface: 'var(--theme-surface, #142032)',
   border:  'var(--theme-border, rgba(255,255,255,0.08))',
   gold:    'var(--theme-primary, #c9a84c)',
-  muted:   'var(--theme-secondary, #5e768f)',
+  muted:   'var(--theme-secondary, #8099b0)',
   text:    'var(--theme-text, #d7e3fc)',
   mono:    'var(--theme-mono)',
   pos:     'var(--theme-positive)',

@@ -18,7 +18,7 @@ const T = {
   headerBg: 'var(--theme-surface, #142032)',
   gold: 'var(--theme-primary, #c9a84c)',
   text: 'var(--theme-text, #d7e3fc)',
-  muted: 'var(--theme-secondary, #5e768f)',
+  muted: 'var(--theme-secondary, #8099b0)',
   mono: 'var(--theme-mono)',
   label: 'var(--theme-sans)',
   pos: 'var(--theme-positive, #22c55e)',

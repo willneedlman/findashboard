@@ -123,7 +123,7 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], orders =
     if (!el) return
     const cs = getComputedStyle(document.documentElement)
     const bg = cs.getPropertyValue('--theme-bg').trim() || '#101c2e'
-    const txt = cs.getPropertyValue('--theme-secondary').trim() || '#5e768f'
+    const txt = cs.getPropertyValue('--theme-secondary').trim() || '#8099b0'
     const gold = cs.getPropertyValue('--theme-primary').trim() || '#c9a84c'
     const chart = createChart(el, {
       layout: { background: { type: ColorType.Solid, color: bg }, textColor: txt, fontFamily: "ui-monospace, monospace", fontSize: 10 },

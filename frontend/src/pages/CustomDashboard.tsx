@@ -157,7 +157,9 @@ export default function CustomDashboard() {
       <div ref={fullscreenRef} className="ft-dashboard-fs">
       {/* ── Consolidated top bar: one line — icon-collapsed dashboard tabs + controls ── */}
       {isMobile ? (
-        <h1 className="ft-page-title" style={{ marginBottom: 12 }}>My Dashboard</h1>
+        <div className="ft-page-header" style={{ marginBottom: 12 }}>
+          <h1 className="ft-page-title">My Dashboard</h1>
+        </div>
       ) : (
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingBottom: 8, flexWrap: 'wrap' }}>
         {/* Dashboards — the active one shows its name, the rest collapse to their icon (name on hover).
@@ -176,7 +178,7 @@ export default function CustomDashboard() {
                     padding: isActive ? '5px 12px' : '6px', cursor: 'pointer',
                     border: `1px solid ${isActive ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`,
                     background: isActive ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' : 'transparent',
-                    color: isActive ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #5e768f)',
+                    color: isActive ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)',
                   }}
                 >
                   <DashIcon k={iconForDash(d)} />
@@ -185,7 +187,7 @@ export default function CustomDashboard() {
                 {editMode && isActive && (
                   <>
                     <button onClick={() => setIconPickerOpen(o => !o)} title="Choose icon"
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-secondary, #5e768f)', padding: '2px', display: 'flex' }}>
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-secondary, #8099b0)', padding: '2px', display: 'flex' }}>
                       <ChevronDown size={12} />
                     </button>
                     {dashboards.length > 1 && (
@@ -215,12 +217,12 @@ export default function CustomDashboard() {
           {/* New dashboard (preset menu) */}
           <div style={{ position: 'relative', flexShrink: 0 }}>
             <button onClick={() => setPresetMenuOpen(o => !o)} title="New dashboard"
-              style={{ display: 'flex', alignItems: 'center', padding: '6px 8px', cursor: 'pointer', border: '1px dashed var(--theme-border, rgba(255,255,255,0.18))', background: 'transparent', color: 'var(--theme-secondary, #5e768f)' }}>
+              style={{ display: 'flex', alignItems: 'center', padding: '6px 8px', cursor: 'pointer', border: '1px dashed var(--theme-border, rgba(255,255,255,0.18))', background: 'transparent', color: 'var(--theme-secondary, #8099b0)' }}>
               <Plus size={13} />
             </button>
             {presetMenuOpen && (
               <div style={{ position: 'absolute', top: '120%', left: 0, zIndex: 30, minWidth: 150, background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-primary, #c9a84c)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
-                <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', padding: '7px 10px 4px' }}>Start with</div>
+                <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', padding: '7px 10px 4px' }}>Start with</div>
                 {(['cockpit', 'research', 'screening', 'market-overview', 'options', 'risk', 'main'] as PresetKey[]).map(k => (
                   <button key={k} onClick={() => { createDashboard(k); setPresetMenuOpen(false) }}
                     style={{ display: 'block', width: '100%', textAlign: 'left', fontFamily: 'var(--theme-sans)', fontSize: 11, padding: '7px 10px', cursor: 'pointer', border: 'none', background: 'transparent', color: 'var(--theme-text, #d7e3fc)' }}
@@ -232,7 +234,7 @@ export default function CustomDashboard() {
                   style={{ display: 'block', width: '100%', textAlign: 'left', fontFamily: 'var(--theme-sans)', fontSize: 11, padding: '7px 10px', cursor: 'pointer', border: 'none', borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'transparent', color: 'var(--theme-primary, #c9a84c)' }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary) 10%, transparent)')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                >Custom — start blank</button>
+                >Custom, start blank</button>
               </div>
             )}
           </div>
@@ -241,12 +243,12 @@ export default function CustomDashboard() {
         {/* Controls */}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 1, flexWrap: 'wrap', justifyContent: 'flex-end', marginLeft: 'auto', maxWidth: '100%' }}>
           <span title={editMode ? 'Drag to rearrange · resize from corners · click + to add widgets' : `${OBJECTIVE_LABELS[objective]} · ${widgets.length} widget${widgets.length !== 1 ? 's' : ''} · click the lock to customise`}
-            style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: 'var(--theme-secondary, #5e768f)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 190 }}>
+            style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: 'var(--theme-secondary, #8099b0)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 190 }}>
             {editMode ? 'Drag · resize · + add' : `${OBJECTIVE_LABELS[objective]} · ${widgets.length} widget${widgets.length !== 1 ? 's' : ''}`}
           </span>
           {(showTicker || tickerWidgets.length > 0) && (
             <div style={{ display: 'flex', alignItems: 'stretch', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))' }} title={`Applies to ${tickerWidgets.length} ticker widget${tickerWidgets.length !== 1 ? 's' : ''} on this dashboard`}>
-              <span style={{ display: 'flex', alignItems: 'center', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', padding: '0 8px', background: 'var(--theme-surface, #0d1826)' }}>Ticker</span>
+              <span style={{ display: 'flex', alignItems: 'center', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', padding: '0 8px', background: 'var(--theme-surface, #0d1826)' }}>Ticker</span>
               <input
                 value={tickerInput}
                 onChange={e => setTickerInput(e.target.value.toUpperCase())}
@@ -278,13 +280,13 @@ export default function CustomDashboard() {
               <button
                 onClick={autoOrganize}
                 title="Arrange widgets into a clear, compact dashboard"
-                style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', color: 'var(--theme-secondary, #5e768f)', padding: '6px 12px', cursor: 'pointer', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', color: 'var(--theme-secondary, #8099b0)', padding: '6px 12px', cursor: 'pointer', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}
               >
                 <LayoutGrid size={12} /> Auto Arrange
               </button>
               <button
                 onClick={handleReset}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: `1px solid ${confirmReset ? 'var(--theme-negative, #ef4444)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`, color: confirmReset ? 'var(--theme-negative, #ef4444)' : 'var(--theme-secondary, #5e768f)', padding: '6px 12px', cursor: 'pointer', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: `1px solid ${confirmReset ? 'var(--theme-negative, #ef4444)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`, color: confirmReset ? 'var(--theme-negative, #ef4444)' : 'var(--theme-secondary, #8099b0)', padding: '6px 12px', cursor: 'pointer', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}
               >
                 <RotateCcw size={12} /> {confirmReset ? 'Confirm Reset' : 'Reset'}
               </button>
@@ -292,14 +294,14 @@ export default function CustomDashboard() {
           )}
           <button
             onClick={() => { setEditMode(e => !e); setPaletteOpen(false) }}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, background: editMode ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' : 'var(--theme-surface, #1f2a3d)', border: `1px solid ${editMode ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`, color: editMode ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #5e768f)', padding: '6px 12px', cursor: 'pointer', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', transition: 'all 0.15s' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: editMode ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' : 'var(--theme-surface, #1f2a3d)', border: `1px solid ${editMode ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`, color: editMode ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)', padding: '6px 12px', cursor: 'pointer', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', transition: 'background 0.15s var(--ease-out), border-color 0.15s var(--ease-out), color 0.15s var(--ease-out)' }}
           >
             {editMode ? <><Unlock size={12} /> Done</> : <><Lock size={12} /> Edit</>}
           </button>
           <button
             onClick={toggleFullscreen}
             title={isFull ? 'Exit full screen' : 'Full screen'}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', color: 'var(--theme-secondary, #5e768f)', padding: '6px 10px', cursor: 'pointer', transition: 'all 0.15s' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', color: 'var(--theme-secondary, #8099b0)', padding: '6px 10px', cursor: 'pointer', transition: 'background 0.15s var(--ease-out), border-color 0.15s var(--ease-out), color 0.15s var(--ease-out)' }}
           >
             {isFull ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
           </button>

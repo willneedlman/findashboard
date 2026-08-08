@@ -173,7 +173,7 @@ export default function LogisticsMap() {
     ['vessels', 'Cargo ships', VESSEL, countState(vq.isLoading, vq.isError, vessels.length)], ['flights', 'Cargo flights', FLIGHT, countState(fq.isLoading, fq.isError, flights.length)],
     ['air', 'Air hubs', AIR, countState(air.isLoading, air.isError, hubs.length)], ['choke', 'Chokepoints', CHOKE, Object.keys(CHOKES).length], ['port', 'LSCI ports', PORT, countState(mf.isLoading, mf.isError, econ.length)],
   ]
-  const selStyle: React.CSSProperties = { flex: 1, minWidth: 0, background: 'var(--theme-bg, #0b1626)', color: L.text, border: `1px solid ${L.border}`, borderRadius: 3, fontFamily: L.mono, fontSize: 10, padding: '4px 6px' }
+  const selStyle: React.CSSProperties = { flex: 1, minWidth: 0, background: 'var(--theme-bg, #0b1626)', color: L.text, border: '1px solid color-mix(in srgb, var(--theme-primary) 30%, transparent)', borderRadius: 0, minHeight: 32, boxSizing: 'border-box', fontFamily: L.mono, fontSize: 12, padding: '6px 8px' }
   const selLbl: React.CSSProperties = { display: 'block', fontFamily: L.sans, fontSize: 9, color: L.faint, marginBottom: 3 }
 
   // Freight-macro (+ container spot rate) ride the docked bottom tape, energy-map style.
@@ -205,7 +205,7 @@ export default function LogisticsMap() {
     <PageWrapper>
       <style>{`.lm-map { background: ${OCEAN}; } .lm-map .leaflet-tooltip { background: var(--theme-surface); color: var(--theme-text); border: 1px solid var(--theme-border); font-family: var(--theme-mono); font-size: 11px; }
         .lm-mk svg { transition: color .12s ease; cursor: pointer; } .lm-mk:hover svg { color: var(--theme-primary, #c9a84c) !important; }`}</style>
-      <div style={{ height: 'calc(100vh - 32px)', minHeight: 620, display: 'flex', flexDirection: 'column', border: `1px solid ${L.border}`, borderRadius: 6, overflow: 'hidden' }}>
+      <div style={{ height: 'calc(100vh - 32px)', minHeight: 620, display: 'flex', flexDirection: 'column', border: `1px solid ${L.border}`, overflow: 'hidden' }}>
         <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         <MapContainer className="lm-map" center={[30, 30]} zoom={2.3} minZoom={2} maxZoom={6} worldCopyJump preferCanvas zoomControl={false} style={{ position: 'absolute', inset: 0, height: '100%', width: '100%' }}>
           <SizeFix /><Basemap land={LAND} /><BoundsWatch onChange={setBbox} />
@@ -274,7 +274,7 @@ export default function LogisticsMap() {
               {facetInds.map(i => <option key={i} value={i}>{i}</option>)}
             </select>
             <input value={supProduct} onChange={e => setSupProduct(e.target.value)} placeholder="product keyword…" style={{ ...selStyle, width: '100%' }} />
-            {supQ.data && !supQ.data.available && <div style={{ fontFamily: L.sans, fontSize: 8.5, color: L.faint, marginTop: 7, lineHeight: 1.5 }}>Supplier data not yet ingested — run the Veridion ETL with a valid DEWEY_API_KEY.</div>}
+            {supQ.data && !supQ.data.available && <div style={{ fontFamily: L.sans, fontSize: 11, color: L.faint, marginTop: 7, lineHeight: 1.5 }}>Supplier data not yet ingested. Run the Veridion ETL with a valid DEWEY_API_KEY.</div>}
           </div>
           <div style={{ marginTop: 'auto', pointerEvents: 'auto', background: panel, border: `1px solid ${L.border}`, padding: '13px 16px' }}>
             <div style={{ fontFamily: L.mono, fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', color: L.text, marginBottom: 9 }}>LEGEND</div>
@@ -289,7 +289,7 @@ export default function LogisticsMap() {
                 <span style={{ fontFamily: L.sans, fontSize: 11.5, color: L.sec }}>{lbl}</span>
               </div>
             ))}
-            <div style={{ fontFamily: L.sans, fontSize: 8.5, color: L.faint, marginTop: 8, lineHeight: 1.5 }}>Marker size ∝ value in layer. Click a ship or flight to inspect. Customer links: real disclosed relationships (FAS 131), sparse — only pairs where both companies are geocoded.</div>
+            <div style={{ fontFamily: L.sans, fontSize: 11, color: L.faint, marginTop: 8, lineHeight: 1.5 }}>Marker size ∝ value in layer. Click a ship or flight to inspect. Customer links: real disclosed relationships (FAS 131), sparse. Only pairs where both companies are geocoded.</div>
           </div>
         </div>
 

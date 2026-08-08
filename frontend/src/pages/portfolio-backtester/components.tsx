@@ -30,6 +30,7 @@ import { ReturnsScatter, quickRegression } from '../regressionShared'
 import type { ClipDraft } from '../../lib/reportCreator'
 import { useReportCapture } from '../../hooks/useReportCapture'
 import { kpiClip, tableClip, chartClip } from '../../lib/reportCaptureRegistry'
+import { alpha } from '../../lib/theme'
 
 const STRIP: React.CSSProperties = {
   display: 'flex', alignItems: 'stretch', overflowX: 'auto',
@@ -361,7 +362,7 @@ export function PortfolioTab() {
       ]
       pieces.push(chartClip(
         'Portfolio Backtester',
-        'Cumulative Return — Base 100',
+        'Cumulative Return · Base 100',
         'line',
         'date',
         sampled.map(p => ({
@@ -448,7 +449,7 @@ export function PortfolioTab() {
                 padding: '8px 14px', fontFamily: 'var(--theme-mono)', fontSize: 11, lineHeight: 1.5,
               }}>
                 <span style={{ color: 'var(--theme-primary, #c9a84c)', fontWeight: 700 }}>BENCHMARK · CRSP S&amp;P 500 PIT</span>
-                <span style={{ color: 'var(--theme-secondary, #99907e)', marginLeft: 8 }}>
+                <span style={{ color: 'var(--theme-secondary, #8099b0)', marginLeft: 8 }}>
                   Your {assets.length}-holding portfolio remains unchanged. The comparison series uses {data.constituent_count} S&amp;P 500 constituents as of {start}
                   {data.delistings?.length > 0 && `, including ${data.delistings.length} names later delisted or acquired`}.
                 </span>
@@ -464,7 +465,7 @@ export function PortfolioTab() {
                 <span style={{ color: data.liquidated ? 'var(--theme-negative)' : 'var(--theme-primary, #c9a84c)', fontWeight: 700 }}>
                   {data.liquidated ? 'LIQUIDATED' : `LEVERED ${data.leverage}x`}
                 </span>
-                <span style={{ color: 'var(--theme-secondary, #99907e)', marginLeft: 8 }}>
+                <span style={{ color: 'var(--theme-secondary, #8099b0)', marginLeft: 8 }}>
                   {data.liquidated
                     ? `Equity hit zero at ${data.leverage}x leverage. The portfolio was wiped out; the curve below stops at -100%.`
                     : `Borrowing ${(data.leverage - 1).toFixed(2)}x capital at ${data.borrow_rate}% to magnify returns. Metrics reflect the levered equity.`}
@@ -481,11 +482,11 @@ export function PortfolioTab() {
                   }}>
                     <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, color: l.drift_adj >= 0 ? 'var(--theme-positive)' : 'var(--theme-negative)', marginBottom: 3 }}>
                       {l.ticker} · {l.strategy} · {l.label}
-                      <span style={{ marginLeft: 10, fontSize: 10, color: 'var(--theme-secondary, #99907e)', fontWeight: 400 }}>
+                      <span style={{ marginLeft: 10, fontSize: 10, color: 'var(--theme-secondary, #8099b0)', fontWeight: 400 }}>
                         Drift adj: {l.drift_adj > 0 ? '+' : ''}{l.drift_adj}%
                       </span>
                     </div>
-                    <div style={{ fontSize: 10, color: 'var(--theme-secondary, #99907e)' }}>{l.detail}</div>
+                    <div style={{ fontSize: 10, color: 'var(--theme-secondary, #8099b0)' }}>{l.detail}</div>
                   </div>
                 ))}
               </div>
@@ -1028,7 +1029,7 @@ export function StrategyTab() {
           cursor: backtestMutation.isPending ? 'not-allowed' : 'pointer',
           width: '100%',
           textTransform: 'uppercase',
-          transition: 'all 0.15s',
+          transition: 'background 0.15s var(--ease-out), border-color 0.15s var(--ease-out), color 0.15s var(--ease-out)',
         }}
       >
         {backtestMutation.isPending ? '· Running ·' : '↓ Run Backtest'}
@@ -1057,7 +1058,7 @@ export function StrategyTab() {
             }}>
               {liveSignal.signal}
             </div>
-            <div style={{ fontSize: 9, color: 'var(--theme-secondary, #5e768f)', letterSpacing: '0.05em', lineHeight: '14px' }}>
+            <div style={{ fontSize: 9, color: 'var(--theme-secondary, #8099b0)', letterSpacing: '0.05em', lineHeight: '14px' }}>
               {liveSignal.description}
             </div>
           </div>
@@ -1137,7 +1138,7 @@ export function StrategyTab() {
               >{aiCommentaryPending ? '…' : 'Analyze'}</button>
             </div>
             {!aiCommentary && !aiCommentaryPending && (
-              <div style={{ padding: '8px 10px', fontSize: 10, color: 'var(--theme-secondary, #5e768f)', fontFamily: 'var(--theme-sans)' }}>
+              <div style={{ padding: '8px 10px', fontSize: 10, color: 'var(--theme-secondary, #8099b0)', fontFamily: 'var(--theme-sans)' }}>
                 Click Analyze for AI commentary on these backtest results.
               </div>
             )}
@@ -1152,7 +1153,7 @@ export function StrategyTab() {
                     <div key={label}>
                       <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', color, textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
                       {(items ?? []).map((s: string, i: number) => (
-                        <div key={i} style={{ fontSize: 10, color: 'var(--theme-text, #d7e3fc)', lineHeight: '14px', paddingLeft: 8, borderLeft: `2px solid ${color}44`, marginBottom: 3, fontFamily: 'var(--theme-sans)' }}>{s}</div>
+                        <div key={i} style={{ fontSize: 10, color: 'var(--theme-text, #d7e3fc)', lineHeight: '14px', paddingLeft: 8, borderLeft: `2px solid ${alpha(color, 27)}`, marginBottom: 3, fontFamily: 'var(--theme-sans)' }}>{s}</div>
                       ))}
                     </div>
                   ))}
@@ -1312,7 +1313,7 @@ export function StrategyTab() {
               color: 'var(--theme-text, #d7e3fc)', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>
               <span>Trade Log</span>
-              <span style={{ color: 'var(--theme-secondary, #5e768f)', fontWeight: 400 }}>
+              <span style={{ color: 'var(--theme-secondary, #8099b0)', fontWeight: 400 }}>
                 {result.trades.length} trades
               </span>
             </div>
@@ -1324,7 +1325,7 @@ export function StrategyTab() {
                       <th key={col} style={{
                         padding: '5px 12px', textAlign: 'left',
                         fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
-                        color: 'var(--theme-secondary, #5e768f)', position: 'sticky', top: 0,
+                        color: 'var(--theme-secondary, #8099b0)', position: 'sticky', top: 0,
                         background: 'var(--theme-bg, #101c2e)',
                       }}>
                         {col}
@@ -1341,7 +1342,7 @@ export function StrategyTab() {
                         background: i % 2 === 0 ? 'transparent' : 'var(--theme-hover, rgba(255,255,255,0.01))',
                       }}
                     >
-                      <td style={{ padding: '5px 12px', color: 'var(--theme-secondary, #5e768f)' }}>
+                      <td style={{ padding: '5px 12px', color: 'var(--theme-secondary, #8099b0)' }}>
                         {trade.date}
                       </td>
                       <td style={{ padding: '5px 12px' }}>

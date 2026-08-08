@@ -155,7 +155,7 @@ function SegmentBreakdown({ title, block, hideHeader = false }: { title: string;
       <div style={{ marginBottom: hideHeader ? 0 : 24 }}>
         {!hideHeader && <div style={labelStyle}>{title}</div>}
         {block.error
-          ? <ErrorState title="Segment data unavailable" message="Temporarily unavailable — retry shortly." />
+          ? <ErrorState title="Segment data unavailable" message="The segment feed is not responding. Retry shortly." />
           : <EmptyState title={title} hint="Not reported by this issuer." />}
       </div>
     )
@@ -411,7 +411,7 @@ const RANGES: { key: string; days: number }[] = [
   { key: '6M', days: 182 }, { key: '1Y', days: 365 }, { key: '3Y', days: 1095 }, { key: '5Y', days: 1826 },
   { key: 'MAX', days: 25 * 365 },
 ]
-const TICK_STYLE = { fontSize: 10, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }
+const TICK_STYLE = { fontSize: 10, fill: 'var(--theme-secondary, #8099b0)', fontFamily: 'var(--theme-mono)' }
 
 function PerfChart({ data, stroke, id, fmt, height, tickFmt }: {
   data: { date: string | number; value: number }[]; stroke: string; id: string; fmt: (v: number) => string; height: number
@@ -941,7 +941,7 @@ export function SupplyChainContent() {
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                             {data.peers.map(p => (
                               <button key={p} onClick={() => doFetch(p)}
-                                style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.text, background: 'var(--theme-hover, rgba(255,255,255,0.04))', border: `1px solid ${T.border}`, padding: '6px 12px', cursor: 'pointer', letterSpacing: '0.06em', transition: 'all 0.12s' }}
+                                style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.text, background: 'var(--theme-hover, rgba(255,255,255,0.04))', border: `1px solid ${T.border}`, padding: '6px 12px', cursor: 'pointer', letterSpacing: '0.06em', transition: 'background 0.12s var(--ease-out), border-color 0.12s var(--ease-out), color 0.12s var(--ease-out)' }}
                                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = T.gold; (e.currentTarget as HTMLElement).style.borderColor = 'color-mix(in srgb, var(--theme-primary) 35%, transparent)' }}
                                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = T.text; (e.currentTarget as HTMLElement).style.borderColor = T.border }}>
                                 {p}
@@ -1005,10 +1005,6 @@ export function SupplyChainContent() {
               title="Company Profile"
               hint="Search a ticker or company to load financials, revenue mix, ownership, and market performance."
               keys={['Enter']}
-              kpis={['Price', 'Market Cap', 'P/E', 'Rev Growth', 'Employees']}
-              preview="table"
-              previewLabel="Revenue Profile"
-              columns={['Segment', 'Revenue', 'Share', 'YoY']}
               action="FETCH"
             />
           </>
@@ -1060,7 +1056,7 @@ function CreditPanel({ ticker }: { ticker: string }) {
     <div className="ft-panel" style={{ display: 'flex', flexDirection: 'column' }}>
       <div className="ft-panel-header">Credit Quality</div>
       <div style={{ padding: '16px 18px', flex: 1 }}>
-        {state === 'loading' && <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11 }}>Loading…</div>}
+        {state === 'loading' && <EmptyState variant="loading" size="compact" title="Loading credit metrics" />}
         {state === 'err' && <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11 }}>Credit metrics unavailable for this name.</div>}
         {state === 'ok' && d && !hasData && (
           <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, lineHeight: 1.5 }}>
@@ -1129,7 +1125,7 @@ function AnalystPanel({ ticker }: { ticker: string }) {
     <div className="ft-panel" style={{ display: 'flex', flexDirection: 'column' }}>
       <div className="ft-panel-header">Analyst Ratings</div>
       <div style={{ padding: '16px 18px', flex: 1 }}>
-        {state === 'loading' && <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11 }}>Loading…</div>}
+        {state === 'loading' && <EmptyState variant="loading" size="compact" title="Loading analyst ratings" />}
         {state === 'err' && <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11 }}>No analyst coverage for this name.</div>}
         {state === 'ok' && d && (
           <>
@@ -1202,11 +1198,11 @@ function ShortInterestPanel({ ticker, floatShares, sharesOutstanding }: {
     <div className="ft-panel" style={{ display: 'flex', flexDirection: 'column' }}>
       <div className="ft-panel-header">Short Interest</div>
       <div style={{ padding: '16px 18px', flex: 1 }}>
-        {state === 'loading' && <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11 }}>Loading…</div>}
+        {state === 'loading' && <EmptyState variant="loading" size="compact" title="Loading short interest" />}
         {state === 'err' && <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11 }}>Short interest unavailable for this name.</div>}
         {state === 'ok' && !d && (
           <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, lineHeight: 1.5 }}>
-            Not in FINRA's latest report — thinly traded, delisted, or not yet published for this settlement period.
+            Not in FINRA's latest report. Thinly traded, delisted, or not yet published for this settlement period.
           </div>
         )}
         {state === 'ok' && d && (
@@ -1227,7 +1223,7 @@ function ShortInterestPanel({ ticker, floatShares, sharesOutstanding }: {
               {stat('Prior Period', d.previous_short_position != null ? fmtEmp(d.previous_short_position) : '—')}
             </div>
             <div style={{ marginTop: 14, fontSize: 9.5, color: T.muted, fontFamily: T.label, fontStyle: 'italic' }}>
-              FINRA consolidated short interest, biweekly settlement — not a live intraday figure. % O/S and % Float use shares outstanding/float reported elsewhere on this page, not FINRA's own denominator.
+              FINRA consolidated short interest, biweekly settlement, not a live intraday figure. % O/S and % Float use shares outstanding/float reported elsewhere on this page, not FINRA's own denominator.
             </div>
           </>
         )}

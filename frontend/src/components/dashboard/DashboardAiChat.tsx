@@ -43,7 +43,7 @@ const VALID = new Set<string>(CATALOG.map(c => c.type))
 const T = {
   bg: 'var(--theme-bg, #101c2e)', surface: 'var(--theme-surface, #0d1826)',
   border: 'var(--theme-border, rgba(255,255,255,0.10))', text: 'var(--theme-text, #d7e3fc)',
-  muted: 'var(--theme-secondary, #99907e)', dim: 'var(--theme-text-faint, rgba(255,255,255,0.3))',
+  muted: 'var(--theme-secondary, #8099b0)', dim: 'var(--theme-text-faint, rgba(255,255,255,0.3))',
   gold: 'var(--theme-primary, #c9a84c)', neg: 'var(--theme-negative, #e05c6e)', mono: 'var(--theme-mono, monospace)',
   sans: 'var(--theme-sans, sans-serif)',
 }

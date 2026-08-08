@@ -108,7 +108,7 @@ export default function RiskMetricsWidget({ config }: { config: WidgetConfig }) 
         <div style={{ marginTop: 12, paddingTop: 8, borderTop: `1px solid ${T.border}`, display: 'flex', justifyContent: 'space-between', fontFamily: T.mono, fontSize: 9, color: T.muted }}>
           <span>CAGR <span style={{ color: m && m.cagr >= 0 ? T.pos : T.neg, fontWeight: 700 }}>{m ? `${m.cagr.toFixed(1)}%` : '—'}</span></span>
           <span>Calmar <span style={{ color: T.text, fontWeight: 700 }}>{m ? m.calmar.toFixed(2) : '—'}</span></span>
-          <span>{isLoading ? 'loading…' : isError ? 'data error' : `2y · vs ${BENCH}`}</span>
+          <span>{isLoading ? 'Loading 2y history' : isError ? 'data error' : `2y · vs ${BENCH}`}</span>
         </div>
       </div>
     </div>

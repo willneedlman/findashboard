@@ -310,7 +310,7 @@ export default function StressTester() {
                 {/* Bar chart */}
                 <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: '14px 16px', marginBottom: 16 }}>
                   <div style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.gold, marginBottom: 12 }}>
-                    Portfolio vs SPY — All Scenarios
+                    Portfolio vs SPY · All Scenarios
                   </div>
                   <ResponsiveContainer width="100%" height={200}>
                     <BarChart data={chartData} barGap={2} margin={{ left: -10, right: 8, top: 4, bottom: 0 }}>

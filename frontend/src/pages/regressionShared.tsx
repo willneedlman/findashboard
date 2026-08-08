@@ -27,11 +27,11 @@ export const C = {
   border: 'var(--theme-border)',
   gold:   'var(--theme-primary)',
   text:   'var(--theme-text, #d7e3fc)',
-  muted:  'var(--theme-text-dim)',
+  muted:  'var(--theme-secondary)',
   blue:   'var(--theme-tertiary)',
   green:  'var(--theme-positive)',
   red:    'var(--theme-negative)',
-  purple: '#bb9af7',
+  purple: 'var(--at-series-purple, #7b5ea7)',
 }
 
 export const inputStyle: React.CSSProperties = {
@@ -52,17 +52,38 @@ export const btnStyle: React.CSSProperties = {
 
 export const railLabel: React.CSSProperties = {
   fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
-  textTransform: 'uppercase', color: C.muted, marginBottom: 8, display: 'block',
+  textTransform: 'uppercase', color: C.muted, marginBottom: 5, display: 'block',
 }
 
 export function StatCard({ label, value, sub, tip }: { label: string; value: string | number; sub?: string; tip?: string }) {
   return (
-    <div className="ft-metric-tile" style={{ background: C.surf, border: `1px solid ${C.border}`, borderRadius: 0, padding: '10px 14px', minWidth: 120 }}>
-      <div style={{ display: 'flex', alignItems: 'center', color: C.muted, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>
+    <div className="ft-metric" style={{ minWidth: 120 }}>
+      <div style={{ display: 'flex', alignItems: 'center', color: C.muted, fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 6 }}>
         {label}{tip && <HelpTip text={tip} width={240} />}
       </div>
-      <div style={{ color: C.gold, fontSize: 18, fontWeight: 700, marginTop: 2 }}>{value}</div>
-      {sub && <div style={{ color: C.muted, fontSize: 10, marginTop: 2 }}>{sub}</div>}
+      <div style={{ color: C.text, fontFamily: 'var(--theme-mono)', fontSize: 20, fontWeight: 700, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+      {sub && <div style={{ color: C.muted, fontSize: 10, marginTop: 4 }}>{sub}</div>}
+    </div>
+  )
+}
+
+// Result/chart panel on the shared chrome: caption strip on top, inset body.
+// These four pages had grown their own rounded, gold-captioned box, which is a
+// second panel style and a second heading style on the same screen as .ft-panel.
+export function ChartPanel({ title, hint, children, style, bodyStyle }: {
+  title: React.ReactNode
+  hint?: React.ReactNode
+  children: React.ReactNode
+  style?: React.CSSProperties
+  bodyStyle?: React.CSSProperties
+}) {
+  return (
+    <div className="ft-chart-panel" style={style}>
+      <div className="ft-chart-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{title}</div>
+      <div style={{ padding: '14px 16px', ...bodyStyle }}>
+        {hint && <div style={{ color: C.muted, fontSize: 11, lineHeight: 1.5, marginBottom: 12 }}>{hint}</div>}
+        {children}
+      </div>
     </div>
   )
 }
@@ -105,7 +126,7 @@ export function RunButton({ onClick, disabled, busy, label }: { onClick: () => v
   return (
     <div style={{ padding: '14px 16px' }}>
       <button onClick={onClick} disabled={!can}
-        style={{ width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: `1px solid ${C.gold}`, color: C.gold, fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', padding: '10px 0', cursor: can ? 'pointer' : 'default', opacity: can ? 1 : 0.5 }}>
+        style={{ width: '100%', minHeight: 32, boxSizing: 'border-box', background: 'color-mix(in srgb, var(--theme-primary) 8%, transparent)', border: `1px solid ${C.gold}`, color: C.gold, fontFamily: 'var(--theme-sans)', fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '6px 14px', cursor: can ? 'pointer' : 'default', opacity: can ? 1 : 0.5 }}>
         {busy ? 'Running…' : label}
       </button>
     </div>
@@ -292,7 +313,8 @@ export function ToolShell({ title, rail, children }: { title: string; rail: Reac
   return (
     <PageWrapper title={title}>
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexDirection: isMobile ? 'column' : 'row', color: C.text }}>
-        <aside style={{ width: isMobile ? '100%' : 230, flexShrink: 0, background: C.surf, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column' }}>
+        <aside style={{ width: isMobile ? '100%' : 210, flexShrink: 0, background: C.surf, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column' }}>
+          <div className="ft-sidebar-title">Parameters</div>
           {rail}
         </aside>
         <div style={{ flex: 1, minWidth: 0, width: isMobile ? '100%' : 'auto' }}>

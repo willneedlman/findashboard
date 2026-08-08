@@ -406,7 +406,7 @@ export default function StrategyBuilder() {
             <div style={{ display: tab === 'manual' ? 'flex' : 'none', flexDirection: 'column', gap: 10 }}>
                 {/* Presets */}
             <div>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 6 }}>Presets</div>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', marginBottom: 6 }}>Presets</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {PRESET_GROUPS.map(group => (
                   <div key={group.label}>
@@ -416,7 +416,7 @@ export default function StrategyBuilder() {
                         width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                         padding: '5px 6px', marginBottom: 2, background: 'var(--theme-hover, rgba(255,255,255,0.03))',
                         border: '1px solid var(--theme-border, rgba(255,255,255,0.06))',
-                        cursor: 'pointer', color: 'var(--theme-secondary, #5e768f)',
+                        cursor: 'pointer', color: 'var(--theme-secondary, #8099b0)',
                         fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
                       }}
                     >
@@ -437,7 +437,7 @@ export default function StrategyBuilder() {
                             padding: '5px 8px', fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
                             background: preset === name ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)' : 'transparent',
                             border: `1px solid ${preset === name ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.07))'}`,
-                            color: preset === name ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #5e768f)',
+                            color: preset === name ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)',
                             cursor: 'pointer', textAlign: 'left',
                           }}>
                             <div>{name}</div>
@@ -455,7 +455,7 @@ export default function StrategyBuilder() {
               {/* Saved strategies library */}
               <div style={{ marginTop: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }}>Saved</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)' }}>Saved</div>
                   {!saving && (
                     <button onClick={startSave} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--theme-primary, #c9a84c)', background: 'none', border: 'none', cursor: 'pointer' }}>+ SAVE</button>
                   )}
@@ -471,12 +471,12 @@ export default function StrategyBuilder() {
                       style={{ ...INPUT, flex: 1, minWidth: 0 }}
                     />
                     <button onClick={commitSave} title="Save strategy" style={{ padding: '4px 8px', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer', background: 'color-mix(in srgb, var(--theme-primary) 14%, transparent)', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)' }}>Save</button>
-                    <button onClick={() => { setSaving(false); setSaveName('') }} title="Cancel" style={{ padding: '4px 8px', fontSize: 11, cursor: 'pointer', background: 'none', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: 'var(--theme-secondary, #5e768f)' }}>×</button>
+                    <button onClick={() => { setSaving(false); setSaveName('') }} title="Cancel" aria-label="Cancel saving" style={{ padding: '4px 8px', fontSize: 11, cursor: 'pointer', background: 'none', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: 'var(--theme-secondary, #8099b0)' }}>×</button>
                   </div>
                 )}
 
                 {savedStrategies.length === 0 ? (
-                  <div style={{ fontSize: 9, color: 'var(--theme-secondary, #5e768f)', lineHeight: '13px', padding: '0 2px 4px' }}>
+                  <div style={{ fontSize: 9, color: 'var(--theme-secondary, #8099b0)', lineHeight: '13px', padding: '0 2px 4px' }}>
                     No saved strategies yet. Build one and press Save to keep it here.
                   </div>
                 ) : (
@@ -489,7 +489,7 @@ export default function StrategyBuilder() {
                             flex: 1, minWidth: 0, padding: '5px 8px', textAlign: 'left', cursor: 'pointer',
                             background: on ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)' : 'transparent',
                             border: `1px solid ${on ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.07))'}`,
-                            color: on ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #5e768f)',
+                            color: on ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)',
                           }}>
                             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</div>
                             <div style={{ fontSize: 9, fontWeight: 400, color: on ? 'color-mix(in srgb, var(--theme-primary) 60%, transparent)' : 'rgba(255,255,255,0.2)', marginTop: 1 }}>
@@ -500,10 +500,10 @@ export default function StrategyBuilder() {
                             <div style={{ display: 'flex', gap: 2 }}>
                               <button onClick={() => { deleteSavedStrategy(s.id); if (activeSavedId === s.id) setActiveSavedId(null); setConfirmDel(null) }}
                                 title="Confirm delete" style={{ padding: '0 7px', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'pointer', background: 'color-mix(in srgb, var(--theme-negative) 14%, transparent)', border: '1px solid var(--theme-negative)', color: 'var(--theme-negative)' }}>Del</button>
-                              <button onClick={() => setConfirmDel(null)} title="Cancel" style={{ padding: '0 7px', fontSize: 11, cursor: 'pointer', background: 'none', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: 'var(--theme-secondary, #5e768f)' }}>×</button>
+                              <button onClick={() => setConfirmDel(null)} title="Cancel" aria-label="Cancel removing this strategy" style={{ padding: '0 7px', fontSize: 11, cursor: 'pointer', background: 'none', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: 'var(--theme-secondary, #8099b0)' }}>×</button>
                             </div>
                           ) : (
-                            <button onClick={() => setConfirmDel(s.id)} title="Remove saved strategy" aria-label="Remove saved strategy" style={{ padding: '0 8px', fontSize: 12, cursor: 'pointer', background: 'none', border: '1px solid var(--theme-border, rgba(255,255,255,0.07))', color: 'var(--theme-secondary, #5e768f)' }}>×</button>
+                            <button onClick={() => setConfirmDel(s.id)} title="Remove saved strategy" aria-label="Remove saved strategy" style={{ padding: '0 8px', fontSize: 12, cursor: 'pointer', background: 'none', border: '1px solid var(--theme-border, rgba(255,255,255,0.07))', color: 'var(--theme-secondary, #8099b0)' }}>×</button>
                           )}
                         </div>
                       )
@@ -522,7 +522,7 @@ export default function StrategyBuilder() {
                   borderColor: sentToPaperTrader ? 'var(--theme-positive)' : 'color-mix(in srgb, var(--theme-primary) 50%, transparent)',
                   background: sentToPaperTrader ? 'color-mix(in srgb, var(--theme-positive) 12%, transparent)' : 'color-mix(in srgb, var(--theme-primary) 7%, transparent)',
                   color: sentToPaperTrader ? 'var(--theme-positive)' : 'var(--theme-primary, #c9a84c)',
-                  transition: 'all 0.2s',
+                  transition: 'background 0.2s var(--ease-out), border-color 0.2s var(--ease-out), color 0.2s var(--ease-out)',
                 }}
               >
                 {sentToPaperTrader ? 'Sent — approve in Paper Trader' : 'Send to Paper Trader'}
@@ -538,7 +538,7 @@ export default function StrategyBuilder() {
             {/* Legs */}
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }}>Legs ({legs.length})</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)' }}>Legs ({legs.length})</div>
                 <button onClick={addLeg} style={{ fontSize: 10, color: 'var(--theme-primary, #c9a84c)', background: 'none', border: 'none', cursor: 'pointer' }}>+ ADD</button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -551,7 +551,7 @@ export default function StrategyBuilder() {
                         </span>
                         {daysFromNow > dte(leg.expiry) && (
                           <span title="This leg has expired at the selected time; it is settled at intrinsic value."
-                            style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', border: '1px solid var(--theme-text-subtle, rgba(255,255,255,0.14))', padding: '0 4px' }}>
+                            style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', border: '1px solid var(--theme-text-subtle, rgba(255,255,255,0.14))', padding: '0 4px' }}>
                             Expired
                           </span>
                         )}
@@ -566,13 +566,13 @@ export default function StrategyBuilder() {
                               letterSpacing: '0.06em', textTransform: 'uppercase',
                               background: activeChainLeg === i ? 'color-mix(in srgb, var(--theme-primary) 18%, transparent)' : 'var(--theme-hover, rgba(255,255,255,0.04))',
                               border: `1px solid ${activeChainLeg === i ? 'color-mix(in srgb, var(--theme-primary) 45%, transparent)' : 'var(--theme-text-subtle, rgba(255,255,255,0.12))'}`,
-                              color: activeChainLeg === i ? 'var(--theme-primary, #c9a84c)' : '#5e768f',
+                              color: activeChainLeg === i ? 'var(--theme-primary, #c9a84c)' : '#8099b0',
                             }}
                           >
                             {activeChainLeg === i ? '× Chain' : 'Chain'}
                           </button>
                         )}
-                        <button onClick={() => removeLeg(i)} style={{ fontSize: 12, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
+                        <button onClick={() => removeLeg(i)} title="Remove leg" aria-label="Remove leg" style={{ fontSize: 12, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
                       </div>
                     </div>
 
@@ -684,14 +684,14 @@ export default function StrategyBuilder() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', background: 'var(--theme-surface, #142032)', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', flexWrap: 'wrap', gap: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     {/* Leg tabs */}
-                    <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)' }}>Chain</span>
+                    <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)' }}>Chain</span>
                     {legs.map((l, idx) => legChains[idx]?.expiries?.length > 0 && (
                       <button key={idx} onClick={() => { setActiveChainLeg(idx); setDateInput(legChains[idx].selectedExpiry) }}
                         style={{
                           fontSize: 9, fontWeight: 700, padding: '3px 10px', cursor: 'pointer', letterSpacing: '0.06em',
                           background: activeChainLeg === idx ? `${LEG_COLORS[idx % LEG_COLORS.length]}30` : 'transparent',
                           border: `1px solid ${activeChainLeg === idx ? LEG_COLORS[idx % LEG_COLORS.length] : 'var(--theme-border, rgba(255,255,255,0.1))'}`,
-                          color: activeChainLeg === idx ? LEG_COLORS[idx % LEG_COLORS.length] : 'var(--theme-secondary, #5e768f)',
+                          color: activeChainLeg === idx ? LEG_COLORS[idx % LEG_COLORS.length] : 'var(--theme-secondary, #8099b0)',
                         }}>
                         {l.ticker || `Leg ${idx+1}`}
                       </button>
@@ -724,7 +724,7 @@ export default function StrategyBuilder() {
                             fontSize: 8, padding: '2px 7px', cursor: 'pointer',
                             background: exp === e ? 'color-mix(in srgb, var(--theme-primary) 15%, transparent)' : 'transparent',
                             border: `1px solid ${exp === e ? 'color-mix(in srgb, var(--theme-primary) 40%, transparent)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`,
-                            color: exp === e ? 'var(--theme-primary, #c9a84c)' : '#5e768f',
+                            color: exp === e ? 'var(--theme-primary, #c9a84c)' : '#8099b0',
                           }}>
                           {fmtExpiry(e)}
                         </button>
@@ -739,12 +739,12 @@ export default function StrategyBuilder() {
                           fontSize: 9, padding: '2px 7px', cursor: 'pointer',
                           background: strikeCount === n ? 'color-mix(in srgb, var(--theme-primary) 15%, transparent)' : 'transparent',
                           border: `1px solid ${strikeCount === n ? 'color-mix(in srgb, var(--theme-primary) 40%, transparent)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`,
-                          color: strikeCount === n ? 'var(--theme-primary, #c9a84c)' : '#5e768f',
+                          color: strikeCount === n ? 'var(--theme-primary, #c9a84c)' : '#8099b0',
                         }}>{n}</button>
                       ))}
                     </div>
 
-                    <button onClick={() => setActiveChainLeg(null)} style={{ background: 'none', border: 'none', color: 'var(--theme-text-faint, rgba(255,255,255,0.25))', fontSize: 14, cursor: 'pointer', lineHeight: 1 }}>×</button>
+                    <button onClick={() => setActiveChainLeg(null)} title="Close chain" aria-label="Close chain" style={{ background: 'none', border: 'none', color: 'var(--theme-text-faint, rgba(255,255,255,0.25))', fontSize: 14, cursor: 'pointer', lineHeight: 1 }}>×</button>
                   </div>
                 </div>
 
@@ -942,7 +942,7 @@ export default function StrategyBuilder() {
                   {chartData.breakevens.map((be, i) => (
                     <ReferenceLine key={i} x={be} stroke="rgba(255,255,255,0.55)" strokeDasharray="2 4"
                       label={({ viewBox }: any) => (
-                        <text x={viewBox.x + 3} y={viewBox.y + viewBox.height - 6 - i * 11} fill="var(--theme-secondary, #99907e)" fontSize={8}>{`BE $${be}`}</text>
+                        <text x={viewBox.x + 3} y={viewBox.y + viewBox.height - 6 - i * 11} fill="var(--theme-secondary, #8099b0)" fontSize={8}>{`BE $${be}`}</text>
                       )} />
                   ))}
 
@@ -965,7 +965,7 @@ export default function StrategyBuilder() {
             </div>
 
             {/* Legend — what the lines, shaded zones, and vertical markers mean. */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', alignItems: 'center', padding: '2px 12px 8px', fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary, #99907e)' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', alignItems: 'center', padding: '2px 12px 8px', fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary, #8099b0)' }}>
               <span style={legWrap}><i style={legLine('var(--theme-primary, #c9a84c)', false, 2.5)} />P&L at expiry</span>
               {chartData.showT && (
                 <span style={legWrap}><i style={legLine('var(--theme-tertiary, #60a5fa)', true)} />{chartData.tDays === 0 ? 'Value now' : `Value +${chartData.tDays}d`}</span>
@@ -986,7 +986,7 @@ export default function StrategyBuilder() {
             {/* Spot price slider */}
             <div style={{ padding: '8px 14px 12px', borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', whiteSpace: 'nowrap', width: 68 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', whiteSpace: 'nowrap', width: 68 }}>
                   {primaryTicker} Spot
                 </span>
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -1113,7 +1113,7 @@ export default function StrategyBuilder() {
               </span>
             ))}
             {chartData.breakevens.length > 0 && (
-              <span style={{ fontSize: 10, padding: '3px 8px', fontFamily: 'var(--theme-mono)', color: 'var(--theme-secondary, #99907e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+              <span style={{ fontSize: 10, padding: '3px 8px', fontFamily: 'var(--theme-mono)', color: 'var(--theme-secondary, #8099b0)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
                 BE: {chartData.breakevens.map(b => `$${b}`).join(' / ')}
               </span>
             )}
@@ -1156,7 +1156,7 @@ export default function StrategyBuilder() {
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'rgba(0,0,0,0.2)' }}>
                         {['Ticker','K','Expiry','DTE','Spot','Type','Pos','Qty','Δ','Γ','Θ','ν','Net Δ','Net Γ','Net Θ','Net ν'].map((h, i) => (
-                          <th key={h} style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', textAlign: i === 0 ? 'left' : 'right', padding: '5px 8px', whiteSpace: 'nowrap' }}>{h}</th>
+                          <th key={h} style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', textAlign: i === 0 ? 'left' : 'right', padding: '5px 8px', whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1166,9 +1166,9 @@ export default function StrategyBuilder() {
                           <td style={{ padding: '5px 8px', color: 'var(--theme-primary, #c9a84c)', textAlign: 'left' }}>{pos.ticker}</td>
                           <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--theme-text, #d7e3fc)' }}>{pos.strike}</td>
                           <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--theme-text, #d7e3fc)' }}>{pos.expiry}</td>
-                          <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--theme-secondary, #5e768f)' }}>{pos.dte}d</td>
+                          <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--theme-secondary, #8099b0)' }}>{pos.dte}d</td>
                           <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--theme-text, #d7e3fc)' }}>{pos.spot.toFixed(2)}</td>
-                          <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--theme-secondary, #5e768f)' }}>{pos.option_type}</td>
+                          <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--theme-secondary, #8099b0)' }}>{pos.option_type}</td>
                           <td style={{ padding: '5px 8px', textAlign: 'right', color: pos.position_type === 'long' ? 'var(--theme-positive)' : 'var(--theme-negative)' }}>{pos.position_type}</td>
                           <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--theme-text, #d7e3fc)' }}>{pos.qty}</td>
                           {(['delta','gamma','theta','vega'] as const).map(g => (
@@ -1187,7 +1187,7 @@ export default function StrategyBuilder() {
             )}
 
             {!greekResult && !greekLoading && (
-              <div style={{ padding: '16px 14px', fontFamily: 'var(--theme-sans)', fontSize: 10, color: 'var(--theme-secondary, #5e768f)' }}>
+              <div style={{ padding: '16px 14px', fontFamily: 'var(--theme-sans)', fontSize: 10, color: 'var(--theme-secondary, #8099b0)' }}>
                 Add expiry dates to legs, then click Compute Greeks to see Δ Γ Θ ν for each position.
               </div>
             )}
@@ -1227,7 +1227,7 @@ export default function StrategyBuilder() {
               >{aiNarrativePending ? '…' : 'Analyze'}</button>
             </div>
             {!aiNarrative && !aiNarrativePending && (
-              <div style={{ padding: '10px 12px', fontSize: 10, color: 'var(--theme-secondary, #5e768f)', fontFamily: 'var(--theme-sans)' }}>
+              <div style={{ padding: '10px 12px', fontSize: 10, color: 'var(--theme-secondary, #8099b0)', fontFamily: 'var(--theme-sans)' }}>
                 Compute Greeks first, then click Analyze for AI risk commentary.
               </div>
             )}
@@ -1292,7 +1292,7 @@ function AiOptionsStrategyChat({ onAccept }: { onAccept: (draft: OptionsStrategy
     surface: 'var(--theme-surface, #0d1826)',
     border:  'var(--theme-border, rgba(255,255,255,0.10))',
     text:    'var(--theme-text, #d7e3fc)',
-    muted:   'var(--theme-secondary, #99907e)',
+    muted:   'var(--theme-secondary, #8099b0)',
     dim:     'var(--theme-text-faint, rgba(255,255,255,0.28))',
     gold:    'var(--theme-primary, #c9a84c)',
     pos:     'var(--theme-pos, #4caf7d)',

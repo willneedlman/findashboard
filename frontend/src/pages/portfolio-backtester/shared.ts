@@ -88,10 +88,10 @@ export const PORT_INPUT: React.CSSProperties = {
 export const PORT_LABEL: React.CSSProperties = {
   fontFamily: 'var(--theme-sans)',
   fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
-  textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 4, display: 'block',
+  textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', marginBottom: 4, display: 'block',
 }
 
-export const PORT_TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }
+export const PORT_TICK = { fontSize: 9, fill: 'var(--theme-secondary, #8099b0)', fontFamily: 'var(--theme-mono)' }
 
 // ── Strategy tab types & constants ───────────────────────────────────────────
 
@@ -146,12 +146,12 @@ export const ALGO_LABEL: React.CSSProperties = {
   fontWeight: 700,
   letterSpacing: '0.14em',
   textTransform: 'uppercase',
-  color: 'var(--theme-secondary, #5e768f)',
+  color: 'var(--theme-secondary, #8099b0)',
   marginBottom: 4,
   display: 'block',
 }
 
-export const ALGO_TICK = { fontSize: 9, fill: 'var(--theme-secondary, #5e768f)', fontFamily: 'var(--theme-mono)' }
+export const ALGO_TICK = { fontSize: 9, fill: 'var(--theme-secondary, #8099b0)', fontFamily: 'var(--theme-mono)' }
 
 export const ALGO_SECTION_DIVIDER: React.CSSProperties = {
   borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))',

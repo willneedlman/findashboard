@@ -4,9 +4,7 @@
 // pretends to be a filled cockpit, so it can't read as duplicated or unfinished.
 //
 // Same file also renders the loading and unavailable variants so every tool's
-// three states share one layout. Backward compatible: the old cockpit props
-// (kpis / preview / columns / previewLabel) are still accepted so existing call
-// sites compile unchanged — they are simply ignored now.
+// three states share one layout.
 // (Design: "Bare" direction 1a, handoff 2026-07-15.)
 
 const MONO = 'var(--theme-mono)'
@@ -22,8 +20,9 @@ export type EmptyVariant = 'empty' | 'loading' | 'unavailable'
 
 export interface EmptyStateProps {
   title: string
-  hint: string
+  hint?: string                // required by 'empty' and 'unavailable'; optional on a compact loader
   variant?: EmptyVariant       // 'empty' (default) | 'loading' | 'unavailable'
+  size?: 'default' | 'compact' // compact: no min-height, no panel chrome — fits inside a widget
   action?: string              // primary-button label, e.g. 'Calculate' — renders the CTA cue (empty only)
   onRetry?: () => void         // optional retry affordance (unavailable only)
   keys?: string[]              // key badges under the message, e.g. ['Enter', '⌘K']
@@ -32,11 +31,6 @@ export interface EmptyStateProps {
                                 // tracking real completion (e.g. "N / M enriched") get a bar
                                 // that visibly glides forward instead of jumping in place
                                 // whenever the underlying count updates in large steps.
-  // ── Deprecated / ignored (kept for source compatibility with old call sites) ──
-  kpis?: string[]
-  preview?: 'chart' | 'table'
-  columns?: string[]
-  previewLabel?: string
 }
 
 const TITLE_STYLE: React.CSSProperties = {
@@ -62,23 +56,40 @@ function KeyBadge({ children }: { children: React.ReactNode }) {
   )
 }
 
-export default function EmptyState({ title, hint, variant = 'empty', action, onRetry, keys, progress }: EmptyStateProps) {
+export default function EmptyState({ title, hint, variant = 'empty', size = 'default', action, onRetry, keys, progress }: EmptyStateProps) {
   // ── Loading ──────────────────────────────────────────────────────────────
   if (variant === 'loading') {
     const determinate = progress != null
+    const bar = (
+      <div className="es-load-track" style={{ width: size === 'compact' ? 96 : 150, height: 2, background: BORDER, overflow: 'hidden', marginTop: 2 }}>
+        <div className="es-load-fill" style={determinate ? {
+          width: `${Math.max(0, Math.min(100, progress))}%`, height: '100%', background: PRIMARY,
+          transition: 'width 0.5s var(--ease-out)',
+        } : {
+          width: '40%', height: '100%', background: PRIMARY,
+          animation: 'es-load-slide 1.1s ease-in-out infinite',
+        }} />
+      </div>
+    )
+    // Compact drops the panel chrome and the 220px floor: a dashboard widget is
+    // often shorter than the full state, which is why ~20 of them printed a bare
+    // loading string instead and the app grew four loading treatments.
+    if (size === 'compact') {
+      return (
+        <div role="status" aria-live="polite" style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          gap: 10, padding: '12px 8px', textAlign: 'center',
+        }}>
+          <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: SEC }}>{title}</div>
+          {bar}
+        </div>
+      )
+    }
     return (
       <div role="status" aria-live="polite" style={{ ...SHELL, flexDirection: 'column', gap: 14, minHeight: 220 }}>
         <div style={{ ...TITLE_STYLE, color: TXT }}>{title}</div>
-        <div style={HINT_STYLE}>{hint}</div>
-        <div className="es-load-track" style={{ width: 150, height: 2, background: BORDER, overflow: 'hidden', marginTop: 2 }}>
-          <div className="es-load-fill" style={determinate ? {
-            width: `${Math.max(0, Math.min(100, progress))}%`, height: '100%', background: PRIMARY,
-            transition: 'width 0.5s ease',
-          } : {
-            width: '40%', height: '100%', background: PRIMARY,
-            animation: 'es-load-slide 1.1s ease-in-out infinite',
-          }} />
-        </div>
+        {hint && <div style={HINT_STYLE}>{hint}</div>}
+        {bar}
       </div>
     )
   }

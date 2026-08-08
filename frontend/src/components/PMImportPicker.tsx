@@ -69,7 +69,7 @@ export default function PMImportPicker({
         ))}
       </select>
       {note && (
-        <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary, #5e768f)', lineHeight: 1.5 }}>
+        <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary, #8099b0)', lineHeight: 1.5 }}>
           {note}
         </div>
       )}

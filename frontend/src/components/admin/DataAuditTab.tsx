@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
+import EmptyState from '../EmptyState'
 
 // Data Audit — cross-source, multi-domain reconciliation console for the Admin
 // Hub. A domain selector (Equities / FX / Crypto / Macro) drives a table whose
@@ -217,7 +218,7 @@ export default function DataAuditTab({ secret }: { secret: string }) {
           {(domainMeta?.allSources ?? []).map(s => <option key={s} value={s}>{s}</option>)}
         </select>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Filter entity…" style={{ ...inp, width: 120 }} />
-        <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 10, color: DIM }}>{rows.length} rows{loading ? ' · loading…' : ''}</span>
+        <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 10, color: DIM }}>{rows.length} rows{loading ? ' · loading' : ''}</span>
       </div>
 
       {/* Table */}
@@ -237,7 +238,7 @@ export default function DataAuditTab({ secret }: { secret: string }) {
           <tbody>
             {rows.length === 0 && (
               <tr><td colSpan={sourceCols.length + 6} style={{ ...td, textAlign: 'center', color: DIM, padding: 18 }}>
-                {loading ? 'Loading…' : 'No rows. Run an audit or widen the filter.'}
+                {loading ? <EmptyState variant="loading" size="compact" title="Loading audit rows" /> : 'No rows. Run an audit or widen the filter.'}
               </td></tr>
             )}
             {rows.map(row => {

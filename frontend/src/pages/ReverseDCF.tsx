@@ -16,7 +16,7 @@ import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip } from '../lib/reportCaptureRegistry'
 
 const MONO = 'var(--theme-mono)', SANS = 'var(--theme-sans)'
-const TXT = 'var(--theme-text, #d7e3fc)', SEC = 'var(--theme-secondary, #99907e)', GOLD = 'var(--theme-primary, #c9a84c)'
+const TXT = 'var(--theme-text, #d7e3fc)', SEC = 'var(--theme-secondary, #8099b0)', GOLD = 'var(--theme-primary, #c9a84c)'
 const NEG = 'var(--theme-negative, #ef4444)', TER = 'var(--theme-tertiary, #60a5fa)'
 const HAIR = '1px solid var(--theme-border, rgba(255,255,255,0.08))'
 
@@ -242,8 +242,7 @@ export function ReverseDCFContent() {
       {!data && !error && (
         <EmptyState title="Reverse DCF"
           hint="A reverse DCF flips a normal DCF around. Instead of guessing growth to get a value, it solves for the revenue growth rate the current price already implies, holding margins fixed. Enter a ticker and press FETCH."
-          keys={['Enter']} kpis={['Implied Growth', 'Market Price', 'WACC', 'Op Margin', 'Years']}
-          preview="chart" previewLabel="Implied Revenue Path" action="FETCH" />
+          keys={['Enter']} action="FETCH" />
       )}
 
       {data && implied == null && (

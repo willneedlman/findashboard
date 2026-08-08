@@ -743,7 +743,7 @@ export function Landing() {
           <motion.div variants={container} initial="hidden" animate="show">
             <motion.div className="eyebrow" variants={item}>Institutional-style analytics</motion.div>
             <motion.h1 variants={item}>Research to execution in<br />one <span className="g">terminal</span>.</motion.h1>
-            <motion.p className="lede" variants={item}>Options flow, dealer gamma, live energy flows, DCF valuation, macro rates, and paper trading — every hub in one dark terminal. Go from first idea to sized position.</motion.p>
+            <motion.p className="lede" variants={item}>Options flow, dealer gamma, live energy flows, DCF valuation, macro rates, and paper trading. Every hub in one dark terminal. Go from first idea to sized position.</motion.p>
             <motion.div className="cta" variants={item}>
               <Magnetic><Link to="/app" className="btn btn-gold btn-lg">Launch Terminal →</Link></Magnetic>
               <Link to="/product/research" className="btn btn-ghost btn-lg">Explore the tools</Link>

@@ -43,11 +43,11 @@ export default function WidgetPalette({ open, onClose, onAdd }: WidgetPalettePro
                 <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>
                   Add Widget
                 </div>
-                <div style={{ fontSize: 10, color: 'var(--theme-secondary, #5e768f)', marginTop: 2 }}>
+                <div style={{ fontSize: 10, color: 'var(--theme-secondary, #8099b0)', marginTop: 2 }}>
                   Click to add to dashboard
                 </div>
               </div>
-              <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-secondary, #5e768f)' }}>
+              <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-secondary, #8099b0)' }}>
                 <X size={16} />
               </button>
             </div>
@@ -79,7 +79,7 @@ export default function WidgetPalette({ open, onClose, onAdd }: WidgetPalettePro
                       {WIDGET_DEFINITIONS[type].name}
                     </div>
                     <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 8, color: 'var(--theme-primary, #c9a84c)', marginBottom: 3 }}>{WIDGET_DEFINITIONS[type].category} | {WIDGET_DEFINITIONS[type].priority}</div>
-                    <div style={{ fontSize: 10, color: 'var(--theme-secondary, #5e768f)', lineHeight: '14px' }}>
+                    <div style={{ fontSize: 10, color: 'var(--theme-secondary, #8099b0)', lineHeight: '14px' }}>
                       {WIDGET_DEFINITIONS[type].description}
                     </div>
                   </div>

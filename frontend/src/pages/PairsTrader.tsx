@@ -128,11 +128,10 @@ export default function PairsTrader() {
     <PageWrapper title="Pairs Trader">
       <SidebarLayout sidebar={rail} sidebarTitle="Pair">
         {m.isPending ? <LoadingState label="Testing cointegration and backtesting the spread" />
-          : m.error ? <ErrorState message={(m.error as any)?.response?.data?.detail || 'Could not analyze this pair.'} onRetry={run} />
+          : m.error ? <ErrorState title="Pair analysis failed" message={(m.error as any)?.response?.data?.detail || 'This pair could not be analysed. Check both tickers have history over the window.'} onRetry={run} />
           : m.data ? <Cockpit d={m.data} />
           : <EmptyState title="Pairs Trader" hint="Enter a pair or pick a preset to test cointegration, mean reversion and z-score entries."
-            keys={['Cointegration', 'Half-life', 'Z-score backtest']} kpis={['Cointegration', 'Half-life', 'Z-Score', 'Sharpe']}
-            preview="chart" previewLabel="Spread Z-Score" action="Test Pair" />}
+            keys={['Cointegration', 'Half-life', 'Z-score backtest']} action="Test Pair" />}
       </SidebarLayout>
     </PageWrapper>
   )

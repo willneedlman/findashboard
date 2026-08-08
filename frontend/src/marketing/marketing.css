@@ -2,7 +2,7 @@
    cannot leak into the terminal app (which owns generic class names too). */
 .mkt{
   --bg:#0a1320; --bg2:#0b1626; --surface:#0d1826; --line:rgba(255,255,255,0.08);
-  --gold:#c9a84c; --text:#e6eefc; --muted:#7e93ad; --dim:#5e768f;
+  --gold:#c9a84c; --text:#e6eefc; --muted:#7e93ad; --dim:#8099b0;
   --pos:#3fb950; --neg:#f85149; --blue:#6c8cff;
   --mono:ui-monospace,monospace;
   --sans:'Sora',-apple-system,system-ui,sans-serif;

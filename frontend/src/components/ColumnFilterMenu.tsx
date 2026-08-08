@@ -64,7 +64,7 @@ export default function ColumnFilterMenu({ align = 'right', sortKey, sort, onSor
         style={{
           background: 'none', border: 'none', cursor: 'pointer', padding: 2, marginLeft: 5,
           display: 'inline-flex', verticalAlign: 'middle', lineHeight: 0,
-          color: active ? T.gold : 'var(--theme-secondary, #5e768f)',
+          color: active ? T.gold : 'var(--theme-secondary, #8099b0)',
           opacity: active ? 1 : 0.7,
         }}
       >
@@ -116,7 +116,7 @@ function Popover({ open, anchor, align, onClose, sortKey, dir, setSort, filter, 
 
   const LABEL: React.CSSProperties = {
     fontFamily: 'var(--theme-sans)', fontSize: 8.5, fontWeight: 700, letterSpacing: '0.14em',
-    textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', padding: '2px 12px 5px',
+    textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', padding: '2px 12px 5px',
   }
   const sortRow = (d: SortDir, icon: React.ReactNode, text: string) => {
     const on = dir === d
@@ -162,7 +162,7 @@ function Popover({ open, anchor, align, onClose, sortKey, dir, setSort, filter, 
             style={{
               display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
               background: 'none', border: 'none', cursor: 'pointer', padding: '6px 12px',
-              color: 'var(--theme-secondary, #5e768f)', fontFamily: 'var(--theme-sans)', fontSize: 11,
+              color: 'var(--theme-secondary, #8099b0)', fontFamily: 'var(--theme-sans)', fontSize: 11,
             }}>
             <X size={12} /> Clear
           </button>

@@ -21,7 +21,7 @@ type Palette = ClipPalette
 
 const DARK: Palette = {
   ink: 'var(--theme-text, #d7e3fc)',
-  muted: 'var(--theme-secondary, #5e768f)',
+  muted: 'var(--theme-secondary, #8099b0)',
   border: 'var(--theme-border, rgba(255,255,255,0.10))',
   accent: 'var(--theme-primary, #c9a84c)',
   pos: 'var(--theme-positive, #22c55e)',

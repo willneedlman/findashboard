@@ -65,7 +65,7 @@ function SegmentRow({ r, maxValue, peerGroups, onMult, onPeer }: {
             backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238099b0' stroke-width='2.5'><path d='M6 9l6 6 6-6'/></svg>")`,
             backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px center',
           }}>
-          <option value="">No comp — company blended</option>
+          <option value="">No comp, company blended</option>
           {Object.entries(families).map(([fam, gs]) => (
             <optgroup key={fam} label={fam}>
               {gs.map(g => <option key={g.name} value={g.name}>{g.name} · {g.ps}x</option>)}
@@ -291,8 +291,7 @@ export function SOTPContent() {
       {!data && !error && (
         <EmptyState title="Sum-of-the-Parts"
           hint="Value each business segment on its own pure-play P/S multiple, then sum to an equity value. Enter a ticker and press FETCH."
-          keys={['Enter']} kpis={['Equity Value', 'Per Share', 'Upside', 'Segments']}
-          preview="table" previewLabel="Segment Valuation" columns={['Segment', 'Peer comp', 'Revenue', 'P/S', 'Value']} action="FETCH" />
+          keys={['Enter']} action="FETCH" />
       )}
 
       {data && !data.segments.length && (

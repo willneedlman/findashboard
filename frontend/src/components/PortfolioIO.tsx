@@ -40,7 +40,7 @@ interface PortfolioIOProps {
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 const S = {
-  border: 'var(--theme-border, rgba(255,255,255,0.08))', gold: 'var(--theme-primary, #c9a84c)', muted: 'var(--theme-secondary, #5e768f)', text: 'var(--theme-text, #d7e3fc)',
+  border: 'var(--theme-border, rgba(255,255,255,0.08))', gold: 'var(--theme-primary, #c9a84c)', muted: 'var(--theme-secondary, #8099b0)', text: 'var(--theme-text, #d7e3fc)',
   mono: 'var(--theme-mono)', label: 'var(--theme-sans)',
 }
 
@@ -52,7 +52,7 @@ const btn = (primary = false): React.CSSProperties => ({
   border: `1px solid ${primary ? S.gold : S.border}`,
   background: primary ? 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' : 'transparent',
   color: primary ? S.gold : S.muted,
-  transition: 'all 0.12s',
+  transition: 'background 0.12s var(--ease-out), border-color 0.12s var(--ease-out), color 0.12s var(--ease-out)',
 })
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

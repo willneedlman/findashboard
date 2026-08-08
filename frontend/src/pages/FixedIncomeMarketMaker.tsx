@@ -27,7 +27,7 @@ const T = {
   border:   'var(--theme-border, rgba(255,255,255,0.08))',
   gold:     'var(--theme-primary, #c9a84c)',
   text:     'var(--theme-text, #d7e3fc)',
-  muted:    'var(--theme-secondary, #5e768f)',
+  muted:    'var(--theme-secondary, #8099b0)',
   green:    'var(--theme-positive, #22c55e)',
   red:      'var(--theme-negative, #ef4444)',
   mono:     'var(--theme-mono)',
@@ -671,7 +671,7 @@ function bigBtn(color: string): React.CSSProperties {
 const fmtWidenPts = (v: number) => (v > 1e-4 ? `+${v.toFixed(2)}` : '0.00')
 
 function renderBookTable(f: Frame, plotted: string[], onPlot: (id: string) => void, onQuote: (id: string, side: 'bid' | 'ask', price: number) => void, flash: { bond: string; side: string } | null, bondWiden: Record<string, number>, onWiden: (id: string, dir: 1 | -1) => void) {
-  const G = 'var(--theme-positive, #22c55e)', R = 'var(--theme-negative, #ef4444)', M = 'var(--theme-secondary, #5e768f)', GD = 'var(--theme-primary, #c9a84c)', T2 = 'var(--theme-text, #d7e3fc)', BLUE = 'var(--theme-tertiary, #60a5fa)'
+  const G = 'var(--theme-positive, #22c55e)', R = 'var(--theme-negative, #ef4444)', M = 'var(--theme-secondary, #8099b0)', GD = 'var(--theme-primary, #c9a84c)', T2 = 'var(--theme-text, #d7e3fc)', BLUE = 'var(--theme-tertiary, #60a5fa)'
   const th: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: M, padding: '8px 9px', textAlign: 'right', whiteSpace: 'nowrap' }
   const td: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 13, padding: '7px 9px', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', verticalAlign: 'middle' }
   const signed = (v: number, fmt: (n: number) => string) => v === 0
@@ -731,7 +731,7 @@ function renderBookTable(f: Frame, plotted: string[], onPlot: (id: string) => vo
 
 // Ledger as a single thin strip: a gold tag cell then the latest fills inline.
 function renderLedgerStrip(f: Frame) {
-  const M = 'var(--theme-secondary, #5e768f)', GD = 'var(--theme-primary, #c9a84c)', T2 = 'var(--theme-text, #d7e3fc)'
+  const M = 'var(--theme-secondary, #8099b0)', GD = 'var(--theme-primary, #c9a84c)', T2 = 'var(--theme-text, #d7e3fc)'
   const last = [...f.ledger].slice(-3).reverse()
   const tag: React.CSSProperties = { display: 'flex', alignItems: 'center', padding: '0 14px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: GD, flexShrink: 0 }
   return (

@@ -9,6 +9,7 @@ import { useTheme } from '../../../contexts/ThemeContext'
 import { fmtMarketCap } from '../../../lib/format'
 import { useLiveMarks } from '../../../hooks/useLiveMarks'
 import { useWidgetContentState } from '../widgetContentState'
+import EmptyState from '../../EmptyState'
 
 
 interface Holding { ticker: string; shares: number; avgCost: number }
@@ -177,7 +178,9 @@ export default function PMPortfoliosWidget({ config: _config }: { config: Widget
       </div>
 
       {rows.length === 0 ? (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.muted, fontFamily: T.label, fontSize: 11 }}>{loading ? 'Loading…' : isPaper ? 'No open positions. Trade them on the chart.' : 'No holdings in this portfolio.'}</div>
+        loading
+          ? <EmptyState variant="loading" size="compact" title={isPaper ? 'Loading positions' : 'Loading holdings'} />
+          : <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.muted, fontFamily: T.label, fontSize: 11 }}>{isPaper ? 'No open positions. Trade them on the chart.' : 'No holdings in this portfolio.'}</div>
       ) : (
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>

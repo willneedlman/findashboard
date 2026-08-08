@@ -108,7 +108,7 @@ export default function AlertToastQueue({ alerts }: Props) {
             </div>
             <button
               onClick={() => dismiss(t.key)}
-              style={{ background: 'none', border: 'none', color: 'var(--theme-secondary, #5e768f)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}
+              style={{ background: 'none', border: 'none', color: 'var(--theme-secondary, #8099b0)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}
             >×</button>
           </div>
         </div>

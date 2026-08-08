@@ -904,7 +904,7 @@ export function PortfolioManagerContent() {
           <div>
             {holdings.length === 0 && options.length === 0 && futures.length === 0 && cash.length === 0 ? (
               <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${T.border}`, color: T.muted, fontFamily: T.mono, fontSize: 11 }}>
-                Add a stock, option, future, or cash balance — or import a portfolio file
+                Add a stock, option, future, or cash balance, or import a portfolio file
               </div>
             ) : (<>
               {holdings.length > 0 && (
@@ -1235,7 +1235,7 @@ export function PortfolioManagerContent() {
                 style={{
                   background: 'transparent', border: `1px solid ${T.border}`, color: T.muted,
                   fontFamily: T.label, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
-                  padding: '8px 20px', cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 0.2s',
+                  padding: '8px 20px', cursor: 'pointer', whiteSpace: 'nowrap', transition: 'background 0.2s var(--ease-out), border-color 0.2s var(--ease-out), color 0.2s var(--ease-out)',
                 }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = T.gold; e.currentTarget.style.color = T.gold }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.color = T.muted }}
@@ -1253,7 +1253,7 @@ export function PortfolioManagerContent() {
                   fontFamily: T.label, fontSize: 10, fontWeight: 700,
                   letterSpacing: '0.12em', textTransform: 'uppercase',
                   padding: '8px 20px', cursor: 'pointer',
-                  transition: 'all 0.2s', whiteSpace: 'nowrap',
+                  transition: 'background 0.2s var(--ease-out), border-color 0.2s var(--ease-out), color 0.2s var(--ease-out)', whiteSpace: 'nowrap',
                 }}
               >
                 {saveFlash ? 'Saved' : 'Save Portfolio'}

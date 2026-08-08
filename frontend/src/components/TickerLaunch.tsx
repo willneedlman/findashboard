@@ -16,7 +16,7 @@ export default function TickerLaunch({ hint, onLoad }: { hint: string; onLoad: (
 
   const chip = (sym: string) => (
     <button key={sym} onClick={() => go(sym)}
-      style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', color: T.text, background: 'var(--theme-hover, rgba(255,255,255,0.04))', border: `1px solid ${T.border}`, padding: '6px 14px', cursor: 'pointer', transition: 'all 0.12s' }}
+      style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', color: T.text, background: 'var(--theme-hover, rgba(255,255,255,0.04))', border: `1px solid ${T.border}`, padding: '6px 14px', cursor: 'pointer', transition: 'background 0.12s var(--ease-out), border-color 0.12s var(--ease-out), color 0.12s var(--ease-out)' }}
       onMouseEnter={e => { e.currentTarget.style.color = T.gold; e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--theme-primary) 40%, transparent)' }}
       onMouseLeave={e => { e.currentTarget.style.color = T.text; e.currentTarget.style.borderColor = T.border }}>
       {sym}

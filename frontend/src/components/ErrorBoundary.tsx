@@ -1,6 +1,7 @@
 import { Component, type ReactNode, type ErrorInfo } from 'react'
 import AlphaMark from './AlphaMark'
 import { isChunkLoadError, reloadForChunkError } from '../lib/chunkReload'
+import EmptyState from './EmptyState'
 
 interface Props { children: ReactNode }
 interface State { error: Error | null }
@@ -44,9 +45,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             background: 'var(--theme-bg, #0a1628)', flexDirection: 'column', gap: 16, padding: 32,
           }}>
             <AlphaMark size={40} tile />
-            <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)' }}>
-              Loading…
-            </div>
+            <EmptyState variant="loading" size="compact" title="Reloading" />
           </div>
         )
       }

@@ -626,7 +626,7 @@ export function MasterValuationContent() {
   const renderMultiplesBuilder = () => (
     <div style={{ padding: '16px 18px 18px', borderBottom: `1px solid ${T.border}` }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14 }}>
-        <div><div style={{ fontFamily: T.label, fontSize: 10.5, fontWeight: 780, color: T.text }}>Standalone market valuation</div><div style={{ maxWidth: 650, marginTop: 4, fontFamily: T.label, fontSize: 9, lineHeight: 1.5, color: T.muted }}>Choose the multiples you trust. Each target produces a complete present value; their internal weights create one market-method value.</div></div>
+        <div><div style={{ fontFamily: T.label, fontSize: 10.5, fontWeight: 780, color: T.text }}>Standalone market valuation</div><div style={{ maxWidth: 650, marginTop: 4, fontFamily: T.label, fontSize: 9, lineHeight: 1.5, color: T.muted }}>Choose the multiples you trust. Each target produces a complete present value. Their internal weights create one market-method value.</div></div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><div style={{ textAlign: 'right' }}><div style={LABEL}>Multiples value</div><div style={{ fontFamily: T.mono, fontSize: 19, fontWeight: 790, color: T.blue }}>{fmtMoney(analysis?.multiples.value_per_share)}</div></div><button type="button" onClick={addMultipleTarget} style={{ ...BUTTON, borderColor: T.blue, color: T.blue }}><Plus size={11} /> Add multiple</button></div>
       </div>
       <div style={{ marginTop: 13, overflowX: 'auto' }}>
@@ -677,7 +677,7 @@ export function MasterValuationContent() {
         <button type="button" onClick={() => void loadTicker()} disabled={loading || !ticker.trim()} style={{ ...PRIMARY_BUTTON, opacity: loading || !ticker.trim() ? .45 : 1 }}>{loading ? 'Fetching...' : 'Fetch financials'}</button>
         <button type="button" onClick={() => void suggestAdjustments(false)} disabled={!fundamentals || aiSuggesting} style={{ ...BUTTON, borderColor: fundamentals ? T.gold : T.border, color: fundamentals ? T.gold : T.muted, opacity: !fundamentals || aiSuggesting ? .45 : 1 }}><Sparkles size={12} />{aiSuggesting && !aiRegenerating ? 'Reading filing...' : 'AI suggest adjustments'}</button>
         <div className="mv-toolbar-source" style={{ minWidth: 0, marginLeft: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: T.label, fontSize: 8.5, color: T.muted }}>{fundamentals?.source || 'Load the latest financial statements to begin'}</div>
-        <div className="mv-toolbar-status" style={{ marginLeft: 'auto', flex: 'none', display: 'flex', alignItems: 'center', gap: 7, fontFamily: T.mono, fontSize: 8, color: statusColor }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor }} />{status}</div>
+        <div className="mv-toolbar-status" style={{ marginLeft: 'auto', flex: 'none', display: 'flex', alignItems: 'center', gap: 7, fontFamily: T.mono, fontSize: 9.5, color: statusColor }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor }} />{status}</div>
       </div>
 
       {aiSuggestion && <section style={{ ...PANEL, marginBottom: 8, borderColor: T.goldTint(42) }}>

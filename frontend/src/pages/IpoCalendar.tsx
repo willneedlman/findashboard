@@ -14,8 +14,8 @@ import { kpiClip, tableClip } from '../lib/reportCaptureRegistry'
 const C = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))',
   header: 'var(--theme-surface, #0d1826)', surface: 'var(--theme-bg, #101c2e)',
-  gold: 'var(--theme-primary, #c9a84c)', text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-secondary, #5e768f)',
-  dim: 'color-mix(in srgb, var(--theme-secondary, #5e768f) 62%, var(--theme-bg, #101c2e))',
+  gold: 'var(--theme-primary, #c9a84c)', text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-secondary, #8099b0)',
+  dim: 'color-mix(in srgb, var(--theme-secondary, #8099b0) 62%, var(--theme-bg, #101c2e))',
   pos: 'var(--theme-positive, #22c55e)', neg: 'var(--theme-negative, #ef4444)', warn: '#f59e0b', blue: 'var(--theme-tertiary, #60a5fa)',
   mono: 'var(--theme-mono)', sans: 'var(--theme-sans)',
 }

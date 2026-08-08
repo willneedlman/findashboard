@@ -61,11 +61,11 @@ const CHROME: React.CSSProperties = {
 }
 
 const NOTE_STYLE: React.CSSProperties = {
-  fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary, #5e768f)', lineHeight: 1.5,
+  fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary, #8099b0)', lineHeight: 1.5,
 }
 
 const FALLBACK_STYLE: React.CSSProperties = {
-  fontFamily: 'var(--theme-mono)', fontSize: 9.5, color: 'var(--theme-secondary, #5e768f)',
+  fontFamily: 'var(--theme-mono)', fontSize: 9.5, color: 'var(--theme-secondary, #8099b0)',
   fontStyle: 'normal', letterSpacing: '0.01em',
 }
 

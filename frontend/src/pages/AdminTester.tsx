@@ -6,6 +6,7 @@ import TemporaryFileDrop from '../components/admin/TemporaryFileDrop'
 import WidgetRenderer from '../components/dashboard/WidgetRenderer'
 import { WIDGET_DEFAULT_SIZE, WIDGET_LABELS } from '../hooks/useDashboard'
 import type { WidgetType, WidgetConfig } from '../hooks/useDashboard'
+import EmptyState from '../components/EmptyState'
 
 const RegressionAnalysis = lazy(() => import('./RegressionAnalysis'))
 const StressTester       = lazy(() => import('./StressTester'))
@@ -575,7 +576,7 @@ export default function AdminTester() {
                 <div style={card}>
                   <p style={label('Views by day')}>Views by day</p>
                   {(traffic.by_day ?? []).length === 0 ? (
-                    <p style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-text-dim)' }}>No traffic yet — share the link and check back.</p>
+                    <p style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-text-dim)' }}>No traffic yet. Share the link and check back.</p>
                   ) : (
                     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 80 }}>
                       {traffic.by_day.map((d: { day: string; views: number; visitors: number }) => {
@@ -859,7 +860,7 @@ export default function AdminTester() {
               <p style={label('Info')}>How caching works</p>
               <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-text-dim)', lineHeight: 1.7 }}>
                 Market data responses are cached in-memory with TTLs per endpoint type.
-                Eviction removes entries past their TTL — active entries remain.
+                Eviction removes entries past their TTL. Active entries remain.
                 Check the Health tab for current entry count and size.
               </p>
             </div>
@@ -1089,17 +1090,17 @@ export default function AdminTester() {
           </div>
         )}
         {tab === 'regression' && (
-          <Suspense fallback={<div style={{ color: 'var(--theme-text-dim)', padding: 32 }}>Loading…</div>}>
+          <Suspense fallback={<div style={{ padding: 32 }}><EmptyState variant="loading" size="compact" title="Loading the panel" /></div>}>
             <RegressionAnalysis />
           </Suspense>
         )}
         {tab === 'stress' && (
-          <Suspense fallback={<div style={{ color: 'var(--theme-text-dim)', padding: 32 }}>Loading…</div>}>
+          <Suspense fallback={<div style={{ padding: 32 }}><EmptyState variant="loading" size="compact" title="Loading the panel" /></div>}>
             <StressTester />
           </Suspense>
         )}
         {tab === 'algo' && (
-          <Suspense fallback={<div style={{ color: 'var(--theme-text-dim)', padding: 32 }}>Loading…</div>}>
+          <Suspense fallback={<div style={{ padding: 32 }}><EmptyState variant="loading" size="compact" title="Loading the panel" /></div>}>
             <AlgoRunner />
           </Suspense>
         )}

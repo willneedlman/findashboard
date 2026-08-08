@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import PageWrapper from '../components/PageWrapper'
 import ErrorState from '../components/ErrorState'
 import LoadingState from '../components/LoadingState'
-import { SELECT, LABEL } from './valuationShared'
+import { Select, LABEL } from './valuationShared'
 import { fetchTradeFlows } from '../hooks/useApi'
 import { T } from '../lib/theme'
 import { ISO_GEO, projectWorld, WORLD_DOT_PATH } from '../lib/worldDotMap'
@@ -69,7 +69,7 @@ export default function TradeFlows() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <QueryBar reporter={reporter} setReporter={setReporter} cmd={cmd} setCmd={setCmd} year={year} setYear={setYear} flow={flow} setFlow={setFlow} run={run} loading={q.isFetching} dirty={dirty} />
         {q.isLoading ? <LoadingState label="Fetching bilateral trade from UN Comtrade" />
-          : q.error ? <ErrorState message={(q.error as any)?.response?.data?.detail || 'Could not load trade flows.'} onRetry={() => q.refetch()} />
+          : q.error ? <ErrorState title="Trade flows unavailable" message={(q.error as any)?.response?.data?.detail || 'Comtrade did not return flows for that selection. Retry, or pick another year.'} onRetry={() => q.refetch()} />
           : q.data?.available ? <Results d={q.data} cmdLabel={cmdLabel} countryLabel={countryLabel} />
           : <NoData countryLabel={countryLabel} cmdLabel={cmdLabel} year={request.year} flow={request.flow} />}
       </div>
@@ -86,9 +86,9 @@ function QueryBar({ reporter, setReporter, cmd, setCmd, year, setYear, flow, set
   return (
     <Panel label="" meta="UN Comtrade · annual bilateral flows" style={{ padding: '12px 12px 10px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.15fr 1.35fr 0.6fr 1fr auto', alignItems: 'end', gap: 8 }}>
-        <label><span style={{ ...LABEL, display: 'block', marginBottom: 5 }}>Reporter country</span><select value={reporter} onChange={e => setReporter(Number(e.target.value))} style={{ ...SELECT, width: '100%' }}>{COUNTRIES.map(([c, n]) => <option key={c} value={c}>{n}</option>)}</select></label>
-        <label><span style={{ ...LABEL, display: 'block', marginBottom: 5 }}>Commodity</span><select value={cmd} onChange={e => setCmd(e.target.value)} style={{ ...SELECT, width: '100%' }}>{COMMODITIES.map(([c, n]) => <option key={c} value={c}>{n}</option>)}</select></label>
-        <label><span style={{ ...LABEL, display: 'block', marginBottom: 5 }}>Year</span><select value={year} onChange={e => setYear(e.target.value)} style={{ ...SELECT, width: '100%' }}>{YEARS.map(y => <option key={y} value={y}>{y}</option>)}</select></label>
+        <label><span style={{ ...LABEL, display: 'block', marginBottom: 5 }}>Reporter country</span><Select value={reporter} onChange={e => setReporter(Number(e.target.value))}>{COUNTRIES.map(([c, n]) => <option key={c} value={c}>{n}</option>)}</Select></label>
+        <label><span style={{ ...LABEL, display: 'block', marginBottom: 5 }}>Commodity</span><Select value={cmd} onChange={e => setCmd(e.target.value)}>{COMMODITIES.map(([c, n]) => <option key={c} value={c}>{n}</option>)}</Select></label>
+        <label><span style={{ ...LABEL, display: 'block', marginBottom: 5 }}>Year</span><Select value={year} onChange={e => setYear(e.target.value)}>{YEARS.map(y => <option key={y} value={y}>{y}</option>)}</Select></label>
         <div><div style={{ ...LABEL, marginBottom: 5 }}>Flow</div><div style={{ display: 'flex', gap: 5 }}><button onClick={() => setFlow('X')} style={seg(flow === 'X')}>Exports</button><button onClick={() => setFlow('M')} style={seg(flow === 'M')}>Imports</button></div></div>
         <button onClick={run} disabled={loading} style={{ height: 32, minWidth: 112, fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.gold, border: `1px solid ${T.gold}`, background: mix(T.gold, dirty ? 12 : 6), padding: '0 14px', cursor: loading ? 'wait' : 'pointer', opacity: loading ? 0.6 : 1 }}>{loading ? 'RUNNING…' : 'RUN'}</button>
       </div>

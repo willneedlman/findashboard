@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import PageHeader from './PageHeader'
 
 // Emil's strong ease-out curve — feels more intentional than framer's default easeOut.
@@ -13,12 +13,20 @@ const variants = {
 interface PageWrapperProps {
   children: React.ReactNode
   title?: string
+  meta?: React.ReactNode
 }
 
-export default function PageWrapper({ children, title }: PageWrapperProps) {
+export default function PageWrapper({ children, title, meta }: PageWrapperProps) {
+  // Reduced motion renders the final state directly rather than running the
+  // rise at 0.01ms, which reads as a flash.
+  const reduced = useReducedMotion()
   return (
-    <motion.div className="ft-print-page" variants={variants} initial="initial" animate="animate" exit="exit">
-      {title && <PageHeader title={title} />}
+    <motion.div className="ft-print-page"
+      variants={reduced ? undefined : variants}
+      initial={reduced ? false : 'initial'}
+      animate={reduced ? false : 'animate'}
+      exit={reduced ? undefined : 'exit'}>
+      {title && <PageHeader title={title} meta={meta} />}
       {children}
     </motion.div>
   )

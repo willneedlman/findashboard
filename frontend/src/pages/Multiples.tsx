@@ -10,7 +10,7 @@ import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip } from '../lib/reportCaptureRegistry'
 
 const MONO = 'var(--theme-mono)', SANS = 'var(--theme-sans)'
-const TXT = 'var(--theme-text, #d7e3fc)', SEC = 'var(--theme-secondary, #99907e)', GOLD = 'var(--theme-primary, #c9a84c)'
+const TXT = 'var(--theme-text, #d7e3fc)', SEC = 'var(--theme-secondary, #8099b0)', GOLD = 'var(--theme-primary, #c9a84c)'
 const BAND = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 28%, transparent)'
 const HAIR = '1px solid var(--theme-border, rgba(255,255,255,0.08))'
 
@@ -176,8 +176,7 @@ export function MultiplesContent() {
       {!data && !error && (
         <EmptyState title="Multiples Valuation"
           hint="Set a target multiple on any line to see the share price it implies. Enter a ticker and press FETCH."
-          keys={['Enter']} kpis={['Implied Price', 'Upside', 'P/E', 'EV/EBITDA', 'P/S']}
-          preview="table" previewLabel="Valuation Multiples" columns={['Metric', 'Current', 'Target', 'Implied Price']} action="FETCH" />
+          keys={['Enter']} action="FETCH" />
       )}
 
       {data && !data.metrics.length && (
@@ -228,7 +227,7 @@ export function MultiplesContent() {
                   <tr key={r.key}>
                     <td style={{ ...TD, textAlign: 'left', fontWeight: 700 }}>{r.label}</td>
                     <td style={TD}>${r.per_share.toFixed(2)}</td>
-                    <td style={{ ...TD, color: 'var(--theme-secondary, #99907e)' }}>{r.current_mult != null ? `${r.current_mult.toFixed(1)}x` : '—'}</td>
+                    <td style={{ ...TD, color: 'var(--theme-secondary, #8099b0)' }}>{r.current_mult != null ? `${r.current_mult.toFixed(1)}x` : '—'}</td>
                     <td style={{ ...TD, padding: '5px 12px' }}>
                       <input type="number" step={0.5} min={0} value={Number(r.mult.toFixed(1))}
                         onFocus={e => e.target.select()}

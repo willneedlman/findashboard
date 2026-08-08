@@ -17,7 +17,7 @@ const GREEK_COLOR: Record<string, string> = {
   delta: 'var(--theme-tertiary, #1f5673)', gamma: '#7b5ea7', theta: '#8c2e36', vega: '#2f6b4b',
 }
 
-import { INPUT, SELECT, LABEL, HINT, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
+import { INPUT, Select, LABEL, HINT, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
 
 interface ChainRow {
   strike: number; lastPrice: number; bid: number; ask: number
@@ -453,12 +453,12 @@ export function OptionsPricerContent() {
                 <div>
                   <label style={LABEL}>Expiry</label>
                   <ExpirySelect ticker={chainSym} value={chainExpiry} expirations={chain.expirations}
-                    autoSelect={false} style={{ ...SELECT, cursor: 'pointer' }}
+                    autoSelect={false} style={{ ...INPUT, cursor: 'pointer' }}
                     onChange={exp => { setChainExpiry(exp); chainMut.mutate({ ticker: chainSym, expiry: exp }) }} />
                 </div>
                 <div>
                   <label style={LABEL}>Contract ({params.option_type === 'call' ? 'Calls' : 'Puts'})</label>
-                  <select value={selectedIdx} style={{ ...SELECT, cursor: 'pointer' }}
+                  <Select value={selectedIdx}
                     onChange={e => applyContract(e.target.value)}>
                     <option value="" disabled>Select strike…</option>
                     {chainRows.map((r, i) => (
@@ -466,7 +466,7 @@ export function OptionsPricerContent() {
                         {r.strike} · ${rowMark(r).toFixed(2)} · IV {(r.impliedVolatility * 100).toFixed(0)}%
                       </option>
                     ))}
-                  </select>
+                  </Select>
                   {chain.spot != null && <div style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', fontFamily: 'var(--theme-mono)', marginTop: 5 }}>Spot ${chain.spot.toFixed(2)} · {chain.dte === 0 ? `${(chain.t_days * 24).toFixed(1)}h to expiry` : `${chain.dte}d to expiry`}</div>}
                 </div>
               </>
@@ -519,11 +519,10 @@ export function OptionsPricerContent() {
             </div>
             <div>
               <label style={LABEL}>Preset</label>
-              <select defaultValue="" onChange={e => { const p = ML_PRESETS[e.target.value]; if (p) setLegs(p(params.S, params.sigma, params.T)) }}
-                style={{ ...SELECT, cursor: 'pointer' }}>
+              <Select defaultValue="" onChange={e => { const p = ML_PRESETS[e.target.value]; if (p) setLegs(p(params.S, params.sigma, params.T)) }}>
                 <option value="" disabled>Load a structure…</option>
                 {Object.keys(ML_PRESETS).map(name => <option key={name} value={name}>{name}</option>)}
-              </select>
+              </Select>
             </div>
             <div>
               <label style={LABEL}>Legs</label>

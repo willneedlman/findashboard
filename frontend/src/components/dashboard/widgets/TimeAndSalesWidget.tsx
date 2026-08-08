@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 import { hhmmss } from './usePortfolio'
+import EmptyState from '../../EmptyState'
 
 
 interface Candle { time: number; open: number; high: number; low: number; close: number; volume: number }
@@ -60,9 +61,11 @@ export default function TimeAndSalesWidget({ config }: { config: WidgetConfig })
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {recent.length === 0 ? (
-          <div style={{ padding: 16, textAlign: 'center', fontFamily: T.label, fontSize: 10, color: T.muted, lineHeight: 1.6 }}>
-            {isLoading ? 'Loading prints…' : 'Market closed — no data available.'}
-          </div>
+          isLoading ? <EmptyState variant="loading" size="compact" title="Loading prints" /> : (
+            <div style={{ padding: 16, textAlign: 'center', fontFamily: T.label, fontSize: 10, color: T.muted, lineHeight: 1.6 }}>
+              Market closed. No prints to show.
+            </div>
+          )
         ) : recent.map((p, i) => {
           const prev = recent[i + 1]?.close ?? p.open
           const dir = p.close > prev ? 1 : p.close < prev ? -1 : 0

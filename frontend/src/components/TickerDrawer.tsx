@@ -138,7 +138,7 @@ export default function TickerDrawer({ open, sym, onClose }: { open: boolean; sy
                     </button>
                   </div>
                   <div style={{ fontFamily: SANS, fontSize: 11, color: SEC, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {hub.isLoading ? 'Loading…' : d ? `${d.company_name ?? sym} · ${d.sector ?? ''}` : 'Profile unavailable'}
+                    {hub.isLoading ? 'Loading profile' : d ? `${d.company_name ?? sym} · ${d.sector ?? ''}` : 'Profile unavailable'}
                   </div>
                 </div>
               </div>
@@ -210,7 +210,7 @@ export default function TickerDrawer({ open, sym, onClose }: { open: boolean; sy
             {/* news */}
             <div style={SECTION}>
               <div style={{ ...LABEL, marginBottom: 8 }}>Latest News</div>
-              {news.length === 0 && <TileNote>{hub.isLoading ? 'Loading…' : 'No recent headlines.'}</TileNote>}
+              {news.length === 0 && <TileNote>{hub.isLoading ? 'Loading headlines' : 'No recent headlines.'}</TileNote>}
               {news.map((n, i) => {
                 const title = n?.title ?? n?.headline ?? ''
                 const link = n?.link ?? n?.url

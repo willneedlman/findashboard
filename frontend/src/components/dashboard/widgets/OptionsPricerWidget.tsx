@@ -150,7 +150,7 @@ export default function OptionsPricerWidget({ config }: { config: WidgetConfig }
             border: `1px solid ${justFilled ? 'color-mix(in srgb, var(--theme-positive) 50%, transparent)' : T.border}`,
             color:   fetchActive ? T.muted : justFilled ? 'var(--theme-positive)' : T.gold,
             fontFamily: T.mono, fontSize: 10, padding: '4px 8px', cursor: fetchActive ? 'default' : 'pointer',
-            transition: 'all 0.3s', minWidth: 28, textAlign: 'center',
+            transition: 'min-width 0.3s var(--ease-out), background 0.3s var(--ease-out), color 0.3s var(--ease-out)', minWidth: 28, textAlign: 'center',
           }}
         >
           {fetchActive ? '…' : justFilled ? 'OK' : 'Fill'}
@@ -217,7 +217,7 @@ export default function OptionsPricerWidget({ config }: { config: WidgetConfig }
           <span style={{ color: T.muted, fontSize: 11, fontFamily: T.mono }}>Set inputs and press Calculate</span>
           {spot > 0 && (
             <span style={{ color: T.muted, fontSize: 9, fontFamily: T.mono, opacity: 0.7 }}>
-              Spot ${spot.toFixed(2)} · {impliedVol > 0 ? `IV ${impliedVol.toFixed(1)}%` : 'IV loading…'}
+              Spot ${spot.toFixed(2)} · {impliedVol > 0 ? `IV ${impliedVol.toFixed(1)}%` : 'IV loading'}
             </span>
           )}
         </div>

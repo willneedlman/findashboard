@@ -42,7 +42,7 @@ export default function ChartTooltip({ active, payload, label, formatter, labelF
   return (
     <div style={TOOLTIP_STYLE}>
       {displayLabel && (
-        <div style={{ color: 'var(--theme-secondary, #99907e)', fontSize: 10, letterSpacing: '0.08em', marginBottom: 6, borderBottom: '1px solid rgba(46,57,77,0.8)', paddingBottom: 4 }}>
+        <div style={{ color: 'var(--theme-secondary, #8099b0)', fontSize: 10, letterSpacing: '0.08em', marginBottom: 6, borderBottom: '1px solid rgba(46,57,77,0.8)', paddingBottom: 4 }}>
           {displayLabel}
         </div>
       )}
@@ -53,7 +53,7 @@ export default function ChartTooltip({ active, payload, label, formatter, labelF
         return (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: i > 0 ? 3 : 0 }}>
             <div style={{ width: 8, height: 2, background: entry.color ?? 'var(--theme-primary, #c9a84c)', flexShrink: 0 }} />
-            <span style={{ color: 'var(--theme-secondary, #99907e)', flex: 1 }}>{name}</span>
+            <span style={{ color: 'var(--theme-secondary, #8099b0)', flex: 1 }}>{name}</span>
             <span style={{ color: 'var(--theme-text, #d7e3fc)', fontWeight: 600 }}>{display}</span>
           </div>
         )

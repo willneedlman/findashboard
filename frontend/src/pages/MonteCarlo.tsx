@@ -1030,7 +1030,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
               color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', lineHeight: 1.5,
               border: '1px dashed var(--theme-border, rgba(255,255,255,0.12))', background: 'var(--theme-bg, #101c2e)',
             }}>
-              No legs yet — pick a structure above, or + add leg to build a custom multi-leg.
+              No legs yet. Pick a structure above, or + add leg to build a custom multi-leg.
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -1190,7 +1190,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
                 : `${effectiveNSims.toLocaleString()} paths · ${tickers.length} name${tickers.length === 1 ? '' : 's'} · rough ETA ${mcEtaLabel}`}
               <br />
               <span style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))' }}>
-                Safe to switch tabs — job runs on the server with no client timeout.
+                Safe to switch tabs. The job runs on the server with no client timeout.
               </span>
             </div>
             <div style={{ width: 'min(420px, 100%)', marginTop: 4 }}>
@@ -2145,7 +2145,7 @@ export function MonteCarloContent() {
                     <NumberInput value={shortMaintenance} onChange={setShortMaintenance} step={1} min={1} max={200} />
                   </Field>
                   <div style={{ gridColumn: '1 / -1', color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', fontFamily: 'var(--theme-sans)', fontSize: 9, lineHeight: 1.45 }}>
-                    Maintenance is applied to current marked exposure. Broker house requirements can be higher; set these fields to match the account being modeled.
+                    Maintenance is applied to current marked exposure. Broker house requirements can be higher. Set these fields to match the account being modeled.
                   </div>
                   <button type="button" disabled={model === 'bootstrap'} onClick={() => setCrspCalibration(active => !active)}
                     title={model === 'bootstrap' ? 'Bootstrap already uses realized historical returns' : 'Shift the selected holdings’ modeled drift and volatility to the CRSP point-in-time S&P 500 regime while preserving their relative differences'}
@@ -2218,7 +2218,7 @@ export function MonteCarloContent() {
                   <span style={{ color: 'var(--theme-primary, #c9a84c)', fontWeight: 700 }}>
                     {data.benchmarkSource === 'crsp' ? 'BENCHMARK · CRSP S&P 500 PIT' : 'CALIBRATION · CRSP REGIME'}
                   </span>
-                  <span style={{ color: 'var(--theme-secondary, #99907e)', marginLeft: 8 }}>
+                  <span style={{ color: 'var(--theme-secondary, #8099b0)', marginLeft: 8 }}>
                     Your {data.legs.length}-holding portfolio remains unchanged. CRSP uses {data.crspContext.constituentCount} S&amp;P 500 constituents as of {data.crspContext.start}
                     {data.crspContext.delistings?.length > 0 && `, including ${data.crspContext.delistings.length} names later delisted or acquired`}.
                     {data.crspCalibration && ` Portfolio assumptions are shifted to ${Number(data.crspContext.drift).toFixed(1)}% drift and ${Number(data.crspContext.volatility).toFixed(1)}% volatility at the aggregate regime level.`}
@@ -2247,7 +2247,7 @@ export function MonteCarloContent() {
                 <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
                   {!data.bootstrapReady && (
                     <span style={{ fontSize: 9, color: 'var(--theme-negative)', letterSpacing: '0.04em' }}>
-                      no history — using GBM, run Fetch Live Vol / Drift
+                      no history, using GBM. Run Fetch Live Vol / Drift
                     </span>
                   )}
                   <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>
@@ -2334,11 +2334,11 @@ export function MonteCarloContent() {
                     }}>
                       <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, color: l.stratAdj >= 0 ? 'var(--theme-positive)' : 'var(--theme-negative)', marginBottom: 3 }}>
                         {l.ticker} · {l.strategy} · {l.stratLabel}
-                        <span style={{ marginLeft: 10, fontSize: 10, color: 'var(--theme-secondary, #99907e)', fontWeight: 400 }}>
+                        <span style={{ marginLeft: 10, fontSize: 10, color: 'var(--theme-secondary, #8099b0)', fontWeight: 400 }}>
                           Drift adj: {l.stratAdj > 0 ? '+' : ''}{l.stratAdj}% · Eff. drift: {+(l.drift + l.stratAdj).toFixed(1)}%/yr
                         </span>
                       </div>
-                      <div style={{ fontSize: 10, color: 'var(--theme-secondary, #99907e)' }}>{l.stratDetail}</div>
+                      <div style={{ fontSize: 10, color: 'var(--theme-secondary, #8099b0)' }}>{l.stratDetail}</div>
                     </div>
                   ))}
                 </div>

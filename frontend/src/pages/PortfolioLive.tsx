@@ -1084,7 +1084,7 @@ function PositionsTable({ rows, flash, sort, onSort, openSparks, onToggleSpark, 
                         }}>
                         {open
                           ? (pts ? <RowSparkline points={pts} positive={(r.pct1d ?? 0) >= 0} />
-                            : <span style={{ fontSize: 8.5 }}>{sparksLoading ? '…' : 'no data'}</span>)
+                            : <span style={{ fontSize: 9.5 }}>{sparksLoading ? '…' : 'no data'}</span>)
                           : '∿'}
                       </button>
                     </td>

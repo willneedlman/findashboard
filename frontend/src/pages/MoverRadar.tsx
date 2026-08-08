@@ -14,7 +14,7 @@ const POS = 'var(--theme-positive, #3fb950)'
 const NEG = 'var(--theme-negative, #f85149)'
 const TEXT = 'var(--theme-text, #d7e3fc)'
 const SEC = 'var(--theme-secondary, #8099b0)'
-const FAINT = 'var(--theme-text-faint, #5e768f)'
+const FAINT = 'var(--theme-text-faint, #8099b0)'
 const MONO = 'var(--theme-mono, monospace)'
 const SANS = 'var(--theme-sans, sans-serif)'
 const BORDER = 'var(--theme-border, rgba(255,255,255,0.08))'
@@ -153,7 +153,7 @@ export function MoverRadarContent() {
         </div>
 
         {!ticker && (
-          <EmptyState title="Mover Radar" hint="Enter a ticker to see what's actually moving it — real news, filings, and social chatter, or confirmation it's just noise." action="SCAN" />
+          <EmptyState title="Mover Radar" hint="Enter a ticker to see what is actually moving it: real news, filings, and social chatter, or confirmation it is just noise." action="SCAN" />
         )}
         {ticker && isFetching && (
           <EmptyState title="Scanning…" hint={`Pulling price action, filings, and news/social evidence for ${ticker}.`} variant="loading" />
@@ -197,15 +197,15 @@ export function MoverRadarContent() {
                   <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: CONFIDENCE_COLOR[data.narrative.confidence] ?? SEC, border: `1px solid ${CONFIDENCE_COLOR[data.narrative.confidence] ?? BORDER}`, padding: '2px 7px', textTransform: 'uppercase' }}>{data.narrative.confidence} confidence</span>
                 </div>
                 <div style={{ fontFamily: SANS, fontSize: 13, color: TEXT, lineHeight: 1.6 }}>{data.narrative.summary}</div>
-                <div style={{ fontFamily: SANS, fontSize: 9, color: FAINT, marginTop: 8 }}>AI-synthesized from the evidence below — cited items marked ★.</div>
+                <div style={{ fontFamily: SANS, fontSize: 9, color: FAINT, marginTop: 8 }}>Synthesized from the evidence below. Cited items marked ★.</div>
               </div>
             )}
 
             {data.verdict === 'evidence_only' && (
               <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, padding: '16px 18px' }}>
-                <div style={{ fontFamily: SANS, fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: SEC, marginBottom: 6 }}>Evidence Found — Synthesis Unavailable</div>
+                <div style={{ fontFamily: SANS, fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: SEC, marginBottom: 6 }}>Evidence Found, Synthesis Unavailable</div>
                 <div style={{ fontFamily: SANS, fontSize: 12, color: TEXT, lineHeight: 1.6 }}>
-                  {data.evidence?.length ? 'There is real, fresh evidence below, but the AI summarizer is temporarily unavailable — read the raw evidence directly.' : 'No fresh evidence, but the move is outside the normal range for this name.'}
+                  {data.evidence?.length ? 'There is real, fresh evidence below, but the summarizer is temporarily unavailable. Read the raw evidence directly.' : 'No fresh evidence, but the move is outside the normal range for this name.'}
                 </div>
               </div>
             )}

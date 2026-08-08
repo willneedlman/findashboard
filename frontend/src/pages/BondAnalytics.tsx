@@ -164,10 +164,10 @@ export function BondAnalyticsContent() {
               {lookup && (
                 <div style={{ background: 'var(--theme-surface, #142032)', border: '1px solid var(--theme-border, rgba(255,255,255,0.10))', padding: '8px 9px', display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-sans)' }}>{lookup.name}</div>
-                  <div style={{ fontSize: 9, color: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }}>{lookup.type}{lookup.ticker ? ` · ${lookup.ticker}` : ''}</div>
+                  <div style={{ fontSize: 9, color: 'var(--theme-secondary, #8099b0)', fontFamily: 'var(--theme-mono)' }}>{lookup.type}{lookup.ticker ? ` · ${lookup.ticker}` : ''}</div>
                   {lookup.coupon_rate != null && (
                     <div style={{ fontSize: 9, color: 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-sans)' }}>
-                      Coupon {lookup.coupon_rate}% · matures {lookup.maturity_date} — prefilled
+                      Coupon {lookup.coupon_rate}% · matures {lookup.maturity_date} · prefilled
                     </div>
                   )}
                   {lookup.market_price != null ? (
@@ -175,7 +175,7 @@ export function BondAnalyticsContent() {
                       Price {lookup.market_price}/100 · {lookup.price_source}{lookup.price_as_of ? ` · as of ${lookup.price_as_of}` : ''} — prefilled (a mark, not a live quote)
                     </div>
                   ) : (
-                    <div style={{ fontSize: 9, color: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-sans)', lineHeight: 1.4 }}>
+                    <div style={{ fontSize: 9, color: 'var(--theme-secondary, #8099b0)', fontFamily: 'var(--theme-sans)', lineHeight: 1.4 }}>
                       {lookup.coupon_rate != null ? 'No free price found — enter market price manually.' : 'Identity only — enter coupon & price manually.'} Live prices need a licensed feed.
                     </div>
                   )}
@@ -213,7 +213,7 @@ export function BondAnalyticsContent() {
           </div>
       </>}>
           {imported && (
-            <div style={{ marginBottom: 12, padding: '8px 12px', background: 'var(--theme-surface, #142032)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)', fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-secondary, #99907e)' }}>
+            <div style={{ marginBottom: 12, padding: '8px 12px', background: 'var(--theme-surface, #142032)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)', fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-secondary, #8099b0)' }}>
               Imported from CUSIP <span style={{ fontFamily: 'var(--theme-mono)', color: 'var(--theme-primary, #c9a84c)' }}>{imported.cusip}</span>{imported.name ? ` · ${imported.name}` : ''}
             </div>
           )}
@@ -242,7 +242,7 @@ export function BondAnalyticsContent() {
                 </div>
                 <div style={{ padding: '10px 12px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', whiteSpace: 'nowrap' }}>Rate Shift</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', whiteSpace: 'nowrap' }}>Rate Shift</span>
                     <input type="range" min={-300} max={300} step={5} value={shift}
                       onChange={e => setShift(+e.target.value)} style={{ flex: 1, accentColor: 'var(--theme-primary, #c9a84c)' }} />
                     <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 13, fontWeight: 700, color: 'var(--theme-primary, #c9a84c)', whiteSpace: 'nowrap', width: 72, textAlign: 'right' }}>

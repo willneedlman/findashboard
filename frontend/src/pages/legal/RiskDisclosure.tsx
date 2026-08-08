@@ -15,7 +15,7 @@ export default function RiskDisclosure() {
           'Complex strategies (spreads, condors, straddles) involve multiple simultaneous risks',
           'Implied volatility changes can significantly affect option pricing independent of underlying price movement',
           'Early assignment risk on short options positions',
-          'Liquidity risk — some options may be difficult to exit at a fair price',
+          'Liquidity risk: some options may be difficult to exit at a fair price',
           'Pin risk near expiration when the underlying trades near a strike price',
         ]} />
       </Section>
@@ -24,8 +24,8 @@ export default function RiskDisclosure() {
         <P>The quantitative models and analytical tools on this Platform (Black-Scholes pricing, Monte Carlo simulations, DCF valuations, Greeks calculators, etc.) are mathematical approximations with inherent limitations:</P>
         <UL items={[
           'Black-Scholes assumes constant volatility and log-normal returns, which do not hold in practice',
-          'Monte Carlo simulations are probabilistic and each run produces different results; outputs are not predictions',
-          'DCF valuations are highly sensitive to input assumptions; small changes in growth rates or discount rates produce large changes in output',
+          'Monte Carlo simulations are probabilistic and each run produces different results, and outputs are not predictions',
+          'DCF valuations are highly sensitive to input assumptions. Small changes in growth rates or discount rates produce large changes in output',
           'Historical volatility is a backward-looking measure and may not predict future volatility',
           'Correlation matrices assume stable relationships that can break down during market stress',
           'Implied probability distributions are derived from market prices and reflect market consensus, not certainty',

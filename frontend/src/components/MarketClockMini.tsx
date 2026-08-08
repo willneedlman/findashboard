@@ -8,7 +8,7 @@ import { MARKETS, SUN_ORDER, marketStatus, localArcs, localNowHours, localClock,
 // any ring OR its chip isolates that market everywhere. Reuses lib/marketHours.
 const T = {
   text: 'var(--theme-text, #eaf0f8)', muted: 'var(--theme-secondary, #8099b0)',
-  muted2: 'var(--theme-text-faint, #5e768f)',
+  muted2: 'var(--theme-text-faint, #8099b0)',
   track: 'color-mix(in srgb, var(--theme-text, #d7e3fc) 12%, transparent)',
   gold: 'var(--theme-primary, #c9a84c)', needle: 'var(--theme-primary, #c9a84c)',
   closedDot: 'var(--theme-text-faint, #3a4a63)',
@@ -106,7 +106,7 @@ export default function MarketClockMini() {
           return (
             <button key={m.id} onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(i)} onBlur={() => setHovered(null)}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-              <span style={{ width: active ? 8 : 6, height: active ? 8 : 6, borderRadius: '50%', background: dot, transition: 'all 120ms ease' }} />
+              <span style={{ width: active ? 8 : 6, height: active ? 8 : 6, borderRadius: '50%', background: dot, transition: 'width 120ms var(--ease-out), height 120ms var(--ease-out), background 120ms var(--ease-out)' }} />
               <span style={{ fontFamily: T.mono, fontSize: 12, color: active ? T.text : T.muted, transition: 'color 120ms ease' }}>{m.short}</span>
             </button>
           )

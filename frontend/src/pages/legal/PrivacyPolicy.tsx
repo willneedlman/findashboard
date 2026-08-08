@@ -13,7 +13,7 @@ export default function PrivacyPolicy() {
         <UL items={[
           'Dashboard layout and widget configurations (stored locally in your browser\'s localStorage)',
           'User preferences such as selected tickers, yield selections, and visibility settings (localStorage only)',
-          'Standard server access logs including IP address and request timestamps — retained for 30 days for security purposes',
+          'Standard server access logs including IP address and request timestamps, retained for 30 days for security purposes',
         ]} />
         <P>We do not collect names, email addresses, financial account information, or any payment data.</P>
       </Section>
@@ -27,7 +27,7 @@ export default function PrivacyPolicy() {
         <UL items={[
           'Yahoo Finance (via yfinance) — price history, options chains, news',
           'Financial Modeling Prep (FMP) — fundamental data, analyst ratings',
-          'TradingView — embedded chart widgets loaded via TradingView\'s CDN',
+          'TradingView: embedded chart widgets loaded via TradingView\'s CDN',
           'Federal Reserve Economic Data (FRED) — interest rate data via St. Louis Fed API',
         ]} />
         <P>When the TradingView chart widget loads, TradingView may set its own cookies in accordance with TradingView's privacy policy.</P>

@@ -336,7 +336,7 @@ export function ImpliedProbabilityContent() {
 
           {data && !dist && (
             <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: 16, fontSize: 12, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>
-              Market-implied distribution unavailable — no options data for this ticker/expiry.
+              Market-implied distribution unavailable. No options data for this ticker and expiry.
               The volatility cone above uses Black-Scholes with historical volatility.
             </div>
           )}
@@ -344,16 +344,15 @@ export function ImpliedProbabilityContent() {
           {mutError && (
             <div style={{ background: 'color-mix(in srgb, var(--theme-negative) 7%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-negative) 30%, transparent)', padding: '12px 16px', fontSize: 12, color: 'var(--theme-text, #d7e3fc)' }}>
               {(mutError as Error).message === 'backend_down'
-                ? 'Backend unreachable — start the API server (uvicorn main:app --reload --port 8000) and try again.'
-                : 'No data returned — check ticker and try again.'}
+                ? 'Backend unreachable. Start the API server (uvicorn main:app --reload --port 8000) and try again.'
+                : 'No data returned. Check the ticker and try again.'}
             </div>
           )}
 
           {!data && !mutError && !isPending && (
             <EmptyState title="Implied Probability" hint="Enter a ticker and expiry, then press Generate."
               action="↓ Generate"
-              keys={['Enter']} kpis={['Expected Move', 'P(Up)', 'P(Down)', 'ATM IV', 'Days']}
-              preview="chart" previewLabel="Implied Distribution" />
+              keys={['Enter']} />
           )}
         </SidebarLayout>
   )

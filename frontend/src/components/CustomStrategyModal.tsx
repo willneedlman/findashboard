@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect, type ReactNode } from 'react'
 import axios from 'axios'
 import useIsMobile from '../hooks/useIsMobile'
 import StrategyCodePanel from './StrategyCodePanel'
+import { alpha } from '../lib/theme'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -259,7 +260,7 @@ const T = {
   surface: 'var(--theme-surface, #0d1826)',
   border:  'var(--theme-border, rgba(255,255,255,0.10))',
   text:    'var(--theme-text, #d7e3fc)',
-  muted:   'var(--theme-secondary, #99907e)',
+  muted:   'var(--theme-secondary, #8099b0)',
   dim:     'var(--theme-text-faint, rgba(255,255,255,0.28))',
   gold:    'var(--theme-primary, #c9a84c)',
   pos:     'var(--theme-pos, #4caf7d)',
@@ -316,7 +317,7 @@ function IndicatorSelector({ value, onChange }: {
         value={value.ticker ?? ''}
         onChange={e => onChange({ ...value, ticker: e.target.value.toUpperCase().replace(/[^A-Z0-9.\-]/g, '') || undefined })}
         placeholder="sym"
-        title="Cross-ticker reference — evaluate this indicator on another symbol. Blank = the strategy's primary ticker."
+        title="Cross-ticker reference. Evaluate this indicator on another symbol. Blank = the strategy's primary ticker."
         style={{ ...inp, width: 52, flexShrink: 0, textTransform: 'uppercase' }} />
       {!NO_TIMEFRAME_TYPES.includes(t) && (
         <select value={value.timeframe ?? 'daily'}
@@ -327,7 +328,7 @@ function IndicatorSelector({ value, onChange }: {
         </select>
       )}
       {NO_TIMEFRAME_TYPES.includes(t) && (
-        <span title="Resolved from a point-in-time context (fundamentals/liquidity/flow) aligned to the backtest's own daily bars — always runs at the base cadence, no timeframe to pick."
+        <span title="Resolved from a point-in-time context (fundamentals/liquidity/flow) aligned to the backtest's own daily bars. It always runs at the base cadence, with no timeframe to pick."
           style={{ fontSize: 8, color: T.muted, fontFamily: T.mono, border: `1px solid ${T.border}`, padding: '1px 4px', letterSpacing: '0.06em' }}>
           DAILY
         </span>
@@ -487,8 +488,8 @@ function ConditionGroupEditor({ group, onChange, onRemove, canRemove, isBuy, acc
 
   return (
     <div style={{
-      border: `1px solid ${accentColor}30`,
-      background: `${accentColor}05`,
+      border: `1px solid ${alpha(accentColor, 19)}`,
+      background: alpha(accentColor, 2),
       padding: '8px 10px',
       marginBottom: 8,
     }}>
@@ -503,7 +504,7 @@ function ConditionGroupEditor({ group, onChange, onRemove, canRemove, isBuy, acc
         </select>
         <span style={{ fontSize: 8, color: T.dim, fontFamily: T.mono }}>of these conditions</span>
         <button onClick={addCond}
-          style={{ ...btn, marginLeft: 'auto', fontSize: 8, borderColor: `${accentColor}50`, color: accentColor }}>
+          style={{ ...btn, marginLeft: 'auto', fontSize: 8, borderColor: alpha(accentColor, 31), color: accentColor }}>
           + Add Condition
         </button>
         {canRemove && (
@@ -518,7 +519,7 @@ function ConditionGroupEditor({ group, onChange, onRemove, canRemove, isBuy, acc
       {group.conditions.length === 0 && (
         <div style={{ fontSize: 9, color: T.dim, fontFamily: T.mono, padding: '6px 8px',
           border: `1px dashed ${T.border}`, textAlign: 'center' }}>
-          No conditions — click "+ Add Condition"
+          No conditions. Click "+ Add Condition"
         </div>
       )}
 
@@ -566,7 +567,7 @@ function RuleBlockEditor({ label, block, onChange, accentColor, isBuy }: {
         <span style={{
           fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
           color: accentColor, fontFamily: T.mono, padding: '2px 8px',
-          border: `1px solid ${accentColor}44`, background: `${accentColor}0d`,
+          border: `1px solid ${alpha(accentColor, 27)}`, background: alpha(accentColor, 5),
         }}>
           {label}
         </span>
@@ -591,7 +592,7 @@ function RuleBlockEditor({ label, block, onChange, accentColor, isBuy }: {
       {totalConditions === 0 && (
         <div style={{ fontSize: 10, color: T.dim, fontFamily: T.mono, padding: '8px 10px',
           border: `1px dashed ${T.border}`, textAlign: 'center', marginBottom: 8 }}>
-          No conditions — add a group and define conditions
+          No conditions. Add a group and define conditions
         </div>
       )}
 
@@ -700,7 +701,7 @@ function describeGroup(g: ConditionGroup, wrap: boolean): string {
 }
 function describeRuleBlock(b: RuleBlock): string {
   const groups = b.groups.filter(g => g.conditions.length)
-  if (!groups.length) return '(no rule conditions — exits only via risk controls, if any)'
+  if (!groups.length) return '(no rule conditions, exits only via risk controls, if any)'
   return groups.map(g => describeGroup(g, groups.length > 1)).join(b.logic === 'AND' ? ' AND ' : ' OR ')
 }
 
@@ -735,7 +736,7 @@ function AiStrategyChat({ onAccept }: { onAccept: (draft: StrategyDraft) => void
       if (data?.type === 'draft') {
         const hydrated: StrategyDraft = {
           buy: hydrateRuleBlock(data.buy), sell: hydrateRuleBlock(data.sell), risk: hydrateRisk(data.risk),
-          summary: typeof data.summary === 'string' && data.summary ? data.summary : 'Strategy drafted — review below.',
+          summary: typeof data.summary === 'string' && data.summary ? data.summary : 'Strategy drafted. Review below.',
         }
         setDraft(hydrated)
         setMessages(m => [...m, { role: 'assistant', content: hydrated.summary }])
@@ -795,7 +796,7 @@ function AiStrategyChat({ onAccept }: { onAccept: (draft: StrategyDraft) => void
           </div>
           {(draft.risk.stopLossPct > 0 || draft.risk.takeProfitPct > 0 || draft.risk.trailingStopPct > 0 || draft.risk.maxHoldBars > 0 || draft.risk.sizingPct !== 100 || draft.risk.leverage > 1) && (
             <div style={{ fontSize: 9, fontFamily: T.mono, color: T.muted, marginBottom: 8 }}>
-              Risk — size {draft.risk.sizingPct}%
+              Risk, size {draft.risk.sizingPct}%
               {draft.risk.leverage > 1 ? ` · ${draft.risk.leverage}x leverage` : ''}
               {draft.risk.leverage > 1 && draft.risk.effectiveAnnualRate > 0 ? ` · ${draft.risk.effectiveAnnualRate}% EAR` : ''}
               {draft.risk.stopLossPct > 0 ? ` · SL ${draft.risk.stopLossPct}%` : ''}
@@ -1059,7 +1060,7 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef,
 
           {/* Logic legend — make the ALL/ANY nesting explicit */}
           <div style={{ fontSize: 9, color: T.dim, fontFamily: T.mono, lineHeight: 1.6, marginBottom: 14 }}>
-            Each <span style={{ color: T.muted }}>group</span> matches <span style={{ color: T.muted }}>ALL</span> or <span style={{ color: T.muted }}>ANY</span> of its conditions; a block fires when <span style={{ color: T.muted }}>ALL</span> or <span style={{ color: T.muted }}>ANY</span> of its groups match. Add a second group to combine signals with different logic.
+            Each <span style={{ color: T.muted }}>group</span> matches <span style={{ color: T.muted }}>ALL</span> or <span style={{ color: T.muted }}>ANY</span> of its conditions. A block fires when <span style={{ color: T.muted }}>ALL</span> or <span style={{ color: T.muted }}>ANY</span> of its groups match. Add a second group to combine signals with different logic.
           </div>
 
           {/* Default rules label */}
@@ -1089,7 +1090,7 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef,
           <div style={{ fontSize: 8, color: T.dim, fontFamily: T.mono, marginTop: -8, marginBottom: 16, lineHeight: 1.5 }}>
             Checked in order: Stop-Loss → Take-Profit → Trailing Stop → Max Hold → Exit rule. The first one to trigger
             closes the position (Exit % below controls how much of it). Direction (long/short) is set separately,
-            outside this builder — Enter opens more in that direction, Exit always reduces it.
+            outside this builder. Enter opens more in that direction, Exit always reduces it.
           </div>
 
           {/* Per-ticker signal overrides */}
@@ -1101,7 +1102,7 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef,
               <button onClick={addTickerRule} style={{ ...btn, marginLeft: 'auto', borderColor: `${T.gold}60`, color: T.gold }}>+ Add ticker</button>
             </div>
             <div style={{ fontSize: 9, color: T.dim, fontFamily: T.mono, lineHeight: 1.6, marginBottom: 10 }}>
-              Give a ticker its own buy and sell rules. A position trading that ticker uses these instead of the rules above; every other ticker falls back to the default.
+              Give a ticker its own buy and sell rules. A position trading that ticker uses these instead of the rules above. Every other ticker falls back to the default.
             </div>
             {(def.perTicker ?? []).map(entry => (
               <div key={entry.id} style={{ border: `1px solid ${T.gold}30`, background: `${T.gold}05`, padding: '10px 12px', marginBottom: 10 }}>
@@ -1152,7 +1153,7 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef,
               ))}
             </div>
             <div style={{ fontSize: 8, color: T.dim, fontFamily: T.mono, marginTop: 5 }}>
-              0 disables a control. Position size caps the % of capital committed per trade. Exit closes % is how much of the position the Exit rule closes each time it fires — 100 (default) closes all of it; a lower value trims it instead, and a still-true Exit rule keeps trimming the remainder. Delta Exit / Gamma Exit apply only to option/combo instruments — they close a lot in full once its net delta/gamma (0-1 scale, direction-agnostic — how far ITM or how fast it's curving) reaches the threshold, using the same modeled Black-Scholes pricing already used for P&L. Stop-Loss/Take-Profit/Trailing Stop/Max Hold/Delta/Gamma always close the position in full regardless of the Exit closes % setting. Leverage (1x minimum, no ceiling) multiplies that notional; borrowing EAR charges daily-compounded interest on the portion above 100% of capital. Uncapped leverage means a modest adverse move can wipe the position out entirely — see the tooltip on the leverage field.
+              0 disables a control. Position size caps the % of capital committed per trade. Exit closes % is how much of the position the Exit rule closes each time it fires. 100 (default) closes all of it; a lower value trims it instead, and a still-true Exit rule keeps trimming the remainder. Delta Exit / Gamma Exit apply only to option/combo instruments — they close a lot in full once its net delta/gamma (0-1 scale, direction-agnostic — how far ITM or how fast it's curving) reaches the threshold, using the same modeled Black-Scholes pricing already used for P&L. Stop-Loss/Take-Profit/Trailing Stop/Max Hold/Delta/Gamma always close the position in full regardless of the Exit closes % setting. Leverage (1x minimum, no ceiling) multiplies that notional; borrowing EAR charges daily-compounded interest on the portion above 100% of capital. Uncapped leverage means a modest adverse move can wipe the position out entirely — see the tooltip on the leverage field.
             </div>
           </div>
 
@@ -1175,7 +1176,7 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef,
               ] as [string, string][]).map(([name, desc]) => (
                 <div key={name} style={{ fontSize: 9, color: T.muted, fontFamily: T.mono }}>
                   <span style={{ color: T.text }}>{name}</span>
-                  <span style={{ color: T.dim }}> — {desc}</span>
+                  <span style={{ color: T.dim }}>. {desc}</span>
                 </div>
               ))}
             </div>

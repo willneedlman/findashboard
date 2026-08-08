@@ -22,7 +22,7 @@ const F = {
   text: 'var(--theme-text, #d7e3fc)',
   bright: 'var(--theme-text, #dce3ed)',
   sec: 'var(--theme-secondary, #8099b0)',
-  muted: 'var(--theme-secondary, #5e768f)',
+  muted: 'var(--theme-secondary, #8099b0)',
   surface: 'var(--theme-surface, #101c2e)',
   panel: 'color-mix(in srgb, var(--theme-bg, #0d1826) 55%, var(--theme-surface, #101c2e))',
   border: 'var(--theme-border, rgba(255,255,255,0.08))',
@@ -750,7 +750,7 @@ export default function MorningBrief({
                 <div style={{ fontFamily: F.sans, fontSize: 11, color: F.muted, marginBottom: 10 }}>
                   {overnight.data ? (SESSION_LABEL[overnight.data.session] ?? overnight.data.session) : 'Session —'}
                   {overnight.data?.indicative && (
-                    <span style={{ color: F.gold }}> · indicative — thin extended-hours tape, not a confirmed print</span>
+                    <span style={{ color: F.gold }}> · indicative, a thin extended-hours tape rather than a confirmed print</span>
                   )}
                 </div>
 

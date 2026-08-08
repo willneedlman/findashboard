@@ -172,7 +172,7 @@ export default function StrategyCodePanel({ rules, name, code, useCode, setup, o
           role: 'assistant',
           content: [
             data.ok
-              ? `Done${data.attempts > 1 ? ` — took ${data.attempts} attempts, the first failed validation` : ''}.`
+              ? `Done${data.attempts > 1 ? `, after ${data.attempts} attempts, the first of which failed validation` : ''}.`
               : `Could not get this past validation in ${data.attempts} attempts. It is in the editor with its errors.`,
             changes.length ? `Setup: ${changes.join(' · ')}. Saved with the strategy.` : '',
           ].filter(Boolean).join('\n'),
@@ -190,7 +190,7 @@ export default function StrategyCodePanel({ rules, name, code, useCode, setup, o
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ fontFamily: SANS, fontSize: 10.5, color: T.muted, lineHeight: 1.6 }}>
         Your rule blocks compiled to Python. Edit it, or describe a change below and the assistant
-        rewrites it — everything it writes is checked for lookahead bias, indicator warmup and
+        rewrites it. Everything it writes is checked for lookahead bias, indicator warmup and
         whether it actually matches what you asked for.
       </div>
 

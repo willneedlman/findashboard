@@ -8,8 +8,7 @@ import { loadCustomStrategies } from '../utils/customStrategies'
 import { readPMBooks, type PMPortfolio } from '../lib/pmImport'
 import {
   C, PERIODS, StatCard, inputStyle, selectStyle, railLabel,
-  RailGroup, RunButton, ToolShell, ModeToggle, REG_MODES, ReturnsScatter, RollingBetaChart, type RegMode,
-} from './regressionShared'
+  RailGroup, RunButton, ToolShell, ModeToggle, REG_MODES, ReturnsScatter, RollingBetaChart, type RegMode, ChartPanel } from './regressionShared'
 
 type Source = 'portfolio' | 'algo'
 
@@ -162,7 +161,7 @@ export default function ImportRegression({ mode, setMode }: { mode: RegMode; set
   return (
     <ToolShell title="Regression" rail={rail}>
       {mutation.isError && (
-        <div style={{ color: C.red, background: `${C.red}11`, border: `1px solid ${C.red}44`, borderRadius: 6, padding: '10px 14px', marginBottom: 16, fontSize: 12 }}>
+        <div style={{ color: 'var(--theme-text)', background: 'color-mix(in srgb, var(--theme-negative) 8%, transparent)', borderLeft: '2px solid var(--theme-negative)', padding: '10px 14px', marginBottom: 16, fontSize: 12 }}>
           {(mutation.error as any)?.response?.data?.detail ?? mutation.error.message}
         </div>
       )}
@@ -171,7 +170,7 @@ export default function ImportRegression({ mode, setMode }: { mode: RegMode; set
         <>
           <div style={{ fontSize: 11, color: C.muted, marginBottom: 14, lineHeight: '16px' }}>
             Realized daily returns of <span style={{ color: C.text }}>{r.y_name}</span> regressed on{' '}
-            {r.benchmark} over {r.observations} trading days. Beta is market exposure; alpha is the excess return the market does not explain.
+            {r.benchmark} over {r.observations} trading days. Beta is market exposure. Alpha is the excess return the market does not explain.
           </div>
 
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
@@ -189,34 +188,25 @@ export default function ImportRegression({ mode, setMode }: { mode: RegMode; set
               <span>Market explains</span>
               <span style={{ color: r2Color }}>{(r.r_squared * 100).toFixed(1)}%</span>
             </div>
-            <div style={{ height: 6, background: C.surf, borderRadius: 3, overflow: 'hidden' }}>
-              <div style={{ width: `${r.r_squared * 100}%`, height: '100%', background: r2Color, borderRadius: 3 }} />
+            <div style={{ height: 6, background: C.surf, overflow: 'hidden' }}>
+              <div style={{ width: `${r.r_squared * 100}%`, height: '100%', background: r2Color }} />
             </div>
           </div>
 
-          <div style={{ background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16, marginBottom: 20 }}>
-            <div style={{ color: C.gold, fontSize: 12, marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
-              <GitBranch size={14} /> Returns vs {r.benchmark}
-            </div>
+          <ChartPanel title={<><GitBranch size={14} /> Returns vs {r.benchmark}</>} style={{ marginBottom: 20 }}>
             <ReturnsScatter x={r.scatter.x} y={r.scatter.y} line={r.scatter.line} xLabel={r.benchmark} />
-          </div>
+          </ChartPanel>
 
-          <div style={{ background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
-            <div style={{ color: C.gold, fontSize: 12, marginBottom: 2, display: 'flex', gap: 8, alignItems: 'center' }}>
-              <Activity size={14} /> Rolling beta
-            </div>
-            <div style={{ color: C.muted, fontSize: 10, marginBottom: 12 }}>
-              {r.rolling_beta.window}-day rolling beta, showing how market exposure drifted over time.
-            </div>
+          <ChartPanel
+            title={<><Activity size={14} /> Rolling beta</>}
+            hint={`${r.rolling_beta.window}-day rolling beta, showing how market exposure drifted over time.`}>
             <RollingBetaChart data={roll} xKey="date" refValue={r.beta} refLabel="full-sample beta" />
-          </div>
+          </ChartPanel>
         </>
       )}
 
       {!r && !mutation.isPending && (
-        <EmptyState title="Imported Regression" hint="Select a portfolio or saved strategy, then regress its realized returns against the market."
-          kpis={['Beta', 'Alpha', 'R²', 'Observations']}
-          preview="chart" previewLabel="Returns vs Market" action="Regress vs Market" />
+        <EmptyState title="Imported Regression" hint="Select a portfolio or saved strategy, then regress its realized returns against the market." action="Regress vs Market" />
       )}
     </ToolShell>
   )

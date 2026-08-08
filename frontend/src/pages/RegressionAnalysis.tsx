@@ -10,14 +10,14 @@ import TickerInput from '../components/TickerInput'
 import EmptyState from '../components/EmptyState'
 import {
   C, PERIODS, StatCard, inputStyle, selectStyle, btnStyle,
-  RailGroup, RunButton, TickerTags, ToolShell, ModeToggle, REG_MODES, type RegMode,
-} from './regressionShared'
+  RailGroup, RunButton, TickerTags, ToolShell, ModeToggle, REG_MODES, type RegMode, ChartPanel } from './regressionShared'
 import { TOOLTIP_STYLE } from '../components/ChartTooltip'
 import MonteCarloRegression from './MonteCarloRegression'
 import ImportRegression from './ImportRegression'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip, chartClip, textClip } from '../lib/reportCaptureRegistry'
+import { alpha } from '../lib/theme'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -81,7 +81,7 @@ function CoefTable({ result }: { result: RegressionResult }) {
       </thead>
       <tbody>
         {rows.map((r, i) => (
-          <tr key={i} style={{ borderBottom: `1px solid ${C.border}22` }}>
+          <tr key={i} style={{ borderBottom: `1px solid ${alpha(C.border, 13)}` }}>
             <td style={{ padding: '6px 10px', color: C.blue }}>{r.name}</td>
             <td style={{ padding: '6px 10px', color: C.text }}>{r.coef?.toFixed(6)}</td>
             <td style={{ padding: '6px 10px', color: C.text }}>{r.se?.toFixed(6) ?? 'n/a'}</td>
@@ -250,7 +250,7 @@ function AssetOLS({ mode, setMode }: { mode: RegMode; setMode: (m: RegMode) => v
       </RailGroup>
 
       <RailGroup label="Input">
-        <button onClick={() => setUseReturns(p => !p)} style={{ ...btnStyle, width: '100%', background: useReturns ? `${C.blue}22` : C.surf, borderColor: useReturns ? C.blue : C.border }}>
+        <button onClick={() => setUseReturns(p => !p)} style={{ ...btnStyle, width: '100%', background: useReturns ? alpha(C.blue, 13) : C.surf, borderColor: useReturns ? C.blue : C.border }}>
           {useReturns ? 'Log Returns' : 'Raw Prices'}
         </button>
       </RailGroup>
@@ -262,7 +262,7 @@ function AssetOLS({ mode, setMode }: { mode: RegMode; setMode: (m: RegMode) => v
   return (
     <ToolShell title="Regression" rail={rail}>
       {mutation.isError && (
-        <div style={{ color: C.red, background: `${C.red}11`, border: `1px solid ${C.red}44`, borderRadius: 6, padding: '10px 14px', marginBottom: 16, fontSize: 12 }}>
+        <div style={{ color: 'var(--theme-text)', background: 'color-mix(in srgb, var(--theme-negative) 8%, transparent)', borderLeft: '2px solid var(--theme-negative)', padding: '10px 14px', marginBottom: 16, fontSize: 12 }}>
           {(mutation.error as any)?.response?.data?.detail ?? mutation.error.message}
         </div>
       )}
@@ -289,8 +289,8 @@ function AssetOLS({ mode, setMode }: { mode: RegMode; setMode: (m: RegMode) => v
               <span>R² fit quality</span>
               <span style={{ color: r2Color }}>{r.r_squared > 0.7 ? 'Strong' : r.r_squared > 0.4 ? 'Moderate' : 'Weak'} ({(r.r_squared * 100).toFixed(1)}%)</span>
             </div>
-            <div style={{ height: 6, background: C.surf, borderRadius: 3, overflow: 'hidden' }}>
-              <div style={{ width: `${r.r_squared * 100}%`, height: '100%', background: r2Color, borderRadius: 3 }} />
+            <div style={{ height: 6, background: C.surf, overflow: 'hidden' }}>
+              <div style={{ width: `${r.r_squared * 100}%`, height: '100%', background: r2Color }} />
             </div>
           </div>
 
@@ -305,30 +305,27 @@ function AssetOLS({ mode, setMode }: { mode: RegMode; setMode: (m: RegMode) => v
             {r.chart_b64 && (
               <button onClick={() => { const a = document.createElement('a'); a.href = `data:image/png;base64,${r.chart_b64}`; a.download = `regression_${r.y_ticker}_${r.x_tickers.join('_')}.png`; a.click() }}
                 style={{ ...btnStyle, marginLeft: 'auto', fontSize: 11, display: 'flex', gap: 6, alignItems: 'center' }}>
-                <Download size={12} /> PNG
+                <Download size={12} /> Export PNG
               </button>
             )}
           </div>
 
           {activeTab === 'charts' && (
             <div style={{ display: 'grid', gap: 20 }}>
-              <div style={{ background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
-                <div style={{ color: C.gold, fontSize: 12, marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}><BarChart2 size={14} /> Scatter + Regression Line</div>
+              <ChartPanel title={<><BarChart2 size={14} /> Scatter and regression line</>}>
                 <ScatterPlot result={r} />
-              </div>
-              <div style={{ background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
-                <div style={{ color: C.gold, fontSize: 12, marginBottom: 12 }}>Residual Diagnostics</div>
+              </ChartPanel>
+              <ChartPanel title="Residual diagnostics">
                 <ResidualPlot result={r} />
-              </div>
+              </ChartPanel>
             </div>
           )}
 
           {activeTab === 'table' && (
-            <div style={{ background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16, overflowX: 'auto' }}>
-              <div style={{ color: C.gold, fontSize: 12, marginBottom: 12 }}>Coefficient Table</div>
+            <ChartPanel title="Coefficient table" bodyStyle={{ padding: '14px 16px', overflowX: 'auto' }}>
               <CoefTable result={r} />
               <div style={{ marginTop: 10, fontSize: 10, color: C.muted }}>Significance: *** p&lt;0.001 &nbsp; ** p&lt;0.01 &nbsp; * p&lt;0.05 &nbsp; . p&lt;0.1</div>
-            </div>
+            </ChartPanel>
           )}
         </>
       )}
@@ -336,8 +333,7 @@ function AssetOLS({ mode, setMode }: { mode: RegMode; setMode: (m: RegMode) => v
       {!r && !mutation.isPending && (
         <EmptyState title="Regression" hint="Set a dependent ticker and one or more predictors, then run the regression."
           action="Run Regression"
-          keys={['Enter']} kpis={['R²', 'Adj R²', 'Beta', 'Alpha', 'Observations']}
-          preview="table" previewLabel="Regression Coefficients" columns={['Feature', 'Coefficient', 't-stat', 'p-value']} />
+          keys={['Enter']} />
       )}
     </ToolShell>
   )

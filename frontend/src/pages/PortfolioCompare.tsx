@@ -13,6 +13,7 @@ import { CASH_SYMBOL, type ImportResult } from '../lib/pmImport'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip, chartClip } from '../lib/reportCaptureRegistry'
+import { alpha } from '../lib/theme'
 
 const C = {
   bg: 'var(--theme-bg)', surf: 'var(--theme-surface)', border: 'var(--theme-border)',
@@ -39,7 +40,7 @@ const inputStyle: React.CSSProperties = {
   padding: '5px 8px', fontSize: 12, fontFamily: 'var(--theme-mono)', width: '100%', outline: 'none', boxSizing: 'border-box',
 }
 const labelStyle: React.CSSProperties = {
-  color: 'var(--theme-secondary, #99907e)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
+  color: 'var(--theme-secondary, #8099b0)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
   textTransform: 'uppercase', marginBottom: 4, display: 'block',
 }
 const panel: React.CSSProperties = { background: C.surf, border: `1px solid ${C.border}`, padding: 16 }
@@ -258,7 +259,7 @@ export function PortfolioCompareContent() {
               </ResponsiveContainer>
               {liquidations.length > 0 && (
                 <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: C.red, marginTop: 8 }}>
-                  {liquidations.map(l => l.name).join(', ')} wiped out at this leverage — equity floored to {mode === 'pct' ? '-100%' : '$0'} from the liquidation date.
+                  {liquidations.map(l => l.name).join(', ')} wiped out at this leverage. Equity floored to {mode === 'pct' ? '-100%' : '$0'} from the liquidation date.
                 </div>
               )}
             </div>
@@ -274,7 +275,7 @@ export function PortfolioCompareContent() {
                 </thead>
                 <tbody>
                   {r.metrics.map((mt, i) => (
-                    <tr key={mt.name} style={{ borderBottom: `1px solid ${C.border}33` }}>
+                    <tr key={mt.name} style={{ borderBottom: `1px solid ${alpha(C.border, 20)}` }}>
                       <td style={{ padding: '6px 10px', color: LINE_COLORS[i], fontWeight: 700 }}>
                         {mt.name}{mt.liquidated && <span style={{ color: C.red, marginLeft: 6, fontWeight: 700 }}>LIQUIDATED</span>}
                       </td>

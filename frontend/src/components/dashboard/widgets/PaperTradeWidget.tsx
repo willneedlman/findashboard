@@ -13,6 +13,7 @@ import { smaArr, emaArr, bollinger, vwapArr, type Candle } from '../../../lib/in
 import { marketSession } from '../../../lib/marketSession'
 import { readToken } from '../../../lib/theme'
 import { useLiveTick } from '../../../lib/useLiveTick'
+import EmptyState from '../../EmptyState'
 
 
 interface Position { symbol: string; quantity: number; avg_cost: number; price: number; unrealized_pnl: number; multiplier?: number; margin?: number }
@@ -188,7 +189,7 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
     if (!el) return
     const cs = getComputedStyle(document.documentElement)
     const bg = cs.getPropertyValue('--theme-bg').trim() || '#101c2e'
-    const txt = cs.getPropertyValue('--theme-secondary').trim() || '#5e768f'
+    const txt = cs.getPropertyValue('--theme-secondary').trim() || '#8099b0'
     const gold = cs.getPropertyValue('--theme-primary').trim() || '#c9a84c'
     const chart = createChart(el, {
       layout: { background: { type: ColorType.Solid, color: bg }, textColor: txt, fontFamily: "ui-monospace, monospace", fontSize: 9 },
@@ -656,14 +657,14 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
               fontFamily: T.mono, fontSize: 8, fontWeight: 700, padding: '2px 5px', cursor: 'pointer',
               border: overlays[o.key] ? '1px solid rgba(201,168,76,0.55)' : `1px solid ${T.border}`,
               background: overlays[o.key] ? 'rgba(201,168,76,0.12)' : 'transparent',
-              color: overlays[o.key] ? T.gold : 'var(--theme-secondary, #5e768f)', letterSpacing: '0.04em',
+              color: overlays[o.key] ? T.gold : 'var(--theme-secondary, #8099b0)', letterSpacing: '0.04em',
             }}>{o.label}</button>
           ))}
           <button onClick={() => setOverlayCfgOpen(o => !o)} title="Overlay settings" style={{
             fontFamily: T.mono, fontSize: 9, fontWeight: 700, padding: '2px 5px', cursor: 'pointer',
             border: overlayCfgOpen ? '1px solid rgba(201,168,76,0.55)' : `1px solid ${T.border}`,
             background: overlayCfgOpen ? 'rgba(201,168,76,0.12)' : 'transparent',
-            color: overlayCfgOpen ? T.gold : 'var(--theme-secondary, #5e768f)', display: 'flex', alignItems: 'center',
+            color: overlayCfgOpen ? T.gold : 'var(--theme-secondary, #8099b0)', display: 'flex', alignItems: 'center',
           }}><Sliders size={10} /></button>
           <select value={barSpacing > 0 ? 'custom' : windowKey} onChange={e => pickWindow(e.target.value)} style={selStyle} title="Graph width (visible span)">
             {WINDOWS.map(w => <option key={w.key} value={w.key}>{w.label}</option>)}
@@ -838,7 +839,7 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   <span style={{ ...lbl, fontSize: 9, width: 36 }}>Strike</span>
                   <select value={strike} onChange={e => setStrike(e.target.value)} disabled={!strikes.length} style={{ ...inputStyle, cursor: strikes.length ? 'pointer' : 'not-allowed' }}>
-                    {!strikes.length && <option value="">{chain.isLoading ? 'Loading…' : (opExpiry ? 'No strikes' : 'Pick expiry')}</option>}
+                    {!strikes.length && <option value="">{chain.isLoading ? 'Loading strikes' : (opExpiry ? 'No strikes' : 'Pick expiry')}</option>}
                     {strikes.map(k => <option key={k} value={String(k)}>{k}</option>)}
                   </select>
                 </div>
@@ -893,7 +894,9 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
               </div>
               <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
                 {openPositions.length === 0 ? (
-                  <div style={{ padding: '2px 10px 8px', fontFamily: T.mono, fontSize: 10, color: T.muted }}>{account.isLoading ? 'Loading…' : 'No open positions'}</div>
+                  account.isLoading
+                    ? <EmptyState variant="loading" size="compact" title="Loading the book" />
+                    : <div style={{ padding: '2px 10px 8px', fontFamily: T.mono, fontSize: 10, color: T.muted }}>No open positions</div>
                 ) : openPositions.map(p => (
                   <div key={p.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, padding: '4px 10px', borderBottom: `1px solid ${T.border}` }}>
                     <span style={{ fontFamily: T.mono, fontSize: 10, fontWeight: 700, color: T.gold, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -915,7 +918,9 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
               </div>
               <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
                 {pendingOrders.length === 0 ? (
-                  <div style={{ padding: '2px 10px 8px', fontFamily: T.mono, fontSize: 10, color: T.muted }}>{account.isLoading ? 'Loading…' : 'No pending orders'}</div>
+                  account.isLoading
+                    ? <EmptyState variant="loading" size="compact" title="Loading orders" />
+                    : <div style={{ padding: '2px 10px 8px', fontFamily: T.mono, fontSize: 10, color: T.muted }}>No pending orders</div>
                 ) : pendingOrders.map(o => {
                   const sym = o.option_symbol ? occUnderlying(o.option_symbol) : o.symbol
                   const isBuy = String(o.side).startsWith('buy')

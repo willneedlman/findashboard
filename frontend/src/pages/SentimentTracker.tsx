@@ -8,6 +8,7 @@ import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import { useTheme } from '../contexts/ThemeContext'
+import EmptyState from '../components/EmptyState'
 
 const ADMIN_USERS = ['wneedlman']
 
@@ -16,7 +17,7 @@ const T = {
   surface: 'var(--theme-surface, #0d1826)',
   border:  'var(--theme-border, rgba(255,255,255,0.06))',
   gold:    'var(--theme-primary, #c9a84c)',
-  muted:   'var(--theme-secondary, #5e768f)',
+  muted:   'var(--theme-secondary, #8099b0)',
   text:    'var(--theme-text, #d7e3fc)',
   mono:    'var(--theme-mono)',
   label:   'var(--theme-sans)',
@@ -231,7 +232,7 @@ function sentimentBg(score: number): string {
   return 'rgba(252,165,165,0.07)'
 }
 function tierColor(t: number): string {
-  return ['#5e768f','#60a5fa','#e8c04a','#e8935a','var(--theme-negative, #fca5a5)'][Math.max(0, t - 1)]
+  return ['#8099b0','#60a5fa','#e8c04a','var(--at-series-orange, #d97736)','var(--theme-negative, #fca5a5)'][Math.max(0, t - 1)]
 }
 function confOpacity(c: number): number {
   return 0.45 + c * 0.55
@@ -248,8 +249,8 @@ function BreakingStrip({ items }: { items: BreakingItem[] }) {
     <div style={{ background: T.surface, border: '1px solid rgba(232,147,90,0.30)', marginBottom: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid rgba(232,147,90,0.18)', background: 'rgba(232,147,90,0.06)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#e8935a', boxShadow: '0 0 0 3px rgba(232,147,90,0.18)' }} />
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#e8935a', fontFamily: T.mono }}>Breaking</span>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--at-series-orange, #d97736)', boxShadow: '0 0 0 3px color-mix(in srgb, var(--at-series-orange, #d97736) 18%, transparent)' }} />
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--at-series-orange, #d97736)', fontFamily: T.mono }}>Breaking</span>
         </div>
         <span style={{ fontSize: 9, color: T.muted, fontFamily: T.mono }}>{items.length} cross-source · freshest {windowLabel}</span>
       </div>
@@ -276,7 +277,7 @@ function BreakingStrip({ items }: { items: BreakingItem[] }) {
                   {ageLabel(item.age_hours)}
                 </span>
                 {item.wire && (
-                  <span title="Carried by a wire/alert feed" style={{ fontSize: 9, padding: '1px 5px', fontFamily: T.mono, fontWeight: 700, letterSpacing: '0.08em', color: '#e8935a', background: 'rgba(232,147,90,0.10)', border: '1px solid rgba(232,147,90,0.30)' }}>
+                  <span title="Carried by a wire/alert feed" style={{ fontSize: 9, padding: '1px 5px', fontFamily: T.mono, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--at-series-orange, #d97736)', background: 'color-mix(in srgb, var(--at-series-orange, #d97736) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--at-series-orange, #d97736) 30%, transparent)' }}>
                     WIRE
                   </span>
                 )}
@@ -305,7 +306,7 @@ const ASSET_CLASS_COLORS: Record<string, string> = {
   Equities:      '#60a5fa',
   'Fixed Income':'#e8c04a',
   FX:            '#34d399',
-  Commodities:   '#e8935a',
+  Commodities:   'var(--at-series-orange, #d97736)',
   Crypto:        '#bd93f9',
   Macro:         '#d89fd0',
 }
@@ -1165,7 +1166,7 @@ export default function SentimentTracker() {
                 detail = [
                   used,
                   retryIn ? `Retry in ${retryIn}.` : null,
-                  'Scores defaulted to neutral — upgrade Groq plan or wait for the daily limit to reset.',
+                  'Scores defaulted to neutral. Upgrade the Groq plan or wait for the daily limit to reset.',
                 ].filter(Boolean).join(' ')
               } else if (isNoArticles) {
                 headline = 'NO ARTICLES COLLECTED'
@@ -1185,7 +1186,7 @@ export default function SentimentTracker() {
             })()}
             {lowSignal && (
               <div style={{ marginTop: 6, textAlign: 'center', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: '#e8c04a', fontFamily: T.mono, background: 'rgba(232,192,74,0.05)', padding: '3px 0', border: '1px solid rgba(232,192,74,0.15)' }}>
-                LOW SIGNAL — {data.in_window_count} articles in {tf.label} window
+                LOW SIGNAL · {data.in_window_count} articles in {tf.label} window
               </div>
             )}
             <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: 9, color: T.muted, fontFamily: T.mono }}>
@@ -1230,7 +1231,7 @@ export default function SentimentTracker() {
             )}
           </>
         ) : isLoading ? (
-          <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.muted, fontSize: 11 }}>Loading…</div>
+          <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><EmptyState variant="loading" size="compact" title="Loading sentiment" /></div>
         ) : null}
         {lastUpdated && (
           <div style={{ fontSize: 9, color: T.muted, marginTop: 6, fontFamily: T.mono, textAlign: 'center' }}>Updated {lastUpdated}</div>
@@ -1294,7 +1295,7 @@ export default function SentimentTracker() {
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
           <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, fontFamily: T.mono }}>
-            Trend — {tf.label}
+            Trend · {tf.label}
           </div>
           <button onClick={() => setOverlayPrice(v => !v)}
             title="Overlay SPY price to compare against sentiment"
@@ -1310,7 +1311,7 @@ export default function SentimentTracker() {
         }
         {overlayPrice && (
           <div style={{ display: 'flex', gap: 12, marginTop: 6, fontFamily: T.mono, fontSize: 8, color: T.dim }}>
-            <span style={{ color: sentimentColor(data?.composite_score ?? 50) }}>— Sentiment</span>
+            <span><span style={{ color: sentimentColor(data?.composite_score ?? 50) }}>—</span> Sentiment</span>
             <span style={{ color: T.muted }}>--- SPY (normalized)</span>
           </div>
         )}
@@ -1395,7 +1396,7 @@ export default function SentimentTracker() {
           {sources.length > 0 && (
             <div>
               <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, marginBottom: 8, fontFamily: T.mono }}>
-                News Headlines — last {tf.label} · {shownCount} {lens === 'forward' ? 'forward-looking' : lens === 'backward' ? 'backward-looking' : 'articles'} in window
+                News Headlines · last {tf.label} · {shownCount} {lens === 'forward' ? 'forward-looking' : lens === 'backward' ? 'backward-looking' : 'articles'} in window
               </div>
               {displaySources.length === 0 ? (
                 <div style={{ fontSize: 10, color: T.muted, fontFamily: T.mono, padding: '16px 0', textAlign: 'center' }}>

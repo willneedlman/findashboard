@@ -10,7 +10,7 @@ export const PF = {
   gold:   'var(--theme-primary, #c9a84c)',
   text:   'var(--theme-text, #d7e3fc)',
   muted:  'var(--theme-text-dim)',
-  label:  'var(--theme-secondary, #99907e)',
+  label:  'var(--theme-secondary, #8099b0)',
   green:  'var(--theme-positive)',
   red:    'var(--theme-negative)',
 }
@@ -30,7 +30,7 @@ export const pfInput: CSSProperties = {
 
 // Uppercase, tracked section/field label.
 export const pfLabel: CSSProperties = {
-  color: 'var(--theme-secondary, #99907e)',
+  color: 'var(--theme-secondary, #8099b0)',
   fontSize: 10,
   fontWeight: 700,
   letterSpacing: '0.12em',

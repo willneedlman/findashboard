@@ -301,8 +301,7 @@ export function OptionsScannerContent() {
 
       {!scan && !loading && !error && (
         <EmptyState title="No scan yet" action="SCAN"
-          hint="Add tickers and press SCAN. The screen finds unusual contracts grouped by name; click any row to open the chain it sits in."
-          kpis={['Premium by name', 'Call/put split', 'Top vol/OI']} />
+          hint="Add tickers and press SCAN. The screen finds unusual contracts grouped by name; click any row to open the chain it sits in." />
       )}
       {loading && <EmptyState title="Scanning…" variant="loading" hint="Screening every listed contract in the window…" />}
       {scan && !loading && rows.length === 0 && failedList.length === 0 && (

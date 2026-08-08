@@ -16,13 +16,14 @@ import { getRecents } from '../lib/recents'
 import { wordMatch, tickerFromQuery } from '../lib/search'
 import { getRecentTickers, recordRecentTicker } from '../lib/recentTickers'
 import { formatLocalTime, localTimeZone } from '../lib/time'
+import EmptyState from '../components/EmptyState'
 
 const F = {
   gold: 'var(--theme-primary, #c9a84c)',
   text: 'var(--theme-text, #d7e3fc)',
   bright: 'var(--theme-text, #dce3ed)',
   sec: 'var(--theme-secondary, #8099b0)',
-  muted: 'var(--theme-secondary, #5e768f)',
+  muted: 'var(--theme-secondary, #8099b0)',
   surface: 'var(--theme-surface, #101c2e)',
   panel: 'var(--theme-bg, #0d1826)',
   topbar: 'color-mix(in srgb, var(--theme-bg, #0d1826) 88%, #000)',
@@ -127,13 +128,11 @@ function Tape({ segments, source, onSource }: { segments: { sym: string; price: 
   )
 }
 
+// One loading treatment across the app. A rotation is also the one motion the
+// global reduced-motion rule cannot soften: capping duration at 0.01ms turns a
+// spin into a strobe, so the bar replaces the concept rather than gating it.
 function Spinner() {
-  return (
-    <>
-      <style>{`@keyframes home-spin{to{transform:rotate(360deg)}}`}</style>
-      <div aria-label="Loading" role="status" style={{ width: 18, height: 18, borderRadius: '50%', border: '2px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 22%, transparent)', borderTopColor: 'var(--theme-primary, #c9a84c)', animation: 'home-spin 0.7s linear infinite' }} />
-    </>
-  )
+  return <EmptyState variant="loading" size="compact" title="Loading" />
 }
 
 // ── Performance chart (%-change vs time, ranged 1D/1W/1M/1Y) ─────────────────

@@ -4,6 +4,7 @@ import { createChart, ColorType, CrosshairMode } from 'lightweight-charts'
 import type { IChartApi, ISeriesApi, Time } from 'lightweight-charts'
 import { readToken } from '../lib/theme'
 import { formatLocalDateTime, localTimeZone } from '../lib/time'
+import EmptyState from './EmptyState'
 
 // Click-to-chart popup for the Global Markets board. Reuses /api/market/history,
 // which already resolves the Yahoo symbol forms used here (^GSPC, CL=F, BTC-USD…)
@@ -83,7 +84,7 @@ export default function AssetChartModal({ row, yields, onClose }: { row: Row; yi
     const el = wrapRef.current
     if (!el) return
     const chart = createChart(el, {
-      layout: { background: { type: ColorType.Solid, color: readToken('--theme-bg', '#101c2e'), }, textColor: readToken('--theme-secondary', '#5e768f'), fontFamily: 'ui-monospace, monospace', fontSize: 10, attributionLogo: false },
+      layout: { background: { type: ColorType.Solid, color: readToken('--theme-bg', '#101c2e'), }, textColor: readToken('--theme-secondary', '#8099b0'), fontFamily: 'ui-monospace, monospace', fontSize: 10, attributionLogo: false },
       grid: { vertLines: { color: 'rgba(255,255,255,0.03)' }, horzLines: { color: 'rgba(255,255,255,0.03)' } },
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: 'rgba(255,255,255,0.06)' },
@@ -163,7 +164,7 @@ export default function AssetChartModal({ row, yields, onClose }: { row: Row; yi
           <div ref={wrapRef} style={{ width: '100%', height: '100%' }} />
           {(loading || err) && (
             <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MONO, fontSize: 11, color: 'var(--theme-secondary, #8099b0)', pointerEvents: 'none' }}>
-              {err ? 'No chart data' : 'Loading…'}
+              {err ? 'No chart data' : <EmptyState variant="loading" size="compact" title="Loading candles" />}
             </div>
           )}
           {!loading && !err && data?.meta?.as_of && <div style={{ position: 'absolute', left: 12, bottom: 8, fontFamily: MONO, fontSize: 8.5, color: 'var(--theme-secondary, #5f7893)', pointerEvents: 'none' }}>As of {formatLocalDateTime(data.meta.as_of)} local</div>}

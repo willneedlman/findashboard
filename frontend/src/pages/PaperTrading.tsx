@@ -21,6 +21,7 @@ import useIsMobile from '../hooks/useIsMobile'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip } from '../lib/reportCaptureRegistry'
+import EmptyState from '../components/EmptyState'
 
 
 // OCC option symbol helpers live in lib/occ (shared with the paper-trade widget).
@@ -212,7 +213,7 @@ export default function PaperTrading() {
             background: 'color-mix(in srgb, var(--theme-negative) 10%, transparent)', border: `1px solid color-mix(in srgb, var(--theme-negative) 40%, transparent)`,
             color: T.neg, fontSize: 12, fontFamily: T.mono,
           }}>
-            Tradier sandbox unavailable — check API key in .env
+            Tradier sandbox unavailable. Check the API key in .env
           </div>
         )}
 
@@ -238,7 +239,7 @@ export default function PaperTrading() {
 
           {/* Metrics */}
           {isLoading ? (
-            <span style={{ fontSize: 11, color: T.dim }}>Loading…</span>
+            <EmptyState variant="loading" size="compact" title="Loading the account" />
           ) : bal ? (
             <>
               <HeaderMetric label="EQUITY" value={fmt$(bal.total_equity)} />

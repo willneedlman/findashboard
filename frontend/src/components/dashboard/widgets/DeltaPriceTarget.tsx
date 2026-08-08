@@ -6,7 +6,7 @@ import useContainerSize from '../../../hooks/useContainerSize'
 
 const T = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', headerBg: 'var(--theme-surface, #142032)',
-  gold: 'var(--theme-primary, #c9a84c)', text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-secondary, #5e768f)',
+  gold: 'var(--theme-primary, #c9a84c)', text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-secondary, #8099b0)',
   mono: 'var(--theme-mono)', label: 'var(--theme-sans)',
 }
 
@@ -181,7 +181,7 @@ export default function DeltaPriceTarget({ config }: { config: WidgetConfig }) {
             border: `1px solid ${justFilled ? 'color-mix(in srgb, var(--theme-positive) 50%, transparent)' : T.border}`,
             color:  filling ? T.muted : justFilled ? 'var(--theme-positive)' : T.gold,
             fontFamily: T.mono, fontSize: 10, padding: '4px 8px',
-            cursor: filling ? 'default' : 'pointer', transition: 'all 0.3s', minWidth: 28, textAlign: 'center' as const,
+            cursor: filling ? 'default' : 'pointer', transition: 'min-width 0.3s var(--ease-out), background 0.3s var(--ease-out), color 0.3s var(--ease-out)', minWidth: 28, textAlign: 'center' as const,
           }}
         >{filling ? '…' : justFilled ? 'OK' : 'Fill'}</button>
       </div>

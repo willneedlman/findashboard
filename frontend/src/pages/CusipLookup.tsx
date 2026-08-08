@@ -400,7 +400,7 @@ export default function CusipLookup() {
               <div style={{ fontFamily: SANS, fontSize: 12, color: SEC, marginTop: 6, lineHeight: 1.5 }}>
                 No bond matches <span style={{ fontFamily: MONO, color: TEXT }}>{badQuery}</span> in the reference set. Check the 9-character CUSIP, or search by issuer name.
               </div>
-              <div style={{ fontFamily: MONO, fontSize: 10, color: 'var(--theme-text-dim, #5e768f)', marginTop: 8 }}>CUSIP format: 6 issuer + 2 issue + 1 check digit.</div>
+              <div style={{ fontFamily: MONO, fontSize: 10, color: 'var(--theme-text-dim, #8099b0)', marginTop: 8 }}>CUSIP format: 6 issuer + 2 issue + 1 check digit.</div>
             </div>
           )}
 
@@ -566,7 +566,7 @@ function BatchView() {
                 {rows.map((r, i) => (
                   <tr key={i} style={{ borderBottom: `1px solid ${HAIR}` }}>
                     <td style={{ padding: '8px 14px', color: G }}>{r.cusip}</td>
-                    <td style={{ padding: '8px 14px', fontFamily: SANS, color: r.found ? TEXT : 'var(--theme-text-dim, #5e768f)' }}>
+                    <td style={{ padding: '8px 14px', fontFamily: SANS, color: r.found ? TEXT : 'var(--theme-text-dim, #8099b0)' }}>
                       {r.found ? (r.name || '—') : (r.error === 'invalid' ? 'Invalid CUSIP' : 'Not found')}
                     </td>
                     <td style={{ padding: '8px 14px', textAlign: 'right', color: TEXT }}>{r.coupon_rate != null ? `${r.coupon_rate}%` : '—'}</td>
@@ -579,7 +579,7 @@ function BatchView() {
               </tbody>
             </table>
           </div>
-          <div style={{ padding: '9px 15px', borderTop: `1px solid ${HAIR}`, fontFamily: SANS, fontSize: 9.5, color: 'var(--theme-text-dim, #5e768f)' }}>
+          <div style={{ padding: '9px 15px', borderTop: `1px solid ${HAIR}`, fontFamily: SANS, fontSize: 9.5, color: 'var(--theme-text-dim, #8099b0)' }}>
             Price marks are ETF/N-PORT holdings, not live quotes. Yield is shown only where a price mark exists. Informational only.
           </div>
         </div>
@@ -614,7 +614,7 @@ function KeyTermsGrid({ b, d }: { b: ResolvedBond; d: Derived | null }) {
         <div key={i} style={{ background: BG, padding: '13px 15px' }}>
           <div style={{ fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: SEC, marginBottom: 5 }}>{c.label}</div>
           <div style={{ fontFamily: MONO, fontSize: 19, fontWeight: 600, color: c.color || TEXT }}>{c.value}</div>
-          {c.sub && <div style={{ fontFamily: SANS, fontSize: 9.5, color: 'var(--theme-text-dim, #5e768f)', marginTop: 2 }}>{c.sub}</div>}
+          {c.sub && <div style={{ fontFamily: SANS, fontSize: 9.5, color: 'var(--theme-text-dim, #8099b0)', marginTop: 2 }}>{c.sub}</div>}
         </div>
       ))}
     </div>
@@ -643,7 +643,7 @@ function CockpitView({ b, d, canImport, onImport }: { b: ResolvedBond; d: Derive
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                 <span style={{ fontFamily: SANS, fontSize: 11.5, color: SEC }}>{dash(b.type)}</span>
                 {(b.cusip || b.figi) && <span style={{ fontFamily: MONO, fontSize: 9, color: G, border: `1px solid color-mix(in srgb, ${G} 30%, transparent)`, padding: '2px 6px' }}>{b.cusip || `FIGI ${b.figi}`}</span>}
-                {b.description && <span style={{ fontFamily: MONO, fontSize: 10, color: 'var(--theme-text-dim, #5e768f)' }}>{b.description}</span>}
+                {b.description && <span style={{ fontFamily: MONO, fontSize: 10, color: 'var(--theme-text-dim, #8099b0)' }}>{b.description}</span>}
               </div>
             </div>
           </div>
@@ -654,7 +654,7 @@ function CockpitView({ b, d, canImport, onImport }: { b: ResolvedBond; d: Derive
       <div style={{ ...PANEL, padding: 0 }}>
         <Strip>Key Terms & Analytics</Strip>
         <KeyTermsGrid b={b} d={d} />
-        <div style={{ padding: '9px 15px', borderTop: `1px solid ${HAIR}`, fontFamily: SANS, fontSize: 9.5, color: 'var(--theme-text-dim, #5e768f)' }}>
+        <div style={{ padding: '9px 15px', borderTop: `1px solid ${HAIR}`, fontFamily: SANS, fontSize: 9.5, color: 'var(--theme-text-dim, #8099b0)' }}>
           <PriceNote b={b} /> Settlement T+2, 30/360 day count. Informational only, not a quote.
         </div>
       </div>
@@ -697,7 +697,7 @@ function LedgerView({ b, d, canImport, onImport }: { b: ResolvedBond; d: Derived
         <LedgerTable title="Reference Terms" rows={ref} divider />
         <LedgerTable title="Pricing & Risk" rows={risk} />
       </div>
-      <div style={{ padding: '9px 15px', borderTop: `1px solid ${HAIR}`, fontFamily: SANS, fontSize: 9.5, color: 'var(--theme-text-dim, #5e768f)' }}>
+      <div style={{ padding: '9px 15px', borderTop: `1px solid ${HAIR}`, fontFamily: SANS, fontSize: 9.5, color: 'var(--theme-text-dim, #8099b0)' }}>
         <PriceNote b={b} /> Informational only, not a quote.
       </div>
     </div>

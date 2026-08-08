@@ -1,4 +1,5 @@
 import { useState, useRef, useLayoutEffect } from 'react'
+import { ChevronDown } from 'lucide-react'
 
 // Shared design tokens for the Stock Valuation tabs so every tool reads as one
 // consistent, well-spaced system. Matches the DCF tab's density.
@@ -11,24 +12,41 @@ export const INPUT: React.CSSProperties = {
   padding: '6px 8px', width: '100%', outline: 'none', boxSizing: 'border-box',
 }
 
-// Native <select> styled to match INPUT: reset appearance, add a gold-muted chevron.
+// Native <select> on INPUT geometry: appearance reset, room left for a chevron.
+// The arrow is drawn by <Select> below rather than painted here. A background
+// data URI bakes its stroke colour in and cannot read a CSS variable, so the
+// old one kept a warm brown arrow under every preset, light ones included.
 export const SELECT: React.CSSProperties = {
   ...INPUT,
   appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none',
   cursor: 'pointer', paddingRight: 26,
-  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2399907e' stroke-width='1.4' fill='none'/%3E%3C/svg%3E\")",
-  backgroundRepeat: 'no-repeat', backgroundPosition: 'right 9px center',
+}
+
+/** A `<select>` on SELECT geometry with a themed chevron. Accepts every native
+ *  select prop; `style` merges over the shared geometry. */
+export function Select({ style, children, ...rest }: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <span style={{ position: 'relative', display: 'block', width: style?.width ?? '100%' }}>
+      <select {...rest} style={{ ...SELECT, ...style, width: '100%' }}>{children}</select>
+      <ChevronDown size={10} strokeWidth={1.8} aria-hidden
+        style={{
+          position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)',
+          pointerEvents: 'none', color: 'var(--theme-secondary)',
+        }} />
+    </span>
+  )
 }
 
 export const LABEL: React.CSSProperties = {
   fontFamily: 'var(--theme-sans)',
-  fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
-  color: 'var(--theme-secondary, #99907e)', marginBottom: 5, display: 'block',
+  fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
+  color: 'var(--theme-secondary, #8099b0)', marginBottom: 5, display: 'block',
 }
 
+// Prose, not a label. 35% white at 9px is about 2.6:1, below any usable floor.
 export const HINT: React.CSSProperties = {
-  fontSize: 9, lineHeight: 1.5, color: 'var(--theme-text-dim, rgba(255,255,255,0.42))',
-  marginTop: 4, fontFamily: 'var(--theme-mono)',
+  fontSize: 11, lineHeight: 1.5, color: 'var(--theme-secondary, #8099b0)',
+  marginTop: 5, fontFamily: 'var(--theme-sans)',
 }
 
 // 14px inset + 14px between groups = the breathing room the DCF sidebar has.
@@ -37,7 +55,7 @@ export const SIDEBAR: React.CSSProperties = { padding: 14, display: 'flex', flex
 export const SECTION: React.CSSProperties = {
   fontFamily: 'var(--theme-sans)',
   fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase',
-  color: 'var(--theme-text, #d7e3fc)', paddingBottom: 6,
+  color: 'var(--theme-secondary, #8099b0)', paddingBottom: 6,
   borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
 }
 
@@ -49,13 +67,13 @@ export const PRIMARY_BTN: React.CSSProperties = {
 
 export const GHOST_BTN: React.CSSProperties = {
   ...INPUT, cursor: 'pointer', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-  color: 'var(--theme-secondary, #99907e)',
+  color: 'var(--theme-secondary, #8099b0)',
 }
 
 // Readout list (the small key/value stats under the inputs).
 export const READOUT_ROW: React.CSSProperties = {
   display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--theme-mono)',
-  fontSize: 9.5, color: 'var(--theme-secondary, #99907e)', lineHeight: 2,
+  fontSize: 9.5, color: 'var(--theme-secondary, #8099b0)', lineHeight: 2,
 }
 
 // Tooltip: explicit light text so it never renders gray-on-gray.
@@ -67,11 +85,11 @@ export const TOOLTIP_STYLE = {
 export const TOOLTIP_LABEL = { color: 'var(--theme-text, #d7e3fc)', fontWeight: 700 }
 export const TOOLTIP_ITEM = { color: 'var(--theme-text, #d7e3fc)' }
 export const TOOLTIP_CURSOR = { fill: 'rgba(255,255,255,0.05)' }
-export const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }
+export const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #8099b0)', fontFamily: 'var(--theme-mono)' }
 
 export const TH: React.CSSProperties = {
   fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-  color: 'var(--theme-secondary, #99907e)', padding: '9px 12px', textAlign: 'right',
+  color: 'var(--theme-secondary, #8099b0)', padding: '9px 12px', textAlign: 'right',
   borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
 }
 export const TD: React.CSSProperties = {
@@ -80,7 +98,7 @@ export const TD: React.CSSProperties = {
 }
 
 export const PANEL: React.CSSProperties = {
-  background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+  background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
 }
 
 export const METRIC_GRID: React.CSSProperties = {
@@ -101,10 +119,10 @@ export function RailSection({ title, badge, open, onToggle, children }:
         width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 12px',
         background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700,
         letterSpacing: '0.12em', textTransform: 'uppercase',
-        color: open ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #99907e)', outline: 'none',
+        color: open ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)', outline: 'none',
       }}>
-        <span>{title}{badge != null && badge !== '' ? <span style={{ color: 'var(--theme-secondary, #99907e)', fontWeight: 400 }}> · {badge}</span> : null}</span>
-        <span style={{ display: 'inline-block', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s', color: 'var(--theme-secondary, #99907e)' }}>›</span>
+        <span>{title}{badge != null && badge !== '' ? <span style={{ color: 'var(--theme-secondary, #8099b0)', fontWeight: 400 }}> · {badge}</span> : null}</span>
+        <span style={{ display: 'inline-block', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s', color: 'var(--theme-secondary, #8099b0)' }}>›</span>
       </button>
       {open && <div style={{ padding: '2px 12px 14px' }}>{children}</div>}
     </div>
@@ -164,7 +182,7 @@ export function MetricCard({ label, value, sub, help, color }:
   return (
     <div className="ft-metric-tile" style={{ background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.07))', borderTop: `3px solid ${color ?? 'var(--theme-primary, #c9a84c)'}`, padding: 10, position: 'relative' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }}>{label}</span>
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)' }}>{label}</span>
         {help && <span style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', cursor: 'help' }} onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>ⓘ</span>}
         {show && help && (
           <div style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 6, background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', padding: '6px 8px', width: 180, fontSize: 11, color: 'var(--theme-text, #d7e3fc)', lineHeight: '15px', zIndex: 50, pointerEvents: 'none' }}>{help}</div>
@@ -411,7 +429,7 @@ function VerdictCellView({ c }: { c: VerdictCell }) {
     <div>
       <div style={{ ...EYEBROW, marginBottom: 5, color: TONE[c.labelTone ?? 'muted'] }}>{c.label}</div>
       <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 16, fontWeight: 600, color: TONE[c.tone ?? 'text'] }}>{c.value}</div>
-      {c.sub && <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-text-dim, #5e768f)', marginTop: 2 }}>{c.sub}</div>}
+      {c.sub && <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-text-dim, #8099b0)', marginTop: 2 }}>{c.sub}</div>}
     </div>
   )
 }
@@ -428,7 +446,7 @@ export function LabeledPanel({ title, right, children }: { title: string; right?
         padding: '4px 10px', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
         color: 'var(--theme-text, #d7e3fc)', borderRight: hair, borderBottom: hair,
       }}>{title}</div>
-      {right && <div style={{ position: 'absolute', top: 6, right: 12, fontFamily: 'var(--theme-mono)', fontSize: 9, letterSpacing: '0.06em', color: 'var(--theme-secondary, #99907e)' }}>{right}</div>}
+      {right && <div style={{ position: 'absolute', top: 6, right: 12, fontFamily: 'var(--theme-mono)', fontSize: 9, letterSpacing: '0.06em', color: 'var(--theme-secondary, #8099b0)' }}>{right}</div>}
       {children}
     </div>
   )
@@ -476,7 +494,7 @@ export function Tornado({ rows, base, fmt = (v: number) => `$${v.toFixed(0)}`, l
         <div key={i} style={{ display: 'flex', alignItems: 'center', height: 30 }}>
           <div style={{ width: LABEL_W, flex: 'none', paddingRight: 10 }}>
             <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: 600, color: 'var(--theme-text, #d7e3fc)', lineHeight: 1.2 }}>{r.label}</div>
-            <div style={{ fontFamily: mono, fontSize: 8.5, color: 'var(--theme-secondary, #99907e)' }}>{r.range}</div>
+            <div style={{ fontFamily: mono, fontSize: 8.5, color: 'var(--theme-secondary, #8099b0)' }}>{r.range}</div>
           </div>
           <div style={{ position: 'relative', flex: 1, height: 13 }}>
             <div style={{ position: 'absolute', top: 0, bottom: 0, left: `${pct(r.lo)}%`, width: `${Math.max(0, pct(base) - pct(r.lo))}%`, background: 'rgba(140,46,54,0.6)' }} />
@@ -490,11 +508,11 @@ export function Tornado({ rows, base, fmt = (v: number) => `$${v.toFixed(0)}`, l
         <div style={{ width: LABEL_W, flex: 'none' }} />
         <div style={{ position: 'relative', flex: 1, height: 12 }}>
           {ticks.map((t, i) => (
-            <span key={i} style={{ position: 'absolute', left: `${pct(t)}%`, transform: i === 0 ? 'none' : i === ticks.length - 1 ? 'translateX(-100%)' : 'translateX(-50%)', fontFamily: mono, fontSize: 9, color: 'var(--theme-secondary, #99907e)' }}>{fmt(t)}</span>
+            <span key={i} style={{ position: 'absolute', left: `${pct(t)}%`, transform: i === 0 ? 'none' : i === ticks.length - 1 ? 'translateX(-100%)' : 'translateX(-50%)', fontFamily: mono, fontSize: 9, color: 'var(--theme-secondary, #8099b0)' }}>{fmt(t)}</span>
           ))}
         </div>
       </div>
-      <div style={{ display: 'flex', gap: 18, justifyContent: 'center', marginTop: 8, fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary, #99907e)' }}>
+      <div style={{ display: 'flex', gap: 18, justifyContent: 'center', marginTop: 8, fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary, #8099b0)' }}>
         {([['rgba(140,46,54,0.6)', legend[0]], ['var(--theme-primary, #c9a84c)', 'Base case'], ['rgba(47,107,75,0.6)', legend[1]]] as [string, string][]).map(([c, l]) => (
           <span key={l} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 10, height: 10, background: c }} />{l}</span>
         ))}

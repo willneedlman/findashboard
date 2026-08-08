@@ -304,7 +304,7 @@ export default function GlobalMarkets() {
             </span>
             {!date && <span style={{ display: 'flex', alignItems: 'center', gap: 2, padding: 2, border: '1px solid var(--theme-border, rgba(255,255,255,0.14))', background: 'var(--theme-bg, #101c2e)' }}>
               {WINDOWS.map(item => <button key={item.key} onClick={() => setWindow(item.key)} aria-pressed={window === item.key}
-                style={{ border: 'none', background: window === item.key ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' : 'transparent', color: window === item.key ? GOLD : 'var(--theme-secondary, #8099b0)', cursor: 'pointer', padding: '4px 6px', fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.04em' }}>{item.label}</button>)}
+                style={{ border: 'none', background: window === item.key ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' : 'transparent', color: window === item.key ? GOLD : 'var(--theme-secondary, #8099b0)', cursor: 'pointer', padding: '4px 6px', fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.04em' }}>{item.label}</button>)}
             </span>}
             </div>
           </div>
@@ -326,7 +326,7 @@ export default function GlobalMarkets() {
         {/* Only the first ever load shows the full skeleton; window switches and
             background refreshes keep the previous board on screen. */}
         {q.isLoading && !q.data && <BoardSkeleton isMobile={isMobile} />}
-        {q.isError && !q.data && <ErrorState title="Board unavailable" message="The board is unavailable." onRetry={() => q.refetch()} />}
+        {q.isError && !q.data && <ErrorState title="Board unavailable" message="Quotes did not load for the cross-asset board. Retry, or check the market data key in Settings." onRetry={() => q.refetch()} />}
 
         {q.data && (
           <>
@@ -337,7 +337,7 @@ export default function GlobalMarkets() {
             </div>
             {spotlight.length === 0 ? (
               <div style={{ border: '1px dashed color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', borderRadius: 0, padding: 28, textAlign: 'center', fontFamily: MONO, fontSize: 11, color: 'var(--theme-secondary, #5f7893)', marginBottom: 26 }}>
-                No pinned assets — tap the ☆ on any row below to build your spotlight.
+                No pinned assets. Tap the ☆ on any row below to build your spotlight.
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: `repeat(${isMobile ? 2 : 6}, 1fr)`, gap: 12, marginBottom: 26 }}>

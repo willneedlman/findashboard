@@ -179,7 +179,7 @@ export default function NAVTracker() {
                   onChange={e => setP(x => ({ ...x, use_live: e.target.checked }))}
                   style={{ accentColor: 'var(--theme-primary, #c9a84c)', cursor: 'pointer' }}
                 />
-                <span style={{ fontSize: 10, color: 'var(--theme-secondary, #99907e)', lineHeight: '14px' }}>Use live / registry data</span>
+                <span style={{ fontSize: 10, color: 'var(--theme-secondary, #8099b0)', lineHeight: '14px' }}>Use live / registry data</span>
               </label>
 
               {!p.use_live && (
@@ -224,8 +224,7 @@ export default function NAVTracker() {
           {!data && !isPending && (
             <EmptyState title="NAV Proxy Tracker" hint="Pick a preset company or enter holdings, then press RUN."
               action="RUN"
-              keys={['Enter']} kpis={['Price', 'True Net NAV', 'Premium', 'Holdings', 'Spot']}
-              preview="chart" previewLabel="Price vs Net NAV Floor" />
+              keys={['Enter']} />
           )}
 
           {data && (

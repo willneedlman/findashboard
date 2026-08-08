@@ -5,6 +5,7 @@ import type { WidgetConfig } from '../../../hooks/useDashboard'
 import { readToken } from '../../../lib/theme'
 import { ChevronsRight } from 'lucide-react'
 import { useLiveMarks } from '../../../hooks/useLiveMarks'
+import EmptyState from '../../EmptyState'
 
 const PERIODS = [
   { label: '1M', value: '1mo' },
@@ -52,7 +53,7 @@ export default function TradingViewChart({ config }: { config: WidgetConfig }) {
     const bg      = cs.getPropertyValue('--theme-bg').trim()      || '#101c2e'
     const surface = cs.getPropertyValue('--theme-surface').trim() || '#0d1826'
     const gold    = cs.getPropertyValue('--theme-primary').trim() || '#c9a84c'
-    const text    = cs.getPropertyValue('--theme-secondary').trim()|| '#5e768f'
+    const text    = cs.getPropertyValue('--theme-secondary').trim()|| '#8099b0'
     const grid    = 'var(--theme-hover, var(--theme-hover, rgba(255,255,255,0.04)))'
 
     const chart = createChart(el, {
@@ -189,7 +190,7 @@ export default function TradingViewChart({ config }: { config: WidgetConfig }) {
         <span style={{ color: 'var(--theme-primary, #c9a84c)', fontSize: 11, fontWeight: 700 }}>{displaySym}</span>
         {crosshair ? (
           <>
-            <span style={{ color: 'var(--theme-secondary, #5e768f)', fontSize: 9 }}>{crosshair.date}</span>
+            <span style={{ color: 'var(--theme-secondary, #8099b0)', fontSize: 9 }}>{crosshair.date}</span>
             <span style={{ color: 'var(--theme-text, #d7e3fc)', fontSize: 9 }}>O {crosshair.open.toFixed(2)}</span>
             <span style={{ color: 'var(--theme-text, #d7e3fc)', fontSize: 9 }}>H {crosshair.high.toFixed(2)}</span>
             <span style={{ color: 'var(--theme-text, #d7e3fc)', fontSize: 9 }}>L {crosshair.low.toFixed(2)}</span>
@@ -205,12 +206,12 @@ export default function TradingViewChart({ config }: { config: WidgetConfig }) {
         <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
         {loading && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(16,28,46,0.65)' }}>
-            <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: 'var(--theme-secondary, #5e768f)', letterSpacing: '0.12em' }}>LOADING…</span>
+            <EmptyState variant="loading" size="compact" title="Loading candles" />
           </div>
         )}
         {error && !loading && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-secondary, #5e768f)' }}>Chart unavailable</div>
+            <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-secondary, #8099b0)' }}>Chart unavailable</div>
             <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.18))' }}>{error}</div>
           </div>
         )}

@@ -35,9 +35,9 @@ function DividendBars({ rows }: { rows: { year: number; dividend: number; pv: nu
         ))}
       </div>
       <div style={{ display: 'flex', gap: '5%', padding: '5px 4% 0' }}>
-        {rows.map(r => <div key={r.year} style={{ flex: 1, textAlign: 'center', fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary, #99907e)' }}>Y{r.year}</div>)}
+        {rows.map(r => <div key={r.year} style={{ flex: 1, textAlign: 'center', fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary, #8099b0)' }}>Y{r.year}</div>)}
       </div>
-      <div style={{ display: 'flex', gap: 18, justifyContent: 'center', marginTop: 8, fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary, #99907e)' }}>
+      <div style={{ display: 'flex', gap: 18, justifyContent: 'center', marginTop: 8, fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary, #8099b0)' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 10, height: 10, border: '1px dashed var(--theme-primary, #c9a84c)', boxSizing: 'border-box' }} />Nominal DPS</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 10, height: 10, background: 'var(--theme-primary, #c9a84c)' }} />Present value</span>
       </div>
@@ -49,7 +49,7 @@ function DividendBars({ rows }: { rows: { year: number; dividend: number; pv: nu
 function ModelLedger({ D0, g1, years, r, calc, price }:
   { D0: number; g1: number; years: number; r: number
     calc: { pvStage1: number; terminal: number; pvTerminal: number; value: number; upside: number | null }; price?: number | null }) {
-  const sec = 'var(--theme-secondary, #99907e)', txt = 'var(--theme-text, #d7e3fc)'
+  const sec = 'var(--theme-secondary, #8099b0)', txt = 'var(--theme-text, #d7e3fc)'
   const Row = ({ k, v, vColor }: { k: string; v: string; vColor?: string }) => (
     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontFamily: 'var(--theme-mono)', fontSize: 11 }}>
       <span style={{ color: sec }}>{k}</span><span style={{ color: vColor ?? txt }}>{v}</span>
@@ -263,8 +263,7 @@ export function DividendDiscountContent() {
         <EmptyState title="Dividend Discount Model"
           hint="Value a dividend-paying stock as the present value of its future dividends. Enter a ticker and press FETCH."
           action="FETCH"
-          keys={['Enter']} kpis={['Fair Value', 'Upside', 'Cost of Equity', 'Growth', 'Yield']}
-          preview="chart" previewLabel="Discounted Dividend Stream" />
+          keys={['Enter']} />
       )}
 
       {data && !data.pays_dividend && (
@@ -340,7 +339,7 @@ export function DividendDiscountContent() {
               {grid && (
                 <div style={PANEL}>
                   <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>Sensitivity — Required Return × Terminal Growth</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>Sensitivity · Required Return × Terminal Growth</span>
                     <span style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.08em' }}>Intrinsic $/share</span>
                   </div>
                   <RGHeat grid={grid} activeR={grid.rSteps[3]} activeG={grid.gSteps[3]} />

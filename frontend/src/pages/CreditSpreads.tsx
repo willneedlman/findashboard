@@ -195,7 +195,7 @@ export function CreditSpreadsContent() {
           </div>
           <div style={{ padding: 16 }}>
           {isLoading && <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.muted, fontFamily: T.mono, fontSize: 11 }}>Loading spread history…</div>}
-          {isError  && <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.neg,  fontFamily: T.mono, fontSize: 11 }}>Failed — check FRED API key</div>}
+          {isError  && <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.neg,  fontFamily: T.mono, fontSize: 11 }}>Failed. Check the FRED API key</div>}
           {data && (
             <ResponsiveContainer width="100%" height={320}>
               <LineChart data={chartData} margin={{ left: 0, right: 40, top: 4, bottom: 0 }}>
@@ -223,7 +223,7 @@ export function CreditSpreadsContent() {
             {[
               { label: 'Investment Grade', color: '#60a5fa', text: 'AAA–BBB corps vs. matched-maturity Treasuries. <100 bps: benign. 100–200: caution. >200: stress. Rising = tightening conditions for IG issuers.' },
               { label: 'High Yield', color: 'var(--theme-negative, #ef4444)', text: 'BB–CCC corps vs. matched-maturity Treasuries. <350 bps: risk-on. 350–600: stress building. >600: distress. Leads equity drawdowns by days to weeks.' },
-              { label: 'High Yield CCC', color: '#a78bfa', text: 'Lowest-rated junk vs. Treasuries. Most recession-sensitive. Spikes signal weakest borrowers losing market access — a leading indicator of credit seizure.' },
+              { label: 'High Yield CCC', color: '#a78bfa', text: 'Lowest-rated junk vs. Treasuries. Most recession-sensitive. Spikes signal weakest borrowers losing market access, a leading indicator of credit seizure.' },
               { label: 'VIX vs Spreads', color: 'var(--theme-primary, #c9a84c)', text: 'VIX = equity implied vol. Spreads = credit risk premium. Divergence matters: spreads widening while VIX is calm = credit market leading equities lower.' },
             ].map((item, i) => (
               <div key={item.label} style={{ padding: '12px 16px', borderLeft: `2px solid ${item.color}`, borderTop: i >= 2 ? `1px solid ${T.border}` : 'none', borderRight: i % 2 === 0 ? `1px solid ${T.border}` : 'none' }}>

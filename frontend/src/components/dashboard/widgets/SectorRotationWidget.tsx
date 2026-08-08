@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
+import EmptyState from '../../EmptyState'
 
 
 interface SectorRow {
@@ -57,7 +58,7 @@ export default function SectorRotationWidget({ config }: { config: WidgetConfig 
         </span>
       </div>
 
-      {isLoading && <div style={{ padding: 12, fontFamily: T.mono, fontSize: 10, color: T.muted }}>Loading…</div>}
+      {isLoading && <EmptyState variant="loading" size="compact" title="Loading 11 sectors" />}
       {isError && <div style={{ padding: 12, fontFamily: T.mono, fontSize: 10, color: T.neg }}>Failed to load sectors</div>}
 
       {data && (

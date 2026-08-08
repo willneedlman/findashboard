@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 const S = {
   border: 'var(--theme-border, rgba(255,255,255,0.07))',
   muted:  'var(--theme-text-faint, var(--theme-text-faint, rgba(255,255,255,0.22)))',
-  text:   'var(--theme-secondary, #5e768f)',
+  text:   'var(--theme-secondary, #8099b0)',
   gold:   'var(--theme-primary, #c9a84c)',
   mono:   'var(--theme-mono)',
   label:  'var(--theme-sans)',

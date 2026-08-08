@@ -75,7 +75,7 @@ export default function ChokepointExposure() {
   return (
     <PageWrapper title="Chokepoint Exposure">
       {isLoading ? <LoadingState label="Mapping chokepoint stress to exposed names" />
-        : error || !data ? <ErrorState message="Could not load chokepoint exposure." onRetry={() => refetch()} />
+        : error || !data ? <ErrorState title="Exposure feed unavailable" message="Chokepoint exposure did not load. Retry in a moment." onRetry={() => refetch()} />
         : <Board data={data} />}
     </PageWrapper>
   )
@@ -626,7 +626,7 @@ function LeaderRow({ l, rank, maxScore, open, onToggle, navigate }: { l: Leader;
                   <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 10.5, fontWeight: 700, color: dr.contribution > 0 ? T.pos : T.neg }}>{signed(dr.contribution, 1)}</span>
                 </div>
               ))}
-              {l.drivers.every(dr => dr.contribution === 0) && <div style={{ fontFamily: MONO, fontSize: 10, color: T.muted, padding: '4px 0' }}>No straits under stress right now — score reflects structural exposure ({l.links} straits).</div>}
+              {l.drivers.every(dr => dr.contribution === 0) && <div style={{ fontFamily: MONO, fontSize: 10, color: T.muted, padding: '4px 0' }}>No straits under stress right now. Score reflects structural exposure ({l.links} straits).</div>}
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0' }}>
                 <span style={{ fontFamily: MONO, fontSize: 9, color: T.textDim }}>Σ score</span>
                 <span style={{ fontFamily: MONO, fontSize: 10.5, fontWeight: 700, color: sigC }}>{signed(l.score, 1)}</span>

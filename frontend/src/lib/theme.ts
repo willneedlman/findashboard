@@ -11,7 +11,7 @@ export const T = {
   hover:       'var(--theme-hover, rgba(0,0,0,0.12))',
   gold:        'var(--theme-primary, #c9a84c)',
   blue:        'var(--theme-tertiary, #60a5fa)',
-  muted:       'var(--theme-secondary, #5e768f)',
+  muted:       'var(--theme-secondary, #8099b0)',
   text:        'var(--theme-text, #d7e3fc)',
   textDim:     'var(--theme-text-dim)',
   mono:        'var(--theme-mono)',
@@ -24,6 +24,16 @@ export const T = {
   posTint:   (pct: number) => `color-mix(in srgb, var(--theme-positive) ${pct}%, transparent)`,
   negTint:   (pct: number) => `color-mix(in srgb, var(--theme-negative) ${pct}%, transparent)`,
 }
+
+/** A translucent version of any colour, hex or `var()`.
+ *
+ *  Use this instead of appending an alpha-hex suffix. `${color}22` produced a
+ *  valid 8-digit hex back when the colour was a literal, and the day the
+ *  literal became `var(--theme-negative)` it started producing
+ *  `var(--theme-negative)22` — not a colour, so the browser drops the whole
+ *  declaration and the element renders with no fill at all. */
+export const alpha = (color: string, pct: number) =>
+  `color-mix(in srgb, ${color} ${pct}%, transparent)`
 
 // Resolve a --theme-* token to a concrete value where a string is required at
 // call time (e.g. lightweight-charts series options). Re-read on theme change.

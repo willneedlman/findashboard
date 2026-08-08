@@ -38,6 +38,7 @@ import { PortfolioProvider } from './contexts/PortfolioContext'
 import AccountSync from './components/AccountSync'
 import { findToolByLocation } from './lib/hubs'
 import { recordRecent } from './lib/recents'
+import EmptyState from './components/EmptyState'
 
 // Marketing launchpad — chrome-free, lives at / and /product/*
 const Landing        = lazyWithReload(() => import('./marketing/Marketing').then(m => ({ default: m.Landing })))
@@ -124,9 +125,7 @@ const ReportPrint        = lazyWithReload(() => import('./pages/ReportPrint'))
 function PageLoader() {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
-      <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)' }}>
-        Loading…
-      </div>
+      <EmptyState variant="loading" size="compact" title="Loading the page" />
     </div>
   )
 }

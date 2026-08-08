@@ -6,8 +6,7 @@ import HelpTip from '../components/HelpTip'
 import EmptyState from '../components/EmptyState'
 import {
   C, PERIODS, StatCard, inputStyle, selectStyle, RailGroup, RunButton, ToolShell,
-  ModeToggle, REG_MODES, ReturnsScatter, RollingBetaChart, type RegMode,
-} from './regressionShared'
+  ModeToggle, REG_MODES, ReturnsScatter, RollingBetaChart, type RegMode, ChartPanel } from './regressionShared'
 
 interface Dist {
   mean: number; std: number; min: number; p5: number; p25: number; p50: number
@@ -64,16 +63,14 @@ function DistPanel({ title, tip, values, dist, fmt }: {
   title: string; tip: string; values: number[]; dist: Dist; fmt: (v: number) => string
 }) {
   return (
-    <div style={{ background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
-      <div style={{ color: C.gold, fontSize: 12, marginBottom: 2 }}>{title}</div>
-      <div style={{ color: C.muted, fontSize: 10, marginBottom: 10 }}>{tip}</div>
+    <ChartPanel title={title} hint={tip}>
       <Histogram values={values} p5={dist.p5} p50={dist.p50} p95={dist.p95} color={C.blue} />
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: C.muted, marginTop: 8, fontFamily: 'var(--theme-mono)' }}>
         <span>p5 {fmt(dist.p5)}</span>
         <span style={{ color: C.text }}>median {fmt(dist.p50)}</span>
         <span>p95 {fmt(dist.p95)}</span>
       </div>
-    </div>
+    </ChartPanel>
   )
 }
 
@@ -151,7 +148,7 @@ export default function MonteCarloRegression({ mode, setMode }: { mode: RegMode;
   return (
     <ToolShell title="Regression" rail={rail}>
       {mutation.isError && (
-        <div style={{ color: C.red, background: `${C.red}11`, border: `1px solid ${C.red}44`, borderRadius: 6, padding: '10px 14px', marginBottom: 16, fontSize: 12 }}>
+        <div style={{ color: 'var(--theme-text)', background: 'color-mix(in srgb, var(--theme-negative) 8%, transparent)', borderLeft: '2px solid var(--theme-negative)', padding: '10px 14px', marginBottom: 16, fontSize: 12 }}>
           {(mutation.error as any)?.response?.data?.detail ?? mutation.error.message}
         </div>
       )}
@@ -184,28 +181,22 @@ export default function MonteCarloRegression({ mode, setMode }: { mode: RegMode;
               values={d.per_path.r_squared} dist={d.r_squared} />
           </div>
 
-          <div style={{ background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16, marginBottom: 20 }}>
-            <div style={{ color: C.gold, fontSize: 12, marginBottom: 2, display: 'flex', gap: 8, alignItems: 'center' }}>
-              <GitBranch size={14} /> Strategy returns vs {r.benchmark}
-            </div>
-            <div style={{ color: C.muted, fontSize: 10, marginBottom: 12 }}>
-              Daily simulated strategy returns regressed on market returns (1,500-point sample). Line slope is beta, intercept is alpha. The short-gamma tail bends the cloud below the fit on big down days.
-            </div>
+          <ChartPanel
+            title={<><GitBranch size={14} /> Strategy returns vs {r.benchmark}</>}
+            hint="Daily simulated strategy returns regressed on market returns, on a 1,500-point sample. Line slope is beta, intercept is alpha. The short-gamma tail bends the cloud below the fit on big down days."
+            style={{ marginBottom: 20 }}>
             <ReturnsScatter x={r.scatter.x} y={r.scatter.y} line={r.scatter.line} xLabel={r.benchmark} />
-          </div>
+          </ChartPanel>
 
-          <div style={{ background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16, marginBottom: 20 }}>
-            <div style={{ color: C.gold, fontSize: 12, marginBottom: 2, display: 'flex', gap: 8, alignItems: 'center' }}>
-              <Activity size={14} /> Rolling beta (sample path)
-            </div>
-            <div style={{ color: C.muted, fontSize: 10, marginBottom: 12 }}>
-              {r.rolling_beta.window}-day rolling beta on one simulated future, showing intra-path regime drift.
-            </div>
+          <ChartPanel
+            title={<><Activity size={14} /> Rolling beta (sample path)</>}
+            hint={`${r.rolling_beta.window}-day rolling beta on one simulated future, showing intra-path regime drift.`}
+            style={{ marginBottom: 20 }}>
             <RollingBetaChart data={roll} xKey="i" xLabel="trading day"
               refValue={d.betas[0].mean} refLabel="mean beta" />
-          </div>
+          </ChartPanel>
 
-          <div style={{ background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, padding: '12px 16px', fontSize: 11, color: C.muted, fontFamily: 'var(--theme-mono)' }}>
+          <div className="ft-chart-panel" style={{ padding: '12px 16px', fontSize: 11, color: C.muted, fontFamily: 'var(--theme-mono)' }}>
             <span style={{ color: C.text }}>Pooled OLS</span> (all paths stacked):
             {' '}alpha {pct(r.pooled.alpha * ANN)} (p {r.pooled.alpha_p.toExponential(1)}) ·
             {' '}beta {r.pooled.beta.toFixed(3)} · R² {r.pooled.r_squared.toFixed(3)}
@@ -214,9 +205,7 @@ export default function MonteCarloRegression({ mode, setMode }: { mode: RegMode;
       )}
 
       {!r && !mutation.isPending && (
-        <EmptyState title="Monte Carlo Regression" hint={`Set a benchmark and strategy parameters, then run ${nSims.toLocaleString()} simulated futures.`}
-          kpis={['Mean Alpha', 'Mean Beta', 'Mean R²', 'Paths']}
-          preview="chart" previewLabel="Alpha Distribution" action="Run Simulation" />
+        <EmptyState title="Monte Carlo Regression" hint={`Set a benchmark and strategy parameters, then run ${nSims.toLocaleString()} simulated futures.`} action="Run Simulation" />
       )}
     </ToolShell>
   )

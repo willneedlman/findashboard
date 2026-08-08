@@ -7,7 +7,7 @@ import EmptyState from '../components/EmptyState'
 import ErrorState from '../components/ErrorState'
 import LoadingState from '../components/LoadingState'
 import HelpTip from '../components/HelpTip'
-import { INPUT, SELECT, LABEL, TICK, TOOLTIP_STYLE } from './valuationShared'
+import { INPUT, Select, LABEL, TICK, TOOLTIP_STYLE } from './valuationShared'
 import { fetchFactorDecomposition } from '../hooks/useApi'
 import { readPMBooks, normalizeTicker, type PMPortfolio } from '../lib/pmImport'
 import { T } from '../lib/theme'
@@ -64,7 +64,7 @@ export default function FactorDecomposition() {
       {mode === 'saved' ? (
         <div style={{ padding: '12px 12px 13px', borderBottom: `1px solid ${T.border}` }}>
           <div style={{ ...LABEL, marginBottom: 7 }}>Portfolio</div>
-          {books.length ? <select value={bookId} onChange={e => setBookId(e.target.value)} style={SELECT}>{books.map(b => <option key={b.id} value={b.id}>{b.name} ({b.holdings.length})</option>)}</select>
+          {books.length ? <Select value={bookId} onChange={e => setBookId(e.target.value)}>{books.map(b => <option key={b.id} value={b.id}>{b.name} ({b.holdings.length})</option>)}</Select>
             : <p style={{ fontFamily: MONO, fontSize: 10, color: T.muted, lineHeight: 1.5 }}>No saved book. Build one in Portfolio Manager, or switch to Custom.</p>}
           <p style={{ fontFamily: MONO, fontSize: 9, color: T.textDim, marginTop: 7, lineHeight: 1.5 }}>Weighted by market value from the latest close. Options and futures excluded.</p>
         </div>
@@ -108,11 +108,10 @@ export default function FactorDecomposition() {
     <PageWrapper title="Factor Decomposition">
       <SidebarLayout sidebar={rail} sidebarTitle="Book">
         {m.isPending ? <LoadingState label="Regressing the book on its factors" />
-          : m.error ? <ErrorState message={(m.error as any)?.response?.data?.detail || 'Could not decompose the book.'} onRetry={() => m.mutate()} />
+          : m.error ? <ErrorState title="Decomposition failed" message={(m.error as any)?.response?.data?.detail || 'The book could not be decomposed. Retry, or pick a shorter window.'} onRetry={() => m.mutate()} />
           : m.data ? <Results key={m.data.mode} d={m.data} />
           : <EmptyState title="Factor Decomposition" hint="Load a saved book or enter weights to measure factor exposure and beta drift."
-            keys={['Market', 'Rates', 'Credit', 'Oil', 'Dollar']} kpis={['Market', 'Rates', 'Credit', 'Oil', 'Dollar']}
-            preview="chart" previewLabel="Factor Exposure" action="Decompose" />}
+            keys={['Market', 'Rates', 'Credit', 'Oil', 'Dollar']} action="Decompose" />}
       </SidebarLayout>
     </PageWrapper>
   )
@@ -214,7 +213,7 @@ function Results({ d }: { d: Resp }) {
             </div>
           )
         })}
-        <div style={{ fontFamily: MONO, fontSize: 9, color: T.textDim, padding: '9px 14px', lineHeight: 1.5 }}>Risk shares sum to the systematic {d.systematic_pct}%; the rest is name-specific. Annualized alpha {d.alpha_ann_pct > 0 ? '+' : ''}{d.alpha_ann_pct}%.</div>
+        <div style={{ fontFamily: MONO, fontSize: 9, color: T.textDim, padding: '9px 14px', lineHeight: 1.5 }}>Risk shares sum to the systematic {d.systematic_pct}%. The rest is name-specific. Annualized alpha {d.alpha_ann_pct > 0 ? '+' : ''}{d.alpha_ann_pct}%.</div>
       </Panel>
 
       {/* Rolling exposure */}

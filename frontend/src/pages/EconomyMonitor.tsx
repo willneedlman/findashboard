@@ -11,7 +11,7 @@ import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, chartClip } from '../lib/reportCaptureRegistry'
 
-const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #5e768f)', fontFamily: 'var(--theme-mono)' }
+const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #8099b0)', fontFamily: 'var(--theme-mono)' }
 const FED_TARGET = 2.0
 
 type Pt = { d: string; v: number }

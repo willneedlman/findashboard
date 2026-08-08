@@ -6,10 +6,11 @@ import type { IChartApi, ISeriesApi } from 'lightweight-charts'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 import { readToken } from '../../../lib/theme'
 import { useLiveMarks } from '../../../hooks/useLiveMarks'
+import EmptyState from '../../EmptyState'
 
 const T = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', headerBg: 'var(--theme-surface, #0d1826)',
-  gold: 'var(--theme-primary, #c9a84c)', text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-secondary, #5e768f)',
+  gold: 'var(--theme-primary, #c9a84c)', text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-secondary, #8099b0)',
   mono: 'var(--theme-mono)', label: 'var(--theme-sans)',
   pos: 'var(--theme-positive, #22c55e)', neg: 'var(--theme-negative, #ef4444)',
 }
@@ -57,7 +58,7 @@ function CandleChart({ ticker }: { ticker: string }) {
     const bg      = cs.getPropertyValue('--theme-bg').trim()       || '#101c2e'
     const surface = cs.getPropertyValue('--theme-surface').trim()  || '#0d1826'
     const gold    = cs.getPropertyValue('--theme-primary').trim()  || '#c9a84c'
-    const text    = cs.getPropertyValue('--theme-secondary').trim()|| '#5e768f'
+    const text    = cs.getPropertyValue('--theme-secondary').trim()|| '#8099b0'
 
     const chart = createChart(el, {
       layout: {
@@ -144,12 +145,12 @@ function CandleChart({ ticker }: { ticker: string }) {
         <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
         {loading && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(16,28,46,0.65)' }}>
-            <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: '#5e768f', letterSpacing: '0.12em' }}>LOADING…</span>
+            <EmptyState variant="loading" size="compact" title="Loading price history" />
           </div>
         )}
         {error && !loading && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            <div style={{ fontSize: 11, color: 'var(--theme-secondary, #5e768f)' }}>Chart unavailable</div>
+            <div style={{ fontSize: 11, color: 'var(--theme-secondary, #8099b0)' }}>Chart unavailable</div>
             <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.18))' }}>{error}</div>
           </div>
         )}

@@ -2065,7 +2065,7 @@ export function AlgoStrategyBuilderContent() {
           </div>
 
           {R.bars && R.span && (
-            <div style={{ fontSize: 9, color: 'var(--theme-text-faint, #5e768f)', fontFamily: 'var(--theme-sans)', marginTop: 6, letterSpacing: '0.04em' }}>
+            <div style={{ fontSize: 9, color: 'var(--theme-text-faint, #8099b0)', fontFamily: 'var(--theme-sans)', marginTop: 6, letterSpacing: '0.04em' }}>
               Window used: {R.span.start} → {R.span.end} · {R.bars.toLocaleString()} daily bars{R.bars < 250 ? ' — short history; indicators needing a long lookback (e.g. SMA200) warm up slowly here' : ''}
             </div>
           )}
@@ -2194,7 +2194,7 @@ export function AlgoStrategyBuilderContent() {
 
           <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
             <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10, background: 'var(--theme-surface, #142032)', padding: '3px 8px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>
-              Equity Curve — {selectedPortfolioTicker ? `${selectedPortfolioTicker} Trades` : 'Strategy'}
+              Equity Curve · {selectedPortfolioTicker ? `${selectedPortfolioTicker} Trades` : 'Strategy'}
             </div>
             <div style={{ position: 'absolute', top: 3, right: 4, zIndex: 12, display: 'flex', gap: 3, alignItems: 'center' }}>
               {zoomRange && (
@@ -2456,7 +2456,7 @@ function AiAlgoStrategyChat({ messages, setMessages, pendingPrompt, onPromptCons
     surface: 'var(--theme-surface, #0d1826)',
     border:  'var(--theme-border, rgba(255,255,255,0.10))',
     text:    'var(--theme-text, #d7e3fc)',
-    muted:   'var(--theme-secondary, #99907e)',
+    muted:   'var(--theme-secondary, #8099b0)',
     dim:     'var(--theme-text-faint, rgba(255,255,255,0.28))',
     gold:    'var(--theme-primary, #c9a84c)',
     pos:     'var(--theme-pos, #4caf7d)',

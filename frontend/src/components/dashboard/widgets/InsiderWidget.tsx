@@ -1,13 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
+import EmptyState from '../../EmptyState'
 
 const T = {
   bg:    'var(--theme-bg, #101c2e)',
   border: 'rgba(255,255,255,0.06)',
   rowBorder: 'rgba(255,255,255,0.04)',
   gold:  'var(--theme-primary, #c9a84c)',
-  muted: 'var(--theme-secondary, #5e768f)',
+  muted: 'var(--theme-secondary, #8099b0)',
   sub:   'var(--theme-secondary, #8a9ab0)',
   text:  'var(--theme-text, #dce3ed)',
   mono:  'var(--theme-mono)',
@@ -70,7 +71,7 @@ export default function InsiderWidget({ config }: { config: WidgetConfig }) {
 
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {isLoading ? (
-          <div style={{ padding: 12, fontFamily: T.mono, fontSize: 10, color: T.muted }}>Loading…</div>
+          <EmptyState variant="loading" size="compact" title="Loading insider filings" />
         ) : txns.length === 0 ? (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, color: T.muted, fontFamily: T.label, fontSize: 11, textAlign: 'center' }}>No recent insider transactions.</div>
         ) : txns.map((t, i) => {

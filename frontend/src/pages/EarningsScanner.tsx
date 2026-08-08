@@ -26,8 +26,8 @@ import { kpiClip, tableClip, textClip } from '../lib/reportCaptureRegistry'
 const C = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))',
   header: 'var(--theme-surface, #0d1826)', surface: 'var(--theme-bg, #101c2e)',
-  gold: 'var(--theme-primary, #c9a84c)', text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-secondary, #5e768f)',
-  dim: 'color-mix(in srgb, var(--theme-secondary, #5e768f) 62%, var(--theme-bg, #101c2e))',
+  gold: 'var(--theme-primary, #c9a84c)', text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-secondary, #8099b0)',
+  dim: 'color-mix(in srgb, var(--theme-secondary, #8099b0) 62%, var(--theme-bg, #101c2e))',
   pos: 'var(--theme-positive, #22c55e)', neg: 'var(--theme-negative, #ef4444)', warn: '#f59e0b', blue: 'var(--theme-tertiary, #60a5fa)',
   mono: 'var(--theme-mono)', sans: 'var(--theme-sans)',
   // Hairline between table rows — lighter than the panel border so 500+ rows
@@ -1034,9 +1034,6 @@ export function EarningsScannerContent() {
     <>
       <style>{`
         @keyframes ec-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
-        @keyframes ec-spin { to { transform: rotate(360deg) } }
-        .ec-spinner { animation: ec-spin 0.7s linear infinite; }
-        @media (prefers-reduced-motion: reduce) { .ec-spinner { animation: none; } }
       `}</style>
 
       {/* Controls — a single toolbar line, parameter groups separated by
@@ -1182,9 +1179,7 @@ export function EarningsScannerContent() {
           title="No Holdings"
           hint={bookId === ACTIVE_BOOK
             ? 'Add positions in the Portfolio Manager, or switch scope to All to screen the market.'
-            : 'That book has no positions. Pick another book, or switch scope to All to screen the market.'}
-          kpis={['Next Report', 'Implied Move', 'Short Interest', 'Consensus']}
-          preview="table" previewLabel="Earnings Agenda" columns={['Ticker', 'Report Date', 'Implied Move', 'Consensus']} />
+            : 'That book has no positions. Pick another book, or switch scope to All to screen the market.'} />
       )}
       {isBookScope(scope) && !bookEmpty && bookLoading && visible.length === 0 && (
         <EmptyState title="Loading…" variant="loading" hint="Resolving report dates for your book…" />
@@ -1251,7 +1246,7 @@ export function EarningsScannerContent() {
       {ready && !error && !bookEmpty && visible.length > 0 && (
         <div style={{ fontFamily: C.sans, fontSize: 10, color: C.muted, marginTop: 10, lineHeight: 1.7 }}>
           Impl Move = expected move priced into the ATM straddle of the expiry spanning this report.
-          Result/Reaction show once that report is in — Result is last EPS vs estimate, Reaction is the
+          Result and Reaction show once that report is in. Result is last EPS vs estimate, Reaction is the
           stock's one-day move. Click a row for the last 5 reports, your position, the wire, and an AI
           filing summary. Estimates from finnhub, reactions from prior-quarter prices, book context from
           your Portfolio Manager holdings.
@@ -1507,10 +1502,7 @@ function FilingsArchive({ symbol, filings, onClose, onPick, style }: {
 
       <div style={{ maxHeight: 252, overflowY: 'auto' }}>
         {filings === 'loading' && (
-          <div style={{ ...popNote, display: 'flex', alignItems: 'center', gap: 9 }}>
-            <span className="ec-spinner" style={{ width: 12, height: 12, borderRadius: '50%', border: `2px solid ${gold(30)}`, borderTopColor: C.gold, flexShrink: 0 }} />
-            Loading filings…
-          </div>
+          <EmptyState variant="loading" size="compact" title="Loading filings" />
         )}
         {filings === 'error' && <div style={{ ...popNote, color: C.warn }}>Could not reach SEC EDGAR.</div>}
         {Array.isArray(filings) && shown.length === 0 && <div style={popNote}>No filings of this type.</div>}
@@ -2204,10 +2196,7 @@ function SummarySection({ ticker, state, onFetch, aiTarget, onClearTarget, onPic
           }}>FETCH SUMMARY</button>
         )}
         {running && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            <span className="ec-spinner" style={{ width: 12, height: 12, borderRadius: '50%', border: `2px solid ${gold(30)}`, borderTopColor: C.gold }} />
-            <span style={{ fontFamily: C.sans, fontSize: 10.5, color: C.gold }}>{state!.stage} ({state!.pct}%)</span>
-          </span>
+          <EmptyState variant="loading" size="compact" title={`${state!.stage} (${state!.pct}%)`} progress={state!.pct} />
         )}
         {state && !running && (
           <button onClick={onFetch} style={{

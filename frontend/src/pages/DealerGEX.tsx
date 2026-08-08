@@ -457,9 +457,7 @@ export function DealerGEXContent() {
       {!isFetching && !data && !error && (
         <div style={{ border: `1px solid ${T.border}` }}>
           <EmptyState title="Dealer GEX" action="LOAD"
-            hint="Enter a ticker and press LOAD."
-            kpis={['Net Gamma', 'Net Delta', 'Gamma Flip', 'Call Wall', 'Put Wall']}
-            preview="chart" previewLabel="Exposure by strike" />
+            hint="Enter a ticker and press LOAD." />
         </div>
       )}
 

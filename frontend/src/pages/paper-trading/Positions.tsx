@@ -15,6 +15,7 @@ import { loadActivePortfolio } from '../../components/dashboard/widgets/usePortf
 import { EMPTY_LEG, OPTION_STRATEGY_TEMPLATES, type LegState, type StrategyTemplate } from './optionTemplates'
 import { useAuth, adaptAccount, T, inp, sel, lbl, btn, sectionHeader, fmt$, fmtDate, statusColor, computeReplayStats, applyRiskToChart, PT_LS_KEY, BUILTIN_STRATEGY_INFO, PAPER_DEFAULT_PARAMS, PAPER_PARAM_LABELS, STRATEGY_TEMPLATE, RISK_DEFAULTS, type Balances, type Position, type Order, type AccountData, type PendingOptionStrategy, type ChartPoint, type StrategyEntry, type ReplayEvent, type ReplayResult, type RiskConfig, type SchedulerStatus, type SchedulerJob, type SchedulerLogEntry } from './shared'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../../components/ChartTooltip'
+import EmptyState from '../../components/EmptyState'
 
 // ─── Ticker chart modal ───────────────────────────────────────────────────────
 function TickerChartModal({ ticker, onClose }: { ticker: string; onClose: () => void }) {
@@ -83,7 +84,7 @@ function TickerChartModal({ ticker, onClose }: { ticker: string; onClose: () => 
         </div>
         <div style={{ padding: 14, height: 300 }}>
           {loading ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: T.dim, fontFamily: T.mono, fontSize: 12 }}>Loading…</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><EmptyState variant="loading" size="compact" title="Loading equity curve" /></div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={slice} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
@@ -285,7 +286,7 @@ export function OrdersPanel({ orders, onCancel, onCancelAll, cancelAllPending, c
         border: `1px solid ${active ? (color ?? T.gold) : T.border}`,
         background: active ? `color-mix(in srgb, ${color ?? T.gold} 14%, transparent)` : 'transparent',
         color: active ? (color ?? T.gold) : T.dim,
-        transition: 'all 0.1s',
+        transition: 'background 0.1s var(--ease-out), border-color 0.1s var(--ease-out), color 0.1s var(--ease-out)',
       }}
     >{label}</button>
   )

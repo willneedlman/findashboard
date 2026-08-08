@@ -27,7 +27,7 @@ export default function SidebarLayout({
             style={{
               width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer',
-              borderBottom: open ? '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))' : 'none',
+              borderBottom: open ? '1px solid var(--theme-border, rgba(255,255,255,0.08))' : 'none',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -37,8 +37,8 @@ export default function SidebarLayout({
               </span>
             </div>
             {open
-              ? <ChevronUp   size={13} style={{ color: 'var(--theme-secondary, #5e768f)' }} />
-              : <ChevronDown size={13} style={{ color: 'var(--theme-secondary, #5e768f)' }} />
+              ? <ChevronUp   size={13} style={{ color: 'var(--theme-secondary, #8099b0)' }} />
+              : <ChevronDown size={13} style={{ color: 'var(--theme-secondary, #8099b0)' }} />
             }
           </button>
           {open && <div style={{ padding: 14 }}>{sidebar}</div>}
@@ -48,39 +48,21 @@ export default function SidebarLayout({
     )
   }
 
-  // Desktop: sidebar flush against content, separated by a single border
+  // Desktop: sidebar flush against content, separated by a single border.
+  // Chrome comes from .ft-sidebar-panel / .ft-sidebar-title / .ft-sidebar-body,
+  // not an inline copy of them — keeping both is how the two drifted apart. No
+  // shadow: this is the largest surface in the tool, and lifting it made the
+  // page float over the app sidebar.
   return (
-    <div className="ft-tool-layout" style={{ display: 'flex', alignItems: 'flex-start', gap: 0, border: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', boxShadow: '0 1px 4px rgba(0,0,0,0.35)' }}>
+    <div className="ft-tool-layout" style={{ display: 'flex', alignItems: 'flex-start', gap: 0, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
       {/* Sidebar */}
-      <div className="ft-tool-sidebar" style={{
-        width: sidebarWidth,
-        flexShrink: 0,
-        background: 'color-mix(in srgb, var(--theme-surface, #0d1826) 100%, black 8%)',
-        borderRight: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))',
-        display: 'flex',
-        flexDirection: 'column',
-        alignSelf: 'stretch',
-      }}>
-        {/* Sidebar title strip — omitted when the tool supplies its own RailSection headers (sidebarTitle="") */}
+      <div className="ft-tool-sidebar ft-sidebar-panel" style={{ width: sidebarWidth, flexShrink: 0, alignSelf: 'stretch' }}>
+        {/* Title strip — omitted when the tool supplies its own RailSection headers (sidebarTitle="") */}
         {sidebarTitle && (
-        <div style={{
-          padding: '9px 14px',
-          background: 'rgba(0,0,0,0.2)',
-          borderBottom: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 7,
-          flexShrink: 0,
-        }}>
-          <SlidersHorizontal size={10} style={{ color: 'var(--theme-primary, #c9a84c)', flexShrink: 0 }} />
-          <span style={{
-            fontFamily: 'var(--theme-sans)',
-            fontSize: 9, fontWeight: 700, letterSpacing: '0.16em',
-            textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)',
-          }}>
+          <div className="ft-sidebar-title">
+            <SlidersHorizontal size={10} style={{ color: 'var(--theme-primary, #c9a84c)', flexShrink: 0 }} />
             {sidebarTitle}
-          </span>
-        </div>
+          </div>
         )}
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto' }}>
           {sidebar}

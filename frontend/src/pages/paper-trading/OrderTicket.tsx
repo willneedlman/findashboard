@@ -14,6 +14,7 @@ import PaperChart, { type ChartFill } from '../../components/PaperChart'
 import { loadActivePortfolio } from '../../components/dashboard/widgets/usePortfolio'
 import { EMPTY_LEG, OPTION_STRATEGY_TEMPLATES, type LegState, type StrategyTemplate } from './optionTemplates'
 import { useAuth, adaptAccount, T, inp, sel, lbl, btn, sectionHeader, fmt$, fmtDate, statusColor, computeReplayStats, applyRiskToChart, PT_LS_KEY, BUILTIN_STRATEGY_INFO, PAPER_DEFAULT_PARAMS, PAPER_PARAM_LABELS, STRATEGY_TEMPLATE, RISK_DEFAULTS, type Balances, type Position, type Order, type AccountData, type PendingOptionStrategy, type ChartPoint, type StrategyEntry, type ReplayEvent, type ReplayResult, type RiskConfig, type SchedulerStatus, type SchedulerJob, type SchedulerLogEntry } from './shared'
+import { alpha } from '../../lib/theme'
 
 function LegRow({
   index, leg, hint, underlying, onChange, onRemove, canRemove,
@@ -306,7 +307,7 @@ export function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed,
         letterSpacing: '0.10em', cursor: 'pointer', border: 'none',
         background: tab === id ? T.gold : 'transparent',
         color: tab === id ? 'var(--theme-bg)' : T.muted,
-        transition: 'all 0.15s',
+        transition: 'background 0.15s var(--ease-out), border-color 0.15s var(--ease-out), color 0.15s var(--ease-out)',
       }}
     >
       {label}
@@ -320,9 +321,9 @@ export function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed,
         flex: 1, padding: '6px 0', fontFamily: T.mono, fontSize: 10, fontWeight: 700,
         letterSpacing: '0.1em', cursor: 'pointer',
         border: `1px solid ${active ? activeColor : T.border}`,
-        background: active ? `${activeColor}22` : 'transparent',
+        background: active ? alpha(activeColor, 13) : 'transparent',
         color: active ? activeColor : T.dim,
-        transition: 'all 0.12s',
+        transition: 'background 0.12s var(--ease-out), border-color 0.12s var(--ease-out), color 0.12s var(--ease-out)',
       }}
     >
       {label}
@@ -365,7 +366,7 @@ export function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed,
             </div>
 
             <div>
-              <span style={lbl}>Symbol — stock or ETF</span>
+              <span style={lbl}>Symbol, stock or ETF</span>
               <input
                 style={inp}
                 value={eqSymbol}
@@ -699,7 +700,7 @@ export function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed,
         )}
 
         <div style={{ fontSize: 9, color: T.dim, fontFamily: T.mono, textAlign: 'center', marginTop: 4 }}>
-          PAPER / SANDBOX — no real money
+          PAPER / SANDBOX, no real money
         </div>
       </div>
     </div>

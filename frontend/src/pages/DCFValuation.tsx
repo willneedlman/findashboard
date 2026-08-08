@@ -70,7 +70,7 @@ function CurveRow({ label, curve, onChange, focus, blur }: {
 }) {
   return (
     <div>
-      <label style={LABEL}>{label} — Start % → End %</label>
+      <label style={LABEL}>{label} · Start % → End %</label>
       <div style={{ display: 'flex', gap: 6 }}>
         <input type="number" step={0.25} style={INPUT} value={curve.start_pct} onFocus={focus} onBlur={blur}
           onChange={e => onChange({ ...curve, start_pct: +e.target.value })} />
@@ -129,7 +129,7 @@ function SensitivityMatrix({ table, baseValue }: { table: SensitivityTable; base
         </tbody>
         </table>
       </div>
-      {!baseOnGrid && <div style={{ padding: '7px 10px', borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontSize: 8.5, color: 'var(--theme-secondary, #99907e)' }}>The current model falls outside this custom range, so no base cell is highlighted.</div>}
+      {!baseOnGrid && <div style={{ padding: '7px 10px', borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontSize: 8.5, color: 'var(--theme-secondary, #8099b0)' }}>The current model falls outside this custom range, so no base cell is highlighted.</div>}
     </>
   )
 }
@@ -140,7 +140,7 @@ function ThesisList({ label, items, tone }: { label: string; items: string[]; to
     <div>
       <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: tone, marginBottom: 7 }}>{label}</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {items.map((item, index) => <div key={index} style={{ fontSize: 10, lineHeight: '15px', color: 'var(--theme-secondary, #99907e)' }}>— {item}</div>)}
+        {items.map((item, index) => <div key={index} style={{ fontSize: 10, lineHeight: '15px', color: 'var(--theme-secondary, #8099b0)' }}>— {item}</div>)}
       </div>
     </div>
   )
@@ -420,7 +420,7 @@ export function DCFValuationContent() {
               onFocus={focus} onBlur={blur} placeholder="Ticker or company" />
             <button onClick={autoFill} disabled={fetching} style={{
               marginTop: 6, width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
-              color: 'var(--theme-secondary, #99907e)', fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
+              color: 'var(--theme-secondary, #8099b0)', fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
               textTransform: 'uppercase', padding: '5px 0', cursor: fetching ? 'default' : 'pointer', opacity: fetching ? 0.6 : 1,
             }}>
               {fetching ? 'FETCHING…' : 'FETCH'}
@@ -448,7 +448,7 @@ export function DCFValuationContent() {
                     ['Terminal Growth %', terminalGrowth, aiSuggested.terminal_growth],
                   ].map(([label, was, now]) => (
                     <div key={label as string} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--theme-secondary, #99907e)' }}>{label}</span>
+                      <span style={{ color: 'var(--theme-secondary, #8099b0)' }}>{label}</span>
                       <span>
                         <span style={{ color: 'var(--theme-text-dim, rgba(255,255,255,0.3))', textDecoration: 'line-through', marginRight: 6 }}>{was}</span>
                         <span style={{ color: 'var(--theme-primary, #c9a84c)', fontWeight: 700 }}>{now}</span>
@@ -459,7 +459,7 @@ export function DCFValuationContent() {
                 {aiRationale && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 8, paddingTop: 6, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.06))' }}>
                     {Object.entries(aiRationale).map(([k, v]) => (
-                      <div key={k} style={{ fontSize: 8, color: 'var(--theme-secondary, #99907e)', lineHeight: '12px' }}>
+                      <div key={k} style={{ fontSize: 8, color: 'var(--theme-secondary, #8099b0)', lineHeight: '12px' }}>
                         <span style={{ color: 'var(--theme-primary, #c9a84c)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{k}: </span>{v as string}
                       </div>
                     ))}
@@ -520,7 +520,7 @@ export function DCFValuationContent() {
                   padding: '6px 3px', fontFamily: 'var(--theme-mono)', fontSize: 8.5, fontWeight: 750,
                   background: scenario === key ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' : 'transparent',
                   border: `1px solid ${scenario === key ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`,
-                  color: scenario === key ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #99907e)',
+                  color: scenario === key ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)',
                   cursor: 'pointer',
                 }}>{label}</button>
               ))}
@@ -564,7 +564,7 @@ export function DCFValuationContent() {
 
       <RailSection title="Growth Stages" badge={`${totalYears}y`} open={stagesOpen} onToggle={() => setStagesOpen(o => !o)}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ display: 'flex', gap: 6, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }}>
+          <div style={{ display: 'flex', gap: 6, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)' }}>
             <span style={{ width: 50 }}>Years</span><span style={{ flex: 1 }}>Growth %</span><span style={{ width: 16 }} />
           </div>
           {stages.map((st, i) => (
@@ -575,7 +575,7 @@ export function DCFValuationContent() {
                 onChange={e => updateStage(i, { growth: +e.target.value })} />
               <button onClick={() => removeStage(i)} disabled={stages.length <= 1} style={{
                 width: 16, background: 'none', border: 'none', fontSize: 14, cursor: stages.length <= 1 ? 'default' : 'pointer',
-                color: stages.length <= 1 ? 'var(--theme-text-faint, rgba(255,255,255,0.2))' : 'var(--theme-secondary, #99907e)',
+                color: stages.length <= 1 ? 'var(--theme-text-faint, rgba(255,255,255,0.2))' : 'var(--theme-secondary, #8099b0)',
               }}>×</button>
             </div>
           ))}
@@ -599,7 +599,7 @@ export function DCFValuationContent() {
           <CurveRow label="CapEx % Rev" curve={capex} onChange={value => { setCapex(value); setScenario('custom') }} focus={focus} blur={blur} />
           <CurveRow label="D&A % Rev" curve={da} onChange={value => { setDa(value); setScenario('custom') }} focus={focus} blur={blur} />
           <CurveRow label="Working Capital % Rev" curve={wc} onChange={value => { setWc(value); setScenario('custom') }} focus={focus} blur={blur} />
-          <div style={HINT}>Each glides linearly from Start % (year 1) to End % (final projection year) — e.g. CapEx starting high during the growth phase and fading toward a steady state.</div>
+          <div style={HINT}>Each glides linearly from Start % (year 1) to End % (final projection year). CapEx, for example, starts high during the growth phase and fading toward a steady state.</div>
         </div>
       </RailSection>
 
@@ -612,7 +612,7 @@ export function DCFValuationContent() {
                 textTransform: 'uppercase', cursor: 'pointer',
                 background: waccMode === m ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' : 'transparent',
                 border: `1px solid ${waccMode === m ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`,
-                color: waccMode === m ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #99907e)',
+                color: waccMode === m ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)',
               }}>{m === 'auto' ? 'Auto (CAPM)' : 'Manual'}</button>
             ))}
           </div>
@@ -638,7 +638,7 @@ export function DCFValuationContent() {
                 <div style={HINT}>β {betaInfo.beta.toFixed(2)} · {betaInfo.source} · risk-free rate and D/E resolved live from the Treasury curve and fundamentals.</div>
               )}
               {data?.wacc_build && (
-                <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9.5, color: 'var(--theme-secondary, #99907e)', lineHeight: 1.8, paddingTop: 4, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.06))' }}>
+                <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9.5, color: 'var(--theme-secondary, #8099b0)', lineHeight: 1.8, paddingTop: 4, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.06))' }}>
                   <div>Risk-free {data.wacc_build.risk_free}% · Ke {data.wacc_build.cost_of_equity}% · Kd {data.wacc_build.cost_of_debt}%</div>
                   <div>Weights E {((data.wacc_build.equity_weight ?? 1) * 100).toFixed(0)}% / D {((data.wacc_build.debt_weight ?? 0) * 100).toFixed(0)}% → <span style={{ color: 'var(--theme-primary, #c9a84c)' }}>WACC {data.wacc_build.wacc}%</span></div>
                 </div>
@@ -670,7 +670,7 @@ export function DCFValuationContent() {
             <div>
               <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.13em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>AI Filing-Grounded Thesis</div>
               {aiStatement && (
-                <div style={{ marginTop: 3, fontSize: 9, color: 'var(--theme-secondary, #99907e)' }}>
+                <div style={{ marginTop: 3, fontSize: 9, color: 'var(--theme-secondary, #8099b0)' }}>
                   Income: {aiStatement.source} · {aiStatement.period}
                   {aiStatement.annual_period ? ` · Balance / cash flow: annual filing ${aiStatement.annual_period}` : ''}
                   {aiCacheMeta?.generated_at ? ` · ${aiCacheMeta.cached ? 'Cached' : 'Generated'} ${new Date(aiCacheMeta.generated_at).toLocaleString()}` : ''}
@@ -680,11 +680,11 @@ export function DCFValuationContent() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <button onClick={() => aiSuggest(true)} disabled={aiSuggesting} style={{
                 padding: '4px 8px', background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
-                color: 'var(--theme-secondary, #99907e)', fontSize: 9, fontWeight: 750, letterSpacing: '0.08em',
+                color: 'var(--theme-secondary, #8099b0)', fontSize: 9, fontWeight: 750, letterSpacing: '0.08em',
                 textTransform: 'uppercase', cursor: aiSuggesting ? 'default' : 'pointer', opacity: aiSuggesting ? 0.55 : 1,
               }}>{aiRegenerating ? 'Regenerating…' : 'Regenerate'}</button>
               <span style={{ padding: '4px 8px', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)', fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{aiThesis.stance}</span>
-              <button aria-label="Dismiss filing thesis" onClick={() => { setAiThesis(null); setAiStatement(null) }} style={{ background: 'transparent', border: 0, color: 'var(--theme-secondary, #99907e)', fontSize: 17, lineHeight: 1, cursor: 'pointer', padding: 4 }}>×</button>
+              <button aria-label="Dismiss filing thesis" onClick={() => { setAiThesis(null); setAiStatement(null) }} style={{ background: 'transparent', border: 0, color: 'var(--theme-secondary, #8099b0)', fontSize: 17, lineHeight: 1, cursor: 'pointer', padding: 4 }}>×</button>
             </div>
           </div>
           <div style={{ padding: '14px 15px' }}>
@@ -753,7 +753,7 @@ export function DCFValuationContent() {
                 <div style={{ padding: '9px 12px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
                   <div>
                     <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.13em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>Market-Implied Expectations</div>
-                    <div style={{ marginTop: 3, fontSize: 9.5, color: 'var(--theme-secondary, #99907e)' }}>What the live price requires while every other assumption stays fixed.</div>
+                    <div style={{ marginTop: 3, fontSize: 9.5, color: 'var(--theme-secondary, #8099b0)' }}>What the live price requires while every other assumption stays fixed.</div>
                   </div>
                   <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-primary, #c9a84c)', whiteSpace: 'nowrap' }}>Price ${data.market_implied.market_price.toFixed(2)}</div>
                 </div>
@@ -767,7 +767,7 @@ export function DCFValuationContent() {
                     ['Growth + Margin', `${(data.modeled_revenue_cagr + targetMargin).toFixed(1)}%`, 'Modeled CAGR + target margin'],
                   ].map(([label, value, sub], index) => (
                     <div key={label} style={{ padding: '12px 14px', minHeight: 76, borderRight: index < 5 ? '1px solid var(--theme-border, rgba(255,255,255,0.08))' : undefined }}>
-                      <div style={{ fontSize: 8.5, fontWeight: 750, letterSpacing: '0.11em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }}>{label}</div>
+                      <div style={{ fontSize: 8.5, fontWeight: 750, letterSpacing: '0.11em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)' }}>{label}</div>
                       <div style={{ marginTop: 6, fontFamily: 'var(--theme-mono)', fontSize: 16, fontWeight: 750, color: label === 'Price-Implied CAGR' ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-text, #d7e3fc)' }}>{value}</div>
                       <div style={{ marginTop: 3, fontSize: 9, color: 'var(--theme-text-dim, rgba(255,255,255,0.4))' }}>{sub}</div>
                     </div>
@@ -779,7 +779,7 @@ export function DCFValuationContent() {
             {(data.pv_fcfs < 0 || data.enterprise_value <= 0 || (data.enterprise_value > 0 && termPct != null && termPct > 85)) && (
               <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid color-mix(in srgb, var(--theme-negative) 35%, transparent)', borderLeft: '4px solid var(--theme-negative)', padding: '8px 14px' }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--theme-negative)', marginBottom: 3 }}>Terminal-Dominated Result: Treat With Caution</div>
-                <div style={{ fontSize: 10, color: 'var(--theme-secondary, #99907e)', lineHeight: '14px' }}>
+                <div style={{ fontSize: 10, color: 'var(--theme-secondary, #8099b0)', lineHeight: '14px' }}>
                   {data.pv_fcfs < 0
                     ? 'The projected cash flows are negative across the explicit window, so all value (and more) comes from the terminal year. '
                     : 'Over 85% of enterprise value sits in the terminal value. '}
@@ -828,7 +828,7 @@ export function DCFValuationContent() {
                   <div style={{ padding: '10px 12px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
                     <div>
                       <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.13em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>Two-Way Sensitivity · Intrinsic $/Share</div>
-                      <div style={{ marginTop: 3, fontSize: 9, color: 'var(--theme-secondary, #99907e)' }}>Switch the paired drivers. The current model is highlighted when its assumptions land on the grid.</div>
+                      <div style={{ marginTop: 3, fontSize: 9, color: 'var(--theme-secondary, #8099b0)' }}>Switch the paired drivers. The current model is highlighted when its assumptions land on the grid.</div>
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                       {data.sensitivity_tables.map(table => (
@@ -836,7 +836,7 @@ export function DCFValuationContent() {
                           padding: '5px 8px', fontFamily: 'var(--theme-mono)', fontSize: 9, fontWeight: 750,
                           background: activeTable.id === table.id ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' : 'transparent',
                           border: `1px solid ${activeTable.id === table.id ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`,
-                          color: activeTable.id === table.id ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #99907e)', cursor: 'pointer',
+                          color: activeTable.id === table.id ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)', cursor: 'pointer',
                         }}>{table.label}</button>
                       ))}
                     </div>

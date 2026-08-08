@@ -1,4 +1,4 @@
-import { T } from '../lib/theme'
+import { T, alpha } from '../lib/theme'
 import { useState, useMemo } from 'react'
 import axios from 'axios'
 import { useQuery, useQueries } from '@tanstack/react-query'
@@ -230,7 +230,7 @@ export function CompareContent() {
     : ratios.length && overlays.length ? 'Macro & Multiples'
     : ratios.length ? 'Multiples & Ratios'
     : 'Macro Indicators'
-  const axisLabelStyle = { fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', fill: '#5e768f' as const }
+  const axisLabelStyle = { fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', fill: '#8099b0' as const }
 
   useReportCapture(() => {
     if (!data?.tickers?.length || !chartData.length) return null
@@ -327,7 +327,7 @@ export function CompareContent() {
           <Section title="Multiples & Ratios · right axis" badge={ratios.length ? `${ratios.length}` : undefined} open={open.ratios} onToggle={() => toggleSection('ratios')}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
               {ratios.map(r => { const c = colorOf(ratioKey(r), ratioDef(r)); return (
-                <span key={ratioKey(r)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: T.mono, fontSize: 11, padding: '4px 7px', border: `1px solid ${c}55`, color: T.text }}>
+                <span key={ratioKey(r)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: T.mono, fontSize: 11, padding: '4px 7px', border: `1px solid ${alpha(c, 33)}`, color: T.text }}>
                   <Swatch value={c} onChange={v => setColor(ratioKey(r), v)} />{r.ticker} {METRIC_SHORT[r.metric]}
                   <span onClick={() => removeRatio(r)} style={{ color: T.muted, cursor: 'pointer', marginLeft: 'auto' }}>×</span>
                 </span>
@@ -340,7 +340,7 @@ export function CompareContent() {
               </select>
               <button onClick={addRatio} style={ctrlBtn(false)}>+ Add</button>
             </div>
-            <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, opacity: 0.6, marginTop: 8, lineHeight: 1.5 }}>Size-neutral metrics, plotted at their real level on the right axis — overlay the same multiple across tickers to compare directly.</div>
+            <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, opacity: 0.6, marginTop: 8, lineHeight: 1.5 }}>Size-neutral metrics, plotted at their real level on the right axis. Overlay the same multiple across tickers to compare directly.</div>
           </Section>
 
           <Section title="Macro · right axis" badge={overlays.length ? `${overlays.length}` : undefined} open={open.macro} onToggle={() => toggleSection('macro')}>
@@ -358,7 +358,7 @@ export function CompareContent() {
                 )})}
               </div>
             ))}
-            <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, opacity: 0.65, marginTop: 4, lineHeight: 1.5 }}>Raw on the right axis — one scale family at a time reads best.</div>
+            <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, opacity: 0.65, marginTop: 4, lineHeight: 1.5 }}>Raw on the right axis. One scale family at a time reads best.</div>
           </Section>
         </aside>
 
@@ -372,8 +372,7 @@ export function CompareContent() {
             {isError && <div style={{ fontFamily: T.mono, fontSize: 12, color: T.neg, padding: 40, textAlign: 'center' }}>Could not load data. Check the symbols and try again.</div>}
             {!isError && !isFetching && !data && (
               <EmptyState title="Asset Comparison" hint="Add one or more assets to compare price performance, technicals and valuation overlays."
-                keys={['Enter']} kpis={['Return', 'Relative Return', 'Volatility', 'Period']}
-                preview="chart" previewLabel="Relative Performance" />
+                keys={['Enter']} />
             )}
             {!isError && data && (
               <>
@@ -381,8 +380,8 @@ export function CompareContent() {
                 <ResponsiveContainer width="100%" height={430}>
                   <LineChart data={chartData} margin={{ top: 6, right: hasRight ? 8 : 16, left: 4, bottom: 4 }}>
                     <CartesianGrid stroke={T.border} strokeDasharray="2 4" vertical={false} />
-                    <XAxis dataKey="date" tick={{ fontFamily: 'var(--theme-mono)', fontSize: 9, fill: '#5e768f' }} minTickGap={50} stroke={T.border} />
-                    <YAxis yAxisId="left" tick={{ fontFamily: 'var(--theme-mono)', fontSize: 9, fill: '#5e768f' }} width={60} stroke={T.border} domain={['auto', 'auto']} tickFormatter={(v: number) => norm === 'pct' ? `${v}%` : `${v}`}
+                    <XAxis dataKey="date" tick={{ fontFamily: 'var(--theme-mono)', fontSize: 9, fill: '#8099b0' }} minTickGap={50} stroke={T.border} />
+                    <YAxis yAxisId="left" tick={{ fontFamily: 'var(--theme-mono)', fontSize: 9, fill: '#8099b0' }} width={60} stroke={T.border} domain={['auto', 'auto']} tickFormatter={(v: number) => norm === 'pct' ? `${v}%` : `${v}`}
                       label={{ value: leftAxisLabel, angle: -90, position: 'insideLeft', offset: 4, style: { ...axisLabelStyle, textAnchor: 'middle' } }} />
                     {hasRight && <YAxis yAxisId="right" orientation="right" tick={{ fontFamily: 'var(--theme-mono)', fontSize: 9, fill: '#94a3b8' }} width={60} stroke={T.border} domain={['auto', 'auto']}
                       label={{ value: rightAxisLabel, angle: 90, position: 'insideRight', offset: 4, style: { ...axisLabelStyle, fill: '#94a3b8', textAnchor: 'middle' } }} />}

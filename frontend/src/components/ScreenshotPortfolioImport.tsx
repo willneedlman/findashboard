@@ -178,7 +178,7 @@ export default function ScreenshotPortfolioImport({ onImport }: { onImport: (pay
                       style={{ border: `1px dashed ${T.border}`, borderRadius: 6, padding: images.length ? 14 : 24, textAlign: 'center', cursor: 'pointer', color: T.muted, fontFamily: T.mono, fontSize: 11, lineHeight: 1.6 }}>
                       {images.length
                         ? <>+ Add another screenshot ({images.length}/{MAX_IMAGES})</>
-                        : <>Click to choose file(s), drag them in, or paste (⌘V / Ctrl-V) — add as many screenshots as you need</>}
+                        : <>Click to choose file(s), drag them in, or paste (⌘V / Ctrl-V). Add as many screenshots as you need</>}
                     </div>
                   )}
                   <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleFileChange} />
@@ -193,7 +193,7 @@ export default function ScreenshotPortfolioImport({ onImport }: { onImport: (pay
                 <>
                   {warning && <div style={{ color: T.gold, fontFamily: T.mono, fontSize: 10.5 }}>{warning}</div>}
                   {rows.length === 0 && optRows.length === 0 ? (
-                    <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11 }}>No positions found — try a clearer screenshot.</div>
+                    <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11 }}>No positions found. Try a clearer screenshot.</div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                       {rows.length > 0 && (
@@ -242,7 +242,7 @@ export default function ScreenshotPortfolioImport({ onImport }: { onImport: (pay
                       )}
 
                       <p style={{ fontFamily: T.label, fontSize: 8, color: T.muted, lineHeight: 1.5 }}>
-                        Review before importing — AI-read values can be wrong. Blank avg cost keeps any existing cost basis for that ticker.
+                        Review before importing. Read values can be wrong. Blank avg cost keeps any existing cost basis for that ticker.
                       </p>
                     </div>
                   )}

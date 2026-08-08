@@ -372,7 +372,7 @@ export function SectorRotationContent() {
         {data && view === 'chart' && (
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: '16px' }}>
             <div style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.gold, marginBottom: 16 }}>
-              {activePeriod} Return — All Sectors vs SPY
+              {activePeriod} Return · All Sectors vs SPY
             </div>
             <ResponsiveContainer width="100%" height={380}>
               <BarChart data={chartData} margin={{ left: 0, right: 8, top: 4, bottom: 80 }}>

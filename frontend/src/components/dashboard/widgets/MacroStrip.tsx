@@ -5,7 +5,7 @@ import { DEFAULT_MACRO_STRIP_SERIES } from '../widgetRegistry'
 
 const T = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', headerBg: 'var(--theme-surface, #142032)',
-  gold: 'var(--theme-primary, #c9a84c)', muted: 'var(--theme-secondary, #5e768f)',
+  gold: 'var(--theme-primary, #c9a84c)', muted: 'var(--theme-secondary, #8099b0)',
   mono: 'var(--theme-mono)', label: 'var(--theme-sans)',
   pos: 'var(--theme-positive, #22c55e)', neg: 'var(--theme-negative, #ef4444)',
 }
@@ -129,7 +129,7 @@ export default function MacroStrip({ config }: { config: WidgetConfig }) {
         .macro-strip-container::-webkit-scrollbar { height: 6px; }
         .macro-strip-container::-webkit-scrollbar-track { background: transparent; }
         .macro-strip-container::-webkit-scrollbar-thumb { background: var(--theme-border, rgba(255,255,255,0.08)); border-radius: 3px; }
-        .macro-strip-container::-webkit-scrollbar-thumb:hover { background: var(--theme-secondary, #5e768f); }
+        .macro-strip-container::-webkit-scrollbar-thumb:hover { background: var(--theme-secondary, #8099b0); }
       `}</style>
       <div style={gridStyle} className="macro-strip-container">
         {isLoading

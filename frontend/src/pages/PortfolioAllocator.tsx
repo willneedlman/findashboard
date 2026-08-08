@@ -20,7 +20,7 @@ const POS = 'var(--theme-positive, #3fb950)'
 const NEG = 'var(--theme-negative, #f85149)'
 const TEXT = 'var(--theme-text, #d7e3fc)'
 const SEC = 'var(--theme-secondary, #8099b0)'
-const FAINT = 'var(--theme-text-faint, #5e768f)'
+const FAINT = 'var(--theme-text-faint, #8099b0)'
 const MONO = 'var(--theme-mono, monospace)'
 const SANS = 'var(--theme-sans, sans-serif)'
 const BORDER = 'var(--theme-border, rgba(255,255,255,0.08))'
@@ -782,7 +782,7 @@ export function PortfolioAllocatorContent() {
                     const chg = cmp?.meta?.[chartTicker]?.change_pct
                     return <span style={{ color: chg != null && chg >= 0 ? POS : NEG, fontSize: 11, fontWeight: 700 }}>{chartTicker} {chg != null ? `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%` : '—'}</span>
                   })()}
-                  {cmpLoading && <span style={{ color: FAINT }}>loading…</span>}
+                  {cmpLoading && <span style={{ color: FAINT }}>Loading comparison</span>}
                 </div>
               </div>
             </div>

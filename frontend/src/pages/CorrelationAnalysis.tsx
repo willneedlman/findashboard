@@ -10,11 +10,11 @@ import EmptyState from '../components/EmptyState'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../components/ChartTooltip'
 import {
   C, PERIODS, StatCard, inputStyle, selectStyle, btnStyle,
-  RailGroup, RunButton, TickerTags, ToolShell,
-} from './regressionShared'
+  RailGroup, RunButton, TickerTags, ToolShell, ChartPanel } from './regressionShared'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip, chartClip } from '../lib/reportCaptureRegistry'
+import { alpha } from '../lib/theme'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -247,7 +247,7 @@ export default function CorrelationAnalysis() {
       </RailGroup>
 
       <RailGroup label="Input">
-        <button onClick={() => setUseReturns(p => !p)} style={{ ...btnStyle, width: '100%', background: useReturns ? `${C.blue}22` : C.surf, borderColor: useReturns ? C.blue : C.border }}>
+        <button onClick={() => setUseReturns(p => !p)} style={{ ...btnStyle, width: '100%', background: useReturns ? alpha(C.blue, 13) : C.surf, borderColor: useReturns ? C.blue : C.border }}>
           {useReturns ? 'Log Returns' : 'Raw Prices'}
         </button>
       </RailGroup>
@@ -259,7 +259,7 @@ export default function CorrelationAnalysis() {
   return (
     <ToolShell title="Correlation" rail={rail}>
       {mutation.isError && (
-        <div style={{ color: C.red, background: `${C.red}11`, border: `1px solid ${C.red}44`, borderRadius: 6, padding: '10px 14px', marginBottom: 16, fontSize: 12 }}>
+        <div style={{ color: 'var(--theme-text)', background: 'color-mix(in srgb, var(--theme-negative) 8%, transparent)', borderLeft: '2px solid var(--theme-negative)', padding: '10px 14px', marginBottom: 16, fontSize: 12 }}>
           {(mutation.error as any)?.response?.data?.detail ?? mutation.error.message}
         </div>
       )}
@@ -277,29 +277,27 @@ export default function CorrelationAnalysis() {
             <StatCard label="Observations" value={r.observations} sub={`${r.period} · ${r.use_returns ? 'returns' : 'prices'}`} />
           </div>
 
-          <div style={{ background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16, marginBottom: 20 }}>
-            <div style={{ color: C.gold, fontSize: 12, marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}><LayoutGrid size={14} /> Correlation Matrix</div>
+          <ChartPanel title={<><LayoutGrid size={14} /> Correlation matrix</>} style={{ marginBottom: 20 }}>
             <CorrHeatmap result={r} />
-          </div>
+          </ChartPanel>
 
           {r.rolling && (
             <div style={{ display: 'grid', gap: 20, gridTemplateColumns: '1fr', marginBottom: 20 }}>
-              <div style={{ background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
-                <div style={{ color: C.gold, fontSize: 12, marginBottom: 4, display: 'flex', gap: 8, alignItems: 'center' }}><TrendingUp size={14} /> Rolling Correlation: {r.rolling.pair[0]} ↔ {r.rolling.pair[1]}</div>
-                <div style={{ color: C.muted, fontSize: 10, marginBottom: 12 }}>How their {r.rolling.window}-day correlation drifts over time. Spikes toward +1 mean they are converging; dips show the link breaking down.</div>
+              <ChartPanel
+                title={<><TrendingUp size={14} /> Rolling correlation: {r.rolling.pair[0]} ↔ {r.rolling.pair[1]}</>}
+                hint={`How their ${r.rolling.window}-day correlation drifts over time. Spikes toward +1 mean they are converging. Dips show the link breaking down.`}>
                 <RollingChart result={r} />
-              </div>
-              <div style={{ background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
-                <div style={{ color: C.gold, fontSize: 12, marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}><BarChart2 size={14} /> Pairwise Scatter: {r.scatter?.pair[0]} vs {r.scatter?.pair[1]}</div>
+              </ChartPanel>
+              <ChartPanel title={<><BarChart2 size={14} /> Pairwise scatter: {r.scatter?.pair[0]} vs {r.scatter?.pair[1]}</>}>
                 <CorrScatter result={r} />
-              </div>
+              </ChartPanel>
             </div>
           )}
 
           {r.betas && (
-            <div style={{ background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
-              <div style={{ color: C.gold, fontSize: 12, marginBottom: 4 }}>Beta vs {r.benchmark}</div>
-              <div style={{ color: C.muted, fontSize: 10, marginBottom: 12 }}>Beta &gt; 1 means the asset amplifies {r.benchmark} moves; &lt; 1 means it dampens them; negative means it moves opposite. R² is how much of the asset is explained by {r.benchmark}.</div>
+            <ChartPanel
+              title={`Beta vs ${r.benchmark}`}
+              hint={<>Beta above 1 means the asset amplifies {r.benchmark} moves. Below 1 means it dampens them. Negative means it moves opposite. R² is how much of the asset is explained by {r.benchmark}.</>}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'var(--theme-mono)' }}>
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${C.border}`, color: C.muted }}>
@@ -308,7 +306,7 @@ export default function CorrelationAnalysis() {
                 </thead>
                 <tbody>
                   {r.betas.map(b => (
-                    <tr key={b.ticker} style={{ borderBottom: `1px solid ${C.border}22` }}>
+                    <tr key={b.ticker} style={{ borderBottom: `1px solid ${alpha(C.border, 13)}` }}>
                       <td style={{ padding: '6px 10px', color: C.blue }}>{b.ticker}</td>
                       <td style={{ padding: '6px 10px', color: b.beta < 0 ? C.red : C.text }}>{b.beta.toFixed(3)}</td>
                       <td style={{ padding: '6px 10px', color: C.text }}>{b.r_squared.toFixed(3)}</td>
@@ -319,7 +317,7 @@ export default function CorrelationAnalysis() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </ChartPanel>
           )}
         </>
       )}
@@ -327,8 +325,7 @@ export default function CorrelationAnalysis() {
       {!r && !mutation.isPending && (
         <EmptyState title="Correlation" hint="Add two or more assets, then run the correlation analysis."
           action="Run Correlation"
-          keys={['Enter']} kpis={['Avg |Corr|', 'Strongest Pair', 'Most Negative', 'Observations']}
-          preview="table" previewLabel="Correlation Matrix" columns={['Asset Pair', 'Correlation', 'Beta', 'R²']} />
+          keys={['Enter']} />
       )}
     </ToolShell>
   )

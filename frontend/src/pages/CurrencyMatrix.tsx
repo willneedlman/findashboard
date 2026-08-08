@@ -122,7 +122,7 @@ export function CurrencyMatrixContent() {
   }, { disabled: !data?.rows?.length, sourceTab: TAB })
 
   if (isLoading) return <LoadingState label="Loading FX" />
-  if (error) return <ErrorState title="FX feed failed" message="Could not load the currency matrix." onRetry={() => refetch()} />
+  if (error) return <ErrorState title="FX feed unavailable" message="The currency matrix did not load. Retry in a moment." onRetry={() => refetch()} />
   if (!data || !data.rows.length) return <EmptyState title="FX Matrix" hint="No FX data available right now." variant="unavailable" onRetry={refetch} />
 
   const { currencies, matrix, rows } = data

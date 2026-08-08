@@ -72,7 +72,7 @@ const C = {
   surface: 'var(--theme-surface, #142032)',
   border:  'var(--theme-border, rgba(255,255,255,0.07))',
   gold:    'var(--theme-primary, #c9a84c)',
-  muted:   'var(--theme-secondary, #5e768f)',
+  muted:   'var(--theme-secondary, #8099b0)',
   text:    'var(--theme-text, #d7e3fc)',
   mono:    'var(--theme-mono)',
   pos:     'var(--theme-positive, #22c55e)',
@@ -103,12 +103,11 @@ function Tag({ name, active, onClick }: { name: string; active: boolean; onClick
         letterSpacing: '0.1em',
         textTransform: 'uppercase',
         padding: '3px 8px',
-        borderRadius: 3,
         border: `1px solid ${active ? C.gold : C.border}`,
         background: active ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' : 'transparent',
         color: active ? C.gold : C.muted,
         cursor: 'pointer',
-        transition: 'all 0.15s',
+        transition: 'background 0.15s var(--ease-out), border-color 0.15s var(--ease-out), color 0.15s var(--ease-out)',
       }}
     >
       {name}
@@ -130,7 +129,6 @@ function StatusBadge({ status, pnl }: { status: Status; pnl: number | null }) {
       letterSpacing: '0.1em',
       textTransform: 'uppercase',
       padding: '2px 7px',
-      borderRadius: 3,
       border: `1px solid ${color}`,
       color,
       whiteSpace: 'nowrap',
@@ -334,7 +332,6 @@ function AddTradeForm({ onAdd }: { onAdd: (t: Trade) => void }) {
               fontWeight: 700,
               background: 'color-mix(in srgb, var(--theme-primary) 12%, transparent)',
               border: `1px solid ${C.gold}`,
-              borderRadius: 4,
               color: C.gold,
               padding: '8px 0',
               cursor: 'pointer',
@@ -421,14 +418,13 @@ function CloseForm({ trade, onClose }: { trade: Trade; onClose: (exitDate: strin
     <div style={{
       background: 'color-mix(in srgb, var(--theme-primary) 5%, transparent)',
       border: `1px solid color-mix(in srgb, var(--theme-primary) 20%, transparent)`,
-      borderRadius: 6,
       padding: '14px 16px',
       display: 'flex',
       flexDirection: 'column',
       gap: 10,
     }}>
       <div style={{ fontFamily: C.mono, fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.gold }}>
-        Close — {trade.ticker}
+        Close · {trade.ticker}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         <div>
@@ -454,7 +450,6 @@ function CloseForm({ trade, onClose }: { trade: Trade; onClose: (exitDate: strin
           fontWeight: 700,
           background: 'color-mix(in srgb, var(--theme-primary) 12%, transparent)',
           border: `1px solid ${C.gold}`,
-          borderRadius: 4,
           color: C.gold,
           padding: '7px 0',
           cursor: 'pointer',
@@ -492,7 +487,6 @@ function DetailPanel({ trade, onUpdateNotes }: { trade: Trade; onUpdateNotes: (n
     <div style={{
       background: 'var(--theme-hover, rgba(255,255,255,0.025))',
       border: `1px solid ${C.border}`,
-      borderRadius: 6,
       padding: '16px 18px',
       display: 'flex',
       flexDirection: 'column',
@@ -516,7 +510,6 @@ function DetailPanel({ trade, onUpdateNotes }: { trade: Trade; onUpdateNotes: (n
               letterSpacing: '0.1em',
               textTransform: 'uppercase',
               padding: '2px 7px',
-              borderRadius: 3,
               border: `1px solid ${C.border}`,
               color: C.muted,
             }}>{tag}</span>
@@ -551,7 +544,6 @@ function DetailPanel({ trade, onUpdateNotes }: { trade: Trade; onUpdateNotes: (n
             fontSize: 11,
             background: 'var(--theme-hover, rgba(255,255,255,0.03))',
             border: `1px solid ${C.border}`,
-            borderRadius: 4,
             color: C.text,
             padding: '7px 10px',
             width: '100%',
@@ -745,7 +737,6 @@ export default function TradeJournal() {
                       letterSpacing: '0.1em',
                       textTransform: 'uppercase',
                       padding: '3px 9px',
-                      borderRadius: 3,
                       border: `1px solid ${filterStatus === s ? C.gold : C.border}`,
                       background: filterStatus === s ? 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' : 'transparent',
                       color: filterStatus === s ? C.gold : C.muted,
@@ -762,7 +753,6 @@ export default function TradeJournal() {
                   fontSize: 11,
                   background: 'var(--theme-hover, rgba(255,255,255,0.04))',
                   border: `1px solid ${C.border}`,
-                  borderRadius: 4,
                   color: C.text,
                   padding: '6px 9px',
                   width: '100%',
@@ -802,7 +792,6 @@ export default function TradeJournal() {
                 textTransform: 'uppercase',
                 background: 'transparent',
                 border: `1px solid ${C.border}`,
-                borderRadius: 4,
                 color: C.muted,
                 padding: '5px 12px',
                 cursor: trades.length ? 'pointer' : 'not-allowed',
@@ -892,7 +881,6 @@ export default function TradeJournal() {
                                     textTransform: 'uppercase',
                                     background: isClosing ? 'color-mix(in srgb, var(--theme-primary) 15%, transparent)' : 'transparent',
                                     border: `1px solid ${isClosing ? C.gold : C.border}`,
-                                    borderRadius: 3,
                                     color: isClosing ? C.gold : C.muted,
                                     padding: '3px 8px',
                                     cursor: 'pointer',
@@ -909,7 +897,6 @@ export default function TradeJournal() {
                                   fontSize: 12,
                                   background: 'transparent',
                                   border: `1px solid ${C.border}`,
-                                  borderRadius: 3,
                                   color: C.muted,
                                   padding: '2px 7px',
                                   cursor: 'pointer',

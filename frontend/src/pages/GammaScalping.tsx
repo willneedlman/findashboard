@@ -14,7 +14,7 @@ import axios from 'axios'
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-import { INPUT, SELECT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
+import { INPUT, Select, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
 
 // ── Math helpers ──────────────────────────────────────────────────────────────
 
@@ -438,14 +438,14 @@ export function GammaScalpingContent() {
           Hedge Frequency
           <HelpTip text="How often delta is rebalanced. More frequent = smoother but costlier." width={160} />
         </span>
-        <select style={SELECT} value={hedgeFreq}
+        <Select value={hedgeFreq}
           onChange={e => setHedgeFreq(e.target.value as typeof hedgeFreq)}>
           <option>Hourly</option>
           <option>4x Daily</option>
           <option>Twice Daily</option>
           <option>Daily</option>
           <option>Weekly</option>
-        </select>
+        </Select>
       </div>
 
       <div>
@@ -453,11 +453,11 @@ export function GammaScalpingContent() {
           Position
           <HelpTip text="Long: profit if RV > IV. Short: collect theta, lose if stock moves." width={160} />
         </span>
-        <select style={SELECT} value={position}
+        <Select value={position}
           onChange={e => setPosition(e.target.value as typeof position)}>
           <option value="Long Gamma">Long Gamma (bought straddle)</option>
           <option value="Short Gamma">Short Gamma (sold straddle)</option>
-        </select>
+        </Select>
       </div>
 
       <div>
@@ -508,7 +508,7 @@ export function GammaScalpingContent() {
           }}>
             Gamma Scalping Simulator
           </h1>
-          <span style={{ fontSize: 10, color: 'var(--theme-secondary, #5e768f)', letterSpacing: '0.06em' }}>
+          <span style={{ fontSize: 10, color: 'var(--theme-secondary, #8099b0)', letterSpacing: '0.06em' }}>
             delta-hedge P&L · long/short gamma · {nSims} paths
           </span>
         </div>

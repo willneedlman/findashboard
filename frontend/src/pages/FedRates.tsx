@@ -123,7 +123,7 @@ function PathConnectors(props: any) {
   const yScale = (Object.values(yAxisMap)[0] as any).scale
   const bw = xScale.bandwidth ? xScale.bandwidth() : 0
   return (
-    <g>
+    <g style={{ color: 'var(--theme-secondary)' }}>
       {[0, 2, 4].map(i => {
         const d = data[i]
         if (!d) return null
@@ -134,7 +134,7 @@ function PathConnectors(props: any) {
         return (
           <g key={i}>
             <line x1={x} x2={x} y1={yb} y2={ya} stroke={T.gold} strokeWidth={1} strokeDasharray="2 2" opacity={0.55} />
-            <text x={x + 5} y={(yb + ya) / 2 + 3} fontFamily="var(--theme-mono)" fontSize={8.5} fill="#8099b0">+{bp} bp</text>
+            <text x={x + 5} y={(yb + ya) / 2 + 3} fontFamily="var(--theme-mono)" fontSize={8.5} fill="currentColor">+{bp} bp</text>
           </g>
         )
       })}
@@ -178,9 +178,9 @@ function OddsStrip({ meetings }: { meetings: any[] }) {
   const [hover, setHover] = useState<number | null>(null)
   return (
     <div style={band}>
-      <div style={{ ...bandTitle, marginBottom: 4 }}>Meeting Odds — Hike / Hold / Cut</div>
+      <div style={{ ...bandTitle, marginBottom: 4 }}>Meeting Odds: Hike / Hold / Cut</div>
       <div style={{ fontFamily: T.mono, fontSize: 8.5, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>
-        Source: CME Fed Funds futures (ZQ), unblended for meeting-month timing. Falls back to the FRED Treasury curve when a contract has no data — meetings marked <span style={{ color: T.gold }}>†</span> below used that fallback.
+        Source: CME Fed Funds futures (ZQ), unblended for meeting-month timing. Falls back to the FRED Treasury curve when a contract has no data. Meetings marked <span style={{ color: T.gold }}>†</span> below used that fallback.
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(meetings.length, 8)}, 1fr)`, gap: 14 }}>
       {meetings.slice(0, 8).map((m, i) => {
@@ -225,7 +225,7 @@ function CumulativeBucketsTable({ rows }: { rows: { date: string; buckets: { ran
     <div style={band}>
       <div style={{ ...bandTitle, marginBottom: 4 }}>Cumulative Target Rate Probabilities</div>
       <div style={{ fontFamily: T.mono, fontSize: 8.5, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>
-        Probability the target range is at each level BY that meeting (compounding every meeting from today) — CME's own "Aggregated" view, as distinct from the per-meeting odds above.
+        Probability the target range is at each level BY that meeting (compounding every meeting from today). This is CME's own "Aggregated" view, as distinct from the per-meeting odds above.
       </div>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ borderCollapse: 'collapse', width: '100%', fontFamily: T.mono, fontSize: 10 }}>
@@ -273,7 +273,7 @@ function YieldCurveChart({ rows, twist }: { rows: any[]; twist: number }) {
         <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} formatter={(v: number, n: string) => [`${v.toFixed(2)}%`, n]} />
         <Legend verticalAlign="top" align="right" wrapperStyle={{ fontFamily: T.label, fontSize: 9, letterSpacing: '0.08em', paddingBottom: 4 }} />
         <Line type="monotone" dataKey="m6" stroke="rgba(255,255,255,0.30)" strokeWidth={1.25} strokeDasharray="2 4" dot={false} name="6M ago" connectNulls isAnimationActive={false} />
-        <Line type="monotone" dataKey="m1" stroke="var(--theme-secondary, #5e768f)" strokeWidth={1.5} strokeDasharray="6 4" dot={false} name="1M ago" connectNulls isAnimationActive={false} />
+        <Line type="monotone" dataKey="m1" stroke="var(--theme-secondary, #8099b0)" strokeWidth={1.5} strokeDasharray="6 4" dot={false} name="1M ago" connectNulls isAnimationActive={false} />
         <Line type="monotone" dataKey="d1" stroke={VIOLET} strokeWidth={1.25} strokeDasharray="7 3" strokeOpacity={0.7} dot={false} name="1D ago" connectNulls isAnimationActive={false} />
         <Line type="monotone" dataKey="today"
           stroke={active ? 'rgba(255,255,255,0.28)' : T.gold} strokeWidth={active ? 1.75 : 2}
@@ -302,11 +302,11 @@ function DotPlot({ data }: { data: any }) {
   return (
     <div ref={ref} style={{ width: '100%' }}>
       {w > 0 && (
-        <svg width={w} height={h}>
+        <svg width={w} height={h} style={{ color: 'var(--theme-secondary)' }}>
           {gridVals.map(v => (
             <g key={v}>
               <line x1={padL} x2={w - padR} y1={yPix(v)} y2={yPix(v)} stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
-              <text x={padL - 8} y={yPix(v) + 3} textAnchor="end" fontFamily="var(--theme-mono)" fontSize={9} fill="#8099b0">{v.toFixed(1)}%</text>
+              <text x={padL - 8} y={yPix(v) + 3} textAnchor="end" fontFamily="var(--theme-mono)" fontSize={9} fill="currentColor">{v.toFixed(1)}%</text>
             </g>
           ))}
           {cols.map((c, i) => {
@@ -315,10 +315,10 @@ function DotPlot({ data }: { data: any }) {
             return (
               <g key={c.key}>
                 {d.range_low != null && d.range_high != null && (
-                  <line x1={x} x2={x} y1={yPix(d.range_high)} y2={yPix(d.range_low)} stroke="var(--theme-secondary, #5e768f)" strokeWidth={1} opacity={0.5} />
+                  <line x1={x} x2={x} y1={yPix(d.range_high)} y2={yPix(d.range_low)} stroke="var(--theme-secondary, #8099b0)" strokeWidth={1} opacity={0.5} />
                 )}
                 {d.ct_low != null && d.ct_high != null && (
-                  <line x1={x} x2={x} y1={yPix(d.ct_high)} y2={yPix(d.ct_low)} stroke="var(--theme-secondary, #5e768f)" strokeWidth={7} opacity={0.55} strokeLinecap="round" />
+                  <line x1={x} x2={x} y1={yPix(d.ct_high)} y2={yPix(d.ct_low)} stroke="var(--theme-secondary, #8099b0)" strokeWidth={7} opacity={0.55} strokeLinecap="round" />
                 )}
                 {d.median != null && (
                   <line x1={x - 14} x2={x + 14} y1={yPix(d.median)} y2={yPix(d.median)} stroke={T.gold} strokeWidth={2.5} />
@@ -329,7 +329,7 @@ function DotPlot({ data }: { data: any }) {
                     <text x={x + 12} y={yPix(d.market) + 3} fontFamily="var(--theme-mono)" fontSize={8.5} fontWeight={700} fill={T.blue}>MKT {d.market.toFixed(2)}</text>
                   </g>
                 )}
-                <text x={x} y={h - 8} textAnchor="middle" fontFamily="var(--theme-mono)" fontSize={9} fontWeight={700} letterSpacing="0.08em" fill="#8099b0">{c.label}</text>
+                <text x={x} y={h - 8} textAnchor="middle" fontFamily="var(--theme-mono)" fontSize={9} fontWeight={700} letterSpacing="0.08em" fill="currentColor">{c.label}</text>
               </g>
             )
           })}
@@ -347,7 +347,7 @@ function Sparkline({ pts, w = 120, h = 30 }: { pts: number[]; w?: number; h?: nu
   const x = (i: number) => (i / (pts.length - 1)) * w
   const line = pts.map((v, i) => `${x(i)},${y(v)}`).join(' ')
   return (
-    <svg width={w} height={h} style={{ display: 'block' }}>
+    <svg width={w} height={h} style={{ display: 'block', color: 'var(--theme-secondary)' }}>
       {min <= 0 && max >= 0 && <line x1={0} x2={w} y1={y(0)} y2={y(0)} stroke="rgba(255,255,255,0.10)" strokeDasharray="3 3" />}
       <polyline points={line} fill="none" stroke={T.blue} strokeWidth={1.75} />
     </svg>
@@ -419,7 +419,7 @@ function FomcStatementRead() {
   return (
     <div style={band}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
-        <span style={bandTitle}>FOMC Statement — AI Read</span>
+        <span style={bandTitle}>FOMC Statement Read</span>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           {data.date && <span style={{ fontFamily: T.mono, fontSize: 8.5, letterSpacing: '0.1em', color: T.muted }}>{data.date}</span>}
           {data.url && <a href={data.url} target="_blank" rel="noreferrer" style={{ fontFamily: T.label, fontSize: 8.5, letterSpacing: '0.06em', color: T.muted, textDecoration: 'underline' }}>SOURCE</a>}
@@ -601,7 +601,7 @@ export function FedRatesContent() {
       ))
     }
     if (spreadsData?.spreads?.length) {
-      pieces.push(tableClip(TAB, 'Curve Spreads — 6M Trend',
+      pieces.push(tableClip(TAB, 'Curve Spreads: 6M Trend',
         ['Spread', 'Current (bp)', '6M Change (bp)'],
         spreadsData.spreads.map((s: any) => {
           const chg = (s.current != null && s.history?.length) ? s.current - s.history[0].bp : null
@@ -728,12 +728,12 @@ export function FedRatesContent() {
           <div style={{ ...band, display: 'grid', gridTemplateColumns: 'minmax(0, 55fr) minmax(0, 45fr)', gap: 28 }} className="rate-split">
             <div>
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
-                <span style={bandTitle}>FOMC Dot Plot — SEP Projections vs Market</span>
+                <span style={bandTitle}>FOMC Dot Plot: SEP Projections vs Market</span>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                   {sepVintage && <span style={{ fontFamily: T.mono, fontSize: 8.5, letterSpacing: '0.1em', color: T.muted }}>{sepVintage}</span>}
                   <span style={{ display: 'inline-flex', gap: 12, fontFamily: T.label, fontSize: 8.5, letterSpacing: '0.06em', color: T.muted }}>
                     <span><span style={{ color: T.gold }}>—</span> MEDIAN</span>
-                    <span><span style={{ color: 'var(--theme-secondary, #5e768f)' }}>▮</span> CT / RANGE</span>
+                    <span><span style={{ color: 'var(--theme-secondary, #8099b0)' }}>▮</span> CT / RANGE</span>
                     <span><span style={{ color: T.blue }}>◆</span> MARKET</span>
                   </span>
                 </div>
@@ -742,7 +742,7 @@ export function FedRatesContent() {
               {sepCaption && <div style={{ fontFamily: T.label, fontSize: 11, color: T.muted, marginTop: 8 }}>{sepCaption}</div>}
             </div>
             <div>
-              <div style={{ ...bandTitle, marginBottom: 8 }}>Curve Spreads — 6M Trend</div>
+              <div style={{ ...bandTitle, marginBottom: 8 }}>Curve Spreads: 6M Trend</div>
               {spreadsData?.spreads?.length ? <SpreadsPanel spreads={spreadsData.spreads} /> : <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: T.mono, fontSize: 11, color: T.muted }}>Spread history unavailable.</div>}
               {spreadsData?.spreads?.length > 0 && (() => {
                 const sp = spreadsData.spreads
