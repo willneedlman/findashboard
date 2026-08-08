@@ -181,7 +181,7 @@ export function applyTheme(t: Theme) {
   // Per-font on purpose. Every other face here is already spaced correctly and
   // would read loose under the same value, so this is the single knob to turn
   // if the figures still look wrong.
-  const numTracking = t.primaryFont === 'Hanken Grotesk' ? '0.02em' : 'normal'
+  const numTracking = t.primaryFont === 'Hanken Grotesk' ? '0.045em' : 'normal'
 
   // Load Google Fonts if no custom URL provided
   const monoSrc = t.primaryFontUrl   || gfUrl(t.primaryFont)
