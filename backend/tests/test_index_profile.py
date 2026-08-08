@@ -1,5 +1,6 @@
 import datetime as dt
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -154,6 +155,61 @@ def test_stats_absolute_changes_track_returns(monkeypatch):
 
     assert out["changes_abs"]["1m"] == pytest.approx(0.5)
     assert out["returns"]["1m"] == pytest.approx(12.5)
+
+
+def _lagged_pair(n=300, beta=2.0, seed=7):
+    """An asset that responds to *yesterday's* market move, which is what an
+    Asian close does to a New York close."""
+    rng = np.random.default_rng(seed)
+    market = pd.Series(rng.normal(0, 0.01, n))
+    asset = beta * market.shift(1).fillna(0) + rng.normal(0, 0.002, n)
+    index = pd.bdate_range(end=dt.date.today(), periods=n)
+    return asset.set_axis(index), market.set_axis(index)
+
+
+def test_session_offset_is_corrected_rather_than_reported_as_independence():
+    """The bug this replaces: Korea reads beta 0.5 and correlation 0.13 against
+    the S&P while carrying four times its volatility. Lining the two up by
+    calendar date measures a clock, not a market."""
+    asset, market = _lagged_pair(beta=2.0)
+
+    naive_beta = asset.cov(market) / market.var()
+    out = ip._relationship(asset, market, "^GSPC")
+
+    assert abs(naive_beta) < 0.2                       # same-day comparison sees nothing
+    assert out["beta"] == pytest.approx(2.0, abs=0.25)  # the correction recovers it
+    assert out["correlation_lag_days"] == 1
+    assert out["session_offset"] is True
+    assert out["correlation"] > 0.9
+
+
+def test_overlapping_sessions_keep_the_same_day_reading():
+    """Europe trades while New York is open, so the correction has to be close
+    to a no-op there or it would be inventing a lag that is not present."""
+    rng = np.random.default_rng(3)
+    index = pd.bdate_range(end=dt.date.today(), periods=300)
+    market = pd.Series(rng.normal(0, 0.01, 300), index=index)
+    asset = (0.8 * market + pd.Series(rng.normal(0, 0.002, 300), index=index))
+
+    out = ip._relationship(asset, market, "^GSPC")
+
+    assert out["beta"] == pytest.approx(0.8, abs=0.15)
+    assert out["correlation_lag_days"] == 0
+    assert out["session_offset"] is False
+
+
+def test_relationship_needs_enough_history():
+    rng = np.random.default_rng(1)
+    index = pd.bdate_range(end=dt.date.today(), periods=20)
+    a = pd.Series(rng.normal(0, 0.01, 20), index=index)
+    assert ip._relationship(a, a, "^GSPC") is None
+
+
+def test_relationship_survives_a_flat_benchmark():
+    index = pd.bdate_range(end=dt.date.today(), periods=200)
+    a = pd.Series(np.random.default_rng(2).normal(0, 0.01, 200), index=index)
+    flat = pd.Series(0.0, index=index)
+    assert ip._relationship(a, flat, "^GSPC") is None
 
 
 def test_benchmark_carries_a_readable_name(monkeypatch):

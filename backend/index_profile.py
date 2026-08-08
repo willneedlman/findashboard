@@ -72,6 +72,65 @@ def _series_at_or_before(series: pd.Series, when: _dt.date) -> float | None:
 _BENCHMARK_LABEL = "S&P 500"
 
 
+def _relationship(asset: pd.Series, market: pd.Series, benchmark: str) -> dict | None:
+    """Beta and correlation against the benchmark, corrected for the fact that
+    most of the world does not trade while New York is open.
+
+    A same-day comparison quietly assumes both markets saw the same news before
+    they closed. Seoul closes at 06:00 UTC and New York at 21:00, so the KOSPI's
+    Tuesday is a reaction to the S&P's Monday. Line the two up by calendar date
+    and the measured link collapses: Korea reads 0.13 against the S&P, which
+    would make one of the most cyclical markets on earth look independent of
+    global risk appetite.
+
+    Beta uses Scholes-Williams (1977), which regresses on the sum of the
+    previous, current and next market return and so recovers the relationship
+    however the sessions overlap. It reduces to ordinary beta where they
+    already do: the correction moves the FTSE from 0.31 to 0.36 and the KOSPI
+    from 0.52 to 2.02.
+
+    Correlation cannot be summed the same way, so the lag with the strongest
+    reading wins and the payload says which, rather than reporting a number
+    that is only low because of a clock.
+    """
+    if len(asset) < 60 or market.var() <= 0:
+        return None
+    ln_a = np.log1p(asset.clip(lower=-0.99))
+    ln_m = np.log1p(market.clip(lower=-0.99))
+    mr3 = ln_m.shift(1) + ln_m + ln_m.shift(-1)
+    ok = mr3.notna() & ln_a.notna()
+    if ok.sum() < 30:
+        return None
+    denom = float(np.cov(ln_m[ok], mr3[ok])[0, 1])
+    if not np.isfinite(denom) or abs(denom) < 1e-12:
+        return None
+    beta = float(np.cov(ln_a[ok], mr3[ok])[0, 1]) / denom
+
+    # Lag 1 means "the asset today against the benchmark yesterday", which is
+    # what an Asian close is actually responding to.
+    scored = []
+    for lag in (0, 1):
+        value = float(asset.corr(market.shift(lag)))
+        if np.isfinite(value):
+            scored.append((lag, value))
+    if not scored or not np.isfinite(beta):
+        return None
+    same = next((v for lag, v in scored if lag == 0), 0.0)
+    best_lag, best = max(scored, key=lambda pair: abs(pair[1]))
+    # Only move off the same-day reading when the offset is doing real work.
+    if abs(best) - abs(same) < 0.05:
+        best_lag, best = 0, same
+
+    return {
+        "benchmark": benchmark,
+        "benchmark_label": _BENCHMARK_LABEL,
+        "beta": round(beta, 2),
+        "correlation": round(best, 2),
+        "correlation_lag_days": best_lag,
+        "session_offset": best_lag > 0,
+    }
+
+
 def asset_stats(ticker: str, benchmark: str = "^GSPC") -> dict:
     """Range, return ladder, realised risk, and the relationship to the S&P.
 
@@ -119,13 +178,8 @@ def asset_stats(ticker: str, benchmark: str = "^GSPC") -> dict:
     vs = None
     if ticker != benchmark and benchmark in closes.columns:
         pair = pd.concat([px, closes[benchmark].dropna()], axis=1, keys=["a", "b"]).dropna()
-        pair = pair.tail(252).pct_change().dropna()
-        if len(pair) > 30 and pair["b"].var() > 0:
-            corr = float(pair["a"].corr(pair["b"]))
-            beta = float(pair["a"].cov(pair["b"]) / pair["b"].var())
-            if np.isfinite(corr) and np.isfinite(beta):
-                vs = {"benchmark": benchmark, "benchmark_label": _BENCHMARK_LABEL,
-                      "correlation": round(corr, 2), "beta": round(beta, 2)}
+        pair = pair.tail(253).pct_change().dropna()
+        vs = _relationship(pair["a"], pair["b"], benchmark)
 
     return {
         "last": last,

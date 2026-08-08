@@ -48,7 +48,7 @@ interface Stats {
   range_52w: { low: number | null; high: number | null; position_pct: number | null; from_high_pct: number | null; from_low_pct: number | null }
   vol_30d: number | null
   max_drawdown_1y: number | null
-  vs_benchmark: { benchmark: string; benchmark_label: string; correlation: number; beta: number } | null
+  vs_benchmark: { benchmark: string; benchmark_label: string; correlation: number; beta: number; correlation_lag_days: number; session_offset: boolean } | null
 }
 interface StatsResponse { ticker: string; stats: Stats | null }
 interface ConstituentsResponse { ticker: string; constituents: Constituents }
@@ -146,24 +146,35 @@ function StatGrid({ stats, yields }: { stats: Stats; yields?: boolean }) {
   )
 }
 
-function RiskRow({ stats }: { stats: Stats }) {
+function RiskRow({ stats, label }: { stats: Stats; label: string }) {
+  const vs = stats.vs_benchmark
   const items: [string, string, string?][] = []
   if (stats.vol_30d != null) items.push(['30d volatility', `${stats.vol_30d.toFixed(1)}%`])
   if (stats.max_drawdown_1y != null) items.push(['Deepest 1y fall', `${stats.max_drawdown_1y.toFixed(1)}%`, NEG])
-  if (stats.vs_benchmark) {
-    items.push([`Beta vs ${stats.vs_benchmark.benchmark_label}`, stats.vs_benchmark.beta.toFixed(2)])
-    items.push(['Correlation', stats.vs_benchmark.correlation.toFixed(2)])
+  if (vs) {
+    items.push([`Beta vs ${vs.benchmark_label}`, vs.beta.toFixed(2)])
+    items.push([vs.session_offset ? 'Correlation, lagged' : 'Correlation', vs.correlation.toFixed(2)])
   }
   if (!items.length) return null
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 0 }}>
-      {items.map(([label, value, color], i) => (
-        <div key={label} style={{ flex: '1 1 110px', minWidth: 110, padding: '2px 10px', borderLeft: i ? `1px solid ${FAINT}` : 'none' }}>
-          <div style={{ ...eyebrow, fontSize: 8.5, marginBottom: 4 }}>{label}</div>
-          <div style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: color ?? TXT, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+    <>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 0 }}>
+        {items.map(([itemLabel, value, color], i) => (
+          <div key={itemLabel} style={{ flex: '1 1 110px', minWidth: 110, padding: '2px 10px', borderLeft: i ? `1px solid ${FAINT}` : 'none' }}>
+            <div style={{ ...eyebrow, fontSize: 8.5, marginBottom: 4 }}>{itemLabel}</div>
+            <div style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: color ?? TXT, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+          </div>
+        ))}
+      </div>
+      {vs?.session_offset && (
+        // Without this the reader is left to reconcile a huge volatility number
+        // with a small beta, and the reason is a clock, not the market.
+        <div style={{ marginTop: 11, paddingTop: 9, borderTop: `1px solid ${FAINT}`, fontFamily: SANS, fontSize: 10.5, lineHeight: 1.5, color: SEC }}>
+          {label} closes before {vs.benchmark_label} does, so a same-day comparison misses the link.
+          Beta is corrected for the session offset, and the correlation is against the previous {vs.benchmark_label} session.
         </div>
-      ))}
-    </div>
+      )}
+    </>
   )
 }
 
@@ -339,7 +350,7 @@ export default function AssetFacts({ ticker, label, yields }: { ticker: string; 
             <StatGrid stats={stats} yields={yields} />
           </Section>
           <Section title={yields ? 'Level statistics' : 'Risk'}>
-            <RiskRow stats={stats} />
+            <RiskRow stats={stats} label={label} />
           </Section>
         </>
       )}
