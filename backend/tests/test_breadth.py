@@ -83,6 +83,14 @@ def test_divergence_needs_a_month_of_bars():
     assert breadth._divergence([{"date": "d0", "index": 1.0, "ad_line": 1.0}]) is None
 
 
+def test_schema_is_part_of_the_persisted_cache_key():
+    """The disk tier sits on a volume that outlives a deploy, so a change to the
+    numbers has to invalidate itself or production keeps serving the old ones."""
+    import inspect
+    assert "schema" in inspect.signature(breadth._breadth.__wrapped__).parameters
+    assert breadth._SCHEMA >= 2
+
+
 def test_lookback_covers_the_plotted_window_for_a_200_day_average():
     """Sizing the download by eye is how the zero-line bug happened. The
     run-up has to clear 200 sessions before the window even starts."""
@@ -92,7 +100,7 @@ def test_lookback_covers_the_plotted_window_for_a_200_day_average():
 
 def test_untracked_index_explains_itself(monkeypatch):
     monkeypatch.setattr(breadth, "_load", lambda: {"indices": {}})
-    out = breadth.breadth.__wrapped__("^NOPE")
+    out = breadth.breadth("^NOPE")
     assert out["available"] is False
     assert out["reason"]
 
@@ -100,7 +108,7 @@ def test_untracked_index_explains_itself(monkeypatch):
 def test_index_without_a_member_list_says_why(monkeypatch):
     monkeypatch.setattr(breadth, "_load", lambda: {
         "indices": {"^RUT": {"unavailable": "2,000 members, no free list."}}})
-    assert breadth.breadth.__wrapped__("^RUT")["reason"] == "2,000 members, no free list."
+    assert breadth.breadth("^RUT")["reason"] == "2,000 members, no free list."
 
 
 def test_tracked_indices_are_ordered_by_size(monkeypatch):

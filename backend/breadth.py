@@ -112,8 +112,19 @@ def _pct_of(count: pd.Series, denominator: pd.Series, stamp) -> float | None:
 # real: 500 members over 400 sessions takes Yahoo about two and a half minutes
 # on the production box. Persisted, so a deploy does not make someone pay it
 # again.
+# Part of the cache key. The persisted tier lives on a volume that outlives a
+# deploy, so a fix to the numbers ships to an image that then serves the old
+# ones until the TTL runs out — which at six hours is most of a session. Bump
+# on any change to what this returns.
+_SCHEMA = 2
+
+
+def breadth(index_symbol: str) -> dict:
+    return _breadth(index_symbol, _SCHEMA)
+
+
 @cached(ttl=6 * 3600, maxsize=32, persist=True)
-def breadth(index_symbol: str, schema: int = 1) -> dict:
+def _breadth(index_symbol: str, schema: int) -> dict:
     entry = _load().get("indices", {}).get(index_symbol)
     if not entry or entry.get("unavailable") or not entry.get("members"):
         return {"available": False,
