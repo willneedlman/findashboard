@@ -62,9 +62,14 @@ export default function EmptyState({ title, hint, variant = 'empty', size = 'def
     const determinate = progress != null
     const bar = (
       <div className="es-load-track" style={{ width: size === 'compact' ? 96 : 150, height: 2, background: BORDER, overflow: 'hidden', marginTop: 2 }}>
+        {/* Determinate fill scales rather than resizing. A solid bar looks the
+            same either way, and transform stays off the layout path, so a
+            caller updating progress on every tick cannot make the page reflow. */}
         <div className="es-load-fill" style={determinate ? {
-          width: `${Math.max(0, Math.min(100, progress))}%`, height: '100%', background: PRIMARY,
-          transition: 'width 0.5s var(--ease-out)',
+          width: '100%', height: '100%', background: PRIMARY,
+          transformOrigin: 'left',
+          transform: `scaleX(${Math.max(0, Math.min(100, progress)) / 100})`,
+          transition: 'transform 0.5s var(--ease-out)',
         } : {
           width: '40%', height: '100%', background: PRIMARY,
           animation: 'es-load-slide 1.1s ease-in-out infinite',
