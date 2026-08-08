@@ -3,12 +3,11 @@ import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import {
   ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  ReferenceLine, ReferenceArea, LabelList, Line, ComposedChart,
+  ReferenceLine, ReferenceArea,
 } from 'recharts'
 import EmptyState from './EmptyState'
 import { T } from '../lib/theme'
 import { MONO, SANS, mix } from '../pages/cockpitKit'
-import { TOOLTIP_STYLE, TOOLTIP_LABEL, TOOLTIP_ITEM } from '../pages/valuationShared'
 
 // Relative Rotation Graph.
 //
@@ -28,6 +27,9 @@ const QUADRANTS: Record<string, { label: string; color: string; blurb: string }>
 }
 
 interface TailPoint { date: string; x: number; y: number }
+// The tail carries its own identity so the tooltip can name the sector it is
+// hovering rather than listing every series on the chart.
+interface PlotPoint extends TailPoint { ticker: string; name: string; last: boolean }
 interface Series {
   ticker: string; x: number; y: number
   quadrant: keyof typeof QUADRANTS
@@ -43,6 +45,34 @@ interface Rrg {
   window_weeks?: number
   series?: Series[]
   counts?: Record<string, number>
+}
+
+/** The trail is small dots; only the current week gets a head and a label. */
+function TailDot({ cx, cy, payload, color }: any) {
+  if (cx == null || cy == null) return null
+  if (!payload?.last) return <circle cx={cx} cy={cy} r={1.9} fill={color} opacity={0.55} />
+  return (
+    <g>
+      <circle cx={cx} cy={cy} r={5} fill={color} />
+      <text x={cx + 9} y={cy + 3.5} fill={T.text}
+        style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700 }}>{payload.name}</text>
+    </g>
+  )
+}
+
+function TailTip({ active, payload }: any) {
+  const p = active && payload?.length ? payload[0].payload : null
+  if (!p) return null
+  return (
+    <div style={{ background: T.surface, border: `1px solid ${mix(T.gold, 45)}`, padding: '7px 10px' }}>
+      <div style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: T.text }}>
+        {p.ticker} <span style={{ color: T.muted, fontWeight: 400 }}>{p.name}</span>
+      </div>
+      <div style={{ fontFamily: MONO, fontSize: 10, color: T.muted, marginTop: 3 }}>
+        {p.date} · strength {p.x.toFixed(2)} · momentum {p.y.toFixed(2)}
+      </div>
+    </div>
+  )
 }
 
 /** Pad a bound so the crosshair at 100 is never flush against the frame. */
@@ -110,7 +140,7 @@ export default function RotationGraph({ names }: { names?: Record<string, string
       </div>
 
       <ResponsiveContainer width="100%" height={420}>
-        <ComposedChart margin={{ top: 12, right: 26, bottom: 24, left: 4 }}>
+        <ScatterChart margin={{ top: 12, right: 30, bottom: 24, left: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={T.borderFaint} />
           {/* Quadrant washes, faint enough to read the tails over. */}
           <ReferenceArea x1={100} x2={xDomain[1]} y1={100} y2={yDomain[1]} fill={mix(T.pos, 6)} stroke="none" />
@@ -119,30 +149,31 @@ export default function RotationGraph({ names }: { names?: Record<string, string
           <ReferenceArea x1={xDomain[0]} x2={100} y1={100} y2={yDomain[1]} fill={mix(T.blue, 6)} stroke="none" />
           <ReferenceLine x={100} stroke={T.muted} />
           <ReferenceLine y={100} stroke={T.muted} />
-          <XAxis type="number" dataKey="x" domain={xDomain} stroke={T.muted}
+          <XAxis type="number" dataKey="x" domain={xDomain} allowDataOverflow stroke={T.muted}
             tick={{ fill: T.muted, fontSize: 9 }} tickFormatter={(v: number) => v.toFixed(1)}
             label={{ value: 'Relative strength  ·  100 = benchmark', position: 'insideBottom', offset: -14, fill: T.muted, fontSize: 10 }} />
-          <YAxis type="number" dataKey="y" domain={yDomain} stroke={T.muted} width={52}
+          <YAxis type="number" dataKey="y" domain={yDomain} allowDataOverflow stroke={T.muted} width={52}
             tick={{ fill: T.muted, fontSize: 9 }} tickFormatter={(v: number) => v.toFixed(1)}
             label={{ value: 'Momentum', angle: -90, position: 'center', dx: -22, fill: T.muted, fontSize: 10 }} />
-          <ZAxis range={[70, 70]} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL} itemStyle={TOOLTIP_ITEM}
-            cursor={{ strokeDasharray: '3 3' }}
-            formatter={(v: number, key: string) => [v.toFixed(2), key === 'x' ? 'Strength' : 'Momentum']} />
+          <ZAxis range={[36, 36]} />
+          <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<TailTip />} />
 
-          {series.map(s => (
-            <Line key={`tail-${s.ticker}`} data={s.tail} dataKey="y" type="linear"
-              stroke={QUADRANTS[s.quadrant].color} strokeWidth={1.2} strokeOpacity={0.5}
-              dot={{ r: 1.6, fill: QUADRANTS[s.quadrant].color, strokeWidth: 0 }} isAnimationActive={false} legendType="none" />
-          ))}
-          {series.map(s => (
-            <Scatter key={s.ticker} data={[{ ...s, label: names?.[s.ticker] ?? s.ticker }]}
-              fill={QUADRANTS[s.quadrant].color} isAnimationActive={false}>
-              <LabelList dataKey="label" position="right" offset={9}
-                style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, fill: T.text }} />
-            </Scatter>
-          ))}
-        </ComposedChart>
+          {/* One Scatter per sector, drawing its own connecting line. A Line in
+              a ComposedChart plots against the chart's shared category index
+              rather than each series' own x, which turned eleven tails into one
+              tangle and made the tooltip report every series at once. */}
+          {series.map(s => {
+            const color = QUADRANTS[s.quadrant].color
+            const points: PlotPoint[] = s.tail.map((p, i) => ({
+              ...p, ticker: s.ticker, name: names?.[s.ticker] ?? s.ticker, last: i === s.tail.length - 1,
+            }))
+            return (
+              <Scatter key={s.ticker} data={points} fill={color} isAnimationActive={false}
+                line={{ stroke: color, strokeWidth: 1.3, strokeOpacity: 0.55 }} lineType="joint"
+                shape={(props: any) => <TailDot {...props} color={color} />} />
+            )
+          })}
+        </ScatterChart>
       </ResponsiveContainer>
 
       <div style={{ overflowX: 'auto', marginTop: 8 }}>
