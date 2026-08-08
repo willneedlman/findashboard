@@ -3579,3 +3579,145 @@ React will try to recreate this component tree from scratch using the error boun
 6:31:01 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
 11:28:54 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
 11:28:54 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:20:33 PM [vite] (client) hmr update /src/pages/AlgoStrategyBuilder.tsx, /src/index.css
+4:20:41 PM [vite] (client) hmr update /src/pages/AlgoStrategyBuilder.tsx, /src/index.css
+4:30:50 PM [vite] (client) hmr update /src/index.css
+4:30:59 PM [vite] (client) hmr update /src/pages/AlgoStrategyBuilder.tsx, /src/index.css
+4:31:24 PM [vite] (client) hmr update /src/pages/AlgoStrategyBuilder.tsx, /src/index.css
+4:40:20 PM [vite] (client) hmr update /src/index.css
+4:47:46 PM [vite] (client) hmr update /src/index.css, /src/components/CustomStrategyModal.tsx
+4:48:46 PM [vite] (client) hmr update /src/index.css, /src/components/StrategyCodePanel.tsx
+4:49:00 PM [vite] (client) hmr update /src/index.css, /src/components/CustomStrategyModal.tsx
+4:49:39 PM [vite] (client) hmr update /src/index.css, /src/components/CustomStrategyModal.tsx
+4:49:39 PM [vite] (client) hmr update /src/pages/AlgoStrategyBuilder.tsx, /src/index.css
+4:50:21 PM [vite] (client) hmr update /src/index.css, /src/components/CustomStrategyModal.tsx
+4:51:49 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+4:51:49 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+5:18:55 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+5:18:55 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+5:24:43 PM [vite] (client) hmr update /src/index.css, /src/components/CustomStrategyModal.tsx
+5:24:43 PM [vite] (client) hmr invalidate /src/components/CustomStrategyModal.tsx Could not Fast Refresh ("DEFAULT_RISK" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+5:24:43 PM [vite] (client) hmr update /src/pages/portfolio-backtester/components.tsx, /src/components/StrategySelector.tsx, /src/pages/AlgoStrategyBuilder.tsx, /src/pages/MonteCarlo.tsx
+5:24:43 PM [vite] (client) hmr invalidate /src/pages/AlgoStrategyBuilder.tsx Could not Fast Refresh ("legsToCombo" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+5:24:43 PM [vite] (client) hmr update /src/App.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx, /src/components/portfolio/ConfigHeader.tsx
+5:25:16 PM [vite] (client) hmr update /src/pages/AlgoStrategyBuilder.tsx, /src/index.css
+5:25:16 PM [vite] (client) hmr invalidate /src/pages/AlgoStrategyBuilder.tsx Could not Fast Refresh ("legsToCombo" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+5:25:16 PM [vite] (client) hmr update /src/App.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx, /src/components/portfolio/ConfigHeader.tsx
+5:27:38 PM [vite] (client) hmr update /src/index.css, /src/components/StrategyCodePanel.tsx
+5:27:38 PM [vite] (client) hmr update /src/index.css, /src/components/CustomStrategyModal.tsx
+5:27:38 PM [vite] (client) hmr invalidate /src/components/CustomStrategyModal.tsx Could not Fast Refresh ("DEFAULT_RISK" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+5:27:38 PM [vite] (client) hmr update /src/pages/portfolio-backtester/components.tsx, /src/components/StrategySelector.tsx, /src/pages/AlgoStrategyBuilder.tsx, /src/pages/MonteCarlo.tsx
+5:27:38 PM [vite] (client) hmr invalidate /src/pages/AlgoStrategyBuilder.tsx Could not Fast Refresh ("legsToCombo" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+5:27:38 PM [vite] (client) hmr update /src/App.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx, /src/components/portfolio/ConfigHeader.tsx
+5:29:43 PM [vite] http proxy error: /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+5:29:44 PM [vite] http proxy error: /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+5:31:43 PM [vite] http proxy error: /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+5:31:44 PM [vite] http proxy error: /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+5:40:24 PM [vite] (client) hmr update /src/index.css, /src/components/StrategyCodePanel.tsx
+5:40:24 PM [vite] (client) hmr update /src/index.css, /src/components/CustomStrategyModal.tsx
+5:40:25 PM [vite] (client) hmr invalidate /src/components/CustomStrategyModal.tsx Could not Fast Refresh ("DEFAULT_RISK" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+5:40:25 PM [vite] (client) hmr update /src/pages/portfolio-backtester/components.tsx, /src/components/StrategySelector.tsx, /src/pages/AlgoStrategyBuilder.tsx, /src/pages/MonteCarlo.tsx
+5:40:25 PM [vite] (client) hmr invalidate /src/pages/AlgoStrategyBuilder.tsx Could not Fast Refresh ("legsToCombo" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+5:40:25 PM [vite] (client) hmr update /src/App.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx, /src/components/portfolio/ConfigHeader.tsx
+5:40:49 PM [vite] (client) hmr update /src/index.css, /src/components/StrategyCodePanel.tsx
+5:45:19 PM [vite] (client) hmr update /src/pages/AlgoStrategyBuilder.tsx, /src/index.css
+5:46:01 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+5:46:01 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+5:50:32 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+5:50:32 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+5:52:43 PM [vite] http proxy error: /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+5:52:43 PM [vite] http proxy error: /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+5:59:34 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+5:59:34 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+7:30:29 PM [vite] (client) hmr update /src/pages/AlgoStrategyBuilder.tsx, /src/index.css
+7:30:29 PM [vite] (client) hmr invalidate /src/pages/AlgoStrategyBuilder.tsx Could not Fast Refresh ("legsToCombo" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+7:30:29 PM [vite] (client) hmr update /src/App.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx, /src/components/portfolio/ConfigHeader.tsx
+7:31:04 PM [vite] (client) hmr update /src/pages/AlgoStrategyBuilder.tsx, /src/index.css
+7:31:04 PM [vite] (client) hmr invalidate /src/pages/AlgoStrategyBuilder.tsx Could not Fast Refresh ("legsToCombo" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+7:31:04 PM [vite] (client) hmr update /src/App.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx, /src/components/portfolio/ConfigHeader.tsx
+7:32:43 PM [vite] http proxy error: /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+7:32:43 PM [vite] http proxy error: /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+7:36:07 PM [vite] (client) hmr update /src/App.tsx, /src/index.css
+7:36:17 PM [vite] (client) hmr update /src/App.tsx, /src/index.css
+7:36:17 PM [vite] (client) hmr update /src/App.tsx, /src/components/CommandPalette.tsx, /src/components/Layout.tsx, /src/components/ReportCaptureToolbar.tsx, /src/marketing/Marketing.tsx, /src/pages/Home.tsx, /src/pages/HubLanding.tsx, /src/index.css
+7:36:17 PM [vite] (client) hmr update /src/pages/OptionsChainScanner.tsx, /src/index.css
+7:36:17 PM [vite] (client) hmr update /src/pages/UnusualOptions.tsx, /src/index.css
+7:36:17 PM [vite] (client) hmr update /src/index.css
+7:36:17 PM [vite] (client) [console.error] [vite] Failed to reload /src/pages/OptionsChainScanner.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above)
+7:36:55 PM [vite] (client) hmr update /src/App.tsx, /src/components/CommandPalette.tsx, /src/components/TickerLinkChip.tsx, /src/components/TickerLink.tsx, /src/pages/StockScreener.tsx, /src/index.css
+7:36:55 PM [vite] (client) hmr invalidate /src/pages/StockScreener.tsx Could not Fast Refresh ("loadScreens" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+7:36:55 PM [vite] (client) hmr update /src/App.tsx, /src/pages/AlgoStrategyBuilder.tsx
+7:36:55 PM [vite] (client) hmr invalidate /src/pages/AlgoStrategyBuilder.tsx Could not Fast Refresh ("legsToCombo" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+7:36:55 PM [vite] (client) hmr update /src/App.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx, /src/components/portfolio/ConfigHeader.tsx
+8:08:07 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+8:08:07 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+8:08:09 PM [vite] (client) hmr update /src/index.css, /src/pages/OptionsDesk.tsx
+8:08:45 PM [vite] (client) hmr update /src/index.css, /src/pages/OptionsDesk.tsx
+8:08:45 PM [vite] Internal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mExpected `,` or `)` but found `Identifier`
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/pages/OptionsDesk.tsx:440:14 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m376 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m{[0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mw[0m[38;5;249ms[0m[38;5;249m.[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249mn[0m[38;5;249mg[0m[38;5;249mt[0m[38;5;249mh[0m[38;5;249m [0m[38;5;249m>[0m[38;5;249m [0m[38;5;249m0[0m[38;5;249m [0m[38;5;249m&[0m[38;5;249m&[0m[38;5;249m [0m(
+ [38;5;240m    │[0m                             ┬  
+ [38;5;240m    │[0m                             ╰── Opened here
+ [38;5;240m    │[0m 
+ [38;5;246m440 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m<[0m[38;5;249md[0m[38;5;249mi[0m[38;5;249mv[0m[38;5;249m [0mstyle[38;5;249m=[0m[38;5;249m{[0m[38;5;249m{[0m[38;5;249m [0m[38;5;249mf[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249mx[0m[38;5;249m:[0m[38;5;249m [0m[38;5;249m'[0m[38;5;249m1[0m[38;5;249m [0m[38;5;249m1[0m[38;5;249m [0m[38;5;249m4[0m[38;5;249m2[0m[38;5;249m0[0m[38;5;249mp[0m[38;5;249mx[0m[38;5;249m'[0m[38;5;249m,[0m[38;5;249m [0m[38;5;249mm[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249mW[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249mt[0m[38;5;249mh[0m[38;5;249m:[0m[38;5;249m [0m[38;5;249m3[0m[38;5;249m4[0m[38;5;249m0[0m[38;5;249m,[0m[38;5;249m [0m[38;5;249mb[0m[38;5;249mo[0m[38;5;249mr[0m[38;5;249md[0m[38;5;249me[0m[38;5;249mr[0m[38;5;249m:[0m[38;5;249m [0m[38;5;249m`[0m[38;5;249m1[0m[38;5;249mp[0m[38;5;249mx[0m[38;5;249m [0m[38;5;249ms[0m[38;5;249mo[0m[38;5;249ml[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249m [0m[38;5;249m$[0m[38;5;249m{[0m[38;5;249mT[0m[38;5;249m.[0m[38;5;249mb[0m[38;5;249mo[0m[38;5;249mr[0m[38;5;249md[0m[38;5;249me[0m[38;5;249mr[0m[38;5;249m}[0m[38;5;249m`[0m[38;5;249m [0m[38;5;249m}[0m[38;5;249m}[0m[38;5;249m>[0m
+ [38;5;240m    │[0m              ──┬──  
+ [38;5;240m    │[0m                ╰──── `,` or `)` expected
+[38;5;246m─────╯[0m
+
+  Plugin: vite:oxc
+  File: /Users/willneedlman/finance_dashboard/frontend/src/pages/OptionsDesk.tsx
+      at transformWithOxc (file:///Users/willneedlman/finance_dashboard/frontend/node_modules/vite/dist/node/chunks/node.js:3344:19)
+      at TransformPluginContext.transform (file:///Users/willneedlman/finance_dashboard/frontend/node_modules/vite/dist/node/chunks/node.js:3415:26)
+      at EnvironmentPluginContainer.transform (file:///Users/willneedlman/finance_dashboard/frontend/node_modules/vite/dist/node/chunks/node.js:30387:51)
+      at async loadAndTransform (file:///Users/willneedlman/finance_dashboard/frontend/node_modules/vite/dist/node/chunks/node.js:24646:26)
+      at async viteTransformMiddleware (file:///Users/willneedlman/finance_dashboard/frontend/node_modules/vite/dist/node/chunks/node.js:24440:20)
+8:08:45 PM [vite] (client) [console.error] [vite] Failed to reload /src/pages/OptionsDesk.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above)
+8:09:14 PM [vite] (client) hmr update /src/index.css, /src/pages/OptionsDesk.tsx
+8:09:38 PM [vite] (client) hmr update /src/index.css, /src/pages/OptionsDesk.tsx
+8:11:07 PM [vite] (client) hmr update /src/index.css, /src/pages/OptionsDesk.tsx
+8:11:52 PM [vite] (client) hmr update /src/App.tsx, /src/index.css
+8:11:52 PM [vite] (client) hmr update /src/App.tsx, /src/components/CommandPalette.tsx, /src/components/Layout.tsx, /src/components/ReportCaptureToolbar.tsx, /src/marketing/Marketing.tsx, /src/pages/Home.tsx, /src/pages/HubLanding.tsx, /src/index.css
+8:11:52 PM [vite] (client) hmr update /src/App.tsx, /src/components/CommandPalette.tsx, /src/components/TickerLinkChip.tsx, /src/components/TickerLink.tsx, /src/pages/StockScreener.tsx, /src/index.css
+8:11:52 PM [vite] (client) hmr update /src/index.css, /src/pages/OptionsDesk.tsx
+8:11:52 PM [vite] (client) hmr update /src/index.css, /src/pages/OptionsDesk.tsx
+8:11:52 PM [vite] (client) [console.error] [vite] Failed to reload /src/pages/OptionsDesk.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above)
+8:11:52 PM [vite] (client) [console.error] [vite] Failed to reload /src/pages/OptionsDesk.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above)
+8:19:12 PM [vite] (client) hmr update /src/pages/OptionsScanner.tsx, /src/index.css
+8:20:33 PM [vite] (client) hmr update /src/index.css, /src/components/TickerBasket.tsx
+8:20:33 PM [vite] (client) hmr invalidate /src/components/TickerBasket.tsx Could not Fast Refresh ("parseTickerFile" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+8:20:33 PM [vite] (client) hmr update /src/pages/OptionsScanner.tsx
+9:03:49 PM [vite] (client) hmr update /src/index.css, /src/components/TickerBasket.tsx
+9:03:49 PM [vite] (client) hmr invalidate /src/components/TickerBasket.tsx Could not Fast Refresh ("parseTickerFile" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+9:03:49 PM [vite] (client) hmr update /src/pages/OptionsScanner.tsx
+9:06:25 PM [vite] (client) hmr update /src/pages/OptionsScanner.tsx, /src/index.css
+9:25:26 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+9:25:26 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+9:26:33 PM [vite] (client) hmr update /src/pages/OptionsScanner.tsx, /src/index.css
+9:26:33 PM [vite] (client) hmr update /src/index.css, /src/pages/OptionsScanner.tsx
+9:26:33 PM [vite] (client) hmr update /src/index.css
+9:37:11 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+9:37:11 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+9:37:25 PM [vite] (client) hmr update /src/pages/DealerGEX.tsx, /src/index.css
+9:38:08 PM [vite] (client) hmr update /src/pages/DealerGEX.tsx, /src/index.css
+9:38:58 PM [vite] (client) hmr update /src/index.css, /src/pages/PortfolioLive.tsx
+9:39:12 PM [vite] (client) hmr update /src/index.css, /src/pages/PortfolioLive.tsx
+9:39:44 PM [vite] (client) hmr update /src/pages/OptionsScanner.tsx, /src/index.css
