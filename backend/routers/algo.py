@@ -360,12 +360,37 @@ def _summarize_equity(equity: pd.Series, initial_capital: float, bars_per_year: 
     }
 
 
+def _size_multiplier(size: "np.ndarray | None", n: int) -> np.ndarray:
+    """Per-bar conviction multiplier on the configured allocation, in [0, 1].
+
+    A strategy can say WHEN to enter via the signal arrays; this is how it says
+    HOW MUCH. `size[i] = 0.5` puts in half of `position_size`% of available cash
+    on that bar, so volatility-targeted sizing ("risk 1% of capital, so size
+    inversely to ATR") becomes expressible instead of every entry being the same
+    fraction regardless of how violent the name is.
+
+    Capped at 1.0 on purpose: position_size stays a hard ceiling the user set, so
+    a strategy can scale DOWN from it but never silently exceed it. NaN means an
+    indicator was not warm, and is treated as 0 — no position — which matches the
+    engine's existing rule that NaN comparisons never fire.
+
+    None yields all-ones, so every existing caller is bit-identical.
+    """
+    if size is None:
+        return np.ones(n, dtype=float)
+    arr = np.asarray(size, dtype=float)
+    if arr.shape != (n,):
+        raise HTTPException(422, f"size has shape {arr.shape}, expected ({n},)")
+    return np.clip(np.nan_to_num(arr, nan=0.0, posinf=1.0, neginf=0.0), 0.0, 1.0)
+
+
 def _compute_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, close: pd.Series,
                      position_size: float = 100, initial_capital: float = 10_000,
                      direction: str = "long", bars_per_year: int = 252, intraday: bool = False,
                      stop_loss: float | None = None, take_profit: float | None = None,
                      trailing_stop: float | None = None, max_hold_bars: int | None = None,
-                     exit_pct: float = 100.0, max_open_positions: int | None = None):
+                     exit_pct: float = 100.0, max_open_positions: int | None = None,
+                     size: "np.ndarray | None" = None):
     """Shares are fungible — a share bought at $80 and one bought at $100
     aren't distinguishable positions the way two options with different
     strikes are, and P&L doesn't depend on which one a later sale is
@@ -383,6 +408,7 @@ def _compute_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, close: pd.
     the long side's dollar P&L (project convention, matches the option/combo
     engines) rather than modeling real short-sale margin mechanics."""
     alloc = max(0.0, position_size) / 100.0
+    size_mult = _size_multiplier(size, len(close))
     exit_frac_cfg = max(0.0, min(1.0, exit_pct / 100.0))
     # Intraday keeps the time in each label so bars within a day stay distinct
     # (a date-only label would collapse them and break the curve / portfolio join).
@@ -463,7 +489,7 @@ def _compute_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, close: pd.
         if buy_signal[i] and cash > 0.01 and position_limit_reached:
             position_limit_blocked_entries += 1
         if buy_signal[i] and cash > 0.01 and not position_limit_reached:
-            invest = cash * alloc
+            invest = cash * alloc * size_mult[i]
             if invest > 0:
                 new_shares = invest / price
                 cash -= invest
@@ -559,7 +585,8 @@ def _compute_option_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clo
                             trailing_stop: float | None = None, max_hold_bars: int | None = None,
                             exit_pct: float = 100.0,
                             delta_exit: float | None = None, gamma_exit: float | None = None,
-                            max_open_positions: int | None = None):
+                            max_open_positions: int | None = None,
+                            size: "np.ndarray | None" = None):
     """Modeled single-option backtest, multi-lot: every bar the buy signal
     fires, ANOTHER fresh Black-Scholes-priced call/put (strike = moneyness ×
     spot at that bar, fixed DTE) opens sized off currently-available cash —
@@ -598,6 +625,7 @@ def _compute_option_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clo
     exit_action = "BUY" if short else "SELL"
     r = 4.0
     alloc = max(0.0, position_size) / 100.0
+    size_mult = _size_multiplier(size, len(close))
     exit_frac_cfg = max(0.0, min(1.0, exit_pct / 100.0))
     _dfmt = "%Y-%m-%d %H:%M" if intraday else "%Y-%m-%d"
     idx = close.index
@@ -716,7 +744,7 @@ def _compute_option_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clo
         if buy_signal[i] and cash > 0.01 and not position_limit_reached:
             strike = round(px[i] * moneyness, 2)
             entry_val = max(float(bs_price(px[i], strike, dte, r, iv, otype)), 0.01)
-            invest = cash * alloc
+            invest = cash * alloc * size_mult[i]
             if invest > 0:
                 contracts = invest / (entry_val * _OPT_MULT)
                 signed_contracts = -contracts if short else contracts
@@ -793,7 +821,8 @@ def _compute_combo_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clos
                            trailing_stop: float | None = None, max_hold_bars: int | None = None,
                            exit_pct: float = 100.0,
                            delta_exit: float | None = None, gamma_exit: float | None = None,
-                           max_open_positions: int | None = None):
+                           max_open_positions: int | None = None,
+                           size: "np.ndarray | None" = None):
     """Modeled multi-leg option combo backtest (straddle/strangle/spread/condor/
     butterfly/etc — same leg shape as the Options Strategy Builder's PRESETS
     table: {type, side, moneyness, qty}), multi-lot: every bar the buy signal
@@ -847,6 +876,7 @@ def _compute_combo_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clos
     dte = max(1, int(combo.get("dte", 30)))
     r = 4.0
     alloc = max(0.0, position_size) / 100.0
+    size_mult = _size_multiplier(size, len(close))
     exit_frac_cfg = max(0.0, min(1.0, exit_pct / 100.0))
     _dfmt = "%Y-%m-%d %H:%M" if intraday else "%Y-%m-%d"
     idx = close.index
@@ -986,7 +1016,7 @@ def _compute_combo_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clos
                 entry_val = max(float(bs_price(px[i], strike, dte, r, iv, otype)), 0.01)
                 unscaled.append({"type": otype, "strike": strike, "signed_qty": signed_qty, "entry_val": entry_val})
                 base_notional += qty * px[i] * _OPT_MULT
-            scale = (cash * alloc) / base_notional if base_notional > 0 else 0.0
+            scale = (cash * alloc * size_mult[i]) / base_notional if base_notional > 0 else 0.0
             if scale > 0:
                 lot_legs = []
                 for l in unscaled:

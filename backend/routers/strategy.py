@@ -8,7 +8,7 @@ Each strategy returns a daily signal (1=invested, 0=cash) and a drift adjustment
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from validation import validate_ticker, validate_date
@@ -611,12 +611,17 @@ def build_aligned_frames(tickers: list[str], start: str, end: str, timeframe: st
     """Fetch each symbol's OHLCV and inner-join closes on shared bars so every frame
     shares one index (cross-ticker conditions compare same-bar values). `timeframe`
     selects the base bar size (daily or Alpaca intraday). Returns
-    (index, {TICKER: close_array}, {TICKER: volume_array}) — volume feeds the
-    VOL_RELATIVE/VOL_DOLLAR context indicators, reindexed onto the same shared
-    bars (NaN where a symbol's feed has no volume, e.g. some intraday sources).
-    Symbols with no data are dropped."""
+    (index, {TICKER: close_array}, {TICKER: volume_array}, {TICKER: {field: array}}).
+
+    The fourth value is the full OHLCV per symbol on the same shared bars. The
+    rule DSL only ever consumed closes — which is why strategies/indicators.atr
+    is documented as a close-to-close proxy "no high/low data available here" —
+    but the fetch has always returned open/high/low, and code strategies can use
+    them. Symbols with no data are dropped; a missing field is all-NaN rather
+    than absent, so callers never have to branch on availability."""
     series: dict[str, pd.Series] = {}
     vol_series: dict[str, pd.Series] = {}
+    bars: dict[str, pd.DataFrame] = {}
     for tk in tickers:
         df = _fetch_ohlcv_tf(tk, start, end, timeframe)
         if df.empty or "Close" not in df:
@@ -625,17 +630,30 @@ def build_aligned_frames(tickers: list[str], start: str, end: str, timeframe: st
         if c.empty:
             continue
         series[tk] = c
+        bars[tk] = df
         if "Volume" in df:
             vol_series[tk] = df["Volume"]
     if not series:
-        return None, {}, {}
+        return None, {}, {}, {}
     df = pd.concat(series, axis=1, join="inner").dropna()
     frames = {str(tk): df[tk].to_numpy(dtype=float) for tk in df.columns}
     volumes = {
         str(tk): vol_series[tk].reindex(df.index).to_numpy(dtype=float)
         for tk in df.columns if tk in vol_series
     }
-    return df.index, frames, volumes
+    ohlcv: dict[str, dict] = {}
+    for tk in df.columns:
+        src = bars.get(tk)
+        if src is None:
+            continue
+        row = {}
+        for field in ("Open", "High", "Low", "Close", "Volume"):
+            if field in src:
+                row[field.lower()] = src[field].reindex(df.index).to_numpy(dtype=float)
+            else:
+                row[field.lower()] = np.full(len(df.index), np.nan)
+        ohlcv[str(tk)] = row
+    return df.index, frames, volumes, ohlcv
 
 
 class CustomSignalRequest(BaseModel):
@@ -697,6 +715,10 @@ def get_custom_signal(req: CustomSignalRequest):
 class CustomBacktestRequest(BaseModel):
     ticker: str
     rules: dict = {}
+    # Code-first path (algo_runtime). When present, this Python `signal(c)`
+    # produces the entry/exit arrays instead of the rule interpreter; `rules`
+    # stays on the request so the visual builder keeps rendering.
+    signal_source: str | None = None
     start: str = "2022-01-01"
     end: str | None = None
     timeframe: str = "1d"            # 1d (default) | 1h | 30m | 15m | 5m — intraday needs Alpaca + an equity
@@ -765,7 +787,8 @@ def _legacy_signal_from_raw(buy_signal: np.ndarray, sell_signal: np.ndarray) -> 
     return signal
 
 
-def _run_custom_rules(ticker: str, rules: dict, start: str, end: str, timeframe: str = "1d"):
+def _run_custom_rules(ticker: str, rules: dict, start: str, end: str, timeframe: str = "1d",
+                      signal_source: str | None = None):
     """Fetch + align every symbol a rule set references, resolve each one's
     point-in-time context (fundamentals/liquidity/flow series aligned to the same
     bars), and evaluate the rules on the chosen base timeframe. Returns
@@ -788,7 +811,7 @@ def _run_custom_rules(ticker: str, rules: dict, start: str, end: str, timeframe:
     rules = strip_self_placeholder(rules)
     primary = ticker.strip().upper()
     tickers = referenced_tickers(rules, primary)
-    index, frames, volumes = build_aligned_frames(tickers, start, end, timeframe)
+    index, frames, volumes, ohlcv = build_aligned_frames(tickers, start, end, timeframe)
     if index is None or primary not in frames:
         return None, None
     ctx_by_ticker = {
@@ -796,11 +819,237 @@ def _run_custom_rules(ticker: str, rules: dict, start: str, end: str, timeframe:
         for tk in frames
     }
     prices = frames[primary]
-    buy_signal, sell_signal = evaluate_custom_rules(prices, rules, frames=frames,
-                                ctx_by_ticker=ctx_by_ticker, primary=primary,
-                                daily_index=index, intraday_base=_is_intraday_tf(timeframe),
-                                base_tf=(timeframe or "1d").lower(), raw=True)
-    return (buy_signal, sell_signal), pd.Series(prices, index=index, name=primary)
+    buy_signal, sell_signal, size = _signals_for(
+        prices, rules, frames, ctx_by_ticker, primary, index, timeframe, signal_source, ohlcv)
+    return (buy_signal, sell_signal, size), pd.Series(prices, index=index, name=primary)
+
+
+# Which engine produces the raw (buy, sell) arrays. The interpreter stays the
+# default for one release; ALGO_ENGINE=compiled routes rule-based strategies
+# through the compiler so the two can be compared in production before the
+# interpreter is removed. Explicit Python source always uses the runtime.
+def _engine() -> str:
+    import os
+    return (os.getenv("ALGO_ENGINE") or "interpreter").strip().lower()
+
+
+def _signals_for(prices, rules, frames, ctx_by_ticker, primary, index, timeframe,
+                 signal_source: str | None, ohlcv: dict | None = None):
+    """One place where a strategy becomes two boolean arrays.
+
+    Python source runs sandboxed; rules run through the interpreter, or through
+    the compiler when ALGO_ENGINE=compiled. All three return the identical shape
+    the P&L engines in algo.py already consume, which is what makes this
+    swappable at all.
+
+    Returns (buy, sell, size). `size` is a per-bar 0..1 multiplier on the
+    configured position size and is None for every rule-based path — the
+    condition DSL has no way to express conviction, so only code strategies can
+    produce it.
+    """
+    base_tf = (timeframe or "1d").lower()
+
+    def interpret():
+        buy, sell = evaluate_custom_rules(prices, rules, frames=frames,
+                                          ctx_by_ticker=ctx_by_ticker, primary=primary,
+                                          daily_index=index, intraday_base=_is_intraday_tf(timeframe),
+                                          base_tf=base_tf, raw=True)
+        return buy, sell, None
+
+    if not signal_source and _engine() != "compiled":
+        return interpret()
+
+    try:
+        from algo_runtime import run_signal
+        from algo_runtime.compiler import compile_rules
+        from algo_runtime.contract import ctx_from_frames
+    except Exception:
+        logger.exception("algo_runtime unavailable; falling back to the rule interpreter")
+        return interpret()
+
+    ctx = ctx_from_frames(prices, frames=frames, ctx_by_ticker=ctx_by_ticker,
+                          primary=primary, daily_index=index, base_tf=base_tf, ohlcv=ohlcv)
+    try:
+        src = signal_source or compile_rules(rules)
+        sig = run_signal(src, ctx)
+        buy = np.asarray(sig.entries, dtype=bool)
+        sell = np.asarray(sig.exits, dtype=bool)
+        if buy.shape != (len(prices),) or sell.shape != (len(prices),):
+            raise ValueError(f"signal returned {buy.shape}, expected ({len(prices)},)")
+        size = getattr(sig, "size", None)
+        if size is not None:
+            size = np.asarray(size, dtype=float)
+            if size.shape != (len(prices),):
+                raise ValueError(f"size returned {size.shape}, expected ({len(prices)},)")
+        return buy, sell, size
+    except Exception as e:
+        # Author-supplied code must fail loudly — silently backtesting different
+        # logic than the user wrote is the worst possible outcome here.
+        if signal_source:
+            raise HTTPException(422, f"Strategy code failed: {e}") from e
+        logger.warning("compiled engine failed for %s (%s); using the interpreter", primary, e)
+        return interpret()
+
+
+class CompileRequest(BaseModel):
+    rules: dict = {}
+    name: str = "strategy"
+    source: str | None = None      # validate hand-edited code instead of compiling rules
+    check: bool = True             # not `validate` — that shadows a BaseModel attribute
+
+
+@router.post("/compile")
+def compile_strategy(req: CompileRequest):
+    """Rules (or hand-written code) -> Python source + diagnostics.
+
+    Powers the read-only code panel today and the editor later. Validation runs
+    against a synthetic random walk, not live market data: the checks here are
+    structural (lookahead, warmup, determinism) and a fixed series makes the
+    verdict reproducible and instant.
+    """
+    try:
+        from algo_runtime.compiler import compile_rules, rules_warmup, UnsupportedRule
+        from algo_runtime.contract import Ctx
+        from algo_runtime.sandbox import make_runner
+        from algo_runtime.validate import validate_source
+    except Exception:
+        logger.exception("algo_runtime unavailable")
+        raise HTTPException(503, "The code engine is not available on this server.")
+
+    if req.source:
+        source, warm = req.source, {"entries": 0, "exits": 0}
+    else:
+        try:
+            source = compile_rules(req.rules or {}, req.name)
+            warm = rules_warmup(req.rules or {})
+        except UnsupportedRule as e:
+            return {"ok": False, "source": None, "unsupported": str(e),
+                    "diagnostics": [{"level": "compile", "severity": "error",
+                                     "message": f"This rule has no code equivalent yet: {e}", "line": None}]}
+
+    out = {"ok": True, "source": source, "warmup": warm, "diagnostics": []}
+    if not req.check:
+        return out
+
+    rng = np.random.default_rng(7)
+    ctx = Ctx(close=100 * np.exp(np.cumsum(rng.normal(0.0004, 0.013, 400))))
+    res = validate_source(source, ctx, make_runner(), warmup=warm)
+    out["ok"] = res.ok
+    out["diagnostics"] = [d.as_dict() for d in res.diagnostics]
+    return out
+
+
+class GenerateRequest(BaseModel):
+    prompt: str
+    source: str | None = None                 # current code, for edits
+    history: list[dict] = Field(default_factory=list)
+    # The strategy's current ticker/instrument/window. Sent so a follow-up
+    # message is read as a PATCH: "sorry, calls not puts" must not silently
+    # reset the ticker and expiry it says nothing about.
+    setup: dict | None = None
+    strategy_id: str | None = None            # commit the result to this strategy
+    name: str = "AI strategy"
+
+
+@router.post("/generate")
+def generate_strategy(req: GenerateRequest):
+    """Plain English -> validated Python, with an automatic repair loop.
+
+    A failure here still returns the last attempt and its diagnostics: seeing
+    what the model wrote and exactly which check rejected it is more useful than
+    a bare error, and the code is often one edit from correct.
+    """
+    try:
+        from algo_runtime.generate import generate
+        from algo_runtime import store
+    except Exception:
+        logger.exception("algo_runtime unavailable")
+        raise HTTPException(503, "The code engine is not available on this server.")
+
+    if not (req.prompt or "").strip():
+        raise HTTPException(400, "prompt must not be empty")
+
+    hist = [{"role": m.get("role", "user"), "content": str(m.get("content", ""))}
+            for m in (req.history or [])[-8:] if m.get("content")]
+    out = generate(req.prompt, req.source, hist, current_setup=req.setup)
+
+    # Only successful, validated code enters the history — a rejected draft is
+    # returned for inspection but never becomes a revision.
+    if out["ok"] and out.get("source") and out["intent"] != "explain":
+        try:
+            if req.strategy_id:
+                out.update(store.commit(req.strategy_id, out["source"], author="ai",
+                                        prompt=req.prompt, diagnostics=out["diagnostics"]))
+            else:
+                out.update(store.create_strategy(req.name, out["source"], author="ai",
+                                                 prompt=req.prompt, diagnostics=out["diagnostics"]))
+        except Exception:
+            logger.exception("revision commit failed")
+    return out
+
+
+class CommitRequest(BaseModel):
+    strategy_id: str | None = None
+    name: str = "Strategy"
+    source: str
+    author: str = "user"
+
+
+@router.post("/code/commit")
+def commit_code(req: CommitRequest):
+    """Save a hand edit. Validates first — an invalid revision is never stored,
+    so every revision in the history is one that actually runs."""
+    from algo_runtime import store
+    from algo_runtime.contract import Ctx
+    from algo_runtime.sandbox import make_runner
+    from algo_runtime.validate import validate_source
+
+    rng = np.random.default_rng(7)
+    ctx = Ctx(close=100 * np.exp(np.cumsum(rng.normal(0.0004, 0.013, 400))))
+    res = validate_source(req.source, ctx, make_runner())
+    diags = [d.as_dict() for d in res.diagnostics]
+    if not res.ok:
+        return {"ok": False, "diagnostics": diags}
+
+    out = (store.commit(req.strategy_id, req.source, req.author, None, diags)
+           if req.strategy_id else
+           store.create_strategy(req.name, req.source, req.author, None, diags))
+    return {"ok": True, "diagnostics": diags, **out}
+
+
+@router.get("/code/strategies")
+def list_code_strategies():
+    from algo_runtime import store
+    return {"strategies": store.list_strategies()}
+
+
+@router.get("/code/history")
+def code_history(strategy_id: str):
+    from algo_runtime import store
+    revs = store.history(strategy_id)
+    for i, r in enumerate(revs):
+        nxt = revs[i + 1]["source"] if i + 1 < len(revs) else ""
+        r["diff"] = store.diff(nxt, r["source"])
+        r.pop("source", None)
+    return {"revisions": revs}
+
+
+@router.get("/code/revision")
+def code_revision(revision_id: str):
+    from algo_runtime import store
+    rev = store.get_revision(revision_id)
+    if rev is None:
+        raise HTTPException(404, "No such revision")
+    return rev
+
+
+@router.post("/code/revert")
+def code_revert(strategy_id: str, revision_id: str):
+    from algo_runtime import store
+    try:
+        return store.revert(strategy_id, revision_id)
+    except KeyError:
+        raise HTTPException(404, "No such revision")
 
 
 @router.post("/custom-backtest")
@@ -817,10 +1066,11 @@ def custom_backtest(req: CustomBacktestRequest):
         start = _clamp_intraday_start(tf, req.start, end)
     else:
         start = req.start
-    raw_signals, close = _run_custom_rules(req.ticker, req.rules, start, end, tf)
+    raw_signals, close = _run_custom_rules(req.ticker, req.rules, start, end, tf,
+                                           signal_source=req.signal_source)
     if close is None or len(close) < 60:
         raise HTTPException(422, "Not enough price history for a backtest (need about 60 bars). Use a longer date range.")
-    buy_signal, sell_signal = raw_signals
+    buy_signal, sell_signal, signal_size = raw_signals
     is_modeled = (req.instrument or {}).get("kind") in ("option", "combo")
     # Every instrument kind now applies its own risk controls internally,
     # evaluated against its own entry/P&L (shares: against the position's own
@@ -836,7 +1086,8 @@ def custom_backtest(req: CustomBacktestRequest):
                                  stop_loss=req.stop_loss, take_profit=req.take_profit,
                                  trailing_stop=req.trailing_stop, max_hold_bars=req.max_hold_bars,
                                  exit_pct=req.exit_pct, delta_exit=req.delta_exit, gamma_exit=req.gamma_exit,
-                                 max_open_positions=req.max_open_positions)
+                                 max_open_positions=req.max_open_positions,
+                                 size=signal_size)
 
     # Leverage is "free" P&L amplification unless the borrowed portion of
     # notional (beyond 100% of capital) actually costs something — apply the
@@ -892,11 +1143,15 @@ def _instrument_metrics(buy_signal, sell_signal, close, instrument, side, ticker
                         trailing_stop: float | None = None, max_hold_bars: int | None = None,
                         exit_pct: float = 100.0,
                         delta_exit: float | None = None, gamma_exit: float | None = None,
-                        max_open_positions: int | None = None):
+                        max_open_positions: int | None = None,
+                        size=None):
     """Metrics for one position given its raw (buy_signal, sell_signal) + close:
     modeled option P&L for an option instrument (long buys it, short writes
     it), else long/short shares. `side` drives direction for both. Same result
     shape as /algo/backtest. Raises 422 if an option can't be priced.
+
+    `size` is the optional per-bar conviction multiplier a code strategy can
+    return; None (every rule-based path) means every entry is full size.
 
     stop_loss/take_profit/trailing_stop/max_hold_bars are evaluated against
     each engine's own P&L/entry now — shares against the (fungible, single
@@ -923,13 +1178,13 @@ def _instrument_metrics(buy_signal, sell_signal, close, instrument, side, ticker
         if not isinstance(iv, (int, float)) or iv <= 0:
             raise HTTPException(422, f"No implied volatility available to model options for {ticker}")
         if inst.get("kind") == "combo":
-            return _compute_combo_metrics(buy_signal, sell_signal, close, inst, float(iv), position_size, capital, bars_per_year=bars_per_year, intraday=intraday,
+            return _compute_combo_metrics(buy_signal, sell_signal, close, inst, float(iv), position_size, capital, size=size, bars_per_year=bars_per_year, intraday=intraday,
                                           stop_loss=stop_loss, take_profit=take_profit, trailing_stop=trailing_stop, max_hold_bars=max_hold_bars, exit_pct=exit_pct,
                                           delta_exit=delta_exit, gamma_exit=gamma_exit, max_open_positions=max_open_positions)
-        return _compute_option_metrics(buy_signal, sell_signal, close, inst, float(iv), position_size, capital, direction=side, bars_per_year=bars_per_year, intraday=intraday,
+        return _compute_option_metrics(buy_signal, sell_signal, close, inst, float(iv), position_size, capital, size=size, direction=side, bars_per_year=bars_per_year, intraday=intraday,
                                        stop_loss=stop_loss, take_profit=take_profit, trailing_stop=trailing_stop, max_hold_bars=max_hold_bars, exit_pct=exit_pct,
                                        delta_exit=delta_exit, gamma_exit=gamma_exit, max_open_positions=max_open_positions)
-    return _compute_metrics(buy_signal, sell_signal, close, position_size, capital, direction=side, bars_per_year=bars_per_year, intraday=intraday,
+    return _compute_metrics(buy_signal, sell_signal, close, position_size, capital, size=size, direction=side, bars_per_year=bars_per_year, intraday=intraday,
                             stop_loss=stop_loss, take_profit=take_profit, trailing_stop=trailing_stop, max_hold_bars=max_hold_bars, exit_pct=exit_pct,
                             max_open_positions=max_open_positions)
 
