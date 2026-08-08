@@ -5,6 +5,7 @@ import type { IChartApi, ISeriesApi, Time } from 'lightweight-charts'
 import { readToken } from '../lib/theme'
 import { formatLocalDateTime, localTimeZone } from '../lib/time'
 import EmptyState from './EmptyState'
+import AssetFacts from './AssetFacts'
 
 // Click-to-chart popup for the Global Markets board. Reuses /api/market/history,
 // which already resolves the Yahoo symbol forms used here (^GSPC, CL=F, BTC-USD…)
@@ -128,7 +129,7 @@ export default function AssetChartModal({ row, yields, onClose }: { row: Row; yi
     <div onClick={onClose} role="dialog" aria-modal="true" aria-label={`${row.label} chart`}
       style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.62)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div onClick={e => e.stopPropagation()}
-        style={{ width: 'min(940px, 94vw)', height: 'min(560px, 84vh)', display: 'flex', flexDirection: 'column', background: 'var(--theme-surface, #0d1826)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 34%, transparent)', borderRadius: 8, boxShadow: '0 24px 70px rgba(0,0,0,0.55)', overflow: 'hidden' }}>
+        style={{ width: 'min(1040px, 96vw)', height: 'min(760px, 92vh)', display: 'flex', flexDirection: 'column', background: 'var(--theme-surface, #0d1826)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 34%, transparent)', boxShadow: '0 24px 70px rgba(0,0,0,0.55)', overflow: 'hidden' }}>
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', padding: '13px 16px', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 22%, transparent)' }}>
@@ -159,15 +160,20 @@ export default function AssetChartModal({ row, yields, onClose }: { row: Row; yi
             style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: MONO, fontSize: 16, lineHeight: 1, color: 'var(--theme-secondary, #8099b0)', padding: '0 2px' }}>×</button>
         </div>
 
-        {/* Chart */}
-        <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
-          <div ref={wrapRef} style={{ width: '100%', height: '100%' }} />
-          {(loading || err) && (
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MONO, fontSize: 11, color: 'var(--theme-secondary, #8099b0)', pointerEvents: 'none' }}>
-              {err ? 'No chart data' : <EmptyState variant="loading" size="compact" title="Loading candles" />}
-            </div>
-          )}
-          {!loading && !err && data?.meta?.as_of && <div style={{ position: 'absolute', left: 12, bottom: 8, fontFamily: MONO, fontSize: 8.5, color: 'var(--theme-secondary, #5f7893)', pointerEvents: 'none' }}>As of {formatLocalDateTime(data.meta.as_of)} local</div>}
+        {/* Chart over the facts panel, one scroll for the pair. The chart keeps
+            a fixed height so it cannot be squeezed to a sliver by a long
+            constituent table. */}
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+          <div style={{ height: 'min(340px, 42vh)', position: 'relative', flex: 'none' }}>
+            <div ref={wrapRef} style={{ width: '100%', height: '100%' }} />
+            {(loading || err) && (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MONO, fontSize: 11, color: 'var(--theme-secondary, #8099b0)', pointerEvents: 'none' }}>
+                {err ? 'No chart data' : <EmptyState variant="loading" size="compact" title="Loading candles" />}
+              </div>
+            )}
+            {!loading && !err && data?.meta?.as_of && <div style={{ position: 'absolute', left: 12, bottom: 8, fontFamily: MONO, fontSize: 8.5, color: 'var(--theme-secondary, #5f7893)', pointerEvents: 'none' }}>As of {formatLocalDateTime(data.meta.as_of)} local</div>}
+          </div>
+          <AssetFacts ticker={row.symbol} label={row.label} yields={yields} />
         </div>
       </div>
     </div>

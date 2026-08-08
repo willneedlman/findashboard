@@ -13,6 +13,7 @@ import alpaca
 import factor_models as fm
 from market_hours import is_market_open, is_overnight_session, session_status, session_label, now_et
 import extended_quotes
+import index_profile as _index_profile
 
 
 router = APIRouter()
@@ -1655,3 +1656,20 @@ def macro_dashboard():
 
     payload = {"assets": results, "as_of": date.today().isoformat()}
     return payload
+
+
+@router.get("/asset-profile")
+def asset_profile(ticker: str):
+    """Everything the Global Markets popup shows beneath the chart.
+
+    One endpoint rather than two: the popup opens on a click and a second
+    round-trip would show the stats and the member table arriving at different
+    moments on the same panel.
+    """
+    validate_ticker(ticker)
+    stats = _index_profile.asset_stats(ticker)
+    return {
+        "ticker": ticker,
+        "stats": stats or None,
+        "constituents": _index_profile.index_profile(ticker),
+    }
