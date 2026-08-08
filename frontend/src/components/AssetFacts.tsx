@@ -112,10 +112,6 @@ function RangeBar({ range, yields }: { range: Stats['range_52w']; yields?: boole
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: SANS, fontSize: 10, color: SEC }}>
         <span>52-week low</span>
-        <span style={{ color: TXT }}>
-          {pos != null ? `${pos.toFixed(0)}% of the band` : ''}
-          {range.from_high_pct != null && <span style={{ color: SEC }}> · {signed(range.from_high_pct, 1)} from high</span>}
-        </span>
         <span>high</span>
       </div>
     </div>
