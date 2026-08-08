@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import useIsMobile from '../hooks/useIsMobile'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
@@ -26,16 +27,22 @@ import { kpiClip, chartClip, tableClip } from '../lib/reportCaptureRegistry'
 // are positioned divs on a percentage grid. Recharts stays for the history
 // pane, which has no alignment requirement.
 
-const GUTTER_L = 92          // row labels (expiry code + DTE), "flow today" caption
-const GUTTER_R = 64          // profile y-labels, heatmap row totals
-const PLOT_H = 270
+// Gutter and plot sizes, narrowed on a phone. The profile, ribbon and heatmap
+// share one column geometry, so they cannot be reflowed independently — the
+// frame stays horizontally scrollable and these just buy back width inside it.
+const GUTTER_L_WIDE = 92     // row labels (expiry code + DTE), "flow today" caption
+const GUTTER_L_NARROW = 56
+const GUTTER_R_WIDE = 64     // profile y-labels, heatmap row totals
+const GUTTER_R_NARROW = 44
+const PLOT_H_WIDE = 270
+const PLOT_H_NARROW = 200
 const CHIP_LANE = 17         // lane pitch for the level markers above the profile
 const CHIP_H = 15            // rendered chip height, where its own rule starts
 const CHIP_MIN = 46
 const RIBBON_H = 34
 const heatRowH = (n: number) => (n > 16 ? 20 : n > 10 ? 24 : 30)
 const BAR_INSET = 11         // % of column, each side — bars fill 78%
-const HISTORY_W = 520
+const HISTORY_W = 520        // history pane; full width once the row wraps
 
 /** Panel headers / KPI strip. */
 const SURFACE = T.surface
@@ -105,6 +112,10 @@ const pct2 = (v: number) => `${v >= 0 ? '' : '−'}${Math.abs(v).toFixed(2)}%`
 
 export function DealerGEXContent() {
   const cc = useChartColors()
+  const isMobile = useIsMobile()
+  const GUTTER_L = isMobile ? GUTTER_L_NARROW : GUTTER_L_WIDE
+  const GUTTER_R = isMobile ? GUTTER_R_NARROW : GUTTER_R_WIDE
+  const PLOT_H = isMobile ? PLOT_H_NARROW : PLOT_H_WIDE
   const [sp] = useSearchParams()
   const urlTicker = (sp.get('ticker') || 'SPY').trim().toUpperCase()
 
@@ -368,8 +379,8 @@ export function DealerGEXContent() {
   }, [cols])
 
   return (
-    <div style={{ overflowX: 'auto' }}>
-     <div style={{ minWidth: 900 }}>
+    <div>
+     <div style={{ minWidth: isMobile ? 0 : 900 }}>
       {/* ── Command bar ─────────────────────────────────────────────────── */}
       {/* One row: identity, the expiry strip, then the entry. The strip takes
           the slack and scrolls inside itself, so eleven expiries never push the
@@ -492,6 +503,12 @@ export function DealerGEXContent() {
           </div>
 
           {/* ── Aligned stack: profile, ribbon, axis, heatmap ─────────────── */}
+          {/* One scroller around all three registered regions. They share a
+              single column geometry, so they must scroll together or not at
+              all — reflowing any one of them breaks the alignment the whole
+              layout exists for. */}
+          <div style={{ overflowX: isMobile ? 'auto' : 'visible' }}>
+           <div style={{ minWidth: isMobile ? 720 : 0 }}>
           <div style={{ border: `1px solid ${T.border}`, borderTop: 'none' }}>
             <PanelHead
               title={`${METRICS[metric].noun} by strike · ${sliced ? selExpiry : `${data.processed.length} expiries`}`}
@@ -697,10 +714,19 @@ export function DealerGEXContent() {
               })}
             </div>
           )}
+           </div>
+          </div>
 
           {/* ── History · flow table ──────────────────────────────────────── */}
-          <div style={{ display: 'flex', border: `1px solid ${T.border}`, borderTop: 'none', alignItems: 'stretch' }}>
-            <div style={{ width: HISTORY_W, flexShrink: 0, borderRight: `1px solid ${T.border}` }}>
+          <div style={{
+            display: 'flex', flexWrap: 'wrap', border: `1px solid ${T.border}`,
+            borderTop: 'none', alignItems: 'stretch',
+          }}>
+            <div style={{
+              width: isMobile ? '100%' : HISTORY_W, flex: isMobile ? '1 1 100%' : `0 0 ${HISTORY_W}px`,
+              borderRight: isMobile ? 'none' : `1px solid ${T.border}`,
+              borderBottom: isMobile ? `1px solid ${T.border}` : 'none',
+            }}>
               <PanelHead title="Flip vs spot · accrued history"
                 right={<span style={{ fontFamily: MONO, fontSize: 9.5, color: T.muted }}>
                   {defended ? `${defended.held}/${defended.total} sessions closed above flip` : 'no flip recorded yet'}

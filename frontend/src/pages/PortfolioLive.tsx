@@ -5,6 +5,7 @@ import {
   Area, AreaChart, CartesianGrid, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
+import useIsMobile from '../hooks/useIsMobile'
 import EmptyState from '../components/EmptyState'
 import TickerLogo from '../components/TickerLogo'
 import CustomSelect from '../components/portfolio/CustomSelect'
@@ -617,6 +618,7 @@ function HeroBand(props: {
     value, gainAbs, gainPct, rangeIsToday, rangeLabel, baseline, cash, positions,
     phase, msToNext, now, range, onRange, chartData, xDomain, yDomain, tickFmt, loading, error,
   } = props
+  const isMobile = useIsMobile()
   const deltaColor = chg(gainAbs)
   const phaseColor = PHASE_COLOR[phase]
   const nextLabel = phase === 'regular' ? `closes in ${countdown(msToNext)}`
@@ -626,11 +628,16 @@ function HeroBand(props: {
 
   return (
     <div style={{
-      display: 'grid', gridTemplateColumns: 'minmax(0, 340px) minmax(0, 1fr)',
+      display: 'grid',
+      gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'minmax(0, 340px) minmax(0, 1fr)',
       background: T.surface, borderTop: `1px solid ${T.goldTint(28)}`,
     }}>
       {/* Left: the number, the session */}
-      <div style={{ padding: '18px 20px 16px', borderRight: `1px solid ${T.borderFaint}`, minWidth: 0 }}>
+      <div style={{
+        padding: isMobile ? '14px 14px 12px' : '18px 20px 16px', minWidth: 0,
+        borderRight: isMobile ? 'none' : `1px solid ${T.borderFaint}`,
+        borderBottom: isMobile ? `1px solid ${T.borderFaint}` : 'none',
+      }}>
         <span style={eyebrow}>Book Value</span>
         <div style={{
           fontFamily: MONO, fontSize: 34, fontWeight: 700, lineHeight: 1, letterSpacing: '-0.02em',
