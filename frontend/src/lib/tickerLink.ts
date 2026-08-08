@@ -21,7 +21,7 @@ export const TICKER_SYM_RE = /^[A-Z][A-Z0-9.\-]{0,9}$/
 export interface TickerTool { label: string; short: string; route: string; param?: 'tickers' }
 export const TICKER_TOOLS: TickerTool[] = [
   { label: 'Company Profile',     short: 'Profile',  route: '/company-profile' },
-  { label: 'Chain Scanner',       short: 'Chain',    route: '/chain' },
+  { label: 'Options Scanner',     short: 'Options', route: '/options-scanner' },
   { label: 'Volatility Skew',     short: 'Skew',     route: '/skew' },
   { label: 'Dealer GEX',          short: 'GEX',      route: '/gex' },
   { label: 'Implied Probability', short: 'Prob',     route: '/probability' },

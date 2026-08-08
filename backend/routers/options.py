@@ -601,11 +601,8 @@ def options_chain(ticker: str, expiry: str | None = None):
         g_dte = max(t_days, 1.0 / 1440)   # keep greeks math off T=0
         def _enrich(rows: list[dict], flag: str) -> list[dict]:
             for row in rows:
-                iv_dec = float(row.get("impliedVolatility") or 0)
-                iv_pct = iv_dec * 100 if iv_dec < 1.0 else iv_dec  # already pct if >= 1.0
-                if iv_pct < 0.5:
-                    iv_pct = 25.0
-                row["impliedVolatility"] = round(iv_pct / 100, 4)  # keep as decimal for UI compat
+                row["impliedVolatility"] = _normalize_iv(row.get("impliedVolatility"))
+                iv_pct = row["impliedVolatility"] * 100
                 if not row.get("gamma") and spot and spot > 0:
                     try:
                         g = bs_greeks(spot, float(row["strike"]), g_dte, r_pct, iv_pct, flag)
@@ -1395,30 +1392,92 @@ _unusual_cache: TTLCache = TTLCache(maxsize=64, ttl=300)   # 5 min
 _unusual_lock = threading.Lock()
 
 
-def _scan_ticker_unusual(sym: str, expiries: int, min_volume: int, min_vol_oi: float) -> list[dict]:
+def _normalize_iv(raw) -> float:
+    """Vendor IV -> a decimal, with the same rule everywhere.
+
+    Feeds are inconsistent: Tradier's smv_vol and yfinance both return a decimal
+    most of the time and a percentage occasionally, and either can report a
+    near-zero IV for an illiquid contract. This is the rule /options/chain's
+    _enrich already applied; the flow screen has to use the SAME one or the two
+    panes of the Options Desk show different implied vols for one contract.
+    """
+    iv_dec = float(raw or 0)
+    iv_pct = iv_dec * 100 if iv_dec < 1.0 else iv_dec
+    if iv_pct < 0.5:
+        iv_pct = 25.0
+    return round(iv_pct / 100, 4)
+
+
+def _scan_ticker_unusual(sym: str, expiries: int, min_volume: int, min_vol_oi: float) -> tuple[list[dict], str | None]:
+    """Contracts clearing the unusual screen, plus a failure reason (None on success).
+
+    Returns the reason so the caller can tell "the screen found nothing" from
+    "nothing was ever fetched". Both used to come back as an empty list, so the
+    UI told users to lower their thresholds when the vendor had 401'd.
+
+    Sources the chain from Tradier when it is available and falls back to
+    /options/chain's own path (yfinance) otherwise. The screen is arithmetic
+    over volume and open interest, both of which that path already returns, so
+    the tool does not need a second vendor to work.
+    """
     import datetime as _dt
     today = _dt.date.today()
+    reason: str | None = None
+
+    exps: list[str] = []
     try:
         exps = _tradier.get_expirations(sym)
     except Exception as e:
-        logger.warning("unusual: expirations failed %s: %s", sym, e)
-        return []
+        reason = f"{type(e).__name__}"
+        logger.warning("unusual: Tradier expirations failed %s (%s); using the chain fallback", sym, e)
+    if not exps:
+        try:
+            exps = list(yf.Ticker(sym).options or [])
+        except Exception as e:
+            logger.warning("unusual: yfinance expirations failed %s: %s", sym, e)
+            return [], reason or "no expirations available"
+
     future = [e for e in exps if _dt.date.fromisoformat(e) > today][:expiries]
     if not future:
-        return []
+        return [], "no future expirations listed"
     try:
         q = _tradier.get_quote(sym)
         spot = float(q.get("last") or q.get("close") or 0) or None
     except Exception:
         spot = None
+    if not spot:
+        try:
+            hist = get_history(sym, period="5d")
+            spot = float(hist["Close"].dropna().iloc[-1]) if not hist.empty else None
+        except Exception:
+            spot = None
 
     out: list[dict] = []
+    fetched_any = False
     for exp in future:
+        chain = None
         try:
             chain = _tradier.get_options_chain(sym, exp)
         except Exception as e:
-            logger.warning("unusual: chain failed %s %s: %s", sym, exp, e)
-            continue
+            logger.warning("unusual: Tradier chain %s %s: %s", sym, exp, e)
+        if not chain or (not chain.get("calls") and not chain.get("puts")):
+            try:
+                yc = yf.Ticker(sym).option_chain(exp)
+
+                def _rows(df):
+                    return [{
+                        "strike": float(r.get("strike", 0)),
+                        "volume": int(r.get("volume", 0)),
+                        "openInterest": int(r.get("openInterest", 0)),
+                        "bid": float(r.get("bid", 0)), "ask": float(r.get("ask", 0)),
+                        "lastPrice": float(r.get("lastPrice", 0)),
+                        "impliedVolatility": float(r.get("impliedVolatility", 0)),
+                    } for _, r in df.fillna(0).iterrows()]
+                chain = {"calls": _rows(yc.calls), "puts": _rows(yc.puts)}
+            except Exception as e:
+                logger.warning("unusual: chain fallback failed %s %s: %s", sym, exp, e)
+                continue
+        fetched_any = True
         dte = max((_dt.date.fromisoformat(exp) - today).days, 0)
         for typ, contracts in (("call", chain["calls"]), ("put", chain["puts"])):
             for c in contracts:
@@ -1443,11 +1502,13 @@ def _scan_ticker_unusual(sym: str, expiries: int, min_volume: int, min_vol_oi: f
                     "volume":       vol,
                     "openInterest": oi,
                     "volOiRatio":   round(vol_oi, 2),
-                    "iv":           round(float(c.get("impliedVolatility") or 0) * 100, 1),
+                    "iv":           round(_normalize_iv(c.get("impliedVolatility")) * 100, 1),
                     "mid":          round(mid, 2),
                     "premium":      round(vol * mid * 100),
                 })
-    return out
+    if not fetched_any:
+        return [], reason or "no chain data returned"
+    return out, None
 
 
 @router.get("/unusual")
@@ -1486,18 +1547,25 @@ def unusual_activity(
         return cached
 
     rows: list[dict] = []
+    failed: dict[str, str] = {}
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = pool.map(
             lambda s: _scan_ticker_unusual(s, expiries, min_volume, min_vol_oi),
             valid,
         )
-        for r in results:
+        for sym, (r, reason) in zip(valid, results):
             rows.extend(r)
+            if reason:
+                failed[sym] = reason
 
     rows.sort(key=lambda r: r["premium"], reverse=True)
     result = {
         "asOf":    _dt.datetime.utcnow().isoformat() + "Z",
         "scanned": valid,
+        # Which symbols could not be fetched at all. Without this an empty
+        # result is indistinguishable from a strict screen, and the UI blames
+        # the user's thresholds for a vendor outage.
+        "failed":  failed,
         "count":   len(rows[:limit]),
         "rows":    rows[:limit],
         "params":  {"expiries": expiries, "minVolume": min_volume, "minVolOi": min_vol_oi},

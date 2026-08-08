@@ -58,9 +58,8 @@ export const HUBS: Hub[] = [
     masthead: 'Price, scan, and structure options end to end, from a single contract to a full multi-leg book.',
     icon: Layers,
     tools: [
-      { title: 'Chain Scanner',       chip: 'Chain Scanner',       desc: 'Live option chains with IV rank and skew',          route: '/chain',           icon: BarChart2 },
+      { title: 'Options Scanner',     chip: 'Options Scanner',     desc: 'Unusual flow and the chain it sits in, on one surface', route: '/options-scanner', icon: Activity },
       { title: 'Volatility Scanner',  chip: 'Volatility Scanner',  desc: 'One IV surface across expiry and strike, with rank, term structure and skew from a single load', route: '/volatility-scanner', icon: Waves },
-      { title: 'Options Flow',        chip: 'Options Flow',        desc: 'Volume and open-interest surges',                   route: '/unusual-options', icon: Activity },
       { title: 'Dealer GEX',          chip: 'Dealer GEX',          desc: 'Gamma exposure by strike and expiry',               route: '/gex',             icon: Zap },
       { title: 'Implied Probability', chip: 'Implied Probability', desc: 'Risk-neutral distributions from the chain',         route: '/probability',     icon: Percent },
       { title: 'Options Pricer',      chip: 'Options Pricer',      desc: 'Black-Scholes greeks and payoff diagrams',          route: '/options',         icon: LineChart },

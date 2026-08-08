@@ -67,8 +67,7 @@ const DividendDiscount   = lazyWithReload(() => import('./pages/DividendDiscount
 const SOTP               = lazyWithReload(() => import('./pages/SOTP'))
 const Multiples          = lazyWithReload(() => import('./pages/Multiples'))
 const ReverseDCF         = lazyWithReload(() => import('./pages/ReverseDCF'))
-const OptionsChainScanner = lazyWithReload(() => import('./pages/OptionsChainScanner'))
-const OptionsDeskDemo    = lazyWithReload(() => import('./pages/OptionsDeskDemo'))
+const OptionsScanner     = lazyWithReload(() => import('./pages/OptionsScanner'))
 const RegressionAnalysis = lazyWithReload(() => import('./pages/RegressionAnalysis'))
 const CorrelationAnalysis = lazyWithReload(() => import('./pages/CorrelationAnalysis'))
 const PortfolioBacktester = lazyWithReload(() => import('./pages/PortfolioBacktester'))
@@ -111,7 +110,6 @@ const MacroEventHub      = lazyWithReload(() => import('./pages/MacroEventHub'))
 const SectorRotation     = lazyWithReload(() => import('./pages/SectorRotation'))
 const VolatilityScanner  = lazyWithReload(() => import('./pages/VolatilityScanner'))
 const MarketMakerSimulator = lazyWithReload(() => import('./pages/MarketMakerSimulator'))
-const UnusualOptions     = lazyWithReload(() => import('./pages/UnusualOptions'))
 const Compare            = lazyWithReload(() => import('./pages/Compare'))
 const ResetPassword      = lazyWithReload(() => import('./pages/ResetPassword'))
 const HubLanding         = lazyWithReload(() => import('./pages/HubLanding'))
@@ -301,9 +299,12 @@ export default function App() {
               <Route path="/fed"        element={<FedRates />} />
               {/* Portfolio Earnings is now the book scope of the fused Earnings tool. */}
               <Route path="/corporate"  element={<RedirectWithSearch to="/earnings" />} />
-              <Route path="/chain"      element={<OptionsChainScanner />} />
-              {/* Evaluating a Chain Scanner + Options Flow merge; both originals stay. */}
-              <Route path="/options-desk-demo" element={<OptionsDeskDemo />} />
+              {/* Chain Scanner + Options Flow merged. The old routes redirect so
+                  existing links and saved tabs keep working. */}
+              <Route path="/options-scanner" element={<OptionsScanner />} />
+              <Route path="/chain"      element={<Navigate to="/options-scanner" replace />} />
+              <Route path="/options-desk-demo" element={<Navigate to="/options-scanner" replace />} />
+              <Route path="/options-desk" element={<Navigate to="/options-scanner" replace />} />
               <Route path="/correlation" element={<CorrelationAnalysis />} />
               <Route path="/strategy"   element={<StrategyBuilder />} />
               <Route path="/algo-strategy" element={<AlgoStrategyBuilder />} />
@@ -344,7 +345,7 @@ export default function App() {
               <Route path="/iv-tracker"         element={<Navigate to="/volatility-scanner" replace />} />
               <Route path="/market-maker"       element={<MarketMakerSimulator />} />
               <Route path="/fixed-income-mm"    element={<Navigate to="/market-maker?desk=fixed-income" replace />} />
-              <Route path="/unusual-options"    element={<UnusualOptions />} />
+              <Route path="/unusual-options"    element={<Navigate to="/options-scanner" replace />} />
               <Route path="/asset-overlay"      element={<Compare />} />
               <Route path="/compare"            element={<RedirectWithSearch to="/asset-overlay" />} />
               <Route path="/etf-analyzer"       element={<EtfXray />} />
