@@ -10,7 +10,7 @@ import { KpiCell } from '../components/mmCockpit'
 import { useChartColors } from '../hooks/useChartColors'
 import useIsMobile from '../hooks/useIsMobile'
 import { INPUT, LABEL, TOOLTIP_STYLE, TOOLTIP_LABEL, TOOLTIP_ITEM, TICK } from './valuationShared'
-import CustomStrategyModal, { type CustomStrategyDef, type StrategyRisk, DEFAULT_RISK, rulesForTicker, usesNonDailyTimeframe } from '../components/CustomStrategyModal'
+import CustomStrategyModal, { type CustomStrategyDef, type StrategyRisk, type StrategySetup, DEFAULT_RISK, rulesForTicker, usesNonDailyTimeframe } from '../components/CustomStrategyModal'
 import { loadCustomStrategies, saveCustomStrategy, deleteCustomStrategy, duplicateCustomStrategy } from '../utils/customStrategies'
 import { PRESETS, PRESET_GROUPS, type Leg } from './strategy-builder/shared'
 import { ReturnsScatter, dailyReturnPairs, regressReturnPairs } from './regressionShared'
@@ -177,7 +177,7 @@ function HeaderNumberControl({ label, value, min, max, unit, title, onCommit }: 
   const [focused, setFocused] = useState(false)
   return (
     <label title={title} onFocusCapture={() => setFocused(true)} onBlurCapture={() => setFocused(false)} style={{
-      minHeight: 28, display: 'flex', alignItems: 'center', gap: 8, marginRight: 10,
+      minHeight: 28, display: 'flex', alignItems: 'center', gap: 6, marginRight: 6, flexShrink: 0,
       whiteSpace: 'nowrap', cursor: 'text',
     }}>
       <span style={{
@@ -461,12 +461,38 @@ function SavedStrategyRow({ def, active, onSelect, onEdit, onDuplicate, onDelete
   onSelect: () => void; onEdit: () => void; onDuplicate: () => void; onDelete: () => void
 }) {
   const c = countConds(def)
+  // Which engine this strategy runs on. Rule counts are meaningless for a code
+  // strategy — "BUY 0 · SELL 0" made a working Python strategy look empty — so
+  // the meta line describes whichever engine is actually selected.
+  const runsCode = Boolean(def.useCode && (def.code || '').trim())
+  const codeLines = runsCode ? (def.code || '').trim().split('\n').length : 0
+  const hasIdleCode = !runsCode && Boolean((def.code || '').trim())
   return (
     <div onClick={onSelect}
       style={{ cursor: 'pointer', padding: '7px 9px', border: `1px solid ${active ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`,
         background: active ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)' : 'transparent' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
-        <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, color: active ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-text, #d7e3fc)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{def.name}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+          <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, color: active ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-text, #d7e3fc)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{def.name}</span>
+          {runsCode && (
+            <span title="Backtests the Python in Build with Code, not the rule blocks"
+              style={{
+                flexShrink: 0, fontFamily: 'var(--theme-mono)', fontSize: 7.5, fontWeight: 700,
+                letterSpacing: '0.1em', padding: '1px 4px', lineHeight: 1.5,
+                color: 'var(--theme-primary, #c9a84c)',
+                border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 55%, transparent)',
+              }}>PY</span>
+          )}
+          {hasIdleCode && (
+            <span title="Has Python saved, but the rule blocks are what run. Switch it on in Build with Code."
+              style={{
+                flexShrink: 0, fontFamily: 'var(--theme-mono)', fontSize: 7.5, fontWeight: 700,
+                letterSpacing: '0.1em', padding: '1px 4px', lineHeight: 1.5,
+                color: 'var(--theme-secondary, #8099b0)',
+                border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+              }}>PY OFF</span>
+          )}
+        </span>
         <span style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
           <button onClick={e => { e.stopPropagation(); onEdit() }} title="Edit"
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-secondary, #8099b0)', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em' }}>EDIT</button>
@@ -477,7 +503,12 @@ function SavedStrategyRow({ def, active, onSelect, onEdit, onDuplicate, onDelete
         </span>
       </div>
       <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 8, color: 'var(--theme-secondary, #8099b0)', marginTop: 2, letterSpacing: '0.06em' }}>
-        BUY {c.buy} · SELL {c.sell}{def.perTicker?.length ? ` · ${def.perTicker.length} ticker${def.perTicker.length === 1 ? '' : 's'}` : ''}
+        {runsCode
+          ? `PYTHON · ${codeLines} line${codeLines === 1 ? '' : 's'}`
+          : `BUY ${c.buy} · SELL ${c.sell}`}
+        {def.setup?.ticker ? ` · ${def.setup.ticker}` : ''}
+        {def.setup?.instMode === 'option' ? ' · OPT' : def.setup?.instMode === 'combo' ? ' · COMBO' : ''}
+        {def.perTicker?.length ? ` · ${def.perTicker.length} ticker${def.perTicker.length === 1 ? '' : 's'}` : ''}
       </div>
     </div>
   )
@@ -933,16 +964,15 @@ function StrategyControlsPanel({
   const activeDef = saved.find(s => s.name === activeName) ?? null
   const singleRisk = activeDef ? { ...DEFAULT_RISK, ...(activeDef.risk ?? {}) } : DEFAULT_RISK
   const headerBtn: React.CSSProperties = {
-    display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', fontFamily: 'inherit', fontSize: 9.5, fontWeight: 700,
-    letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap',
+    display: 'flex', alignItems: 'center', gap: 5, padding: '6px 9px', fontFamily: 'inherit', fontSize: 9.5, fontWeight: 700,
+    letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
   }
   const [confirmClear, setConfirmClear] = useState(false)
   const isMobile = useIsMobile()
   return (
     <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'nowrap', padding: '8px 10px',
-        overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'thin',
+        display: 'flex', alignItems: 'center', gap: 8, rowGap: 6, flexWrap: 'wrap', padding: '8px 10px',
         background: 'var(--theme-surface, #142032)', borderBottom: collapsed ? 'none' : '1px solid var(--theme-border, rgba(255,255,255,0.08))',
       }}>
         <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
@@ -958,14 +988,16 @@ function StrategyControlsPanel({
 
         {mode === 'portfolio' ? (
           <span style={{
-            paddingRight: 18, marginRight: 4, borderRight: '1px solid color-mix(in srgb, var(--theme-text, #d7e3fc) 20%, transparent)',
+            paddingRight: 12, marginRight: 2, flexShrink: 0, whiteSpace: 'nowrap',
+            borderRight: '1px solid color-mix(in srgb, var(--theme-text, #d7e3fc) 20%, transparent)',
             fontSize: 9, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', color: 'var(--theme-text, #d7e3fc)', opacity: 0.78,
           }}>
             {positions.length} symbol{positions.length === 1 ? '' : 's'} · one shared strategy
           </span>
         ) : (
           <span style={{
-            paddingRight: 18, marginRight: 4, borderRight: '1px solid color-mix(in srgb, var(--theme-text, #d7e3fc) 20%, transparent)',
+            paddingRight: 12, marginRight: 2, flexShrink: 0, whiteSpace: 'nowrap',
+            borderRight: '1px solid color-mix(in srgb, var(--theme-text, #d7e3fc) 20%, transparent)',
             fontSize: 9, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', color: 'var(--theme-text, #d7e3fc)', opacity: 0.78,
           }}>
             {ticker.toUpperCase()} · {instMode === 'underlying' ? 'Shares' : instMode === 'option' ? `${optType.toUpperCase()} Option` : 'Combo'}
@@ -990,7 +1022,7 @@ function StrategyControlsPanel({
             onCommit={v => mode === 'portfolio' ? setPortfolioLeverage(v) : patchActiveRisk({ leverage: v })}
             title="Gross-notional multiplier. 1x is unlevered. High leverage can wipe out the account after a modest adverse move." />}
         </div>
-        <div style={{ flex: 1, minWidth: 8 }} />
+        <div style={{ flex: '1 1 0', minWidth: 0 }} />
         {mode === 'portfolio' ? (
           <button onClick={() => runPortfolio.mutate()} disabled={positions.length === 0 || runPortfolio.isPending} style={{
             ...headerBtn, background: 'var(--theme-bg, #0a1628)', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))',
@@ -1053,7 +1085,7 @@ function StrategyControlsPanel({
           <Plus size={10} />New Strategy
         </button>
         <button onClick={onToggleCollapsed} title={collapsed ? 'Expand' : 'Collapse'} style={{
-          display: 'flex', padding: 6, background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: 'var(--theme-secondary, #8099b0)', cursor: 'pointer',
+          display: 'flex', padding: 6, flexShrink: 0, background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: 'var(--theme-secondary, #8099b0)', cursor: 'pointer',
         }}>{collapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}</button>
       </div>
 
@@ -1386,6 +1418,52 @@ export function AlgoStrategyBuilderContent() {
 
   const activeDef = saved.find(s => s.name === activeName) ?? null
   const activeStrategyRisk = activeDef ? { ...DEFAULT_RISK, ...(activeDef.risk ?? {}) } : DEFAULT_RISK
+  // A strategy runs its own saved Python when Build with Code is switched on
+  // for it (def.useCode), so which engine ran is a property of the strategy
+  // rather than a transient toggle on this page.
+  const activeCode = activeDef?.useCode && activeDef.code ? activeDef.code : undefined
+
+  // ── strategy setup: capture on save, restore on select ────────────────────
+  // A strategy is the rules AND what they trade. Without this, picking a saved
+  // strategy left you on whichever ticker and instrument happened to be loaded,
+  // so the same strategy silently backtested a different thing depending on
+  // what you did last.
+  const captureSetup = (): StrategySetup => ({
+    mode, ticker: ticker.trim().toUpperCase(), side, timeframe, start, end,
+    instMode, optType, otmPct, dte,
+    comboLegs, comboDte,
+    positions: mode === 'portfolio' ? positions : undefined,
+    portfolioTradeSize, portfolioMaxOpenPositions, portfolioLeverage,
+  })
+
+  const applySetup = (setup: StrategySetup | undefined) => {
+    if (!setup) return                      // older strategies keep what is on screen
+    if (setup.mode) setMode(setup.mode)
+    if (setup.ticker) setTicker(setup.ticker)
+    if (setup.side) setSide(setup.side)
+    if (setup.timeframe) setTimeframe(setup.timeframe)
+    if (setup.start) setStart(setup.start)
+    if (setup.end !== undefined) setEnd(setup.end)
+    if (setup.instMode) setInstMode(setup.instMode)
+    if (setup.optType) setOptType(setup.optType)
+    if (setup.otmPct !== undefined) setOtmPct(setup.otmPct)
+    if (setup.dte !== undefined) setDte(setup.dte)
+    if (setup.comboLegs?.length) setComboLegs(setup.comboLegs)
+    if (setup.comboDte !== undefined) setComboDte(setup.comboDte)
+    if (setup.positions) setPositions(setup.positions)
+    if (setup.portfolioTradeSize !== undefined) setPortfolioTradeSize(setup.portfolioTradeSize)
+    if (setup.portfolioMaxOpenPositions !== undefined) setPortfolioMaxOpenPositions(setup.portfolioMaxOpenPositions)
+    if (setup.portfolioLeverage !== undefined) setPortfolioLeverage(setup.portfolioLeverage)
+  }
+
+  // Restore on selection only — not on every render, and not while the user is
+  // mid-edit of a strategy that is already active.
+  const restoredFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!activeName || restoredFor.current === activeName) return
+    restoredFor.current = activeName
+    applySetup(saved.find(s => s.name === activeName)?.setup)
+  }, [activeName, saved])   // eslint-disable-line react-hooks/exhaustive-deps
   const refresh = () => setSaved(loadCustomStrategies())
   // Strategy financing has one source of truth. Borrowing EAR is edited only
   // in the strategy's Risk section and follows that strategy into every run
@@ -1600,9 +1678,15 @@ export function AlgoStrategyBuilderContent() {
   }
 
   const onModalSave = (def: CustomStrategyDef) => {
-    saveCustomStrategy(def)
+    // Save the rules together with the current setup, so reselecting this
+    // strategy later restores the whole configuration and not just its logic.
+    // A setup the modal already produced (the copilot can set one) wins.
+    const withSetup: CustomStrategyDef = { ...def, setup: { ...captureSetup(), ...(def.setup ?? {}) } }
+    saveCustomStrategy(withSetup)
     refresh()
-    setActiveName(def.name)
+    restoredFor.current = withSetup.name    // just saved from live state; nothing to restore
+    setActiveName(withSetup.name)
+    applySetup(withSetup.setup)
   }
   const onDelete = (name: string) => {
     deleteCustomStrategy(name)
@@ -1625,6 +1709,10 @@ export function AlgoStrategyBuilderContent() {
       const { data } = await axios.post('/api/strategy/custom-backtest', {
         ticker, start, end: end || undefined, side, timeframe,
         rules: { buy: rules.buy, sell: rules.sell },
+        // With Build with Code switched on, the server runs this instead of the
+        // rule blocks. `rules` still goes along so the trade-marker tooltips
+        // keep describing the strategy the blocks encode.
+        signal_source: activeCode,
         position_size: r.sizingPct || 100,
         max_open_positions: singleMaxOpenPositions,
         stop_loss: r.stopLossPct || undefined,

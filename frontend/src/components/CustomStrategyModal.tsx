@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect, type ReactNode } from 'react'
 import axios from 'axios'
 import useIsMobile from '../hooks/useIsMobile'
+import StrategyCodePanel from './StrategyCodePanel'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -116,10 +117,61 @@ export interface TickerRuleSet {
   sell: RuleBlock
 }
 
+/** One leg of an option combo. Mirrors AlgoStrategyBuilder's ComboLeg; declared
+ *  here so the strategy type does not import from the page that renders it. */
+export interface StrategyComboLeg { type: 'call' | 'put'; side: 'buy' | 'sell'; moneyness: number; qty: number }
+
+export interface StrategyPosition {
+  id: string; strategy: string; ticker: string
+  instMode: 'underlying' | 'option' | 'combo'; optType: 'call' | 'put'; otmPct: number; dte: number
+  comboLegs: StrategyComboLeg[]; comboDte: number
+  side: 'long' | 'short'; tradeSize?: number
+}
+
+/**
+ * Everything the builder needs besides the rules: what to trade, as what
+ * instrument, over what window.
+ *
+ * This used to live only as page state, so selecting a saved strategy restored
+ * its rules and left you on whatever ticker and instrument happened to be
+ * loaded — the strategy remembered HOW to trade but not WHAT. Saving it here
+ * makes a strategy a complete, reproducible setup.
+ *
+ * Every field is optional: an older strategy has no setup and keeps whatever is
+ * on screen, exactly as before.
+ */
+export interface StrategySetup {
+  mode?: 'single' | 'portfolio'
+  ticker?: string
+  side?: 'long' | 'short'
+  timeframe?: string
+  start?: string
+  end?: string
+  instMode?: 'underlying' | 'option' | 'combo'
+  optType?: 'call' | 'put'
+  otmPct?: number
+  dte?: number
+  comboLegs?: StrategyComboLeg[]
+  comboDte?: number
+  positions?: StrategyPosition[]
+  portfolioTradeSize?: number
+  portfolioMaxOpenPositions?: number
+  portfolioLeverage?: number
+}
+
 export interface CustomStrategyDef {
   name: string
   buy: RuleBlock
   sell: RuleBlock
+  /** Ticker, instrument and window this strategy was built for. */
+  setup?: StrategySetup
+  /** Python `signal(c)` written in the Build with Code tab. Saved with the
+   *  strategy, so a code strategy survives a reload like any other. */
+  code?: string
+  /** When true the backtest runs `code` instead of the buy/sell blocks. The
+   *  blocks are kept either way — they still describe the strategy in the
+   *  trade-marker tooltips, and turning this off restores them exactly. */
+  useCode?: boolean
   perTicker?: TickerRuleSet[]   // ticker-specific signals; default buy/sell is the fallback
   bull_drift: number
   bear_drift: number
@@ -840,14 +892,14 @@ interface Props {
   initialDef?: CustomStrategyDef | null
   allowAiAssist?: boolean
   aiAssistant?: ReactNode
-  initialTab?: 'manual' | 'describe'
+  initialTab?: 'manual' | 'describe' | 'code'
 }
 
 export default function CustomStrategyModal({ open, onClose, onSave, initialDef, allowAiAssist = true, aiAssistant, initialTab = 'manual' }: Props) {
   const [def, setDef] = useState<CustomStrategyDef>(() => initialDef ?? { ...DEFAULTS, buy: { ...DEFAULTS.buy }, sell: { ...DEFAULTS.sell }, name: '' })
   const [nameError, setNameError] = useState('')
   const isMobile = useIsMobile()
-  const [tab, setTab] = useState<'manual' | 'describe'>(initialTab)
+  const [tab, setTab] = useState<'manual' | 'describe' | 'code'>(initialTab)
   const aiAssistantOwnsSave = Boolean(aiAssistant) && tab === 'describe'
 
   const reset = useCallback(() => {
@@ -891,8 +943,11 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef,
       setNameError('Give every ticker-specific rule set a ticker symbol, or remove it.'); return
     }
     const anyPerTicker = perTicker.some(r => hasConditions(r.buy) || hasConditions(r.sell))
-    if (!hasConditions(def.buy) && !hasConditions(def.sell) && !anyPerTicker) {
-      setNameError('Add at least one Enter or Exit condition.'); return
+    // A code strategy carries its logic in def.code, so it can legitimately have
+    // empty rule blocks — the condition requirement would make it unsaveable.
+    const codeStrategy = Boolean(def.useCode && (def.code || '').trim())
+    if (!codeStrategy && !hasConditions(def.buy) && !hasConditions(def.sell) && !anyPerTicker) {
+      setNameError('Add at least one Enter or Exit condition, or write one in Build with Code.'); return
     }
     const dupe = perTicker.map(r => r.ticker.toUpperCase().trim())
       .find((t, i, a) => a.indexOf(t) !== i)
@@ -961,13 +1016,20 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef,
 
           {(allowAiAssist || aiAssistant) && (
             <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
-              {(['manual', 'describe'] as const).map(t => (
+              {(['manual', 'describe', 'code'] as const).map(t => (
                 <button key={t} onClick={() => setTab(t)} style={{
                   padding: '6px 14px', fontFamily: T.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
                   background: tab === t ? `${T.gold}1a` : 'transparent',
                   border: `1px solid ${tab === t ? T.gold : T.border}`,
                   color: tab === t ? T.gold : T.muted,
-                }}>{t === 'manual' ? 'Manual' : aiAssistant ? 'AI Assistant' : 'Describe (AI)'}</button>
+                }}>
+                  {t === 'manual' ? 'Manual'
+                    : t === 'code' ? 'Build with Code'
+                    : aiAssistant ? 'AI Assistant' : 'Describe (AI)'}
+                  {t === 'code' && def.useCode && (
+                    <span style={{ marginLeft: 6, color: T.gold }}>●</span>
+                  )}
+                </button>
               ))}
             </div>
           )}
@@ -975,6 +1037,21 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef,
           {(allowAiAssist || aiAssistant) && (
             <div style={{ display: tab === 'describe' ? 'block' : 'none', marginBottom: 16 }}>
               {aiAssistant ?? <AiStrategyChat onAccept={acceptDraft} />}
+            </div>
+          )}
+
+          {/* Build with Code — the rule blocks as editable Python, plus the
+              copilot. Mounted only while selected: it compiles on mount and
+              there is no reason to pay for that from the Manual tab. */}
+          {tab === 'code' && (
+            <div style={{ marginBottom: 16 }}>
+              <StrategyCodePanel
+                rules={{ buy: def.buy, sell: def.sell }}
+                name={def.name || 'strategy'}
+                code={def.code}
+                useCode={def.useCode}
+                setup={def.setup}
+                onChange={(patch: { code?: string; useCode?: boolean; setup?: StrategySetup }) => u(patch)} />
             </div>
           )}
 
