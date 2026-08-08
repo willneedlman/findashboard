@@ -724,23 +724,27 @@
    except Hanken Grotesk, whose figures are drawn tight enough that "$13,666"
    runs its comma into the digits at display sizes.
 
-   The attribute selectors are not a hack of convenience: this codebase styles
-   with inline styles, so `fontFamily: var(--theme-mono)` renders the variable
-   name into the element's own style attribute. Matching on it reaches all
-   ~1,300 mono call sites without touching one of them.
+   Letter-spacing is the only lever available. Hanken Grotesk ships no `tnum`
+   feature and its digits are already uniform-width (560/1000), so
+   font-variant-numeric is a no-op here — verified against the served woff2.
 
-   SVG needs its own selector. React renders `fontFamily` on an <svg> child as
-   the font-family *presentation attribute*, so the style attribute is empty and
-   the first selector misses it entirely — which is why the market-clock dial
-   kept its cramped figures after the first attempt. The class list covers the
-   handful that take the font from a stylesheet instead. */
-[style*="--theme-mono"],
-[font-family*="--theme-mono"],
+   That lever cannot tell a digit from a letter, so the selector has to. An
+   earlier version matched every `--theme-mono` call site, but the data face is
+   also the label face: tickers, column heads and button text all took the
+   tracking and the whole interface read loose. These selectors are the ones
+   that mark a numeric-only element:
+
+     [style*="tabular-nums"]  the inline marker on numeric cells and figures
+     .ft-metric-value         the shared KPI figure
+     axis tick values         numbers by definition; chart labels are not
+
+   A mono element carrying words is left alone. If a figure still reads tight,
+   the fix is to add `fontVariantNumeric: 'tabular-nums'` at that call site
+   rather than to widen the selector. */
+[style*="tabular-nums"],
+[font-family*="--theme-mono"][style*="tabular-nums"],
 .ft-metric-value,
-.ft-input,
-.ft-control,
-.recharts-text,
-.recharts-default-tooltip {
+.recharts-cartesian-axis-tick-value {
   letter-spacing: var(--theme-num-tracking, normal);
 }
 

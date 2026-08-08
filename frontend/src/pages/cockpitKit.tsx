@@ -38,7 +38,7 @@ export function KpiStrip({ cells, cellHeight }: { cells: KpiCellSpec[]; cellHeig
             <span style={{ fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, whiteSpace: 'nowrap' }}>{k.label}</span>
             {k.tip && <HelpTip title={k.tip.title} body={k.tip.body} source={k.tip.source} />}
           </div>
-          <div style={{ fontFamily: MONO, fontSize: 17, fontWeight: 700, color: k.vc ?? T.text, marginTop: 5 }}>{k.value}</div>
+          <div style={{ fontFamily: MONO, fontSize: 17, fontWeight: 700, color: k.vc ?? T.text, marginTop: 5, fontVariantNumeric: 'tabular-nums' }}>{k.value}</div>
           {k.sub && <div style={{ fontFamily: MONO, fontSize: 9, color: k.sc ?? T.muted, marginTop: 2 }}>{k.sub}</div>}
         </div>
       ))}
