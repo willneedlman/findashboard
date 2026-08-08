@@ -210,6 +210,15 @@ _STRATEGY_MAX_TICKERS = 15   # cap the fan-out per sweep to bound the fetch cost
 # events) lives in payload. Default watches the marquee market-movers so routine
 # daily releases don't spam; "monetary" narrows to Fed/Treasury, "high" widens.
 _MACRO_CONDITIONS = {"macro_event_within_days"}
+# Macro *print* alerts, as distinct from the scheduling alert above: fire on the
+# released figure itself crossing a level. "Tell me when CPI comes in over 3%" is
+# a different question from "tell me CPI is on Thursday", and only the second one
+# was answerable. The FRED series id lives in payload.series.
+_MACRO_PRINT_CONDITIONS = {"macro_print_above", "macro_print_below"}
+# Portfolio drawdown: the basket in payload.holdings valued daily over the last
+# year, measured from its own peak. Stateless by design — a running peak stored
+# on the row would silently reset whenever the alert was edited.
+_PORTFOLIO_CONDITIONS = {"portfolio_drawdown_above"}
 _MACRO_MARQUEE = frozenset({
     "FOMC Decision", "FOMC Minutes", "Fed Chair Press Conference", "Fed Beige Book",
     "CPI (Headline)", "Core CPI (ex Food/Energy)", "Jobs Report (NFP)", "Unemployment Rate",
@@ -353,6 +362,97 @@ def _strategy_triggered_sync(payload_json: str | None, cond: str) -> tuple[bool,
         return False, []
 
 
+def _macro_print_sync(payload_json: str | None, cond: str, threshold: float) -> tuple[bool, float | None, str]:
+    """Fire on the latest released value of a FRED series crossing `threshold`.
+
+    Reads the same observations the Macro Monitor plots. The comparison is on
+    the released figure, so a revision to a prior month cannot trigger it — only
+    a new print can.
+    """
+    try:
+        import fred as _fred
+        p = json.loads(payload_json) if payload_json else {}
+        series_id = str(p.get("series") or "").strip()
+        if not series_id:
+            return False, None, ""
+        transform = p.get("transform")          # "yoy" | None
+        obs = _fred.observations(series_id, 400)
+        if not obs:
+            return False, None, ""
+        latest = obs[-1]
+        value = float(latest["value"])
+        if transform == "yoy":
+            # Year-over-year needs the print from twelve periods back, not a
+            # calendar lookup: the series may be monthly, weekly or quarterly.
+            if len(obs) < 13:
+                return False, None, ""
+            base = float(obs[-13]["value"])
+            if base == 0:
+                return False, None, ""
+            value = (value / base - 1.0) * 100.0
+        hit = value > threshold if cond == "macro_print_above" else value < threshold
+        label = f"{p.get('label') or series_id} {value:.2f}{'%' if transform == 'yoy' else ''} ({latest['date']})"
+        return hit, round(value, 4), label
+    except Exception as e:
+        _log.warning("macro print eval: %s", e)
+        return False, None, ""
+
+
+def _portfolio_drawdown_sync(payload_json: str | None, threshold: float) -> tuple[bool, float | None, str]:
+    """Fire when the basket is more than `threshold` percent below its own peak.
+
+    The holdings ride in the payload because portfolios live in the browser, the
+    same way strategy alerts carry their rules. Share counts are taken as fixed
+    across the window, so this is the drawdown of the basket as held today, not
+    a reconstruction of past trading.
+    """
+    try:
+        import datetime as _d
+        from cache import get_download
+        p = json.loads(payload_json) if payload_json else {}
+        holdings = [h for h in (p.get("holdings") or []) if h.get("ticker") and h.get("weight")]
+        if not holdings:
+            return False, None, ""
+        symbols = tuple(dict.fromkeys(str(h["ticker"]).upper() for h in holdings))
+        end = (_d.date.today() + _d.timedelta(days=1)).isoformat()
+        start = (_d.date.today() - _d.timedelta(days=400)).isoformat()
+        frame = get_download(symbols, start, end, "1d", cache_ttl=900)
+        closes = frame.get("Close") if frame is not None and not frame.empty else None
+        if closes is None:
+            return False, None, ""
+        if not hasattr(closes, "columns"):
+            closes = closes.to_frame(name=symbols[0])
+        # The client knows weights, not share counts, because a saved book is
+        # stored by position rather than by lot. Convert at today's price so the
+        # basket matches what is actually held right now, then hold those share
+        # counts fixed back through the window.
+        total = float(p.get("total_value") or 100_000)
+        equity = None
+        for h in holdings:
+            sym = str(h["ticker"]).upper()
+            if sym not in closes.columns:
+                continue
+            series = closes[sym].ffill().dropna()
+            if series.empty or float(series.iloc[-1]) <= 0:
+                continue
+            shares = (total * float(h["weight"]) / 100.0) / float(series.iloc[-1])
+            leg = closes[sym].ffill() * shares
+            equity = leg if equity is None else equity.add(leg, fill_value=0)
+        if equity is None or equity.dropna().empty:
+            return False, None, ""
+        equity = equity.dropna()
+        peak = float(equity.max())
+        last = float(equity.iloc[-1])
+        if peak <= 0:
+            return False, None, ""
+        drawdown = (last / peak - 1.0) * 100.0
+        label = f"{p.get('label') or 'Portfolio'} {drawdown:.1f}% from its 1-year peak"
+        return drawdown <= -abs(threshold), round(drawdown, 2), label
+    except Exception as e:
+        _log.warning("portfolio drawdown eval: %s", e)
+        return False, None, ""
+
+
 def _macro_triggered_sync(payload_json: str | None, days_ahead: float) -> tuple[bool, list[str]]:
     """Fire when a watched macro event is within `days_ahead` days (inclusive).
 
@@ -483,6 +583,24 @@ async def _run_evaluation_loop():
                         price, pct = 0.0, 0.0
                         value = ", ".join(fired_tickers)
                         cooldown = now + _SLOW_COOLDOWN
+                    elif cond in _MACRO_PRINT_CONDITIONS:
+                        if not slow_due:
+                            continue
+                        triggered, printed, label = await loop.run_in_executor(
+                            _EXECUTOR, _macro_print_sync, alert.get("payload"), cond, alert["threshold"])
+                        if not triggered:
+                            continue
+                        price, pct, value = printed or 0.0, 0.0, label
+                        cooldown = now + _SLOW_COOLDOWN
+                    elif cond in _PORTFOLIO_CONDITIONS:
+                        if not slow_due:
+                            continue
+                        triggered, dd, label = await loop.run_in_executor(
+                            _EXECUTOR, _portfolio_drawdown_sync, alert.get("payload"), alert["threshold"])
+                        if not triggered:
+                            continue
+                        price, pct, value = dd or 0.0, dd or 0.0, label
+                        cooldown = now + _SLOW_COOLDOWN
                     elif cond in _SLOW_CONDITIONS:
                         if not slow_due:
                             continue
@@ -563,7 +681,9 @@ class AlertCreate(BaseModel):
     payload:   dict | None = None
 
 
-_VALID_CONDITIONS = _QUOTE_CONDITIONS | _INDICATOR_CONDITIONS | _SLOW_CONDITIONS | _STRATEGY_CONDITIONS | _MACRO_CONDITIONS
+_VALID_CONDITIONS = (_QUOTE_CONDITIONS | _INDICATOR_CONDITIONS | _SLOW_CONDITIONS
+                     | _STRATEGY_CONDITIONS | _MACRO_CONDITIONS
+                     | _MACRO_PRINT_CONDITIONS | _PORTFOLIO_CONDITIONS)
 _MACRO_MODES = {"marquee", "monetary", "high"}
 
 
@@ -600,6 +720,28 @@ async def create_alert(req: AlertCreate):
             mode = p.get("mode") if p.get("mode") in _MACRO_MODES else "marquee"
             labels = [str(x)[:60] for x in (p.get("labels") or [])][:20]
             payload_json = json.dumps({"mode": mode, "labels": labels})
+    elif req.condition in _MACRO_PRINT_CONDITIONS:
+        ticker = _MARKET_TICKER          # market-wide
+        p = req.payload or {}
+        series = str(p.get("series") or "").strip().upper()
+        if not series:
+            raise HTTPException(400, "macro print alert needs a FRED series id, e.g. CPIAUCSL")
+        transform = "yoy" if p.get("transform") == "yoy" else None
+        payload_json = json.dumps({"series": series, "transform": transform,
+                                   "label": str(p.get("label") or series)[:60]})
+    elif req.condition in _PORTFOLIO_CONDITIONS:
+        p = req.payload or {}
+        holdings = [
+            {"ticker": str(h.get("ticker", "")).strip().upper(), "weight": float(h.get("weight") or 0)}
+            for h in (p.get("holdings") or [])
+            if str(h.get("ticker", "")).strip() and float(h.get("weight") or 0) > 0
+        ][:60]
+        if not holdings:
+            raise HTTPException(400, "portfolio alert needs at least one weighted holding")
+        label = str(p.get("label") or "Portfolio").strip()[:40]
+        ticker = label or "Portfolio"    # ticker column = display name
+        payload_json = json.dumps({"label": label, "holdings": holdings,
+                                   "total_value": float(p.get("total_value") or 100_000)})
     elif req.condition in _SENTIMENT_CONDITIONS:
         ticker = _MARKET_TICKER          # market-wide: no per-ticker input
     else:

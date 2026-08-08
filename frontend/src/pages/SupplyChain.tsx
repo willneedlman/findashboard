@@ -117,7 +117,7 @@ interface SupplyChainData {
   peers:            string[]
 }
 
-interface Holder { holder: string; shares: number; value: number; pct_out: number | null; date: string | null; change_shares?: number; investment_style?: string }
+interface Holder { holder: string; shares: number; value: number; pct_out: number | null; date: string | null; change_shares?: number; pct_change?: number | null; investment_style?: string }
 interface InstData {
   ticker: string
   pct_institutions: number | null
@@ -127,7 +127,18 @@ interface InstData {
   float_shares?: number | null
   holders: Holder[]
   funds: Holder[]
+  changes?: PositionChanges | null
   source: string
+}
+
+interface PositionChanges {
+  filed: string | null
+  added: number
+  trimmed: number
+  unchanged: number
+  net_share_change: number
+  biggest_adds: Holder[]
+  biggest_trims: Holder[]
 }
 
 function fmtCap(v: number | null): string {
@@ -303,6 +314,11 @@ function HolderRow({ h, last, maxPct }: { h: Holder; last: boolean; maxPct: numb
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontFamily: T.label, fontSize: 11, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.holder}</div>
+          {!isLseg && h.pct_change != null && h.pct_change !== 0 && (
+            <div style={{ marginTop: 2, fontFamily: T.mono, fontSize: 9, color: h.pct_change > 0 ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)' }}>
+              {h.pct_change > 0 ? '▲' : '▼'} {h.pct_change > 0 ? '+' : ''}{h.pct_change}% since prior filing
+            </div>
+          )}
           {isLseg && (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 2, fontFamily: T.mono, fontSize: 9 }}>
               <span style={{ color: styleColor, fontWeight: 700 }}>{h.investment_style}</span>
@@ -328,6 +344,43 @@ function HolderRow({ h, last, maxPct }: { h: Holder; last: boolean; maxPct: numb
 
 // Full-width institutional ownership: summary stats in a narrow first column,
 // then the top holders split across two columns so the list never feels cramped.
+// Who moved since the prior filing. A holders table on its own is a snapshot
+// of who owns the company, which barely moves quarter to quarter; the change
+// is the part that carries information.
+function PositionFlow({ c }: { c: PositionChanges }) {
+  const net = c.net_share_change
+  const cell = (label: string, value: string, color?: string) => (
+    <div key={label} style={{ flex: '1 1 118px', minWidth: 108 }}>
+      <div style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, marginBottom: 4 }}>{label}</div>
+      <div style={{ fontFamily: T.mono, fontSize: 15, fontWeight: 700, color: color ?? T.text }}>{value}</div>
+    </div>
+  )
+  const names = (rows: Holder[]) => rows.map(h => `${h.holder.replace(/ (Inc|Corp|Corporation|LLC|Ltd)\.?$/i, '')} ${h.pct_change! > 0 ? '+' : ''}${h.pct_change}%`).join(' · ')
+  return (
+    <div style={{ marginBottom: 18, paddingBottom: 16, borderBottom: `1px solid ${T.border}` }}>
+      <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginBottom: 10 }}>
+        {cell('Added', String(c.added), 'var(--theme-positive, #22c55e)')}
+        {cell('Trimmed', String(c.trimmed), 'var(--theme-negative, #ef4444)')}
+        {cell('Held flat', String(c.unchanged))}
+        {cell('Net shares', `${net >= 0 ? '+' : ''}${fmtEmp(net)}`, net >= 0 ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)')}
+      </div>
+      {c.biggest_adds.length > 0 && (
+        <div style={{ fontFamily: T.label, fontSize: 10, color: T.muted, lineHeight: 1.6 }}>
+          <span style={{ color: 'var(--theme-positive, #22c55e)', fontWeight: 700 }}>Accumulating</span> {names(c.biggest_adds)}
+        </div>
+      )}
+      {c.biggest_trims.length > 0 && (
+        <div style={{ fontFamily: T.label, fontSize: 10, color: T.muted, lineHeight: 1.6 }}>
+          <span style={{ color: 'var(--theme-negative, #ef4444)', fontWeight: 700 }}>Reducing</span> {names(c.biggest_trims)}
+        </div>
+      )}
+      <div style={{ marginTop: 8, fontFamily: T.mono, fontSize: 9, color: T.muted }}>
+        Change since each holder's prior filing{c.filed ? `, filed ${c.filed}` : ''}. 13F positions lag quarter end by up to 45 days.
+      </div>
+    </div>
+  )
+}
+
 function InstitutionalPanel({ inst, loading, tab, onTab }:
   { inst: InstData | null; loading: boolean; tab: 'holders' | 'funds'; onTab: (t: 'holders' | 'funds') => void }) {
   const isMobile = useIsMobile()
@@ -363,6 +416,8 @@ function InstitutionalPanel({ inst, loading, tab, onTab }:
         ) : !hasData ? (
           <EmptyState title="Ownership" hint="No institutional ownership reported." />
         ) : (
+          <>
+          {tab === 'holders' && inst!.changes && <PositionFlow c={inst!.changes} />}
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '200px minmax(0, 1fr) minmax(0, 1fr)', gap: 32, alignItems: 'start' }}>
             {/* Summary stats + provenance */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -394,6 +449,7 @@ function InstitutionalPanel({ inst, loading, tab, onTab }:
               )
             })}
           </div>
+          </>
         )}
       </div>
     </div>
@@ -954,6 +1010,7 @@ export function SupplyChainContent() {
                   </div>
                   <AnalystPanel ticker={data.ticker} />
                 </div>
+                <RevisionsPanel ticker={data.ticker} />
                 <FactSetFinancials ticker={data.ticker} />
                 <div style={{ display: 'grid', gridTemplateColumns: isMobileLayout ? '1fr' : '1fr 1fr', gap: 18, alignItems: 'stretch' }}>
                   <RevenuePanel title="Revenue · By Segment" block={data.product_segments} />
@@ -1084,6 +1141,120 @@ function CreditPanel({ ticker }: { ticker: string }) {
             </div>
             <div style={{ marginTop: 14, fontSize: 9.5, color: T.muted, fontFamily: T.label, fontStyle: 'italic' }}>
               Model-based estimate from the latest financials — not an agency (S&amp;P/Moody's/Fitch) rating.
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Where consensus has been going, as distinct from where it is. The Analyst
+// panel next to this one already shows the level; revision direction is the
+// part that has historically carried signal.
+interface Drift { period: string; label: string; current: number; d30_pct: number | null; d90_pct: number | null }
+interface RevBreadth { period: string; label: string; up_7d: number; down_7d: number; up_30d: number; down_30d: number; net_30d: number }
+interface TargetAction { date: string; firm: string | null; action: string | null; to_grade: string | null; target: number | null; prior_target: number | null }
+interface Revisions {
+  available: boolean; reason?: string
+  analyst_count: number | null
+  direction: 'rising' | 'falling' | 'flat'
+  headline: { current: number | null; change_30d_pct: number | null; change_90d_pct: number | null; up_30d: number | null; down_30d: number | null }
+  drift: Drift[]; breadth: RevBreadth[]
+  targets: { raises: number; cuts: number; maintains: number; window_days: number; recent: TargetAction[] }
+}
+
+function RevisionsPanel({ ticker }: { ticker: string }) {
+  const [d, setD] = useState<Revisions | null>(null)
+  const [state, setState] = useState<'loading' | 'ok' | 'err'>('loading')
+  useEffect(() => {
+    let cancel = false
+    setState('loading')
+    axios.get(`/api/corporate/hub/estimates?ticker=${encodeURIComponent(ticker)}`)
+      .then(r => { if (!cancel) { setD(r.data); setState(r.data?.available ? 'ok' : 'err') } })
+      .catch(() => { if (!cancel) setState('err') })
+    return () => { cancel = true }
+  }, [ticker])
+
+  const tone = (v: number | null | undefined) => (v == null ? T.muted : v > 0 ? POS : v < 0 ? NEG : T.muted)
+  const sgn = (v: number | null | undefined, unit = '%') => (v == null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(2)}${unit}`)
+  const dirColor = d?.direction === 'rising' ? POS : d?.direction === 'falling' ? NEG : T.muted
+
+  return (
+    <div className="ft-panel" style={{ display: 'flex', flexDirection: 'column' }}>
+      <div className="ft-panel-header">Estimate Revisions</div>
+      <div style={{ padding: '16px 18px', flex: 1 }}>
+        {state === 'loading' && <EmptyState variant="loading" size="compact" title="Loading revisions" />}
+        {state === 'err' && (
+          <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11 }}>
+            {d?.reason ?? 'No analyst estimates are published for this name.'}
+          </div>
+        )}
+        {state === 'ok' && d && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+              <div style={{ minWidth: 96, padding: '10px 12px', border: `1px solid ${dirColor}`, background: `color-mix(in srgb, ${dirColor} 10%, transparent)` }}>
+                <div style={{ fontFamily: T.label, fontSize: 13, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: dirColor }}>{d.direction}</div>
+                <div style={{ ...labelStyle, marginTop: 4 }}>90-day drift</div>
+              </div>
+              <div style={{ fontFamily: T.label, fontSize: 11.5, color: T.muted, lineHeight: 1.5, flex: 1, minWidth: 200 }}>
+                Current-year consensus EPS <span style={{ color: T.text }}>{d.headline.current?.toFixed(2) ?? '—'}</span>,
+                {' '}<span style={{ color: tone(d.headline.change_30d_pct) }}>{sgn(d.headline.change_30d_pct)}</span> over 30 days and
+                {' '}<span style={{ color: tone(d.headline.change_90d_pct) }}>{sgn(d.headline.change_90d_pct)}</span> over 90.
+                {d.analyst_count ? ` ${d.analyst_count} analysts covering.` : ''}
+              </div>
+            </div>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 340 }}>
+                <thead><tr>
+                  {['Period', 'Consensus', '30d', '90d', 'Up / down 30d'].map((h, i) => (
+                    <th key={h} style={{ ...labelStyle, padding: '0 8px 6px', textAlign: i ? 'right' : 'left', whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>
+                  {d.drift.map(row => {
+                    const b = d.breadth.find(x => x.period === row.period)
+                    return (
+                      <tr key={row.period} style={{ borderTop: `1px solid ${T.borderFaint}` }}>
+                        <td style={{ fontFamily: T.label, fontSize: 11, color: T.text, padding: '5px 8px' }}>{row.label}</td>
+                        <td style={{ fontFamily: T.mono, fontSize: 11, color: T.text, textAlign: 'right', padding: '5px 8px' }}>{row.current.toFixed(2)}</td>
+                        <td style={{ fontFamily: T.mono, fontSize: 11, color: tone(row.d30_pct), textAlign: 'right', padding: '5px 8px' }}>{sgn(row.d30_pct)}</td>
+                        <td style={{ fontFamily: T.mono, fontSize: 11, color: tone(row.d90_pct), textAlign: 'right', padding: '5px 8px' }}>{sgn(row.d90_pct)}</td>
+                        <td style={{ fontFamily: T.mono, fontSize: 11, textAlign: 'right', padding: '5px 8px' }}>
+                          <span style={{ color: POS }}>{b?.up_30d ?? 0}</span>
+                          <span style={{ color: T.muted }}> / </span>
+                          <span style={{ color: NEG }}>{b?.down_30d ?? 0}</span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${T.border}` }}>
+              <div style={{ fontFamily: T.mono, fontSize: 11, color: T.muted, marginBottom: 8 }}>
+                Price targets over {d.targets.window_days} days ·
+                {' '}<span style={{ color: POS, fontWeight: 700 }}>{d.targets.raises} raised</span> ·
+                {' '}<span style={{ color: NEG, fontWeight: 700 }}>{d.targets.cuts} cut</span> ·
+                {' '}<span>{d.targets.maintains} held</span>
+              </div>
+              {d.targets.recent.slice(0, 5).map((a, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '2px 0', fontFamily: T.mono, fontSize: 10 }}>
+                  <span style={{ color: T.muted, width: 66, flex: 'none' }}>{a.date}</span>
+                  <span style={{ color: T.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.firm}</span>
+                  <span style={{ color: a.action === 'Raises' ? POS : a.action === 'Lowers' ? NEG : T.muted, flex: 'none' }}>
+                    {a.prior_target != null && a.target != null && a.prior_target !== a.target
+                      ? `${a.prior_target.toFixed(0)} → ${a.target.toFixed(0)}`
+                      : a.target != null ? a.target.toFixed(0) : '—'}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: 12, fontSize: 9.5, color: T.muted, fontFamily: T.label, lineHeight: 1.5 }}>
+              Counts are counts. No score is derived from them, because four upgrades is four upgrades.
             </div>
           </>
         )}

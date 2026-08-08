@@ -13,6 +13,7 @@ import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip } from '../lib/reportCaptureRegistry'
 import EmptyState from '../components/EmptyState'
+import PMImportPicker from '../components/PMImportPicker'
 
 const CONDITIONS = [
   { value: 'price_above',           label: 'Price above $' },
@@ -34,15 +35,35 @@ const CONDITIONS = [
   { value: 'strategy_entry',        label: 'Strategy entry signal fires' },
   { value: 'strategy_exit',         label: 'Strategy exit signal fires' },
   { value: 'macro_event_within_days', label: 'Macro event within (days)' },
+  { value: 'macro_print_above',     label: 'Macro release prints above' },
+  { value: 'macro_print_below',     label: 'Macro release prints below' },
+  { value: 'portfolio_drawdown_above', label: 'Portfolio drawdown beyond %' },
+]
+
+// FRED series worth watching by their printed value. `yoy` compares against the
+// print twelve periods back, which is what "CPI at 3%" means — the index level
+// itself is a meaningless number to threshold on.
+const MACRO_SERIES: { value: string; label: string; transform?: 'yoy'; unit: string }[] = [
+  { value: 'CPIAUCSL', label: 'CPI, year over year',        transform: 'yoy', unit: '%' },
+  { value: 'CPILFESL', label: 'Core CPI, year over year',   transform: 'yoy', unit: '%' },
+  { value: 'PCEPILFE', label: 'Core PCE, year over year',   transform: 'yoy', unit: '%' },
+  { value: 'UNRATE',   label: 'Unemployment rate',                            unit: '%' },
+  { value: 'PAYEMS',   label: 'Nonfarm payrolls, year over year', transform: 'yoy', unit: '%' },
+  { value: 'ICSA',     label: 'Initial jobless claims',                       unit: '' },
+  { value: 'FEDFUNDS', label: 'Fed funds effective rate',                     unit: '%' },
+  { value: 'T10Y2Y',   label: '10y minus 2y spread',                          unit: '%' },
 ]
 
 // Market-wide conditions take no ticker; the flip cross takes no threshold.
-const noTicker = (cond: string) => cond.startsWith('sentiment') || cond === 'macro_event_within_days'
+const noTicker = (cond: string) => cond.startsWith('sentiment') || cond === 'macro_event_within_days' || cond.startsWith('macro_print')
 const noThreshold = (cond: string) => cond === 'price_cross_gex_flip' || cond.startsWith('strategy')
 // Strategy alerts run a saved custom strategy's rules across a ticker list.
 const isStrategy = (cond: string) => cond.startsWith('strategy')
 // Macro-event alerts watch the economic calendar for upcoming releases.
 const isMacro = (cond: string) => cond === 'macro_event_within_days'
+// A release's printed value, as opposed to the fact that it is scheduled.
+const isMacroPrint = (cond: string) => cond.startsWith('macro_print')
+const isPortfolio = (cond: string) => cond === 'portfolio_drawdown_above'
 const MACRO_MODES: { value: string; label: string; hint: string }[] = [
   { value: 'marquee',  label: 'Major movers',  hint: 'FOMC, CPI, jobs, PCE, GDP, ISM' },
   { value: 'monetary', label: 'Fed / Treasury', hint: 'FOMC, minutes, Beige Book, refunding' },
@@ -63,7 +84,7 @@ function parseTickerList(raw: string): string[] {
 const isSlow = (cond: string) =>
   cond.startsWith('iv_rank') || cond.startsWith('sentiment') ||
   cond === 'price_cross_gex_flip' || cond === 'earnings_within_days' || cond.startsWith('strategy') ||
-  cond === 'macro_event_within_days'
+  cond === 'macro_event_within_days' || cond.startsWith('macro_print') || cond === 'portfolio_drawdown_above'
 
 interface StrategyPayload { name: string; tickers: string[]; rules: unknown }
 interface Alert {
@@ -108,6 +129,9 @@ function conditionLabel(cond: string, threshold: number): string {
     case 'strategy_entry':        return 'Entry signal fires'
     case 'strategy_exit':         return 'Exit signal fires'
     case 'macro_event_within_days': return `Macro event within ${threshold}d`
+    case 'macro_print_above':     return `Release prints above ${threshold}`
+    case 'macro_print_below':     return `Release prints below ${threshold}`
+    case 'portfolio_drawdown_above': return `Drawdown beyond ${threshold}%`
     default:                      return `${cond} ${threshold}`
   }
 }
@@ -117,6 +141,8 @@ function thresholdLabel(cond: string): string {
   if (cond.startsWith('iv_rank')) return 'IV rank (0-100)'
   if (cond.startsWith('sentiment')) return 'Composite score (0-100)'
   if (cond === 'earnings_within_days' || cond === 'macro_event_within_days') return 'Days ahead'
+  if (cond.startsWith('macro_print')) return 'Level'
+  if (cond === 'portfolio_drawdown_above') return 'Drawdown %'
   if (cond.includes('sma')) return 'SMA period (days)'
   if (cond.includes('pct')) return 'Threshold (%)'
   return 'Threshold ($)'
@@ -163,6 +189,10 @@ export default function Alerts() {
   const [stratTickers, setStratTickers] = useState('')
   const parsedStratTickers = useMemo(() => parseTickerList(stratTickers), [stratTickers])
   const [macroMode, setMacroMode] = useState('marquee')
+  const [macroSeries, setMacroSeries] = useState(MACRO_SERIES[0].value)
+  // Portfolios live in the browser, so a drawdown alert has to carry its
+  // holdings to the server the same way a strategy alert carries its rules.
+  const [drawdownBook, setDrawdownBook] = useState<{ name: string; totalValue: number; holdings: { ticker: string; weight: number }[] } | null>(null)
 
   useEffect(() => {
     if (!('Notification' in window)) setNotifState('unsupported')
@@ -208,6 +238,25 @@ export default function Alerts() {
       })
       return
     }
+    if (isMacroPrint(condition)) {
+      const level = parseFloat(threshold)
+      const spec = MACRO_SERIES.find(m => m.value === macroSeries)
+      if (isNaN(level) || !spec) return
+      createMut.mutate({
+        user_id: user.id, ticker: 'MARKET', condition, threshold: level,
+        payload: { series: spec.value, transform: spec.transform ?? null, label: spec.label },
+      })
+      return
+    }
+    if (isPortfolio(condition)) {
+      const level = parseFloat(threshold)
+      if (isNaN(level) || !drawdownBook) return
+      createMut.mutate({
+        user_id: user.id, ticker: drawdownBook.name, condition, threshold: Math.abs(level),
+        payload: { label: drawdownBook.name, holdings: drawdownBook.holdings, total_value: drawdownBook.totalValue },
+      })
+      return
+    }
     if (isMacro(condition)) {
       const days = parseFloat(threshold)
       if (isNaN(days)) return
@@ -222,7 +271,9 @@ export default function Alerts() {
   const canSubmit = !createMut.isPending && (
     isStrategy(condition)
       ? (!!stratName && parsedStratTickers.length > 0)
-      : (noTicker(condition) || !!ticker) && (noThreshold(condition) || !!threshold)
+      : isPortfolio(condition)
+        ? (!!drawdownBook && !!threshold)
+        : (noTicker(condition) || !!ticker) && (noThreshold(condition) || !!threshold)
   )
 
   const alerts = data?.alerts ?? []
@@ -380,6 +431,39 @@ export default function Alerts() {
                       )}
                     </div>
                   </>
+                )}
+                {isMacroPrint(condition) && (
+                  <div>
+                    <label style={lbl} htmlFor="al-series">Release</label>
+                    <select id="al-series" value={macroSeries} onChange={e => setMacroSeries(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                      {MACRO_SERIES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                    </select>
+                    <div style={{ fontFamily: T.label, fontSize: 9.5, color: T.muted, marginTop: 5, lineHeight: 1.5 }}>
+                      Fires on the released figure crossing your level, checked every 10 minutes and at most once a day.
+                      A revision to an earlier month cannot trigger it.
+                    </div>
+                  </div>
+                )}
+                {isPortfolio(condition) && (
+                  <div>
+                    <label style={lbl}>Book</label>
+                    <PMImportPicker
+                      emptyLabel="Save a portfolio in Portfolio Manager first"
+                      onImport={(result, name) => setDrawdownBook({
+                        name,
+                        totalValue: result.totalValue || 100000,
+                        holdings: result.legs.map(l => ({ ticker: l.ticker.toUpperCase(), weight: l.weight })),
+                      })} />
+                    {drawdownBook && (
+                      <div style={{ fontFamily: T.mono, fontSize: 10, color: T.text, marginTop: 6 }}>
+                        {drawdownBook.name} · {drawdownBook.holdings.length} holdings
+                      </div>
+                    )}
+                    <div style={{ fontFamily: T.label, fontSize: 9.5, color: T.muted, marginTop: 5, lineHeight: 1.5 }}>
+                      Measured from the basket's own one-year peak, holding today's share counts fixed across the
+                      window. It is the drawdown of what you hold now, not a replay of what you traded.
+                    </div>
+                  </div>
                 )}
                 {isMacro(condition) && (
                   <div>

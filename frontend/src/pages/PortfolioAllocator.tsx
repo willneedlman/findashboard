@@ -141,6 +141,9 @@ export function PortfolioAllocatorContent() {
   const [chartTicker, setChartTicker] = useState<string | null>(tickers[0] ?? null)
   const [exportMsg, setExportMsg] = useState('')
   const [importMsg, setImportMsg] = useState('')
+  // The book as loaded, kept so the optimiser's output can be expressed as
+  // trades against what is actually held rather than as an abstract target.
+  const [baseline, setBaseline] = useState<{ name: string; weights: Record<string, number> } | null>(null)
   // Raw in-progress text for the $ / shares boxes — kept separate from the
   // derived weight so mid-typing keystrokes never fight a recomputed value;
   // committed (and cleared) on blur/Enter.
@@ -198,6 +201,7 @@ export function PortfolioAllocatorContent() {
     // legs' weights won't sum to 100% of it, which correctly shows up as
     // leftover cash here rather than being silently dropped.
     if (result.totalValue > 0) setCashAmount(String(Math.round(result.totalValue)))
+    setBaseline({ name, weights: Object.fromEntries(legs.map(l => [l.ticker.toUpperCase(), l.weight])) })
     setImportMsg(`Loaded "${name}" — ${legs.length} holdings.`)
   }
   // Full CSV/JSON import screen, fused in from the optimizer.
@@ -208,6 +212,7 @@ export function PortfolioAllocatorContent() {
     setTickers(valid.map(a => a.ticker.toUpperCase()))
     setWeights(Object.fromEntries(valid.map(a => [a.ticker.toUpperCase(), Number(a.weight) || 0])))
     setLocked({})
+    setBaseline({ name: 'imported file', weights: Object.fromEntries(valid.map(a => [a.ticker.toUpperCase(), Number(a.weight) || 0])) })
     setImportMsg(`Imported ${valid.length} holdings.`)
   }
   const removeTicker = (sym: string) => {
@@ -305,6 +310,55 @@ export function PortfolioAllocatorContent() {
     const shares = price ? +((cashNum * w) / price).toFixed(4) : 0
     return { ticker: t, weight: w, price, shares, dollarActual: price ? shares * price : 0 }
   }), [tickers, weights, priceMap, cashNum])
+  // Drift and the trades that close it. Every symbol in either the book or the
+  // target appears, so a position being exited to zero is a row rather than a
+  // silent disappearance.
+  const rebalance = useMemo(() => {
+    if (!baseline) return null
+    const universe = Array.from(new Set([...Object.keys(baseline.weights), ...tickers]))
+    const rows = universe.map(t => {
+      const price = priceMap[t]
+      const currentW = baseline.weights[t] ?? 0
+      const targetW = tickers.includes(t) ? (weights[t] || 0) : 0
+      const currentShares = price ? (cashNum * currentW / 100) / price : 0
+      const targetShares = price ? (cashNum * targetW / 100) / price : 0
+      return {
+        ticker: t, price,
+        currentW, targetW,
+        driftPp: +(targetW - currentW).toFixed(2),
+        deltaShares: +(targetShares - currentShares).toFixed(4),
+        deltaDollars: price ? (targetShares - currentShares) * price : 0,
+      }
+    })
+    // A tenth of a percentage point is noise, not a trade.
+    const trades = rows.filter(r => Math.abs(r.driftPp) >= 0.1 && r.price)
+      .sort((a, b) => Math.abs(b.deltaDollars) - Math.abs(a.deltaDollars))
+    return {
+      rows: rows.sort((a, b) => Math.abs(b.driftPp) - Math.abs(a.driftPp)),
+      trades,
+      turnover: +(trades.reduce((sum, r) => sum + Math.abs(r.deltaDollars), 0)).toFixed(0),
+      buys: trades.filter(r => r.deltaShares > 0).length,
+      sells: trades.filter(r => r.deltaShares < 0).length,
+    }
+  }, [baseline, tickers, weights, priceMap, cashNum])
+
+  const exportTrades = () => {
+    if (!rebalance?.trades.length) return
+    const header = ['Ticker', 'Side', 'Shares', 'Price', 'Notional', 'Current %', 'Target %', 'Drift pp']
+    const lines = rebalance.trades.map(r => [
+      r.ticker, r.deltaShares > 0 ? 'BUY' : 'SELL', Math.abs(r.deltaShares).toFixed(4),
+      (r.price ?? 0).toFixed(2), Math.abs(r.deltaDollars).toFixed(2),
+      r.currentW.toFixed(2), r.targetW.toFixed(2), r.driftPp.toFixed(2),
+    ].join(','))
+    const blob = new Blob([[header.join(','), ...lines].join('\n')], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `rebalance-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const totalDeployed = shareRows.reduce((s, r) => s + r.dollarActual, 0)
   const leftoverCash = cashNum - totalDeployed
   const canExport = cashNum > 0 && shareRows.some(r => r.shares > 0)
@@ -509,6 +563,67 @@ export function PortfolioAllocatorContent() {
             </button>
           </div>
           {exportMsg && <div style={{ width: '100%', fontFamily: MONO, fontSize: 9, color: NEG }}>{exportMsg}</div>}
+
+          {/* Rebalance: the optimiser's answer expressed as trades against the
+              book you actually hold, which is the form it has to be in before
+              anyone can act on it. */}
+          {rebalance && (
+            <div style={{ width: '100%', marginTop: 10, border: `1px solid ${BORDER}` }}>
+              <div className="ft-chart-label" style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+                <span>Rebalance to target</span>
+                <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 9, fontWeight: 400, letterSpacing: '0.04em', textTransform: 'none' }}>
+                  vs {baseline?.name} · {rebalance.buys} buys, {rebalance.sells} sells · turnover ${rebalance.turnover.toLocaleString()}
+                </span>
+              </div>
+              <div style={{ padding: '12px 14px' }}>
+                {rebalance.trades.length === 0 ? (
+                  <div style={{ fontFamily: SANS, fontSize: 11, color: SEC }}>
+                    Every position is within 0.1 percentage points of its target. Nothing to trade.
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520 }}>
+                        <thead>
+                          <tr>
+                            {['Ticker', 'Side', 'Shares', 'Notional', 'Current', 'Target', 'Drift'].map((h, i) => (
+                              <th key={h} style={{ fontFamily: SANS, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: SEC, padding: '0 10px 7px', textAlign: i < 2 ? 'left' : 'right', whiteSpace: 'nowrap' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rebalance.trades.map(r => {
+                            const buy = r.deltaShares > 0
+                            return (
+                              <tr key={r.ticker} style={{ borderTop: `1px solid ${BORDER}` }}>
+                                <td style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: TEXT, padding: '5px 10px' }}>{r.ticker}</td>
+                                <td style={{ fontFamily: SANS, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.08em', color: buy ? POS : NEG, padding: '5px 10px' }}>{buy ? 'BUY' : 'SELL'}</td>
+                                <td style={{ fontFamily: MONO, fontSize: 11, color: TEXT, textAlign: 'right', padding: '5px 10px', fontVariantNumeric: 'tabular-nums' }}>{Math.abs(r.deltaShares).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                                <td style={{ fontFamily: MONO, fontSize: 11, color: buy ? POS : NEG, textAlign: 'right', padding: '5px 10px', fontVariantNumeric: 'tabular-nums' }}>${Math.abs(r.deltaDollars).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                                <td style={{ fontFamily: MONO, fontSize: 11, color: SEC, textAlign: 'right', padding: '5px 10px', fontVariantNumeric: 'tabular-nums' }}>{r.currentW.toFixed(1)}%</td>
+                                <td style={{ fontFamily: MONO, fontSize: 11, color: TEXT, textAlign: 'right', padding: '5px 10px', fontVariantNumeric: 'tabular-nums' }}>{r.targetW.toFixed(1)}%</td>
+                                <td style={{ fontFamily: MONO, fontSize: 11, color: r.driftPp >= 0 ? POS : NEG, textAlign: 'right', padding: '5px 10px', fontVariantNumeric: 'tabular-nums' }}>{r.driftPp > 0 ? '+' : ''}{r.driftPp.toFixed(1)}pp</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 11, flexWrap: 'wrap' }}>
+                      <button onClick={exportTrades}
+                        style={{ background: 'transparent', border: `1px solid ${BORDER}`, color: SEC, cursor: 'pointer', fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '6px 12px', minHeight: 32 }}>
+                        Export trade list
+                      </button>
+                      <span style={{ fontFamily: SANS, fontSize: 10.5, color: SEC, lineHeight: 1.5 }}>
+                        Shares are computed at the current quote against a ${cashNum.toLocaleString()} book. No commission,
+                        spread or tax lot is modelled, and the list is not sent anywhere.
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
           {data?.dropped && data.dropped.length > 0 && <div style={{ width: '100%', fontFamily: MONO, fontSize: 9, color: NEG }}>dropped (too little history): {data.dropped.join(', ')}</div>}
           {isError && <div style={{ width: '100%', fontFamily: MONO, fontSize: 9, color: NEG }}>{errMsg ?? 'Could not solve the frontier for this ticker set'}</div>}
 

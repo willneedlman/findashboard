@@ -701,6 +701,14 @@ def get_corporate_hub_earnings_detail(ticker: str):
     return out
 
 
+@router.get("/hub/estimates")
+def get_corporate_hub_estimates(ticker: str):
+    """Where consensus has been moving: EPS drift against 7/30/60/90 days ago,
+    revision breadth, and recent price-target raises and cuts."""
+    import estimates as _estimates
+    return _estimates.revisions(ticker)
+
+
 @router.get("/hub/analyst")
 def get_corporate_hub_analyst(ticker: str):
     """Analyst consensus: rating distribution, mean/high/low targets, implied upside."""
@@ -1104,6 +1112,10 @@ def _holder_rows(df, limit: int = 12) -> list:
         value  = row.get("Value") or row.get("value")
         pct    = row.get("pctHeld") or row.get("% Out") or row.get("pctOut")
         date   = row.get("Date Reported") or row.get("dateReported") or row.get("Date")
+        # Fractional change in the position since the holder's prior filing.
+        # This is the whole "who is accumulating" question and it was being
+        # dropped on the floor.
+        chg    = row.get("pctChange") or row.get("pct_change")
         # pctHeld is a fraction (0.071); older columns may already be a percent.
         pct_out = None
         if _holder_num(pct):
@@ -1114,6 +1126,7 @@ def _holder_rows(df, limit: int = 12) -> list:
             "value":  float(value) if _holder_num(value) else 0,
             "pct_out": pct_out,
             "date":   str(date)[:10] if date is not None else None,
+            "pct_change": round(float(chg) * 100, 2) if _holder_num(chg) else None,
         })
     return out
 
@@ -1134,6 +1147,41 @@ def _lseg_institutional_data_v2(symbol: str):
     return {
         "holdings": [dict(r) for r in hold_rows],
         "rollup": dict(rollup) if rollup else None,
+    }
+
+
+def _position_changes(holders: list[dict]) -> dict | None:
+    """Who added and who trimmed since the prior filing.
+
+    A holders table without this is a snapshot of who owns the company, which
+    is nearly static quarter to quarter. The change is the part that carries
+    information, and it is the question "what are funds accumulating" is
+    actually asking.
+
+    Positions are 13F filings, so they lag by up to 45 days after quarter end
+    and the payload carries the filing date to say so.
+    """
+    rows = [h for h in holders if h.get("pct_change") is not None]
+    if not rows:
+        return None
+    # yfinance reports a brand-new position as +100%, which is indistinguishable
+    # from a doubled one. Counted as "added" rather than guessed at.
+    added = [h for h in rows if h["pct_change"] > 0.5]
+    trimmed = [h for h in rows if h["pct_change"] < -0.5]
+    held = len(rows) - len(added) - len(trimmed)
+    net_shares = sum(
+        (h.get("shares") or 0) * h["pct_change"] / (100 + h["pct_change"])
+        for h in rows if h["pct_change"] > -100
+    )
+    ranked = sorted(rows, key=lambda h: h["pct_change"], reverse=True)
+    return {
+        "filed": max((h.get("date") for h in rows if h.get("date")), default=None),
+        "added": len(added),
+        "trimmed": len(trimmed),
+        "unchanged": held,
+        "net_share_change": int(net_shares),
+        "biggest_adds": ranked[:3],
+        "biggest_trims": list(reversed(ranked[-3:])) if len(ranked) > 3 else [],
     }
 
 
@@ -1167,6 +1215,7 @@ def get_institutional_ownership(ticker: str):
     if lseg and lseg["holdings"]:
         holders, funds = [], []
         for r in lseg["holdings"]:
+            prior = (r["shares"] or 0) - (r["change_shares"] or 0)
             hold_dict = {
                 "holder": r["holder_name"],
                 "shares": r["shares"],
@@ -1174,6 +1223,9 @@ def get_institutional_ownership(ticker: str):
                 "pct_out": r["pct_out"],
                 "date": r["date"],
                 "change_shares": r["change_shares"],
+                # LSEG gives an absolute delta where yfinance gives a fraction.
+                # Both summaries read pct_change, so normalise here.
+                "pct_change": round(r["change_shares"] / prior * 100, 2) if (prior and r["change_shares"] is not None) else None,
                 "investment_style": r["investment_style"]
             }
             if (r["holder_type"] or "").strip().lower() == "institutional":
@@ -1192,11 +1244,12 @@ def get_institutional_ownership(ticker: str):
             "float_shares": float_shares,
             "holders": holders,
             "funds": funds,
+            "changes": _position_changes(holders),
             "source": "LSEG"
         }
 
     # Fallback to yfinance for named holders
-    cache_key = f"instown:v1:{symbol}"
+    cache_key = f"instown:v2:{symbol}"
     cached = disk_get(cache_key)
     if cached:
         cached["passive_pct"] = lseg_passive_pct
@@ -1226,6 +1279,7 @@ def get_institutional_ownership(ticker: str):
             "float_shares":     float_shares,
             "holders":          holders,
             "funds":            funds,
+            "changes":          _position_changes(holders),
             "source":           "yfinance",
         }
         # 13F data is quarterly — cache hard so we don't re-hit yfinance per view.

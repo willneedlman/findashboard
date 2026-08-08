@@ -54,6 +54,91 @@ function Panel({ title, note, children }: { title: string; note?: string; childr
   )
 }
 
+interface CycleComponent {
+  key: string; label: string; value: number; unit: string
+  as_of: string; score: number; reading: string; rule: string
+}
+interface Cycle {
+  available: boolean; reason?: string
+  composite: number; phase: string; blurb: string
+  components: CycleComponent[]; resolved: number; expected: number
+  weakest: string; strongest: string
+}
+
+// Where the cycle stands, from the series this page already plots.
+//
+// Deliberately not a recession probability. A single percentage implies a
+// calibrated model, and there isn't one here: this is five well-known
+// indicators scored against published rules of thumb. So the panel shows every
+// component, its level and the threshold it is being judged against, and the
+// composite is just their mean. A reader who disagrees with a component can see
+// exactly which one to discount.
+function CyclePanel() {
+  const { data } = useQuery<Cycle>({
+    queryKey: ['macro-cycle'],
+    queryFn: () => axios.get('/api/rates/cycle').then(r => r.data),
+    staleTime: 60 * 60_000,
+    retry: 0,
+  })
+  if (!data?.available) return null
+
+  const tone = (score: number) => (score >= 0.35 ? T.pos : score <= -0.35 ? T.neg : T.warn)
+  const phaseColor = tone(data.composite)
+  // The composite runs -1 to +1; place it on a 0-100 track for the marker.
+  const pos = ((data.composite + 1) / 2) * 100
+
+  return (
+    <Panel title="Cycle Position" note={`${data.resolved} of ${data.expected} indicators reporting`}>
+      <div style={{ padding: '4px 8px 2px' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+          <span style={{ fontFamily: T.label, fontSize: 17, fontWeight: 700, color: phaseColor }}>{data.phase}</span>
+          <span style={{ fontFamily: T.label, fontSize: 11.5, color: T.muted, lineHeight: 1.5, flex: 1, minWidth: 220 }}>{data.blurb}</span>
+        </div>
+
+        <div style={{ position: 'relative', height: 4, background: T.borderFaint, marginBottom: 6 }}>
+          <div style={{ position: 'absolute', inset: 0, left: '50%', width: 1, background: T.muted }} />
+          <div style={{ position: 'absolute', top: -4, left: `${Math.max(0, Math.min(100, pos))}%`, width: 2, height: 12, background: phaseColor, transform: 'translateX(-1px)' }} />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: T.label, fontSize: 9.5, color: T.muted, marginBottom: 14 }}>
+          <span>Contraction</span><span>Neutral</span><span>Expansion</span>
+        </div>
+
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 460 }}>
+            <tbody>
+              {data.components.map(c => (
+                <tr key={c.key} style={{ borderTop: `1px solid ${T.borderFaint}` }}>
+                  <td style={{ fontFamily: T.label, fontSize: 11, color: T.text, padding: '7px 10px 7px 0', whiteSpace: 'nowrap' }}>{c.label}</td>
+                  <td style={{ fontFamily: T.mono, fontSize: 11.5, fontWeight: 700, color: T.text, padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                    {c.value}{c.unit ? ` ${c.unit}` : ''}
+                  </td>
+                  <td style={{ fontFamily: T.mono, fontSize: 10, color: tone(c.score), padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>{c.reading}</td>
+                  <td style={{ padding: '7px 0 7px 10px', width: 90 }}>
+                    <div style={{ position: 'relative', height: 4, background: T.borderFaint }}>
+                      <div style={{ position: 'absolute', inset: 0, left: '50%', width: 1, background: T.muted }} />
+                      <div style={{
+                        position: 'absolute', top: 0, height: 4, background: tone(c.score),
+                        left: c.score >= 0 ? '50%' : `${50 + c.score * 50}%`,
+                        width: `${Math.abs(c.score) * 50}%`,
+                      }} />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${T.borderFaint}`, fontFamily: T.label, fontSize: 10.5, lineHeight: 1.6, color: T.muted }}>
+          {data.components.map(c => `${c.label}: ${c.rule}`).join(' ')}
+          {' '}The composite is the mean of the components above, not a fitted probability, and no recession odds
+          are claimed from it.
+        </div>
+      </div>
+    </Panel>
+  )
+}
+
 export function EconomyMonitorContent() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['rates-economy'],
@@ -139,6 +224,8 @@ export function EconomyMonitorContent() {
         <Stat label="PCE (YoY)" value={inf.pce != null ? `${inf.pce.toFixed(1)}%` : '—'}
           sub="Fed's preferred gauge" tone={inf.pce == null ? undefined : inf.pce > FED_TARGET ? 'warn' : 'pos'} />
       </div>
+
+      <CyclePanel />
 
       {/* Inflation — multi-line vs 2% target */}
       <Panel title="Inflation — Year over Year" note="Fed target 2%">

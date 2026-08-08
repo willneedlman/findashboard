@@ -1622,3 +1622,11 @@ def economy():
     }
     disk_set(ckey, result, ttl=_ECON_DISK_TTL)
     return result
+
+
+@router.get("/cycle")
+def business_cycle():
+    """Business-cycle read from five FRED indicators, each scored against a
+    published rule of thumb and shown with its own threshold."""
+    import cycle as _cycle
+    return _cycle.cycle()
