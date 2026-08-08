@@ -177,6 +177,7 @@ def _price_members(members: list[dict], currency: str | None) -> tuple[list[dict
         rows.append({
             "ticker": sym,
             "name": member.get("name") or sym,
+            "sector": member.get("sector"),
             "price": round(price, 2),
             "change_pct": _pct(price, prev),
             "market_cap_usd": round(shares * price * fx) if (shares and fx) else None,
@@ -188,6 +189,39 @@ def _price_members(members: list[dict], currency: str | None) -> tuple[list[dict
 # fifteen seconds, and a member's day change does not need to be fresher than
 # the wait it costs. Persisted so a restart does not make the first visitor pay
 # it again.
+def _sector_mix(rows: list[dict], total_cap: float | None) -> list[dict]:
+    """Weight, member count and cap-weighted day move per sector.
+
+    The taxonomy is whichever one the index itself publishes, so the buckets
+    are not comparable across indices: the Hang Seng ships four, the FTSE
+    forty-four. Relabelling them into a common scheme would be inventing a
+    classification the source never made.
+    """
+    if not total_cap:
+        return []
+    buckets: dict[str, dict] = {}
+    for row in rows:
+        name = row.get("sector")
+        cap = row.get("market_cap_usd")
+        if not name or not cap:
+            continue
+        bucket = buckets.setdefault(name, {"sector": name, "cap": 0.0, "count": 0, "moved": 0.0})
+        bucket["cap"] += cap
+        bucket["count"] += 1
+        if row.get("change_pct") is not None:
+            bucket["moved"] += cap * row["change_pct"]
+    out = [
+        {
+            "sector": b["sector"],
+            "weight_pct": round(b["cap"] / total_cap * 100, 2),
+            "count": b["count"],
+            "change_pct": round(b["moved"] / b["cap"], 2) if b["cap"] else None,
+        }
+        for b in buckets.values()
+    ]
+    return sorted(out, key=lambda s: s["weight_pct"], reverse=True)
+
+
 @cached(ttl=1800, maxsize=64, persist=True)
 def index_profile(symbol: str) -> dict:
     """Members of `symbol` priced live, plus the aggregates worth reading off
@@ -220,6 +254,8 @@ def index_profile(symbol: str) -> dict:
     advancing = sum(1 for r in moved if r["change_pct"] > 0)
     declining = sum(1 for r in moved if r["change_pct"] < 0)
 
+    sectors = _sector_mix(rows, total_cap)
+
     def share(n: int) -> float | None:
         if not total_cap:
             return None
@@ -240,6 +276,7 @@ def index_profile(symbol: str) -> dict:
         "breadth": {"advancing": advancing, "declining": declining,
                     "unchanged": len(moved) - advancing - declining, "priced": len(moved)},
         "concentration": {"top5_pct": share(5), "top10_pct": share(10)},
+        "sectors": sectors,
         "members": by_cap,
         "leaders": ranked[:5],
         "laggards": list(reversed(ranked[-5:])) if len(ranked) > 5 else [],

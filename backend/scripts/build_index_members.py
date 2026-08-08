@@ -97,6 +97,19 @@ def _normalise(raw: str, suffix: str) -> str | None:
     return f"{t}{suffix}" if suffix else t
 
 
+# Each source names the column differently, and some carry two levels of
+# granularity. The broad one is what a mix chart wants.
+_SECTOR_COLUMNS = (
+    "gics sector", "icb industry", "ftse industry classification benchmark sector",
+    "prime standard sector", "sub-index", "sector", "industry",
+)
+
+
+def _clean(value) -> str:
+    text = re.sub(r"\[.*?\]", "", str(value)).strip()
+    return "" if text.lower() in ("nan", "-", "—", "none") else text
+
+
 def _pick_column(table: pd.DataFrame, wanted: str):
     for c in table.columns:
         if re.sub(r"\[.*?\]", "", str(c)).strip().lower() == wanted:
@@ -107,14 +120,21 @@ def _pick_column(table: pd.DataFrame, wanted: str):
     return None
 
 
-def _scrape_list(html: str, spec: dict) -> list[tuple[str, str]]:
-    """[(ticker, company name)] from a bullet list rather than a table."""
+def _scrape_list(html: str, spec: dict) -> list[tuple[str, str, str | None]]:
+    """[(ticker, company name, sector)] from a bullet list rather than a table.
+
+    The list is grouped under sub-headings, and those headings are the sector,
+    so the walk tracks the most recent one."""
     start = html.find(f'id="{spec["list_section"]}"')
     if start == -1:
         return []
-    out: list[tuple[str, str]] = []
-    for item in re.findall(r"<li[^>]*>(.*?)</li>", html[start:], re.S):
-        text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", item)).strip()
+    out: list[tuple[str, str, str | None]] = []
+    sector: str | None = None
+    for kind, body in re.findall(r"<h[34][^>]*>(.*?)</h[34]>|<li[^>]*>(.*?)</li>", html[start:], re.S):
+        if kind:
+            sector = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", kind)).replace("[edit]", "").strip() or None
+            continue
+        text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", body)).strip()
         m = re.search(spec["list_re"], text)
         if not m:
             continue
@@ -123,12 +143,12 @@ def _scrape_list(html: str, spec: dict) -> list[tuple[str, str]]:
         # which is the company, and drop the paragraph that preceded it.
         if len(name) > 70:
             name = re.split(r"\[edit\]|(?<=[a-z])\.\s+(?=[A-Z])", name)[-1].strip()
-        out.append((f"{m.group(1)}{spec['suffix']}", name or m.group(1)))
+        out.append((f"{m.group(1)}{spec['suffix']}", name or m.group(1), sector))
     return out
 
 
-def _scrape(spec: dict) -> list[tuple[str, str]]:
-    """[(ticker, company name)] from the page's constituent table."""
+def _scrape(spec: dict) -> list[tuple[str, str, str | None]]:
+    """[(ticker, company name, sector)] from the page's constituent table."""
     html = requests.get(f"https://en.wikipedia.org/wiki/{spec['page']}", headers=UA, timeout=30).text
     if spec.get("list_section"):
         return _scrape_list(html, spec)
@@ -141,13 +161,19 @@ def _scrape(spec: dict) -> list[tuple[str, str]]:
             ncol = _pick_column(table, cand)
             if ncol is not None:
                 break
-        out: list[tuple[str, str]] = []
+        scol = None
+        for cand in _SECTOR_COLUMNS:
+            scol = _pick_column(table, cand)
+            if scol is not None:
+                break
+        out: list[tuple[str, str, str | None]] = []
         for _, row in table.iterrows():
             sym = _normalise(row[tcol], spec["suffix"])
             if not sym:
                 continue
-            name = re.sub(r"\[.*?\]", "", str(row[ncol])).strip() if ncol is not None else sym
-            out.append((sym, name or sym))
+            name = _clean(row[ncol]) if ncol is not None else sym
+            sector = _clean(row[scol]) if scol is not None else None
+            out.append((sym, name or sym, sector or None))
         if out:
             return out
     return []
@@ -188,6 +214,46 @@ def _verify(symbols: list[str]) -> dict[str, dict]:
     return out
 
 
+def add_sectors(only: str | None = None) -> dict:
+    """Re-scrape the pages and merge the sector onto members already in the
+    file, matched by ticker.
+
+    Separate from a full build because it touches no price source at all. The
+    member lists and share counts are already verified; re-running the whole
+    job to pick up one extra column would mean 1,600 more Yahoo lookups and a
+    real chance of being throttled into a worse list than the one on disk.
+    """
+    payload = {"indices": {}}
+    if os.path.exists(OUT):
+        with open(OUT) as fh:
+            payload = json.load(fh)
+
+    for sym, entry in payload.get("indices", {}).items():
+        if only and sym != only:
+            continue
+        spec = SOURCES.get(sym)
+        if not spec or "skip" in spec or not entry.get("members"):
+            continue
+        try:
+            scraped = _scrape(spec)
+        except Exception as exc:
+            print(f"{sym}: FAILED {exc}", file=sys.stderr)
+            continue
+        sectors = {ticker: sector for ticker, _, sector in scraped if sector}
+        hits = 0
+        for member in entry["members"]:
+            sector = sectors.get(member["ticker"])
+            if sector:
+                member["sector"] = sector
+                hits += 1
+        entry["sector_coverage"] = hits
+        print(f"{sym}: {hits}/{len(entry['members'])} members tagged", file=sys.stderr)
+
+    with open(OUT, "w") as fh:
+        json.dump(payload, fh, indent=1, sort_keys=True)
+    return payload
+
+
 def build(only: str | None = None) -> dict:
     existing = {}
     if os.path.exists(OUT):
@@ -212,10 +278,10 @@ def build(only: str | None = None) -> dict:
             print(f"{sym}: no constituent table matched", file=sys.stderr)
             continue
         scraped = list(dict.fromkeys(scraped))
-        live = _verify([s for s, _ in scraped])
+        live = _verify([s for s, _, _ in scraped])
         members = [
-            {"ticker": s, "name": n, **live[s]}
-            for s, n in scraped if s in live
+            {"ticker": s, "name": n, **({"sector": sec} if sec else {}), **live[s]}
+            for s, n, sec in scraped if s in live
         ]
         currencies = [m["currency"] for m in members if m.get("currency")]
         prior = existing.get(sym, {})
@@ -244,7 +310,14 @@ def build(only: str | None = None) -> dict:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--index", help="rebuild a single index, e.g. ^NSEI")
+    ap.add_argument("--sectors-only", action="store_true",
+                    help="merge sectors onto the existing members, no price source touched")
     args = ap.parse_args()
+    if args.sectors_only:
+        data = add_sectors(args.index)
+        tagged = {k: v.get("sector_coverage") for k, v in data["indices"].items() if "members" in v}
+        print(f"\nwrote {OUT}\nsector coverage: {tagged}", file=sys.stderr)
+        raise SystemExit(0)
     data = build(args.index)
     ok = {k: v.get("resolved") for k, v in data["indices"].items() if "members" in v}
     print(f"\nwrote {OUT}\n{len(ok)} indices: {ok}", file=sys.stderr)

@@ -21,7 +21,8 @@ const TXT = 'var(--theme-text, #d7e3fc)'
 const BORDER = 'var(--theme-border, rgba(255,255,255,0.08))'
 const FAINT = 'var(--theme-border-faint, rgba(255,255,255,0.05))'
 
-interface Member { ticker: string; name: string; price: number | null; change_pct: number | null; market_cap_usd: number | null; weight_pct: number | null }
+interface Member { ticker: string; name: string; sector: string | null; price: number | null; change_pct: number | null; market_cap_usd: number | null; weight_pct: number | null }
+interface Sector { sector: string; weight_pct: number; count: number; change_pct: number | null }
 interface Constituents {
   available: boolean
   reason?: string
@@ -35,6 +36,7 @@ interface Constituents {
   breadth?: { advancing: number; declining: number; unchanged: number; priced: number }
   concentration?: { top5_pct: number | null; top10_pct: number | null }
   members?: Member[]
+  sectors?: Sector[]
   leaders?: Member[]
   laggards?: Member[]
 }
@@ -203,6 +205,39 @@ function MoverList({ title, rows }: { title: string; rows: Member[] }) {
   )
 }
 
+/** Weight bars per sector. Long tails get rolled up rather than printed: the
+ *  FTSE publishes forty-four buckets and a chart of forty-four bars is a list
+ *  with extra steps. */
+function SectorMix({ rows }: { rows: Sector[] }) {
+  const [all, setAll] = useState(false)
+  const top = all ? rows : rows.slice(0, 8)
+  const rest = all ? [] : rows.slice(8)
+  const restWeight = rest.reduce((sum, r) => sum + r.weight_pct, 0)
+  const widest = Math.max(...rows.map(r => r.weight_pct), 1)
+  return (
+    <div>
+      {top.map(r => (
+        <div key={r.sector} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '3px 0' }}>
+          <span style={{ fontFamily: SANS, fontSize: 11, color: TXT, width: 150, flex: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.sector}</span>
+          <span style={{ fontFamily: MONO, fontSize: 10, color: SEC, width: 26, flex: 'none', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.count}</span>
+          <span style={{ flex: 1, minWidth: 40, height: 6, background: FAINT }}>
+            <span style={{ display: 'block', width: `${(r.weight_pct / widest) * 100}%`, height: '100%', background: 'color-mix(in srgb, var(--theme-primary) 55%, transparent)' }} />
+          </span>
+          <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: TXT, width: 48, flex: 'none', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.weight_pct.toFixed(1)}%</span>
+          <span style={{ fontFamily: MONO, fontSize: 11, color: tone(r.change_pct), width: 52, flex: 'none', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{signed(r.change_pct, 2)}</span>
+        </div>
+      ))}
+      {rest.length > 0 && (
+        <button onClick={() => setAll(true)}
+          style={{ marginTop: 7, background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+            fontFamily: SANS, fontSize: 10, color: SEC, textAlign: 'left' }}>
+          {rest.length} more sectors, {restWeight.toFixed(1)}% of market cap
+        </button>
+      )}
+    </div>
+  )
+}
+
 const th: React.CSSProperties = {
   ...eyebrow, fontSize: 8.5, padding: '0 10px 7px', textAlign: 'right', whiteSpace: 'nowrap',
 }
@@ -216,10 +251,11 @@ function Members({ rows, weighting }: { rows: Member[]; weighting?: 'cap' | 'pri
   const shown = all ? rows : rows.slice(0, 12)
   return (
     <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 380 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520 }}>
         <thead>
           <tr>
             <th style={{ ...th, textAlign: 'left' }}>Company</th>
+            <th style={{ ...th, textAlign: 'left' }}>Sector</th>
             <th style={th}>Price</th>
             <th style={th}>1D</th>
             <th style={th}>Market cap</th>
@@ -233,6 +269,7 @@ function Members({ rows, weighting }: { rows: Member[]; weighting?: 'cap' | 'pri
                 <span style={{ fontWeight: 700 }}>{r.ticker.split('.')[0]}</span>
                 <span style={{ fontFamily: SANS, fontSize: 10, color: SEC, marginLeft: 7 }}>{r.name}</span>
               </td>
+              <td style={{ ...td, textAlign: 'left', fontFamily: SANS, fontSize: 10, color: SEC, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.sector ?? '—'}</td>
               <td style={td}>{r.price == null ? '—' : num(r.price)}</td>
               <td style={{ ...td, color: tone(r.change_pct) }}>{signed(r.change_pct, 2)}</td>
               <td style={td}>{cap(r.market_cap_usd)}</td>
@@ -319,6 +356,12 @@ export default function AssetFacts({ ticker, label, yields }: { ticker: string; 
                 <MoverList title="Leaders" rows={c.leaders ?? []} />
                 <MoverList title="Laggards" rows={c.laggards ?? []} />
               </div>
+            </Section>
+          )}
+
+          {!!c.sectors?.length && (
+            <Section title="Sector mix" meta={`${c.sectors.length} sectors · the index's own classification`}>
+              <SectorMix rows={c.sectors} />
             </Section>
           )}
 

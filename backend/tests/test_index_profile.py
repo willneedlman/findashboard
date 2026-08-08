@@ -88,6 +88,27 @@ def test_profile_aggregates(monkeypatch):
     assert out["coverage"] == {"listed": 3, "priced": 3}
 
 
+def test_sector_mix_is_cap_weighted_not_headcount(monkeypatch):
+    """One giant bank outweighs six small miners. Counting names instead of
+    capital would invert the picture on any concentrated index."""
+    rows = [
+        {"sector": "Banks", "market_cap_usd": 900, "change_pct": -1.0},
+        {"sector": "Mining", "market_cap_usd": 50, "change_pct": 4.0},
+        {"sector": "Mining", "market_cap_usd": 50, "change_pct": 2.0},
+        {"sector": None, "market_cap_usd": 100, "change_pct": 5.0},      # untagged, excluded
+    ]
+    mix = ip._sector_mix(rows, 1000.0)
+
+    assert [s["sector"] for s in mix] == ["Banks", "Mining"]
+    assert mix[0]["weight_pct"] == 90.0 and mix[0]["count"] == 1
+    assert mix[1]["weight_pct"] == 10.0 and mix[1]["count"] == 2
+    assert mix[1]["change_pct"] == pytest.approx(3.0)     # equal caps, so the mean
+
+
+def test_sector_mix_is_empty_without_a_cap_total(monkeypatch):
+    assert ip._sector_mix([{"sector": "Banks", "market_cap_usd": 10, "change_pct": 1.0}], None) == []
+
+
 def test_unavailable_index_explains_itself(monkeypatch):
     monkeypatch.setattr(ip, "_load", lambda: {"indices": {"^RUT": {"unavailable": "2,000 members, no free list."}}})
     out = ip.index_profile.__wrapped__("^RUT")
@@ -163,3 +184,8 @@ def test_shipped_constituent_file_is_sane():
         for member in entry["members"]:
             assert member["ticker"] and member["name"], symbol
             assert member.get("shares") is None or member["shares"] > 0, member["ticker"]
+    # Sector tagging is best effort per source, but it has to have worked
+    # somewhere or the mix panel is dead weight on every screen.
+    tagged = sum(1 for e in tracked.values() for m in e["members"] if m.get("sector"))
+    total = sum(len(e["members"]) for e in tracked.values())
+    assert tagged / total > 0.9, f"only {tagged}/{total} members carry a sector"
