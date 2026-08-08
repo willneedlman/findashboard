@@ -76,7 +76,7 @@ def test_profile_aggregates(monkeypatch):
     frame = _frame({"BIG": [100.0, 110.0], "MID": [50.0, 45.0], "FLAT": [10.0, 10.0]}, 2)
     monkeypatch.setattr(ip, "get_download", lambda *a, **k: frame)
 
-    out = ip.index_profile.__wrapped__("^X")
+    out = ip.index_profile("^X")
 
     assert out["available"] is True
     assert out["breadth"] == {"advancing": 1, "declining": 1, "unchanged": 1, "priced": 3}
@@ -111,7 +111,7 @@ def test_sector_mix_is_empty_without_a_cap_total(monkeypatch):
 
 def test_unavailable_index_explains_itself(monkeypatch):
     monkeypatch.setattr(ip, "_load", lambda: {"indices": {"^RUT": {"unavailable": "2,000 members, no free list."}}})
-    out = ip.index_profile.__wrapped__("^RUT")
+    out = ip.index_profile("^RUT")
     assert out == {"available": False, "reason": "2,000 members, no free list."}
 
 
@@ -120,7 +120,7 @@ def test_non_index_gets_no_constituent_section_at_all(monkeypatch):
     no members answers a question the reader never asked, so the payload stays
     silent and the panel renders nothing."""
     monkeypatch.setattr(ip, "_load", lambda: {"indices": {}})
-    assert ip.index_profile.__wrapped__("GC=F") == {"available": False}
+    assert ip.index_profile("GC=F") == {"available": False}
 
 
 def test_stats_ladder_and_range(monkeypatch):
@@ -167,6 +167,15 @@ def test_benchmark_against_itself_has_no_beta_row(monkeypatch):
 def test_empty_download_returns_nothing_rather_than_raising(monkeypatch):
     monkeypatch.setattr(ip, "get_download", lambda *a, **k: pd.DataFrame())
     assert ip.asset_stats("^X") == {}
+
+
+def test_schema_bump_busts_the_persisted_cache():
+    """The persisted tier sits on a volume that outlives a deploy. If the
+    schema constant is not part of the cache key, new code serves the previous
+    payload shape from disk until the TTL runs out."""
+    import inspect
+    assert "schema" in inspect.signature(ip._index_profile.__wrapped__).parameters
+    assert ip._SCHEMA >= 2
 
 
 def test_shipped_constituent_file_is_sane():

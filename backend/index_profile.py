@@ -185,10 +185,6 @@ def _price_members(members: list[dict], currency: str | None) -> tuple[list[dict
     return rows, fx
 
 
-# Half an hour, not the usual five minutes. Pricing 500 names takes Yahoo about
-# fifteen seconds, and a member's day change does not need to be fresher than
-# the wait it costs. Persisted so a restart does not make the first visitor pay
-# it again.
 def _sector_mix(rows: list[dict], total_cap: float | None) -> list[dict]:
     """Weight, member count and cap-weighted day move per sector.
 
@@ -222,8 +218,23 @@ def _sector_mix(rows: list[dict], total_cap: float | None) -> list[dict]:
     return sorted(out, key=lambda s: s["weight_pct"], reverse=True)
 
 
-@cached(ttl=1800, maxsize=64, persist=True)
+# Bump whenever the payload gains or loses a field. The persisted tier lives on
+# a Fly volume that survives a deploy, so without this a shape change ships to
+# an image that then serves the previous shape from disk until the TTL expires:
+# new code, old JSON, and a panel missing a column for half an hour.
+_SCHEMA = 2
+
+
 def index_profile(symbol: str) -> dict:
+    return _index_profile(symbol, _SCHEMA)
+
+
+# Half an hour, not the usual five minutes. Pricing 500 names takes Yahoo about
+# fifteen seconds, and a member's day change does not need to be fresher than
+# the wait it costs. Persisted so a restart does not make the first visitor pay
+# it again.
+@cached(ttl=1800, maxsize=64, persist=True)
+def _index_profile(symbol: str, schema: int) -> dict:
     """Members of `symbol` priced live, plus the aggregates worth reading off
     them: who is carrying the index, who is dragging it, and how many names are
     actually participating."""
