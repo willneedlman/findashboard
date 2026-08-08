@@ -48,7 +48,7 @@ interface Stats {
   range_52w: { low: number | null; high: number | null; position_pct: number | null; from_high_pct: number | null; from_low_pct: number | null }
   vol_30d: number | null
   max_drawdown_1y: number | null
-  vs_benchmark: { benchmark: string; correlation: number; beta: number } | null
+  vs_benchmark: { benchmark: string; benchmark_label: string; correlation: number; beta: number } | null
 }
 interface StatsResponse { ticker: string; stats: Stats | null }
 interface ConstituentsResponse { ticker: string; constituents: Constituents }
@@ -151,7 +151,7 @@ function RiskRow({ stats }: { stats: Stats }) {
   if (stats.vol_30d != null) items.push(['30d volatility', `${stats.vol_30d.toFixed(1)}%`])
   if (stats.max_drawdown_1y != null) items.push(['Deepest 1y fall', `${stats.max_drawdown_1y.toFixed(1)}%`, NEG])
   if (stats.vs_benchmark) {
-    items.push([`Beta vs ${stats.vs_benchmark.benchmark}`, stats.vs_benchmark.beta.toFixed(2)])
+    items.push([`Beta vs ${stats.vs_benchmark.benchmark_label}`, stats.vs_benchmark.beta.toFixed(2)])
     items.push(['Correlation', stats.vs_benchmark.correlation.toFixed(2)])
   }
   if (!items.length) return null

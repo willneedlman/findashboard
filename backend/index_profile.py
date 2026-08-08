@@ -66,6 +66,12 @@ def _series_at_or_before(series: pd.Series, when: _dt.date) -> float | None:
     return float(prior.iloc[-1]) if len(prior) else None
 
 
+# The benchmark travels with a readable name. "^GSPC" is a Yahoo symbol, and a
+# label built by interpolating it puts the vendor's ticker in front of a reader
+# who asked about the S&P 500.
+_BENCHMARK_LABEL = "S&P 500"
+
+
 def asset_stats(ticker: str, benchmark: str = "^GSPC") -> dict:
     """Range, return ladder, realised risk, and the relationship to the S&P.
 
@@ -118,7 +124,8 @@ def asset_stats(ticker: str, benchmark: str = "^GSPC") -> dict:
             corr = float(pair["a"].corr(pair["b"]))
             beta = float(pair["a"].cov(pair["b"]) / pair["b"].var())
             if np.isfinite(corr) and np.isfinite(beta):
-                vs = {"benchmark": benchmark, "correlation": round(corr, 2), "beta": round(beta, 2)}
+                vs = {"benchmark": benchmark, "benchmark_label": _BENCHMARK_LABEL,
+                      "correlation": round(corr, 2), "beta": round(beta, 2)}
 
     return {
         "last": last,

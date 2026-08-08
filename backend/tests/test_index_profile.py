@@ -156,6 +156,20 @@ def test_stats_absolute_changes_track_returns(monkeypatch):
     assert out["returns"]["1m"] == pytest.approx(12.5)
 
 
+def test_benchmark_carries_a_readable_name(monkeypatch):
+    """The panel prints this label. Interpolating the raw symbol put "^GSPC" in
+    front of a reader who came to look at an index."""
+    index = pd.bdate_range(end=dt.date.today(), periods=300)
+    a = pd.Series(range(1, 301), index=index, dtype=float)
+    b = pd.Series(range(300, 0, -1), index=index, dtype=float)
+    frame = pd.concat({"Close": pd.DataFrame({"^X": a, "^GSPC": b})}, axis=1)
+    monkeypatch.setattr(ip, "get_download", lambda *a, **k: frame)
+
+    vs = ip.asset_stats("^X")["vs_benchmark"]
+    assert vs["benchmark_label"] == "S&P 500"
+    assert "^" not in vs["benchmark_label"]
+
+
 def test_benchmark_against_itself_has_no_beta_row(monkeypatch):
     index = pd.bdate_range(end=dt.date.today(), periods=300)
     frame = pd.concat({"Close": pd.DataFrame({"^GSPC": pd.Series(range(1, 301), index=index, dtype=float)})}, axis=1)
