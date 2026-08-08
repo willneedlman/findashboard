@@ -9,7 +9,9 @@ from reporting.pipeline import (
     validate_template_sections,
 )
 from types import SimpleNamespace
-from reporting.tool_registry import REPORT_TOOL_BY_ID, report_tool_manifest
+from reporting.tool_registry import (
+    EVIDENCE_CLASSES, QUESTION_TAGS, REPORT_TOOL_BY_ID, report_tool_manifest,
+)
 from fastapi import HTTPException
 from routers import ai
 
@@ -22,11 +24,24 @@ PORTFOLIO_REVIEW_FIXTURE = json.loads(
 def test_tool_manifest_is_authoritative_and_schema_complete():
     manifest = report_tool_manifest()
 
-    assert len(manifest) == len(REPORT_TOOL_BY_ID) == 23
+    assert len(manifest) == len(REPORT_TOOL_BY_ID)
     assert len({tool["id"] for tool in manifest}) == len(manifest)
     assert all(tool["description"] and tool["targetMode"] for tool in manifest)
     assert all(tool["domain"] in {"portfolio", "issuer", "macro", "benchmark"} for tool in manifest)
     assert {tool["id"] for tool in manifest} == set(REPORT_TOOL_BY_ID)
+
+    # The machine fields are what retrieval ranks on. A tool that ships without
+    # them is invisible to every question and would silently never be selected.
+    for tool in manifest:
+        assert tool["questionTags"], f"{tool['id']} answers no question"
+        assert set(tool["questionTags"]) <= set(QUESTION_TAGS)
+        assert tool["evidenceClass"] in EVIDENCE_CLASSES
+        assert tool["outputShapes"]
+        assert tool["cost"] in {"cheap", "normal", "slow"}
+
+    # Every tag must be answerable, or a question carrying it retrieves nothing.
+    covered = {tag for tool in manifest for tag in tool["questionTags"]}
+    assert covered == set(QUESTION_TAGS)
 
 
 def test_data_bank_requires_terminal_record_for_every_required_tool():

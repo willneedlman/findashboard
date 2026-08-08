@@ -39,66 +39,146 @@ def _clip(id_, source, title, summary):
                          dataSummary=summary, userDescription="")
 
 
-def test_report_research_planner_keeps_only_supported_nonbaseline_tools(monkeypatch):
-    monkeypatch.setattr(ai, "groq_complete", lambda *args, **kwargs: """{
-      "summary": "Add visual dependence and rates evidence.",
-      "additions": [
-        {"id": "correlation", "reason": "Show whether the subjects diversify one another."},
-        {"id": "company", "reason": "Repeat the baseline."},
-        {"id": "invented", "reason": "Not a real tool."},
-        {"id": "rate-engine", "reason": "Frame duration-sensitive valuation risk."},
-        {"id": "rate-engine", "reason": "Duplicate."}
-      ]
-    }""")
+def _planner_stub(questions: str, picks: str):
+    """Stand in for both planner calls.
+
+    The planner makes two: decomposition first, then picking. They are told apart
+    by the system prompt so a test can drive each independently.
+    """
+    def complete(prompt, *args, system="", **kwargs):
+        return questions if "break a research objective" in system else picks
+    return complete
+
+
+def test_planner_accepts_only_picks_from_that_questions_own_shortlist(monkeypatch):
+    """Cross-question leakage is the failure that would reopen flat-menu picking.
+
+    An id can be perfectly sensible and still be rejected here: if the model was
+    not offered it for THIS question, accepting it means it chose from the whole
+    registry again, which is the behaviour the shortlist exists to prevent.
+    """
+    monkeypatch.setattr(ai, "groq_complete", _planner_stub(
+        questions='{"questions": [{"q": "How do they co-move?", "tags": ["correlation_struct"], "priority": 1}]}',
+        picks="""{
+          "thesis": "AAPL and MSFT diversify less than their sector labels imply.",
+          "summary": "Measure dependence directly.",
+          "picks": [
+            {"question": 1, "id": "correlation", "reason": "Direct measure of co-movement."},
+            {"question": 1, "id": "housing", "reason": "Not on question 1 candidate list."},
+            {"question": 4, "id": "regression", "reason": "No such question."},
+            {"question": 1, "id": "invented", "reason": "Not a tool at all."}
+          ]
+        }""",
+    ))
     req = ai.ReportResearchPlanRequest(
         objective="Compare AAPL and MSFT risk",
         symbols=["AAPL", "MSFT"],
         baselineSourceIds=["company"],
+        templateId="comparison",
     )
     result = ai.plan_report_research(req)
-    assert result == {
-        "phase": "tool-discovery",
-        "objectivePlan": {
-            "thesis": "Test the evidence needed to answer: Compare AAPL and MSFT risk",
-            "requiredDataPoints": [
-                "Decision-relevant evidence from Company snapshot",
-                "Decision-relevant evidence from Correlation structure",
-                "Decision-relevant evidence from Rates and Fed path",
-            ],
-            "requiredChecks": [],
-        },
-        "summary": "Add visual dependence and rates evidence.",
-        "requiredSourceIds": ["company", "correlation", "rate-engine"],
-        "additions": [
-            {"id": "correlation", "reason": "Show whether the subjects diversify one another."},
-            {"id": "rate-engine", "reason": "Frame duration-sensitive valuation risk."},
-        ],
-        "directives": {},
-    }
+
+    selected = set(result["requiredSourceIds"])
+    assert "correlation" in selected
+    assert "company" in selected, "the baseline stays in the plan"
+    assert "invented" not in selected
+    assert "housing" not in selected, "picked for a question that never offered it"
+    assert "regression" not in selected, "picked for a question that does not exist"
+    assert all(addition["id"] != "company" for addition in result["additions"])
 
 
-def test_planner_directives_are_kept_only_for_known_tools():
-    """Directives configure a tool instead of accepting its default view. They may
-    target baseline tools as well as additions, but never an unknown id."""
-    ai.groq_complete = staticmethod(lambda *a, **k: """{
-      "summary": "Chart the pair with trend context.",
-      "additions": [{"id": "correlation", "reason": "Show co-movement."}],
-      "directives": {
-        "company": "  pull the   latest quarter  ",
-        "correlation": "use a 90 day rolling window",
-        "invented": "should be dropped"
-      }
-    }""")
+def test_planner_fills_a_missing_evidence_class_without_asking_the_model(monkeypatch):
+    """The coverage floor is enforced in code, so a model that picks nothing at
+    all still cannot produce a report with no risk evidence in it."""
+    monkeypatch.setattr(ai, "groq_complete", _planner_stub(
+        questions='{"questions": [{"q": "Is it cheap?", "tags": ["valuation_level"], "priority": 1}]}',
+        picks='{"thesis": "", "summary": "", "picks": []}',
+    ))
+    req = ai.ReportResearchPlanRequest(
+        objective="Is NVDA cheap",
+        symbols=["NVDA"],
+        baselineSourceIds=["company"],
+        templateId="equity-note",
+    )
+    result = ai.plan_report_research(req)
+
+    classes = result["coverage"]["evidenceClasses"]
+    assert not result["coverage"]["missingClasses"]
+    for required in ("level", "trend", "risk", "relative"):
+        assert classes[required] >= 1, f"{required} evidence missing from an equity note"
+    assert any("floor" in note for note in result["planNotes"])
+
+
+def test_planner_falls_back_to_tagged_questions_when_decomposition_fails(monkeypatch):
+    """A failed first call must not collapse the plan back onto one intent label.
+
+    Before the rebuild a broad objective funnelled into `company` and pulled the
+    same two clips. Here the objective's own words still have to reach the tools
+    that answer them.
+    """
+    def complete(prompt, *args, system="", **kwargs):
+        if "break a research objective" in system:
+            raise RuntimeError("model unavailable")
+        return '{"thesis": "", "summary": "", "picks": []}'
+    monkeypatch.setattr(ai, "groq_complete", complete)
+
+    req = ai.ReportResearchPlanRequest(
+        objective="What is the seasonal pattern and the insider positioning in AAPL",
+        symbols=["AAPL"],
+        baselineSourceIds=["company"],
+        templateId="equity-note",
+    )
+    result = ai.plan_report_research(req)
+
+    tags = {tag for question in result["questions"] for tag in question["tags"]}
+    assert "seasonality_timing" in tags
+    assert "positioning_flow" in tags
+
+
+def test_planner_directives_are_kept_only_for_selected_tools(monkeypatch):
+    """Directives configure a tool instead of accepting its default view. A
+    directive for a tool that was not selected has nothing to configure."""
+    monkeypatch.setattr(ai, "groq_complete", _planner_stub(
+        questions='{"questions": [{"q": "How do they co-move?", "tags": ["correlation_struct"], "priority": 1}]}',
+        picks="""{
+          "summary": "Chart the pair with trend context.",
+          "picks": [{"question": 1, "id": "correlation", "reason": "Show co-movement."}],
+          "directives": {
+            "company": "  pull the   latest quarter  ",
+            "correlation": "use a 90 day rolling window",
+            "housing": "never selected, so nothing to configure",
+            "invented": "should be dropped"
+          }
+        }""",
+    ))
     req = ai.ReportResearchPlanRequest(
         objective="Compare AAPL and MSFT",
         symbols=["AAPL", "MSFT"],
         baselineSourceIds=["company"],
+        templateId="comparison",
     )
     got = ai.plan_report_research(req)["directives"]
-    assert got == {
-        "company": "pull the latest quarter",          # whitespace collapsed
-        "correlation": "use a 90 day rolling window",
-    }
+
+    assert got["company"] == "pull the latest quarter"     # whitespace collapsed
+    assert got["correlation"] == "use a 90 day rolling window"
+    assert "invented" not in got
+    assert "housing" not in got
+
+
+def test_evidence_utilisation_separates_cited_pulls_from_ignored_ones():
+    """The tuning signal for retrieval: a tool pulled and never cited was
+    selected on name rather than on fit."""
+    data_bank = {"runs": [
+        {"sourceId": "company", "clipIds": ["c1", "c2"]},
+        {"sourceId": "seasonality", "clipIds": ["s1"]},
+        {"sourceId": "housing", "clipIds": ["h1"]},
+        {"sourceId": "empty", "clipIds": []},
+    ]}
+    result = ai._evidence_utilisation(data_bank, {"c2", "s1"})
+
+    assert result["citedSourceIds"] == ["company", "seasonality"]
+    assert result["uncitedSourceIds"] == ["housing"]
+    assert result["citationRate"] == round(2 / 3, 3)
 
 
 def test_report_title_uses_only_the_writer_headline():

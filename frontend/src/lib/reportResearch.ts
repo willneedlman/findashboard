@@ -39,6 +39,26 @@ export type ReportResearchSourceId =
   | 'volatility-skew'
   | 'dealer-gex'
   | 'implied-probability'
+  // Reachable since the evidence-selection rebuild. Each one answers a question
+  // the report used to have no tool for; see backend/reporting/tool_registry.py
+  // for the question tags that route to them.
+  | 'asset-profile'
+  | 'dividends'
+  | 'debt-maturity'
+  | 'seasonality'
+  | 'options-unusual'
+  | 'insider-activity'
+  | 'institutional-ownership'
+  | 'cot-positioning'
+  | 'breadth'
+  | 'sector-rrg'
+  | 'pairs'
+  | 'fx-matrix'
+  | 'macro-cycle'
+  | 'credit-stress'
+  | 'housing'
+  | 'ipo-calendar'
+  | 'chokepoint-exposure'
 
 export interface ReportResearchSource {
   id: ReportResearchSourceId
@@ -67,12 +87,34 @@ export interface ReportResearchPlan {
   aiSummary?: string
   objectivePlan?: ReportObjectivePlan
   requiredSourceIds?: ReportResearchSourceId[]
+  questions?: ReportResearchQuestion[]
+  coverage?: ReportEvidenceCoverage
+  planNotes?: string[]
+  /** Caveat text per pull, so a section cannot claim past what the source supports. */
+  evidenceLimits?: Record<string, string>
 }
 
 export interface ReportObjectivePlan {
   thesis: string
   requiredDataPoints: string[]
   requiredChecks: string[]
+}
+
+/** One analytical question the objective contains, with its closed-vocabulary tags. */
+export interface ReportResearchQuestion {
+  q: string
+  tags: string[]
+  priority: number
+}
+
+/** What the selected evidence covers. Drives the build note, not the fetch. */
+export interface ReportEvidenceCoverage {
+  evidenceClasses: Record<string, number>
+  questionTags: Record<string, number>
+  requiredClasses: string[]
+  missingClasses: string[]
+  toolCount: number
+  distinctClasses: number
 }
 
 export interface ReportDataBankRun {
@@ -239,6 +281,23 @@ const SOURCE_META: Record<ReportResearchSourceId, Omit<ReportResearchSource, 're
   'volatility-skew': { id: 'volatility-skew', label: 'Volatility skew', tool: 'Volatility Skew', route: '/skew', domain: 'issuer' },
   'dealer-gex': { id: 'dealer-gex', label: 'Dealer gamma', tool: 'Dealer GEX', route: '/gex', domain: 'issuer' },
   'implied-probability': { id: 'implied-probability', label: 'Implied probability', tool: 'Implied Probability', route: '/probability', domain: 'issuer' },
+  'asset-profile': { id: 'asset-profile', label: 'Instrument profile', tool: 'Global Markets', route: '/global-markets', domain: 'benchmark' },
+  dividends: { id: 'dividends', label: 'Dividend profile', tool: 'Portfolio Manager', route: '/portfolio-manager', domain: 'issuer' },
+  'debt-maturity': { id: 'debt-maturity', label: 'Debt and maturity wall', tool: 'Company Profile', route: '/company-profile', domain: 'issuer' },
+  seasonality: { id: 'seasonality', label: 'Seasonal pattern', tool: 'Seasonality', route: '/seasonality', domain: 'issuer' },
+  'options-unusual': { id: 'options-unusual', label: 'Unusual options activity', tool: 'Options Scanner', route: '/options-scanner', domain: 'issuer' },
+  'insider-activity': { id: 'insider-activity', label: 'Insider activity', tool: 'Company Profile', route: '/company-profile', domain: 'issuer' },
+  'institutional-ownership': { id: 'institutional-ownership', label: 'Institutional ownership', tool: 'Company Profile', route: '/company-profile', domain: 'issuer' },
+  'cot-positioning': { id: 'cot-positioning', label: 'Futures positioning', tool: 'Trader Positioning', route: '/trader-positioning', domain: 'macro' },
+  breadth: { id: 'breadth', label: 'Market breadth', tool: 'Market Breadth', route: '/breadth', domain: 'benchmark' },
+  'sector-rrg': { id: 'sector-rrg', label: 'Rotation graph', tool: 'Sector Rotation', route: '/sector-rotation', domain: 'benchmark' },
+  pairs: { id: 'pairs', label: 'Pair relationship', tool: 'Pairs Trader', route: '/pairs-trader', domain: 'benchmark' },
+  'fx-matrix': { id: 'fx-matrix', label: 'Currency matrix', tool: 'FX Matrix', route: '/currency', domain: 'macro' },
+  'macro-cycle': { id: 'macro-cycle', label: 'Business cycle read', tool: 'Macro Monitor', route: '/economy', domain: 'macro' },
+  'credit-stress': { id: 'credit-stress', label: 'Credit stress', tool: 'Credit Stress', route: '/credit-delinquencies', domain: 'macro' },
+  housing: { id: 'housing', label: 'Housing market', tool: 'Housing Market', route: '/housing', domain: 'macro' },
+  'ipo-calendar': { id: 'ipo-calendar', label: 'IPO calendar', tool: 'IPO Scanner', route: '/ipo-calendar', domain: 'macro' },
+  'chokepoint-exposure': { id: 'chokepoint-exposure', label: 'Chokepoint exposure', tool: 'Chokepoint Exposure', route: '/chokepoint-exposure', domain: 'macro' },
 }
 
 type ResearchTargetMode = 'market' | 'symbols' | 'portfolio' | 'portfolio-or-symbols'
@@ -276,6 +335,23 @@ const REPORT_RESEARCH_TOOL_CATALOG_BASE: Omit<ReportResearchToolCatalogItem, 'do
   { id: 'volatility-skew', label: 'Volatility skew', description: 'Options smile, downside skew, implied move, and ATM volatility term structure.', targetMode: 'symbols', producesVisuals: true },
   { id: 'dealer-gex', label: 'Dealer gamma', description: 'Dealer gamma exposure by strike, gamma flip, and the largest positive and negative positioning levels.', targetMode: 'symbols', producesVisuals: true },
   { id: 'implied-probability', label: 'Implied probability', description: 'Risk-neutral price cone, options-implied terminal distribution, percentiles, and finish-above probabilities.', targetMode: 'symbols', producesVisuals: true },
+  { id: 'asset-profile', label: 'Instrument profile', description: 'Return ladder, position in the 52-week range, realised volatility, drawdown, and benchmark relationship for one instrument or index.', targetMode: 'symbols', producesVisuals: false },
+  { id: 'dividends', label: 'Dividend profile', description: 'Forward annual dividend per share and yield for each named holding.', targetMode: 'symbols', producesVisuals: false },
+  { id: 'debt-maturity', label: 'Debt and maturity wall', description: 'Scheduled debt maturities by year from the latest annual filing, and total debt outstanding.', targetMode: 'symbols', producesVisuals: true },
+  { id: 'seasonality', label: 'Seasonal pattern', description: 'Month-of-year, weekday, and turn-of-month return patterns with the sample size behind each.', targetMode: 'symbols', producesVisuals: true },
+  { id: 'options-unusual', label: 'Unusual options activity', description: 'Contracts trading far above their open interest, by volume, premium, and moneyness.', targetMode: 'symbols', producesVisuals: false },
+  { id: 'insider-activity', label: 'Insider activity', description: 'Recent Form 4 insider buys and sells with size, role, and 10b5-1 status.', targetMode: 'symbols', producesVisuals: false },
+  { id: 'institutional-ownership', label: 'Institutional ownership', description: '13F holder base, quarter-on-quarter position changes, and float held.', targetMode: 'symbols', producesVisuals: false },
+  { id: 'cot-positioning', label: 'Futures positioning', description: 'CFTC Commitments of Traders net positioning and weekly flow by trader cohort.', targetMode: 'market', producesVisuals: true },
+  { id: 'breadth', label: 'Market breadth', description: 'Advance-decline, new highs and lows, share of members above their moving averages, and index-versus-breadth divergence.', targetMode: 'market', producesVisuals: true },
+  { id: 'sector-rrg', label: 'Rotation graph', description: 'Relative-strength and momentum coordinates per sector against the benchmark, with the quadrant each rotated in from.', targetMode: 'market', producesVisuals: true },
+  { id: 'pairs', label: 'Pair relationship', description: 'Cointegration, hedge ratio, spread z-score, half-life, and the historical spread trade record for two names.', targetMode: 'symbols', producesVisuals: false },
+  { id: 'fx-matrix', label: 'Currency matrix', description: 'Cross-rate matrix, forward points, basis, implied volatility, and short rates across the majors.', targetMode: 'market', producesVisuals: true },
+  { id: 'macro-cycle', label: 'Business cycle read', description: 'Composite cycle score and phase from payrolls, unemployment, the yield curve, and related components.', targetMode: 'market', producesVisuals: false },
+  { id: 'credit-stress', label: 'Credit stress', description: 'Observed delinquency and charge-off rates by asset class, with Federal Reserve stress indicators.', targetMode: 'market', producesVisuals: true },
+  { id: 'housing', label: 'Housing market', description: 'Mortgage rates, median price, affordability, months of supply, and delinquency.', targetMode: 'market', producesVisuals: false },
+  { id: 'ipo-calendar', label: 'IPO calendar', description: 'Priced and upcoming listings with deal size, as a read on primary-market risk appetite.', targetMode: 'market', producesVisuals: false },
+  { id: 'chokepoint-exposure', label: 'Chokepoint exposure', description: 'Maritime chokepoint transit stress and the listed companies most exposed to it.', targetMode: 'market', producesVisuals: true },
 ]
 
 export const REPORT_RESEARCH_TOOL_CATALOG: ReportResearchToolCatalogItem[] = REPORT_RESEARCH_TOOL_CATALOG_BASE.map(item => ({
@@ -292,12 +368,18 @@ const HISTORICAL_RESEARCH_SOURCES = new Set<ReportResearchSourceId>([
   'regression',
   'factor-decomposition',
   'credit-spreads',
+  'seasonality',
+  'breadth',
+  'sector-rrg',
+  'pairs',
+  'cot-positioning',
 ])
 
 const FORWARD_RESEARCH_SOURCES = new Set<ReportResearchSourceId>([
   'earnings',
   'macro-events',
   'implied-probability',
+  'ipo-calendar',
 ])
 
 function sourceMatchesHorizon(sourceId: ReportResearchSourceId, scope: ReportScope): boolean {
@@ -868,7 +950,7 @@ export function researchSourceProducesVisuals(sourceId: ReportResearchSourceId):
 // itself is 1. Both planners truncate the symbol list to a single name unless the
 // intent is literally 'comparison', which handed these tools one ticker and made
 // them fail every time the planner chose them for a portfolio or macro report.
-const MULTI_ASSET_SOURCES = new Set<ReportResearchSourceId>(['correlation', 'regression', 'market-compare'])
+const MULTI_ASSET_SOURCES = new Set<ReportResearchSourceId>(['correlation', 'regression', 'market-compare', 'pairs'])
 
 function targetsForSource(_sourceId: ReportResearchSourceId, symbols: string[]): string[] {
   return unique(symbols.map(normalizeTicker).filter(Boolean))
@@ -912,6 +994,17 @@ export async function enhanceReportResearchPlan(
       cashIncluded: portfolio.cashValue > 0,
     },
     baselineSourceIds: baseline.sources.map(source => source.id),
+    // The template decides which evidence classes the plan must cover, and the
+    // length decides how many pulls it may carry. Both are enforced server-side,
+    // so they have to travel with the request rather than be inferred from prose.
+    templateId: scope.reportType,
+    length: scope.length,
+    // Anything the horizon rules out is unavailable, not merely unattractive.
+    // Telling the planner keeps it from spending a shortlist slot on a tool the
+    // client would then silently refuse to run.
+    disabledSourceIds: REPORT_RESEARCH_TOOL_CATALOG
+      .filter(tool => !sourceMatchesHorizon(tool.id, scope))
+      .map(tool => tool.id),
   }))
   const additions = array(response.additions)
   const catalog = new Map(toolCatalog.map(item => [item.id, item]))
@@ -919,9 +1012,11 @@ export async function enhanceReportResearchPlan(
   const portfolioRelationshipTargets = usesActivePortfolio(scope, portfolio)
     ? portfolioSymbols(portfolio)
     : baseline.symbols
-  let added = 0
+  // No addition cap here any more. The server enforces a budget derived from the
+  // report length and will not return more than the note can carry, so a second
+  // cap on this side could only silently drop evidence the coverage floor had
+  // just added to close a gap.
   for (const raw of additions) {
-    if (added >= 8) break
     const addition = record(raw)
     const id = String(addition.id ?? '') as ReportResearchSourceId
     const item = catalog.get(id)
@@ -930,7 +1025,7 @@ export async function enhanceReportResearchPlan(
     if (item.targetMode === 'symbols' && baseline.symbols.length === 0) continue
     if (item.targetMode === 'portfolio' && !hasPortfolio) continue
     if (item.targetMode === 'portfolio-or-symbols' && !hasPortfolio && baseline.symbols.length === 0) continue
-    if ((id === 'correlation' || id === 'regression') && portfolioRelationshipTargets.length < 2) continue
+    if (MULTI_ASSET_SOURCES.has(id) && portfolioRelationshipTargets.length < 2) continue
     const reason = String(addition.reason ?? '').replace(/\s+/g, ' ').trim().slice(0, 220)
     if (!reason) continue
     sources.push({
@@ -946,7 +1041,6 @@ export async function enhanceReportResearchPlan(
           : baseline.symbols.slice(0, 1)),
       selectionOrigin: 'ai',
     })
-    added += 1
   }
 
   // Per-tool setup instructions, applied to baseline tools as well as additions.
@@ -978,6 +1072,17 @@ export async function enhanceReportResearchPlan(
     aiSummary: String(response.summary ?? '').replace(/\s+/g, ' ').trim().slice(0, 240),
     objectivePlan,
     requiredSourceIds,
+    questions: array(response.questions).map(raw => {
+      const question = record(raw)
+      return {
+        q: plain(question.q) === '—' ? '' : plain(question.q),
+        tags: array(question.tags).map(plain).filter(tag => tag !== '—'),
+        priority: finite(question.priority) ?? 9,
+      }
+    }).filter(question => question.q),
+    coverage: response.coverage ? (response.coverage as ReportEvidenceCoverage) : undefined,
+    planNotes: array(response.planNotes).map(plain).filter(note => note !== '—'),
+    evidenceLimits: record(response.evidenceLimits) as Record<string, string>,
   }
 }
 
@@ -2743,6 +2848,526 @@ async function runSource(
       }
       return clips
     }
+
+    // ── Tools the report reached for the first time in the evidence rebuild ──
+    // Each one closes a question the planner could previously find no tool for.
+    // They follow the same contract as the cases above: return [] rather than
+    // throw when the source has nothing, so one thin answer degrades that pull
+    // to a recorded gap instead of failing the report.
+
+    case 'asset-profile':
+      return perTicker(source, async ticker => {
+        const data = record(await client.get(`/api/market/asset-profile?ticker=${encodeURIComponent(ticker)}`))
+        const stats = record(data.stats)
+        const returns = record(stats.returns)
+        const band = record(stats.range_52w)
+        if (finite(stats.last) == null) return null
+        const vsBenchmark = record(stats.vs_benchmark)
+        const cells = [
+          { label: 'Last', value: finite(stats.last)!.toLocaleString(undefined, { maximumFractionDigits: 2 }), sub: plain(stats.as_of) },
+          ...['1D', '1W', '1M', '3M', '6M', 'YTD', '1Y'].map(key => ({
+            label: `Return ${key}`, value: percent(returns[key]),
+          })),
+          { label: '30d realised volatility', value: percent(stats.vol_30d), sub: 'Annualised' },
+          { label: 'Max drawdown 1y', value: percent(stats.max_drawdown_1y) },
+        ]
+        if (finite(band.position_pct) != null) {
+          cells.push({
+            label: 'Position in 52w range',
+            value: `${finite(band.position_pct)!.toFixed(0)}%`,
+            sub: `${finite(band.low)?.toFixed(2) ?? '—'} to ${finite(band.high)?.toFixed(2) ?? '—'}`,
+          })
+        }
+        if (finite(vsBenchmark.beta) != null) {
+          // A beta on a market that does not overlap the benchmark's session is
+          // measured on lagged returns, and saying so is the difference between
+          // 0.52 and 2.09 for an index like the KOSPI.
+          const lag = finite(vsBenchmark.correlation_lag_days) ?? 0
+          cells.push({
+            label: `Beta vs ${plain(vsBenchmark.benchmark_label) === '—' ? 'benchmark' : plain(vsBenchmark.benchmark_label)}`,
+            value: finite(vsBenchmark.beta)!.toFixed(2),
+            sub: `Correlation ${finite(vsBenchmark.correlation)?.toFixed(2) ?? '—'}${
+              vsBenchmark.session_offset ? ` · lagged ${lag}d for non-overlapping sessions` : ''}`,
+          })
+        }
+        return tagClip(kpiClip('Global Markets', `${ticker} · instrument profile`, cells), source, ticker)
+      })
+
+    case 'dividends': {
+      const targets = source.targets.slice(0, 25)
+      if (!targets.length) return []
+      const data = record(await client.get(`/api/market/dividends?tickers=${encodeURIComponent(targets.join(','))}`))
+      const rows = targets
+        .map(ticker => {
+          const row = record(data[ticker])
+          return [ticker, finite(row.annual_dividend), finite(row.dividend_yield)]
+        })
+        .filter(row => row[1] != null || row[2] != null)
+      if (!rows.length) return []
+      return [tagClip(tableClip(
+        'Portfolio Manager',
+        'Dividend profile',
+        ['Ticker', 'Annual dividend $/share', 'Yield %'],
+        rows,
+      ), source, 'dividends')]
+    }
+
+    case 'debt-maturity':
+      return perTicker(source, async ticker => {
+        const data = record(await client.get(`/api/corporate/debt-maturity?ticker=${encodeURIComponent(ticker)}`))
+        const buckets = array(data.buckets)
+          .map(item => ({ bucket: plain(record(item).label), amount: finite(record(item).amount) }))
+          .filter(row => row.amount != null)
+        if (!buckets.length) return null
+        const scale = 1e9
+        return [
+          tagClip(kpiClip('Company Profile', `${ticker} · debt outstanding`, [
+            { label: 'Total debt', value: moneyMillions(data.total) },
+            { label: 'Fiscal year', value: plain(data.fiscal_year), sub: `Filed ${plain(data.filed)}` },
+            { label: 'Source', value: 'SEC 10-K (XBRL)', sub: `As of ${plain(data.as_of)}` },
+          ]), source, `${ticker}:debt`),
+          tagClip(chartClip(
+            'Company Profile',
+            `${ticker} · debt maturing by period`,
+            'bar',
+            'bucket',
+            buckets.map(row => ({ bucket: row.bucket, amount: +(row.amount! / scale).toFixed(2) })),
+            [{ key: 'amount', label: 'Maturing $bn', unit: 'number' }],
+          ), source, `${ticker}:maturity-wall`),
+        ]
+      })
+
+    case 'seasonality':
+      return perTicker(source, async ticker => {
+        const data = record(await client.get(`/api/market/seasonality?ticker=${encodeURIComponent(ticker)}`))
+        if (!data.available) return null
+        const months = array(data.months).map(item => record(item))
+        if (!months.length) return null
+        const stat = (value: unknown) => record(value)
+        const current = stat(data.current_month)
+        const best = stat(data.best_month)
+        const worst = stat(data.worst_month)
+        // The sample size is the story. Twenty Augusts is not a forecast, and a
+        // hit rate quoted without its n invites exactly that misreading.
+        const describe = (row: Record<string, any>) =>
+          `${percent(row.mean_pct)} mean · ${finite(row.hit_rate_pct)?.toFixed(0) ?? '—'}% hit · n=${plain(row.n)}`
+        return [
+          tagClip(kpiClip('Seasonality', `${ticker} · seasonal record`, [
+            { label: `Current month (${plain(current.label)})`, value: percent(current.mean_pct), sub: describe(current) },
+            { label: `Best month (${plain(best.label)})`, value: percent(best.mean_pct), sub: describe(best) },
+            { label: `Worst month (${plain(worst.label)})`, value: percent(worst.mean_pct), sub: describe(worst) },
+            { label: 'Sample', value: `${finite(data.years_covered)?.toFixed(0) ?? '—'} years`, sub: `${plain(data.sessions)} sessions from ${plain(data.first_date)}` },
+          ]), source, `${ticker}:seasonal-summary`),
+          tagClip(chartClip(
+            'Seasonality',
+            `${ticker} · mean return by calendar month`,
+            'bar',
+            'month',
+            months.map(row => ({
+              month: plain(row.label),
+              mean: finite(row.mean_pct),
+              hitRate: finite(row.hit_rate_pct),
+            })),
+            [{ key: 'mean', label: 'Mean return %', unit: 'percent' }],
+            { details: [{ key: 'hitRate', label: 'Hit rate %', unit: 'percent' }] },
+          ), source, `${ticker}:monthly-pattern`),
+          tagClip(tableClip(
+            'Seasonality',
+            `${ticker} · monthly detail with sample size`,
+            ['Month', 'Mean %', 'Median %', 'Hit rate %', 'Best %', 'Worst %', 'Observations'],
+            months.map(row => [
+              plain(row.label), finite(row.mean_pct), finite(row.median_pct),
+              finite(row.hit_rate_pct), finite(row.best_pct), finite(row.worst_pct), finite(row.n),
+            ]),
+          ), source, `${ticker}:monthly-table`),
+        ]
+      })
+
+    case 'options-unusual':
+      return perTicker(source, async ticker => {
+        const data = record(await client.get(`/api/options/unusual?ticker=${encodeURIComponent(ticker)}`))
+        const rows = array(data.rows).map(item => record(item))
+        if (!rows.length) return null
+        const top = rows
+          .sort((a, b) => (finite(b.volOiRatio) ?? 0) - (finite(a.volOiRatio) ?? 0))
+          .slice(0, 15)
+        const calls = rows.filter(row => plain(row.type).toLowerCase() === 'call').length
+        return [
+          tagClip(kpiClip('Options Scanner', `${ticker} · unusual options activity`, [
+            { label: 'Contracts flagged', value: plain(data.count) },
+            { label: 'Call share', value: rows.length ? `${((calls / rows.length) * 100).toFixed(0)}%` : '—', sub: `${calls} calls / ${rows.length - calls} puts` },
+            { label: 'Highest volume/OI', value: finite(top[0]?.volOiRatio)?.toFixed(1) ?? '—', sub: `${plain(top[0]?.strike)} ${plain(top[0]?.type)} ${plain(top[0]?.expiry)}` },
+            { label: 'Screen', value: `vol/OI ≥ ${plain(record(data.params).minVolOi)}`, sub: `min volume ${plain(record(data.params).minVolume)}` },
+          ]), source, `${ticker}:unusual-summary`),
+          tagClip(tableClip(
+            'Options Scanner',
+            `${ticker} · contracts trading above open interest`,
+            ['Type', 'Strike', 'Expiry', 'DTE', 'Volume', 'Open interest', 'Vol/OI', 'IV %', 'Premium $'],
+            top.map(row => [
+              plain(row.type), finite(row.strike), plain(row.expiry), finite(row.dte),
+              finite(row.volume), finite(row.openInterest), finite(row.volOiRatio),
+              finite(row.iv) == null ? null : +(finite(row.iv)! * 100).toFixed(1), finite(row.premium),
+            ]),
+          ), source, `${ticker}:unusual-contracts`),
+        ]
+      })
+
+    case 'insider-activity':
+      return perTicker(source, async ticker => {
+        const data = record(await client.get(`/api/corporate/hub/insider?ticker=${encodeURIComponent(ticker)}`))
+        const rows = array(data.transactions).map(item => record(item))
+        if (!rows.length) return null
+        const sumBy = (side: string) => rows
+          .filter(row => plain(row.side).toLowerCase() === side)
+          .reduce((total, row) => total + (finite(row.value) ?? 0), 0)
+        const bought = sumBy('buy')
+        const sold = sumBy('sell')
+        const planned = rows.filter(row => row.is_10b51).length
+        return [
+          tagClip(kpiClip('Company Profile', `${ticker} · insider activity`, [
+            { label: 'Reported transactions', value: String(rows.length) },
+            { label: 'Bought', value: money(bought) },
+            { label: 'Sold', value: money(sold) },
+            // A scheduled sale carries no signal, so the split has to be visible
+            // beside the totals or the totals will be over-read.
+            { label: 'Under a 10b5-1 plan', value: `${planned} of ${rows.length}`, sub: 'Pre-scheduled, not discretionary' },
+            { label: 'Held by insiders', value: percent(data.held_pct_insiders) },
+          ]), source, `${ticker}:insider-summary`),
+          tagClip(tableClip(
+            'Company Profile',
+            `${ticker} · recent insider transactions`,
+            ['Date', 'Insider', 'Role', 'Side', 'Shares', 'Value $', '10b5-1'],
+            rows.slice(0, 15).map(row => [
+              plain(row.date), plain(row.insider), plain(row.title), plain(row.side),
+              finite(row.shares), finite(row.value), row.is_10b51 ? 'Yes' : 'No',
+            ]),
+          ), source, `${ticker}:insider-transactions`),
+        ]
+      })
+
+    case 'institutional-ownership':
+      return perTicker(source, async ticker => {
+        const data = record(await client.get(`/api/corporate/institutional?ticker=${encodeURIComponent(ticker)}`))
+        const holders = array(data.holders).map(item => record(item))
+        const changes = record(data.changes)
+        if (!holders.length && finite(data.pct_institutions) == null) return null
+        const clips: ClipDraft[] = [
+          tagClip(kpiClip('Company Profile', `${ticker} · institutional ownership`, [
+            { label: 'Float held by institutions', value: finite(data.pct_institutions) == null ? '—' : `${(finite(data.pct_institutions)! * 100).toFixed(1)}%` },
+            { label: 'Held by insiders', value: finite(data.pct_insiders) == null ? '—' : `${(finite(data.pct_insiders)! * 100).toFixed(1)}%` },
+            { label: 'Holders adding', value: plain(changes.added), sub: `${plain(changes.trimmed)} trimming, ${plain(changes.unchanged)} unchanged` },
+            { label: 'Net share change', value: finite(changes.net_share_change) == null ? '—' : finite(changes.net_share_change)!.toLocaleString() },
+            // 13F is a rear-view mirror; the filing date belongs next to the number.
+            { label: 'Filing quarter', value: plain(changes.filed), sub: 'Filed up to 45 days after quarter end' },
+          ]), source, `${ticker}:ownership-summary`),
+        ]
+        if (holders.length) {
+          clips.push(tagClip(tableClip(
+            'Company Profile',
+            `${ticker} · largest institutional holders`,
+            ['Holder', 'Shares', 'Value $', '% of float', 'Change %', 'As of'],
+            holders.slice(0, 12).map(row => [
+              plain(row.holder), finite(row.shares), finite(row.value),
+              finite(row.pct_out) == null ? null : +(finite(row.pct_out)! * 100).toFixed(2),
+              finite(row.pct_change), plain(row.date),
+            ]),
+          ), source, `${ticker}:holders`))
+        }
+        return clips
+      })
+
+    case 'cot-positioning': {
+      const data = record(await client.get('/api/official/cot'))
+      if (!data.available) return []
+      const markets = array(data.markets).map(item => record(item))
+      if (!markets.length) return []
+      const clips = [tagClip(tableClip(
+        'Trader Positioning',
+        `Futures positioning · ${plain(data.asset_label)} · ${plain(data.as_of)}`,
+        ['Market', 'Net position', 'Weekly flow', 'Open interest change', 'Crowding percentile'],
+        markets.map(row => [
+          plain(row.label), finite(row.latest), finite(row.weekly_flow),
+          finite(row.open_interest_change), finite(row.crowding),
+        ]),
+      ), source, 'cot-table')]
+      const withSeries = markets.find(row => array(row.series).length > 4)
+      if (withSeries) {
+        clips.push(tagClip(chartClip(
+          'Trader Positioning',
+          `${plain(withSeries.label)} · net positioning history`,
+          'line',
+          'date',
+          array(withSeries.series).map(item => ({
+            date: plain(record(item).date),
+            net: finite(record(item).net ?? record(item).value),
+          })).filter(point => point.net != null),
+          [{ key: 'net', label: 'Net position (contracts)', unit: 'number' }],
+        ), source, 'cot-history'))
+      }
+      return clips
+    }
+
+    case 'breadth': {
+      const data = record(await client.get('/api/market/breadth'))
+      if (!data.available) return []
+      const today = record(data.today)
+      const participation = record(data.participation)
+      const divergence = record(data.divergence)
+      const history = array(data.history).map(item => record(item))
+      const clips = [tagClip(kpiClip('Market Breadth', `Breadth · ${plain(data.index)} · ${plain(data.as_of)}`, [
+        { label: 'Advancing', value: plain(today.advancing), sub: `${plain(today.declining)} declining` },
+        { label: 'Advance/decline ratio', value: finite(today.ad_ratio)?.toFixed(2) ?? '—' },
+        { label: 'New highs', value: plain(today.new_highs), sub: `${plain(today.new_lows)} new lows` },
+        { label: 'Above 50-day', value: finite(participation.pct_above_50) == null ? '—' : `${finite(participation.pct_above_50)!.toFixed(1)}%`, sub: `${percent(participation.pct_above_50_change)} over the window` },
+        { label: 'Above 200-day', value: finite(participation.pct_above_200) == null ? '—' : `${finite(participation.pct_above_200)!.toFixed(1)}%`, sub: `${percent(participation.pct_above_200_change)} over the window` },
+        { label: 'Index vs breadth', value: plain(divergence.state), sub: `${plain(divergence.sessions)} sessions · index ${percent(divergence.index_change_pct)}` },
+        { label: 'Members priced', value: `${plain(record(data.coverage).priced)} of ${plain(record(data.coverage).listed)}` },
+      ]), source, 'breadth-summary')]
+      if (history.length > 4) {
+        clips.push(tagClip(chartClip(
+          'Market Breadth',
+          `Share of ${plain(data.index)} members above their moving average`,
+          'line',
+          'date',
+          history.map(row => ({
+            date: plain(row.date),
+            above50: finite(row.pct_above_50),
+            above200: finite(row.pct_above_200),
+          })),
+          [
+            { key: 'above50', label: 'Above 50-day %', unit: 'percent' },
+            { key: 'above200', label: 'Above 200-day %', unit: 'percent' },
+          ],
+        ), source, 'breadth-participation'))
+        clips.push(tagClip(chartClip(
+          'Market Breadth',
+          `${plain(data.index)} advance-decline line`,
+          'line',
+          'date',
+          history.map(row => ({ date: plain(row.date), adLine: finite(row.ad_line) })),
+          [{ key: 'adLine', label: 'Cumulative advance-decline', unit: 'number' }],
+        ), source, 'breadth-ad-line'))
+      }
+      return clips
+    }
+
+    case 'sector-rrg': {
+      const data = record(await client.get('/api/market/rrg'))
+      if (!data.available) return []
+      const series = array(data.series).map(item => record(item))
+      if (!series.length) return []
+      const counts = record(data.counts)
+      return [
+        tagClip(kpiClip('Sector Rotation', `Rotation quadrants vs ${plain(data.benchmark)} · ${plain(data.as_of)}`, [
+          { label: 'Leading', value: plain(counts.leading), sub: 'Strong and strengthening' },
+          { label: 'Weakening', value: plain(counts.weakening), sub: 'Strong but fading' },
+          { label: 'Lagging', value: plain(counts.lagging), sub: 'Weak and weakening' },
+          { label: 'Improving', value: plain(counts.improving), sub: 'Weak but turning up' },
+          { label: 'Normalisation window', value: `${plain(data.window_weeks)} weeks`, sub: `${plain(data.tail_weeks)}-week trail` },
+        ]), source, 'rrg-quadrants'),
+        tagClip(tableClip(
+          'Sector Rotation',
+          `Relative strength and momentum vs ${plain(data.benchmark)}`,
+          ['Sector', 'Quadrant', 'Rotated in from', 'Strength', 'Momentum'],
+          series.map(row => [
+            plain(row.ticker), plain(row.quadrant),
+            plain(row.from_quadrant) === plain(row.quadrant) ? 'held' : plain(row.from_quadrant),
+            finite(row.x), finite(row.y),
+          ]),
+        ), source, 'rrg-table'),
+      ]
+    }
+
+    case 'pairs': {
+      const [a, b] = source.targets
+      if (!a || !b) return []
+      const data = record(await client.get(`/api/regression/pairs?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`))
+      if (finite(data.hedge_ratio) == null) return []
+      const adf = record(data.adf)
+      const zscore = record(data.zscore)
+      const backtest = record(data.backtest)
+      const stationary = adf.stationary === true
+      return [tagClip(kpiClip('Pairs Trader', `${a} / ${b} · pair relationship`, [
+        { label: 'Hedge ratio', value: finite(data.hedge_ratio)!.toFixed(3), sub: plain(data.hedge_method) },
+        { label: 'Correlation', value: finite(data.correlation)?.toFixed(3) ?? '—' },
+        // Without cointegration the z-score has no mean to revert to, so the
+        // ADF verdict has to travel with the z-score, not sit below it.
+        { label: 'Cointegrated', value: stationary ? 'Yes' : 'No', sub: `ADF ${finite(adf.stat)?.toFixed(2) ?? '—'} vs 5% critical ${finite(adf.crit_5)?.toFixed(2) ?? '—'}` },
+        { label: 'Spread z-score', value: finite(zscore.current)?.toFixed(2) ?? '—', sub: stationary ? `entry ±${plain(zscore.entry)} · exit ±${plain(zscore.exit)}` : 'Not mean-reverting on this window' },
+        { label: 'Half-life', value: finite(data.half_life_days) == null ? '—' : `${finite(data.half_life_days)!.toFixed(0)} days` },
+        { label: 'Signal', value: plain(data.signal) },
+        { label: 'Backtested Sharpe', value: finite(backtest.sharpe)?.toFixed(2) ?? '—', sub: `${plain(backtest.trades)} trades · ${finite(backtest.win_rate)?.toFixed(0) ?? '—'}% win rate` },
+      ]), source, `${a}-${b}`)]
+    }
+
+    case 'fx-matrix': {
+      const data = record(await client.get('/api/fx/matrix'))
+      const rows = array(data.rows).map(item => record(item))
+      if (!rows.length) return []
+      return [
+        tagClip(tableClip(
+          'FX Matrix',
+          'Major currencies versus the US dollar',
+          ['Currency', 'Pair', 'Spot', 'Change %', '3m forward points', '3m basis bps', '1w vol %', '1m vol %', 'Short rate %'],
+          rows.map(row => [
+            plain(row.ccy), plain(row.pair), finite(row.spot), finite(row.chg_pct),
+            finite(row.fwd_pts_3m), finite(row.basis_3m_bps), finite(row.vol_1w),
+            finite(row.vol_1m), finite(row.short_rate),
+          ]),
+        ), source, 'fx-table'),
+        tagClip(chartClip(
+          'FX Matrix',
+          'Policy short rate by currency',
+          'bar',
+          'ccy',
+          rows.map(row => ({ ccy: plain(row.ccy), rate: finite(row.short_rate) })),
+          [{ key: 'rate', label: 'Short rate %', unit: 'percent' }],
+        ), source, 'fx-rates'),
+      ]
+    }
+
+    case 'macro-cycle': {
+      const data = record(await client.get('/api/rates/cycle'))
+      if (!data.available) return []
+      const components = array(data.components).map(item => record(item))
+      const clips = [tagClip(kpiClip('Macro Monitor', `Business cycle · ${plain(data.as_of)}`, [
+        { label: 'Phase', value: plain(data.phase) },
+        { label: 'Composite score', value: finite(data.composite)?.toFixed(2) ?? '—', sub: plain(data.blurb) },
+        // A mean over three of five components is a weaker read than a mean over
+        // five, and nothing else on the card would tell the reader that.
+        { label: 'Components resolved', value: `${plain(data.resolved)} of ${plain(data.expected)}`, sub: 'Mean of resolved components, not a probability' },
+        { label: 'Strongest', value: plain(data.strongest) },
+        { label: 'Weakest', value: plain(data.weakest) },
+      ]), source, 'cycle-summary')]
+      if (components.length) {
+        clips.push(tagClip(tableClip(
+          'Macro Monitor',
+          'Cycle components',
+          ['Component', 'Reading', 'Value', 'Score', 'Rule', 'As of'],
+          components.map(row => [
+            plain(row.label), plain(row.reading), `${plain(row.value)}${plain(row.unit) === '—' ? '' : ` ${plain(row.unit)}`}`,
+            finite(row.score), plain(row.rule), plain(row.as_of),
+          ]),
+        ), source, 'cycle-components'))
+      }
+      return clips
+    }
+
+    case 'credit-stress': {
+      const data = record(await client.get('/api/credit/summary'))
+      if (!data.available) return []
+      const classes = array(data.asset_classes).map(item => record(item))
+      const indicators = array(data.stress_indicators).map(item => record(item))
+      if (!classes.length && !indicators.length) return []
+      const clips: ClipDraft[] = []
+      if (classes.length) {
+        clips.push(tagClip(tableClip(
+          'Credit Stress',
+          `Delinquency and charge-off by asset class · ${plain(data.as_of)}`,
+          ['Asset class', 'Delinquency %', 'Charge-off %', 'Trend', 'As of'],
+          classes.map(row => [
+            plain(row.label), finite(row.delinquency_rate), finite(row.chargeoff_rate),
+            plain(row.trend), plain(row.asof),
+          ]),
+        ), source, 'credit-classes'))
+        clips.push(tagClip(chartClip(
+          'Credit Stress',
+          'Delinquency rate by asset class',
+          'bar',
+          'assetClass',
+          classes.map(row => ({ assetClass: plain(row.label), rate: finite(row.delinquency_rate) })),
+          [{ key: 'rate', label: 'Delinquency %', unit: 'percent' }],
+        ), source, 'credit-delinquency-visual'))
+      }
+      if (indicators.length) {
+        clips.push(tagClip(tableClip(
+          'Credit Stress',
+          'Federal Reserve stress indicators',
+          ['Indicator', 'Value', 'Previous', 'Unit', 'Frequency', 'Reading', 'As of'],
+          indicators.map(row => [
+            plain(row.label), finite(row.value), finite(row.previous), plain(row.unit),
+            plain(row.frequency), plain(row.interpretation), plain(row.asof),
+          ]),
+        ), source, 'credit-indicators'))
+      }
+      return clips
+    }
+
+    case 'housing': {
+      const data = record(await client.get('/api/housing/report'))
+      if (!data.available) return []
+      const rates = record(data.rates)
+      const regions = array(data.by_region).map(item => record(item))
+      const national = regions[0]
+      if (!national) return []
+      return [tagClip(kpiClip('Housing Market', `Housing · ${plain(data.asof)}`, [
+        { label: '30-year mortgage', value: finite(rates.rate_30y) == null ? '—' : `${finite(rates.rate_30y)!.toFixed(2)}%` },
+        { label: 'ARM', value: finite(rates.rate_arm) == null ? '—' : `${finite(rates.rate_arm)!.toFixed(2)}%` },
+        { label: 'Median price', value: money(national.median_price), sub: `${plain(national.region)} · $${plain(national.price_per_sqft)}/sqft` },
+        { label: 'Price to income', value: finite(national.price_to_income)?.toFixed(2) ?? '—', sub: `Affordability index ${plain(national.affordability_index)}` },
+        { label: 'Months of supply', value: finite(national.months_of_supply)?.toFixed(1) ?? '—', sub: `${plain(national.days_on_market)} days on market` },
+        { label: 'Single-family default rate', value: percent(national.sf_default_rate), sub: `CRE delinquency ${percent(national.cre_delinquency_rate)}` },
+      ]), source, 'housing-summary')]
+    }
+
+    case 'ipo-calendar': {
+      const { range } = eventResearchRange(scope)
+      const days = clamp(inclusiveDays(range), 30, 400)
+      const data = record(await client.get(`/api/ipo/calendar?date=${range.end}&days=${days}`))
+      const rows = array(data.rows).map(item => record(item))
+      if (!rows.length) return []
+      const priced = finite(data.priced) ?? 0
+      const count = finite(data.count) ?? rows.length
+      const dealValues = rows.map(row => finite(row.dealValue)).filter((value): value is number => value != null)
+      return [
+        tagClip(kpiClip('IPO Scanner', `Primary market · ${plain(data.from)} to ${plain(data.to)}`, [
+          { label: 'Listings in window', value: String(count) },
+          { label: 'Priced', value: String(priced), sub: `${count - priced} pending or withdrawn` },
+          { label: 'Median deal value', value: money(median(dealValues)) },
+          { label: 'Largest deal', value: money(dealValues.length ? Math.max(...dealValues) : null) },
+        ]), source, 'ipo-summary'),
+        tagClip(tableClip(
+          'IPO Scanner',
+          'Largest listings in the window',
+          ['Symbol', 'Company', 'Date', 'Exchange', 'Price', 'Shares', 'Deal value $', 'Status'],
+          rows
+            .sort((a, b) => (finite(b.dealValue) ?? 0) - (finite(a.dealValue) ?? 0))
+            .slice(0, 15)
+            .map(row => [
+              plain(row.symbol), plain(row.name), plain(row.date), plain(row.exchange),
+              finite(row.price), finite(row.shares), finite(row.dealValue), plain(row.status),
+            ]),
+        ), source, 'ipo-table'),
+      ]
+    }
+
+    case 'chokepoint-exposure': {
+      const data = record(await client.get('/api/maritime/exposure'))
+      const chokepoints = array(data.chokepoints).map(item => record(item))
+      const leaders = array(data.leaders).map(item => record(item))
+      if (!chokepoints.length) return []
+      const clips = [tagClip(tableClip(
+        'Chokepoint Exposure',
+        'Maritime chokepoint transit stress',
+        ['Chokepoint', 'Oil mb/d', 'Status', 'Change vs baseline %', 'Share of flow %', 'Disruption score'],
+        chokepoints.map(row => [
+          plain(row.name), finite(row.oil_mbd), plain(row.status),
+          finite(row.delta_pct), finite(row.share_pct), finite(row.disruption),
+        ]),
+      ), source, 'chokepoint-table')]
+      if (leaders.length) {
+        clips.push(tagClip(tableClip(
+          'Chokepoint Exposure',
+          'Listed companies most exposed to the stressed chokepoints',
+          ['Ticker', 'Group', 'Direction', 'Exposure score', 'Chokepoints', 'Price', 'Change %'],
+          leaders.slice(0, 12).map(row => [
+            plain(row.ticker), plain(row.group), plain(row.direction), finite(row.score),
+            array(row.chokepoints).map(plain).join(', '), finite(row.price), finite(row.change_pct),
+          ]),
+        ), source, 'chokepoint-leaders'))
+      }
+      return clips
+    }
   }
 }
 
@@ -2765,6 +3390,12 @@ const PER_TICKER_SOURCES = new Set<ReportResearchSourceId>([
   'volatility-skew',
   'dealer-gex',
   'implied-probability',
+  'asset-profile',
+  'debt-maturity',
+  'seasonality',
+  'options-unusual',
+  'insider-activity',
+  'institutional-ownership',
 ])
 
 export async function collectReportResearch(

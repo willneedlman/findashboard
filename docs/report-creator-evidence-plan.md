@@ -1,10 +1,14 @@
 # Report Creator: evidence selection rebuild
 
-Why reports keep citing the same handful of numbers, and the plan to fix it.
+Why reports kept citing the same handful of numbers, and what was built to fix it.
 
 Written against `docs/data-inventory/surfaced.csv` (274 verified values across 59
 tools), `backend/reporting/tool_registry.py`, `backend/routers/ai.py` and
 `frontend/src/lib/reportResearch.ts`.
+
+> **Status: built.** Sections 1 and 2 are the diagnosis and the principle.
+> Section 3 describes the design as implemented. Section 4 records what shipped
+> and what was deliberately left, with measured before/after numbers.
 
 ---
 
@@ -233,27 +237,61 @@ cited rise.
 
 ---
 
-## 4. Order of work
+## 4. What shipped
 
-| # | Step | Unlocks | Size |
-|---|---|---|---|
-| 1 | `metric_catalog.json` + generator | everything | M |
-| 2 | Expand `tool_registry` to the 37 missing tools | 133 unreachable values | L |
-| 3 | Question decomposition + tag vocabulary | multi-label intent | M |
-| 4 | Deterministic retrieval + shortlist ranking | the repetitiveness fix | M |
-| 5 | Coverage, shape and novelty floors | breadth, enforced | S |
-| 6 | Visual-type mapping | chart variety | S |
-| 7 | Validation levels + repair | reliability on a weak model | M |
-| 8 | Citation instrumentation | tuning signal | S |
+| # | Step | Where |
+|---|---|---|
+| 1 | Metric catalog generated from the inventory | `backend/scripts/build_report_catalog.py` → `backend/data/report_metric_catalog.json` |
+| 2 | Registry expanded 23 → 40 tools, each with tags, class, shapes, cost, yields, limits | `backend/reporting/tool_registry.py` |
+| 3 | Question decomposition over a 17-tag closed vocabulary | `_REPORT_QUESTION_SYSTEM`, `normalize_questions()` |
+| 4 | Deterministic retrieval and shortlist ranking | `evidence_plan.shortlist()` |
+| 5 | Coverage floor, shape budget, novelty, redundancy | `evidence_plan.enforce()` |
+| 6 | Visual-type mapping by output shape | `VISUAL_BY_SHAPE`, `allowed_visuals()` |
+| 7 | Validation levels L0–L4 plus one bounded repair | `validate_selection()`, `repair_instruction()` |
+| 8 | Citation instrumentation | `_evidence_utilisation()`, surfaced on `pipeline.evidenceUtilisation` |
 
-Steps 1, 3 and 4 are the ones that change what you observed. 2 is the largest
-piece of work and can land tool-by-tool behind the same catalog.
+### Measured effect on reach
+
+|  | before | after |
+|---|---|---|
+| Report tools | 23 | **40** |
+| Inventory values reachable | 143 of 274 (52%) | **178 of 274 (65%)** |
+| Values unreachable | 131 | **96** |
+
+The 17 new tools, all wired against verified response shapes: `asset-profile`,
+`dividends`, `debt-maturity`, `seasonality`, `options-unusual`,
+`insider-activity`, `institutional-ownership`, `cot-positioning`, `breadth`,
+`sector-rrg`, `pairs`, `fx-matrix`, `macro-cycle`, `credit-stress`, `housing`,
+`ipo-calendar`, `chokepoint-exposure`.
+
+### Deliberately not wired
+
+Each of these needs a preceding fetch to build a POST body — a full assumption
+schedule, a holdings list, a weight vector — which makes each one its own small
+project rather than a fetcher:
+
+Master Valuation, SOTP, DDM, Reverse DCF, Monte Carlo, Portfolio Backtester,
+Portfolio Allocator, Stock Screener (already reachable by a separate path via
+`screenReportSymbols`), ETF Analyzer, Bond Analytics, Trade Flows, Supply Chain
+Map, NAV Tracker, Energy Flows, Options Strategy.
+
+Not evidence, and never will be: Market Hours, Report Creator, Trade Journal,
+Paper Trading, Market Maker leaderboard, Price Alerts, Algo Builder.
+
+That accounts for the remaining 96 values.
+
+### Not done
+
+- **L5 and L6.** Both need the drafted outline, not just the selection, so they
+  belong in the generation call rather than the planner. `limits_for()` already
+  supplies the caveat text they will check against, and it ships to the client on
+  `evidenceLimits`.
 
 ## 5. What this does not do
 
 - It does not make a free-tier Llama a better analyst. It narrows every decision
   until the model is choosing between options that are all defensible.
-- It does not add a data source. Everything selectable already exists and is
+- It does not add a data source. Everything selectable already existed and was
   already verified in the inventory.
 - It does not touch the writing prompts, the outline stage, or the export path.
-  This plan is entirely about *what evidence gets pulled and why*.
+  This work is entirely about *what evidence gets pulled and why*.

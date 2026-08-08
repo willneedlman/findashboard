@@ -1010,7 +1010,6 @@ export function SupplyChainContent() {
                   </div>
                   <AnalystPanel ticker={data.ticker} />
                 </div>
-                <RevisionsPanel ticker={data.ticker} />
                 <FactSetFinancials ticker={data.ticker} />
                 <div style={{ display: 'grid', gridTemplateColumns: isMobileLayout ? '1fr' : '1fr 1fr', gap: 18, alignItems: 'stretch' }}>
                   <RevenuePanel title="Revenue · By Segment" block={data.product_segments} />
@@ -1019,6 +1018,7 @@ export function SupplyChainContent() {
                 {data.revenue_activity && data.revenue_activity.latest.length > 0 && (
                   <RevenuePanel title="Revenue · By Activity (Fees vs Trading)" block={data.revenue_activity} />
                 )}
+                <RevisionsPanel ticker={data.ticker} />
               </div>
             )}
 

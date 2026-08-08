@@ -1,0 +1,2373 @@
+{
+ "metricsByTool": {
+  "asset-profile": [
+   {
+    "formula": "last close in the selected window against the window base; 10m/30m/1h use intraday bars, longer windows use daily",
+    "id": "gm_board_quote",
+    "interpretation": "One request covers the whole board, so the page is a single round trip. Outside the US cash session the Americas index rows swap to their CME futures proxy and are flagged as such.",
+    "limits": "A CME proxy is a different instrument from the cash index and is labelled `is_cme_proxy`. Row status is one of intraday / delayed / end_of_day / unavailable and should be read before the number.",
+    "name": "Board price and change"
+   },
+   {
+    "formula": "-",
+    "id": "gm_commodities",
+    "interpretation": "Front-month futures, so a roll shows as a price jump that is not a market move.",
+    "limits": "No term structure, roll yield or contango indication anywhere in the app; that would need a futures data vendor. Contract months are not labelled on the board.",
+    "name": "Commodities"
+   },
+   {
+    "formula": "-",
+    "id": "gm_crypto",
+    "interpretation": "Trades continuously, so these are the only rows that are live at the weekend.",
+    "limits": "Spot only. No dominance, funding rate or open interest, which are perpetual-swap data and would need a derivatives source; Binance.US does not list perps.",
+    "name": "Crypto"
+   },
+   {
+    "formula": "-",
+    "id": "gm_fx",
+    "interpretation": "Quoting convention differs by pair and is shown as labelled (EUR/USD versus USD/JPY), so the sign of a move means opposite things across rows.",
+    "limits": "yfinance FX is indicative rather than a tradable quote and carries no spread. Weekend prints are stale from the Friday close.",
+    "name": "FX pairs"
+   },
+   {
+    "formula": "-",
+    "id": "gm_yields",
+    "interpretation": "The board switches these rows to basis-point changes rather than percentage returns, because a yield going 4.00 to 4.66 has not returned 16%.",
+    "limits": "The 2-year comes from FRED and updates on a different schedule from the yfinance rows beside it, so the curve can be internally inconsistent intraday.",
+    "name": "US Treasury yields"
+   },
+   {
+    "formula": "-",
+    "id": "gm_indices",
+    "interpretation": "One batched request covers the whole board. Outside the US cash session the Americas rows swap to CME futures proxies and are flagged is_cme_proxy.",
+    "limits": "A futures proxy is a different instrument from the cash index. Foreign indices show their last completed session, so a green row can be many hours old.",
+    "name": "World equity indices"
+   },
+   {
+    "formula": "std(daily returns, last 30) * sqrt(252) * 100; min(price/cummax(price) - 1) over 366 days",
+    "id": "asset_vol_dd",
+    "interpretation": "The volatility figure is a 30-session window, so it reacts fast and will look extreme after a shock: the KOSPI reads 90% against a 52% one-year figure. The drawdown is the honest worst case an investor would have lived through.",
+    "limits": "Realised, not implied, and backward-looking. The 30-day window and the 1-year drawdown are different horizons and should not be compared to each other.",
+    "name": "30-day volatility and deepest 1-year fall"
+   },
+   {
+    "formula": "min/max of the last 366 calendar days of closes; position = (last-low)/(high-low)*100",
+    "id": "asset_52w_range",
+    "interpretation": "Position near 100% of the band means the asset is at its yearly high. Distance from high is the plain drawdown reading.",
+    "limits": "Closing prices only, so it will differ from a vendor 52-week high computed on intraday extremes.",
+    "name": "52-week range and position"
+   },
+   {
+    "formula": "counts of member day change sign; top-N cap sum / total cap",
+    "id": "index_breadth_today",
+    "interpretation": "Concentration is the number that explains why an index and its average member can disagree. The Dow shows 71.8% in its top 5.",
+    "limits": "Day change is close-to-close from the batched download, so for a foreign index it is the last completed session, not live.",
+    "name": "Constituent breadth and concentration"
+   },
+   {
+    "formula": "last / close_at_or_before(today - window) - 1, per window; YTD uses 1 January",
+    "id": "asset_return_ladder",
+    "interpretation": "Reading several windows together separates a trend from a bounce. Works for every row on the board, not just equities.",
+    "limits": "Uses the last close at or before the anchor date, so a long market closure shifts the base. Price return only: no dividends, so equity index figures understate total return by roughly the yield.",
+    "name": "Return ladder (1W-5Y)"
+   },
+   {
+    "formula": "sequence of closes over the selected window",
+    "id": "gm_spark",
+    "interpretation": "Status is one of intraday, delayed, end_of_day or unavailable and should be read before the number itself.",
+    "limits": "The sparkline is drawn from the same window as the selected performance period, so changing the window changes the shape as well as the number.",
+    "name": "Row sparkline and status"
+   },
+   {
+    "formula": "group members by sector; weight = sector cap / total cap; change = cap-weighted mean of member day changes",
+    "id": "index_sectors",
+    "interpretation": "Weighted by capital, not by headcount: the S&P has 75 Financials against 73 Information Technology names, but IT is 34.9% of the index and Financials 10.3%. Counting names would invert the picture.",
+    "limits": "Each index publishes its own taxonomy and they are left alone: the Hang Seng ships 4 buckets, the FTSE 44. Not comparable across indices. 1,588 of 1,620 members carry a sector; the Straits Times table publishes none.",
+    "name": "Sector mix"
+   },
+   {
+    "formula": "last_level - level_at_or_before(anchor), rendered as basis points",
+    "id": "asset_yield_bp",
+    "interpretation": "A 10-year going 4.00 to 4.66 has not returned 16%, it has risen 66 basis points. The panel switches to this reading automatically for the yield rows.",
+    "limits": "Applies only to the yield section of the board. The frontend decides which reading to show from a `yields` flag, so a yield surfaced elsewhere would still print a percentage.",
+    "name": "Yield change in basis points"
+   },
+   {
+    "formula": "Scholes-Williams (1977): beta = cov(ln(1+r_asset), mr3) / cov(ln(1+r_mkt), mr3) where mr3 is the sum of the previous, current and next market log return. Correlation is taken at whichever of lag 0 or lag 1 reads stronger by at least 0.05.",
+    "id": "asset_beta_corr",
+    "interpretation": "Beta near 1 means the asset moves with the S&P point for point. The Scholes-Williams form is used because most of the world does not trade while New York is open: Seoul closes at 06:00 UTC and New York at 21:00, so a same-day comparison put the KOSPI at beta 0.52 while it carried four times the S&P volatility. Corrected it reads 2.09. The panel says when a session offset was applied.",
+    "limits": "The correction is near a no-op where sessions overlap, which is the check that it is not simply inflating everything: FTSE moves 0.31 to 0.36 while the KOSPI moves 0.52 to 2.09. Correlation cannot be summed the same way, so the lag is chosen from the data rather than a table of exchange hours. Needs 60 overlapping observations.",
+    "name": "Beta and correlation vs S&P 500"
+   },
+   {
+    "formula": "members from a bundled list; market cap = stored shares outstanding x live price x FX to USD",
+    "id": "index_constituents",
+    "interpretation": "Answers what an index is actually made of. Caps are computed live from a stored share count rather than a stored cap, because a cap is wrong by the next session while a share count moves a few times a year. Concentration (top 5 / top 10) is the fastest read on whether an index is really a basket.",
+    "limits": "1,620 of 1,741 scraped names resolved on Yahoo; the rest were dropped rather than shipped unpriced. Coverage is stated per index in the payload. London quotes in pence, so the FX conversion divides by 100 (case-sensitive on GBp vs GBP). The Dow and Nikkei are price-weighted, so a market-cap share column there is context, not influence, and the caption says so. Eight board indices have no free member list.",
+    "name": "Index members with live caps"
+   }
+  ],
+  "breadth": [
+   {
+    "formula": "count(close > rolling_mean(close, N)) / count(members with a defined N-session average), N in (50, 200)",
+    "id": "breadth_pct_above_ma",
+    "interpretation": "The participation reading. Above 50% is a broad market. The gap between the two lines is the cycle read: 50-day above 200-day is early recovery, 200-day above 50-day is late-cycle with short-term momentum fading. The S&P currently sits at 66% and 74%.",
+    "limits": "Denominator counts only members with enough history, so a name added to the index last month is excluded rather than counted as \"not above\". Returns null, never zero, when no member qualifies. A 200-day average needs 200 sessions of run-up, which is why the download reaches back 520 calendar days.",
+    "name": "% above 50-day / 200-day"
+   },
+   {
+    "formula": "advancing / declining; null rather than infinity on a session where nothing fell",
+    "id": "breadth_ad_ratio",
+    "interpretation": "Above 1 means more members rose than fell. Sustained readings above ~2 are broad buying; below ~0.5 is broad selling. It is a same-day snapshot, so read it with the A/D line rather than on its own.",
+    "limits": "Undefined when no member declined. A single session is noisy; the A/D line is the version with memory.",
+    "name": "A/D ratio"
+   },
+   {
+    "formula": "cumsum(advancing - declining) over the last 126 sessions, rebased to 0",
+    "id": "breadth_ad_line",
+    "interpretation": "The level means nothing; the shape against price is the whole signal. Index rising while the line falls means the rally is being carried by fewer names each week, which is the classic pre-correction pattern. The payload ships the index series alongside it so the two can be read on one chart.",
+    "limits": "Rebased arbitrarily at the window start, so it cannot be compared across different window lengths or across indices.",
+    "name": "Advance / decline line"
+   },
+   {
+    "formula": "count(close_t > close_t-1) and count(close_t < close_t-1) across every member of the index",
+    "id": "breadth_advancing",
+    "interpretation": "The unweighted vote. 322 up against 177 means the average stock had a good day regardless of what the cap-weighted index printed. Compare it against the index move: a strong index day on weak advancers is being carried by a handful of large members.",
+    "limits": "One vote per member, so a 0.01% move counts the same as a 9% one. Only the 17 indices with a tracked member list; the Russell 2000, Shanghai Composite, CSI 300, KOSPI, TAIEX, IPC and Bovespa have no free constituent list and return an explanatory message instead.",
+    "name": "Advancing / declining"
+   },
+   {
+    "formula": "sign(index change over 21 sessions) vs sign(A/D line change over the same window) -> narrowing | broadening | aligned",
+    "id": "breadth_divergence",
+    "interpretation": "Names the thing a breadth chart exists to show, so the reader does not have to eyeball two lines. Narrowing is an index rising on shrinking participation. Broadening is a decline the average member has stopped joining, which often marks the end of it.",
+    "limits": "A plain comparison of two one-month changes, not a model and not a score. A 21-session window will call a mid-correction bounce \"broadening\". Both figures are printed next to the verdict so it can be checked.",
+    "name": "Divergence state"
+   },
+   {
+    "formula": "count(close >= rolling_max(close, 252)) and count(close <= rolling_min(close, 252)), min_periods 60",
+    "id": "breadth_new_extremes",
+    "interpretation": "An expansion in highs confirms a trend. An expansion in BOTH at once means the market is splitting rather than moving as one, which historically precedes trouble more reliably than either series alone.",
+    "limits": "min_periods of 60 means a name with under a year of history can register an extreme against a partial window. Uses closes, not intraday highs and lows, so it undercounts against a vendor that uses the true range.",
+    "name": "New 52-week highs / lows"
+   }
+  ],
+  "chokepoint-exposure": [
+   {
+    "formula": "AIS position reports matched to a vessel registry and classified by type",
+    "id": "fm_vessels",
+    "interpretation": "The live layer. Vessel type classification is what makes a tanker count meaningful rather than a boat count.",
+    "limits": "Requires AISSTREAM_API_KEY, and the whole live maritime subsystem is gated off on Fly by ENABLE_LIVE_MARITIME, so production currently shows no vessels at all. AIS coverage is patchy beyond coastal receivers and transponders can be switched off.",
+    "name": "Live vessel positions and classification"
+   },
+   {
+    "formula": "-",
+    "id": "port_calls",
+    "interpretation": "The structural view of seaborne trade. The chokepoint history and comparison panels are built on the same feed.",
+    "limits": "PortWatch lags 3 to 4 days, so it cannot show a disruption as it happens. That gap is the reason the live AIS nowcast exists alongside it.",
+    "name": "Port calls and trade volumes"
+   },
+   {
+    "formula": "PortWatch transit counts, with a status derived against the trailing baseline",
+    "id": "fm_chokepoints",
+    "interpretation": "The structural series. A congested status against a multi-year baseline is more meaningful than a raw count, which is seasonal.",
+    "limits": "PortWatch publishes 3-4 days behind, so this cannot show a disruption as it happens. Port ids are resolved by keyword at runtime, which is how the Danish straits map to Oresund.",
+    "name": "Chokepoint transit counts and status"
+   },
+   {
+    "formula": "curated company-to-chokepoint exposure map x a live disruption score per chokepoint, producing a signed score per ticker",
+    "id": "chokepoint_exposure",
+    "interpretation": "Connects a geopolitical event to a tradable list. Top beneficiary and most pressured are the two headline reads.",
+    "limits": "The company-to-chokepoint mapping is curated by hand, not derived from disclosure, so it reflects a judgement about exposure rather than a measured one. A score of zero across all straits means no stress, not no exposure, and the panel says so.",
+    "name": "Equity exposure to chokepoint stress"
+   }
+  ],
+  "company": [
+   {
+    "formula": "-  (implied upside = target_mean / price - 1)",
+    "id": "analyst_ratings",
+    "interpretation": "The level of consensus. Implied upside against the current price is the headline, but the distribution matters more: a mean target hiding a 200-point spread is not consensus.",
+    "limits": "Sell-side ratings skew structurally positive. Target dates are not published, so a stale target from a departed analyst can sit in the mean indefinitely.",
+    "name": "Analyst ratings and price targets"
+   },
+   {
+    "formula": "counts of strongBuy/buy/hold/sell/strongSell; mean recommendation score",
+    "id": "cp_consensus",
+    "interpretation": "Read the distribution, not the mean. Sell-side ratings are compressed into the top half of the scale, so \"hold\" often functions as a sell.",
+    "limits": "Coverage counts vary wildly by size; a mean over three analysts is not consensus.",
+    "name": "Consensus recommendation and distribution"
+   },
+   {
+    "formula": "-",
+    "id": "cp_price",
+    "interpretation": "The anchor every ratio on the page divides by, so a stale quote silently ages every multiple beside it.",
+    "limits": "Delayed outside market hours. Extended-hours prints are shown where the source supplies them but are thin and can be crossed.",
+    "name": "Current price and day change"
+   },
+   {
+    "formula": "current assets / current liabilities",
+    "id": "cp_current_ratio",
+    "interpretation": "The liquidity floor. Below 1 means the company cannot cover a year of obligations from current assets, which is normal for some models and fatal for others.",
+    "limits": "A crude measure that treats inventory as liquid. The quick ratio, which does not, is not computed here.",
+    "name": "Current ratio"
+   },
+   {
+    "formula": "total debt / EBITDA",
+    "id": "cp_debt_ebitda",
+    "interpretation": "Above 4x is where the credit panel colours red, and roughly where lenders begin imposing covenants.",
+    "limits": "EBITDA is not cash flow. Meaningless for banks and insurers, which still render a value.",
+    "name": "Debt / EBITDA"
+   },
+   {
+    "formula": "-",
+    "id": "cp_debt_maturity",
+    "interpretation": "A wall of maturities inside two years at rates above the existing coupon is a refinancing risk the leverage ratios alone will not show.",
+    "limits": "Only issues captured in the filing extraction appear. Revolvers and undrawn facilities are usually absent, which understates flexibility.",
+    "name": "Debt maturity ladder"
+   },
+   {
+    "formula": "trailing 12m dividends / price * 100",
+    "id": "cp_div_yield",
+    "interpretation": "Rises mechanically when the price falls, so a high yield is as often a warning as an attraction. Check it against the payout trend rather than in isolation.",
+    "limits": "Trailing, so a cut already announced but not yet effective still shows the old rate. Special dividends inflate it for a year.",
+    "name": "Dividend yield"
+   },
+   {
+    "formula": "sum of the last four reported quarterly diluted EPS",
+    "id": "cp_eps",
+    "interpretation": "The numerator behind P/E and the cleanest single profitability figure per share.",
+    "limits": "Diluted or basic depends on what the source reported. Restatements are picked up silently on the next refresh.",
+    "name": "EPS (TTM)"
+   },
+   {
+    "formula": "gross profit / revenue",
+    "id": "cp_gross_margin",
+    "interpretation": "Where pricing power shows first. A gross margin that erodes while revenue grows is the earliest sign of competitive pressure.",
+    "limits": "Cost-of-revenue classification differs between filers and between SEC and vendor normalisations.",
+    "name": "Gross margin"
+   },
+   {
+    "formula": "-",
+    "id": "insider_transactions",
+    "interpretation": "Cluster buying by several insiders is the classic signal; a single sale is usually a scheduled 10b5-1 disposal and carries little information. Read the transaction classification, not just the direction.",
+    "limits": "Form 4 has a two-business-day filing deadline, so the data is days old at best. Option exercises and tax withholding sales appear as transactions and dominate the raw counts. LSEG coverage is partial; most tickers fall through to yfinance.",
+    "name": "Insider transactions (Form 4)"
+   },
+   {
+    "formula": "-  (passive/active split comes from the LSEG rollup where it exists)",
+    "id": "institutional_ownership",
+    "interpretation": "High institutional ownership means the register is concentrated in hands that move in size. The passive/active split matters more than the headline: a name that is 40% index-held has a different float dynamic from one that is 40% actively held.",
+    "limits": "From 13F filings, which cover long US equity positions only: no shorts, no derivatives, no non-US managers. Filed up to 45 days after quarter end, so it is up to four months stale at the end of a cycle.",
+    "name": "Institutional and insider ownership"
+   },
+   {
+    "formula": "EBIT / interest expense",
+    "id": "cp_interest_coverage",
+    "interpretation": "The input to the synthetic credit rating, and the threshold the panel colours red below 2x.",
+    "limits": "Uses reported interest expense, which nets capitalised interest inconsistently. Undefined for a debt-free company, where it renders blank rather than infinite.",
+    "name": "Interest coverage"
+   },
+   {
+    "formula": "-",
+    "id": "cp_ma_activity",
+    "interpretation": "Context for a valuation gap: a name trading at a discount with recent approach activity is a different situation from one without.",
+    "limits": "From a static bundled extract with no as-of date shown in the UI, so recent deals may be missing entirely.",
+    "name": "M&A activity"
+   },
+   {
+    "formula": "shares outstanding x price",
+    "id": "cp_market_cap",
+    "interpretation": "The size classification everything else keys off, and the denominator for the concentration figures in other tools.",
+    "limits": "yfinance reports one share class, so a multi-class issuer (Alphabet, Berkshire, Ford) is understated against a full-float figure. Not adjusted for treasury stock.",
+    "name": "Market cap"
+   },
+   {
+    "formula": "-",
+    "id": "cp_target_spread",
+    "interpretation": "The spread matters more than the mean. A tight cluster is real consensus; a 3x range between high and low means the sell side disagrees about the business, not about the price.",
+    "limits": "No target dates are published, so a stale target from a departed analyst sits in the mean indefinitely. Structurally optimistic.",
+    "name": "Mean, high and low price target"
+   },
+   {
+    "formula": "total debt - cash and equivalents",
+    "id": "cp_net_debt",
+    "interpretation": "The figure that bridges enterprise value to equity value in every valuation model in the app.",
+    "limits": "Period-end cash is seasonal for many businesses, so a single balance sheet date can misstate the steady-state position.",
+    "name": "Net debt"
+   },
+   {
+    "formula": "net income / revenue",
+    "id": "cp_net_margin",
+    "interpretation": "Read the gap against operating margin rather than the level. A widening gap is a financing or tax story.",
+    "limits": "Contaminated by asset sales, impairments and tax one-offs that persist in TTM for a year.",
+    "name": "Net margin"
+   },
+   {
+    "formula": "operating income / revenue",
+    "id": "cp_op_margin",
+    "interpretation": "The operating leverage read: compare its trajectory against revenue growth to see whether scale is actually converting.",
+    "limits": "One-off restructuring charges sit inside operating income for most filers and are not stripped out here.",
+    "name": "Operating margin"
+   },
+   {
+    "formula": "price / EPS (TTM)",
+    "id": "cp_pe",
+    "interpretation": "The most-quoted multiple and the least comparable across sectors. Only useful against the same company history or a genuine peer set.",
+    "limits": "Meaningless on negative earnings and suppressed rather than shown negative. TTM includes one-offs, so a single impairment can distort it for four quarters.",
+    "name": "P/E ratio"
+   },
+   {
+    "formula": "-",
+    "id": "cp_revenue_segments",
+    "interpretation": "The input to any sum-of-the-parts view, and the fastest way to see whether a \"software company\" is actually a hardware company.",
+    "limits": "Segment definitions are the company own and change between years without restatement. The activity split (fees vs trading) only exists for financials.",
+    "name": "Revenue by segment, geography and activity"
+   },
+   {
+    "formula": "shares short; shares short / float; shares short / shares outstanding",
+    "id": "cp_shares_short",
+    "interpretation": "Percent of float is the meaningful version: 20% of a small float is a very different setup from 20% of outstanding on a mega cap.",
+    "limits": "Float is sourced separately from the short figure and the two can be dated differently, so the ratio can be internally inconsistent by a couple of weeks.",
+    "name": "Shares short and short % of float"
+   },
+   {
+    "formula": "-",
+    "id": "si_level",
+    "interpretation": "The raw position. On its own it says little: percentage of float and days to cover are the readings that matter.",
+    "limits": "Biweekly and lagged: settlement is roughly two weeks behind and publication a week further, so this is never current.",
+    "name": "Short interest"
+   },
+   {
+    "formula": "mean daily volume over the trailing window",
+    "id": "cp_avg_volume",
+    "interpretation": "The liquidity check that decides whether a position is exitable, and the denominator for days-to-cover.",
+    "limits": "Shares, not dollars, so it is not comparable across price levels. A single block trade skews a short window.",
+    "name": "Average daily volume"
+   },
+   {
+    "formula": "cov(stock returns, market returns) / var(market returns)",
+    "id": "cp_capm_beta",
+    "interpretation": "The textbook figure, shown so the divergence against the Scholes-Williams estimate beside it is visible rather than hidden.",
+    "limits": "Biased toward 1 for thinly traded names because the stock return desynchronises from the same-day market move. That bias is exactly what the adjacent estimate corrects.",
+    "name": "CAPM beta"
+   },
+   {
+    "formula": "shares short / average daily volume, as published by FINRA",
+    "id": "si_days_cover",
+    "interpretation": "Above 3 is the crowding threshold the panel colours amber at. This is the squeeze-risk number, because it measures the exit, not the position.",
+    "limits": "Uses the volume regime at the settlement date. A subsequent volume surge makes the position far easier to cover than the published figure implies.",
+    "name": "Days to cover"
+   },
+   {
+    "formula": "consensus EPS now vs 7/30/60/90 days ago per fiscal period, as a percentage; up/down analyst counts over 7 and 30 days; price-target raises and cuts over 120 days",
+    "id": "estimate_revisions",
+    "interpretation": "Revision breadth is one of the more durable equity factors. NVDA currently reads rising: FY consensus +7.9% over 90 days, 4 analysts up and 0 down, 24 target raises and no cuts. A rising price on falling estimates is the configuration to be wary of.",
+    "limits": "Counts are reported as counts and no score is derived from them, because four upgrades is four upgrades. yfinance reports a new coverage initiation with a prior target of 0, which is an absence rather than a target of zero and is nulled. Sparse or absent for small caps and most non-US listings.",
+    "name": "Estimate revision momentum"
+   },
+   {
+    "formula": "annualised standard deviation of the factor-regression residuals (IVOL); annualised stdev of raw returns (TVOL)",
+    "id": "cp_idio_vol",
+    "interpretation": "High idiosyncratic volatility means the name moves on its own news, which is what a stock-picker wants and a diversifier does not.",
+    "limits": "Residual to a specific factor set, so a missing factor shows up as idiosyncratic risk that is actually systematic.",
+    "name": "Idiosyncratic and total volatility"
+   },
+   {
+    "formula": "target_mean / price - 1",
+    "id": "cp_implied_upside",
+    "interpretation": "Moves as much on price as on any change of view, so a rising implied upside during a selloff is usually the price falling, not analysts turning bullish.",
+    "limits": "Inherits every bias in the target set. Not a forecast and not a probability.",
+    "name": "Implied upside"
+   },
+   {
+    "formula": "min(price/cummax(price) - 1); relative return vs benchmark over the window",
+    "id": "cp_max_dd",
+    "interpretation": "The pair answers \"how much pain, for how much reward\" in one line.",
+    "limits": "Window-dependent and close-based, so intraday depth is understated.",
+    "name": "Max drawdown and market performance"
+   },
+   {
+    "formula": "per-holder pct_change since the prior filing; counts split at +/-0.5%; net = sum(shares * pct/(100+pct))",
+    "id": "institutional_changes",
+    "interpretation": "The holders table is nearly static quarter to quarter; the change is the part that carries information and answers \"what are funds accumulating\". AAPL last filing: 5 added, 2 trimmed.",
+    "limits": "yfinance reports a brand-new position as +100%, indistinguishable from a doubled one, so both are counted as \"added\" rather than guessed at. Same 45-day 13F lag as the ownership figures.",
+    "name": "Quarter-over-quarter position changes"
+   },
+   {
+    "formula": "cov(ln(1+r_i), mr3) / cov(ln(1+r_m), mr3) where mr3 sums the previous, current and next market log return",
+    "id": "cp_sw_beta",
+    "interpretation": "The estimate to trust for an illiquid name. The app flags divergence from CAPM beta past 15% as a thin-trading warning.",
+    "limits": "The 15% flag is a starting threshold, not a statistically derived cutoff, and the code says so. Daily frequency only; the lead-lag correction is meaningless at lower frequency.",
+    "name": "Scholes-Williams beta"
+   },
+   {
+    "formula": "interest coverage mapped to a rating through the Damodaran synthetic-rating table; Altman Z from the standard five-ratio formula; implied default spread from the same table",
+    "id": "credit_quality",
+    "interpretation": "A cheap sanity check on balance-sheet risk when no agency rating exists. Interest coverage under 2x and debt/EBITDA over 4x are the two thresholds the panel colours red at.",
+    "limits": "Model-based, explicitly NOT an S&P/Moody's/Fitch rating, and the panel says so. Altman Z was fitted on manufacturers and is unreliable for financials, REITs and asset-light software. Falls back to a bundled Damodaran snapshot when live financials are missing.",
+    "name": "Synthetic credit rating and Altman Z"
+   }
+  ],
+  "correlation": [
+   {
+    "formula": "cov(asset, benchmark) / var(benchmark)",
+    "id": "corr_beta",
+    "interpretation": "Turns a correlation matrix into something position-sizeable, since correlation alone says nothing about magnitude.",
+    "limits": "Contemporaneous and uncorrected for session offsets, so foreign assets read low.",
+    "name": "Beta to the benchmark"
+   },
+   {
+    "formula": "Pearson correlation of daily returns over the chosen period",
+    "id": "corr_matrix",
+    "interpretation": "The diversification check. Anything above roughly 0.8 is one position wearing two tickers.",
+    "limits": "Cross-region pairs are understated by the same session-offset problem the Global Markets beta corrects for, and this tool does NOT apply that correction.",
+    "name": "Correlation matrix"
+   },
+   {
+    "formula": "correlation over a rolling N-day window",
+    "id": "corr_rolling",
+    "interpretation": "The panel that matters: a static matrix hides that diversification disappears exactly when it is needed. Spikes toward +1 mark a risk-off regime.",
+    "limits": "A rolling window trades responsiveness against stability; a short window produces swings that are estimation noise rather than regime change.",
+    "name": "Rolling correlation"
+   }
+  ],
+  "cot-positioning": [
+   {
+    "formula": "-",
+    "id": "cot_positioning",
+    "interpretation": "Extreme net positioning is a contrarian marker at the tails. Read the percentile against history rather than the raw contract count.",
+    "limits": "Published Friday for Tuesday, so it is always at least three days stale and often more. Covers futures positioning only: no term structure, no roll yield, and no commodity curve, which would need a futures vendor.",
+    "name": "CFTC commitments of traders"
+   },
+   {
+    "formula": "net = long contracts - short contracts per category; percentile against the trailing history of the same series",
+    "id": "positioning_extremes",
+    "interpretation": "The percentile is the tradable version. A record net short by managed money is a contrarian marker; the raw contract count means nothing without that context.",
+    "limits": "Always at least three days stale and often more. Covers futures only, so a position hedged with options or swaps is invisible. Category definitions changed in 2009, which breaks long histories.",
+    "name": "Net positioning and percentile"
+   }
+  ],
+  "credit-spreads": [
+   {
+    "formula": "-",
+    "id": "credit_spreads",
+    "interpretation": "The cleanest single read on financial stress. HY past roughly 6 points is genuine funding stress; CCC is the most recession-sensitive bucket and widens first.",
+    "limits": "Daily and index-level, so it lags an intraday risk event by a session. Option-adjusted, so it embeds a model of embedded optionality.",
+    "name": "IG and HY option-adjusted spreads"
+   }
+  ],
+  "credit-stress": [
+   {
+    "formula": "-",
+    "id": "cs_lending_standards",
+    "interpretation": "The leading indicator of the three on this page. Standards tighten several quarters before delinquencies rise, so this is where a credit cycle turns first.",
+    "limits": "A survey of senior loan officers, so it measures intent rather than realised lending. Quarterly and small-sample.",
+    "name": "Bank lending standards"
+   },
+   {
+    "formula": "-",
+    "id": "cs_charge_offs",
+    "interpretation": "The final confirmation, and the most lagging series here. By the time charge-offs rise the credit event has already happened.",
+    "limits": "Lags delinquencies by roughly two quarters by construction, since a loan must be delinquent before it is charged off.",
+    "name": "Charge-off rates"
+   },
+   {
+    "formula": "-",
+    "id": "cs_delinquencies",
+    "interpretation": "The realised consumer stress read, and a lagging one. Credit card and auto delinquencies turn before mortgage.",
+    "limits": "Lags the cycle by several quarters and is heavily revised. Aggregates hide the subprime cohort where the turn actually starts.",
+    "name": "Delinquency rates"
+   }
+  ],
+  "dcf-valuation": [
+   {
+    "formula": "-",
+    "id": "dcf_statements",
+    "interpretation": "SEC-first by design, so the statements come from the filing rather than a vendor normalisation wherever possible.",
+    "limits": "Vendor fallbacks normalise line items differently, so a company switching source can shift a margin without the business changing. TTM figures lag the most recent quarter.",
+    "name": "Financial statement inputs"
+   },
+   {
+    "formula": "project revenue at a fading growth rate, apply an operating margin path, derive FCFF, discount each year at WACC, add TV = FCFF_final x (1+g) / (WACC - g), subtract net debt, divide by shares",
+    "id": "dcf_fair_value",
+    "interpretation": "The output is a function of the assumptions, not of the company. Read the sensitivity grid before the point estimate: a 1pp change in WACC or terminal growth typically moves fair value more than any operating assumption.",
+    "limits": "Terminal value is usually 60-80% of the total, so the perpetuity growth rate dominates. Requires WACC > terminal growth or the formula diverges. Beta and operating margin silently backstop from the bundled Damodaran snapshot when the vendor has no value, which is not a user-visible option.",
+    "name": "Intrinsic value per share"
+   }
+  ],
+  "dealer-gex": [
+   {
+    "formula": "argmax(net_gex) among positive strikes; argmin(net_gex) among negative strikes",
+    "id": "gex_walls",
+    "interpretation": "Commonly read as magnet or resistance levels because dealer hedging concentrates there. Most useful near expiry, when gamma is largest and the effect is strongest.",
+    "limits": "A wall is only the biggest strike in the current chain; it moves when a single large position rolls. No implication that price will respect it.",
+    "name": "Call wall / put wall"
+   },
+   {
+    "formula": "sign x open_interest x 100 x charm x spot, per strike and expiry",
+    "id": "gex_charm",
+    "interpretation": "Explains mechanical hedging flows into an expiry with no news, and is largest in the final days of a large open interest.",
+    "limits": "Same second-order estimation problem as vanna, and it grows without bound as time to expiry approaches zero, so the final session is unstable.",
+    "name": "Dealer charm exposure"
+   },
+   {
+    "formula": "sign x open_interest x 100 x delta x spot, aggregated per strike",
+    "id": "gex_delta",
+    "interpretation": "Where dealers are long or short the underlying. Large negative delta above spot means hedging pressure builds as price rises into it.",
+    "limits": "Rests on the same sign convention as gamma: dealers assumed short calls and long puts. Frequently wrong for a single name with heavy retail call buying.",
+    "name": "Dealer delta exposure by strike"
+   },
+   {
+    "formula": "sign x open_interest x 100 x vanna x spot, per strike and expiry",
+    "id": "gex_vanna",
+    "interpretation": "The channel through which a volatility move forces spot hedging even when price has not moved. Matters most into a vol crush after an event.",
+    "limits": "Second-order greek computed from a chain IV that is itself derived from a mid price, so error compounds. Unreliable on illiquid strikes.",
+    "name": "Dealer vanna exposure"
+   },
+   {
+    "formula": "the same per-contract aggregation pivoted by expiration date",
+    "id": "gex_expiry_grid",
+    "interpretation": "Shows how much of the exposure rolls off at the next expiry, which is the difference between a level that matters this week and one that matters all quarter.",
+    "limits": "Limited to 24 expiries. LEAPS carry small gamma but large delta, so a gamma-only read understates far-dated positioning.",
+    "name": "Exposure by expiry"
+   },
+   {
+    "formula": "walk strikes ordered by price, linear interpolation between the two strikes where net_gex changes sign, pick the crossing nearest spot",
+    "id": "gex_flip",
+    "interpretation": "Above the flip, dealers dampen moves; below it they amplify. Traders treat it as a regime boundary rather than a target. Also available as an alert condition (price_cross_gex_flip) and stored in the GEX snapshot history so the level can be tracked over time.",
+    "limits": "Interpolated, not observed, so it is only as good as the strike spacing. On a thin chain the nearest crossing can jump several percent between sessions for reasons that have nothing to do with positioning.",
+    "name": "Gamma flip level"
+   },
+   {
+    "formula": "sign * open_interest * 100 * gamma * spot^2 * 0.01 / 1e6, summed calls positive and puts negative into net_gex per strike",
+    "id": "gex_net",
+    "interpretation": "Positive net gamma means dealers are long gamma and hedge against the move, damping volatility. Negative means they hedge with the move, amplifying it. The magnitude is dollars of hedging per 1% move, so it scales with the underlying and is not comparable across tickers of different price.",
+    "limits": "Assumes every open contract is dealer-short calls and dealer-long puts, which is the standard convention and frequently wrong for single names with heavy retail call buying. Open interest is previous-session settled, so intraday positioning is invisible.",
+    "name": "Net gamma exposure by strike"
+   },
+   {
+    "formula": "sum of net_gex across all strikes and expiries",
+    "id": "gex_total_net",
+    "interpretation": "The regime headline. Sign matters more than magnitude: positive damps volatility, negative amplifies it.",
+    "limits": "Not comparable across tickers, because it scales with spot squared and with open interest. A large number on a mega cap and a small one on a small cap can mean the same thing in relative terms.",
+    "name": "Total net gamma"
+   }
+  ],
+  "debt-maturity": [
+   {
+    "formula": "-  (implied upside = target_mean / price - 1)",
+    "id": "analyst_ratings",
+    "interpretation": "The level of consensus. Implied upside against the current price is the headline, but the distribution matters more: a mean target hiding a 200-point spread is not consensus.",
+    "limits": "Sell-side ratings skew structurally positive. Target dates are not published, so a stale target from a departed analyst can sit in the mean indefinitely.",
+    "name": "Analyst ratings and price targets"
+   },
+   {
+    "formula": "counts of strongBuy/buy/hold/sell/strongSell; mean recommendation score",
+    "id": "cp_consensus",
+    "interpretation": "Read the distribution, not the mean. Sell-side ratings are compressed into the top half of the scale, so \"hold\" often functions as a sell.",
+    "limits": "Coverage counts vary wildly by size; a mean over three analysts is not consensus.",
+    "name": "Consensus recommendation and distribution"
+   },
+   {
+    "formula": "-",
+    "id": "cp_price",
+    "interpretation": "The anchor every ratio on the page divides by, so a stale quote silently ages every multiple beside it.",
+    "limits": "Delayed outside market hours. Extended-hours prints are shown where the source supplies them but are thin and can be crossed.",
+    "name": "Current price and day change"
+   },
+   {
+    "formula": "current assets / current liabilities",
+    "id": "cp_current_ratio",
+    "interpretation": "The liquidity floor. Below 1 means the company cannot cover a year of obligations from current assets, which is normal for some models and fatal for others.",
+    "limits": "A crude measure that treats inventory as liquid. The quick ratio, which does not, is not computed here.",
+    "name": "Current ratio"
+   },
+   {
+    "formula": "total debt / EBITDA",
+    "id": "cp_debt_ebitda",
+    "interpretation": "Above 4x is where the credit panel colours red, and roughly where lenders begin imposing covenants.",
+    "limits": "EBITDA is not cash flow. Meaningless for banks and insurers, which still render a value.",
+    "name": "Debt / EBITDA"
+   },
+   {
+    "formula": "-",
+    "id": "cp_debt_maturity",
+    "interpretation": "A wall of maturities inside two years at rates above the existing coupon is a refinancing risk the leverage ratios alone will not show.",
+    "limits": "Only issues captured in the filing extraction appear. Revolvers and undrawn facilities are usually absent, which understates flexibility.",
+    "name": "Debt maturity ladder"
+   },
+   {
+    "formula": "trailing 12m dividends / price * 100",
+    "id": "cp_div_yield",
+    "interpretation": "Rises mechanically when the price falls, so a high yield is as often a warning as an attraction. Check it against the payout trend rather than in isolation.",
+    "limits": "Trailing, so a cut already announced but not yet effective still shows the old rate. Special dividends inflate it for a year.",
+    "name": "Dividend yield"
+   },
+   {
+    "formula": "sum of the last four reported quarterly diluted EPS",
+    "id": "cp_eps",
+    "interpretation": "The numerator behind P/E and the cleanest single profitability figure per share.",
+    "limits": "Diluted or basic depends on what the source reported. Restatements are picked up silently on the next refresh.",
+    "name": "EPS (TTM)"
+   },
+   {
+    "formula": "gross profit / revenue",
+    "id": "cp_gross_margin",
+    "interpretation": "Where pricing power shows first. A gross margin that erodes while revenue grows is the earliest sign of competitive pressure.",
+    "limits": "Cost-of-revenue classification differs between filers and between SEC and vendor normalisations.",
+    "name": "Gross margin"
+   },
+   {
+    "formula": "-",
+    "id": "insider_transactions",
+    "interpretation": "Cluster buying by several insiders is the classic signal; a single sale is usually a scheduled 10b5-1 disposal and carries little information. Read the transaction classification, not just the direction.",
+    "limits": "Form 4 has a two-business-day filing deadline, so the data is days old at best. Option exercises and tax withholding sales appear as transactions and dominate the raw counts. LSEG coverage is partial; most tickers fall through to yfinance.",
+    "name": "Insider transactions (Form 4)"
+   },
+   {
+    "formula": "-  (passive/active split comes from the LSEG rollup where it exists)",
+    "id": "institutional_ownership",
+    "interpretation": "High institutional ownership means the register is concentrated in hands that move in size. The passive/active split matters more than the headline: a name that is 40% index-held has a different float dynamic from one that is 40% actively held.",
+    "limits": "From 13F filings, which cover long US equity positions only: no shorts, no derivatives, no non-US managers. Filed up to 45 days after quarter end, so it is up to four months stale at the end of a cycle.",
+    "name": "Institutional and insider ownership"
+   },
+   {
+    "formula": "EBIT / interest expense",
+    "id": "cp_interest_coverage",
+    "interpretation": "The input to the synthetic credit rating, and the threshold the panel colours red below 2x.",
+    "limits": "Uses reported interest expense, which nets capitalised interest inconsistently. Undefined for a debt-free company, where it renders blank rather than infinite.",
+    "name": "Interest coverage"
+   },
+   {
+    "formula": "-",
+    "id": "cp_ma_activity",
+    "interpretation": "Context for a valuation gap: a name trading at a discount with recent approach activity is a different situation from one without.",
+    "limits": "From a static bundled extract with no as-of date shown in the UI, so recent deals may be missing entirely.",
+    "name": "M&A activity"
+   },
+   {
+    "formula": "shares outstanding x price",
+    "id": "cp_market_cap",
+    "interpretation": "The size classification everything else keys off, and the denominator for the concentration figures in other tools.",
+    "limits": "yfinance reports one share class, so a multi-class issuer (Alphabet, Berkshire, Ford) is understated against a full-float figure. Not adjusted for treasury stock.",
+    "name": "Market cap"
+   },
+   {
+    "formula": "-",
+    "id": "cp_target_spread",
+    "interpretation": "The spread matters more than the mean. A tight cluster is real consensus; a 3x range between high and low means the sell side disagrees about the business, not about the price.",
+    "limits": "No target dates are published, so a stale target from a departed analyst sits in the mean indefinitely. Structurally optimistic.",
+    "name": "Mean, high and low price target"
+   },
+   {
+    "formula": "total debt - cash and equivalents",
+    "id": "cp_net_debt",
+    "interpretation": "The figure that bridges enterprise value to equity value in every valuation model in the app.",
+    "limits": "Period-end cash is seasonal for many businesses, so a single balance sheet date can misstate the steady-state position.",
+    "name": "Net debt"
+   },
+   {
+    "formula": "net income / revenue",
+    "id": "cp_net_margin",
+    "interpretation": "Read the gap against operating margin rather than the level. A widening gap is a financing or tax story.",
+    "limits": "Contaminated by asset sales, impairments and tax one-offs that persist in TTM for a year.",
+    "name": "Net margin"
+   },
+   {
+    "formula": "operating income / revenue",
+    "id": "cp_op_margin",
+    "interpretation": "The operating leverage read: compare its trajectory against revenue growth to see whether scale is actually converting.",
+    "limits": "One-off restructuring charges sit inside operating income for most filers and are not stripped out here.",
+    "name": "Operating margin"
+   },
+   {
+    "formula": "price / EPS (TTM)",
+    "id": "cp_pe",
+    "interpretation": "The most-quoted multiple and the least comparable across sectors. Only useful against the same company history or a genuine peer set.",
+    "limits": "Meaningless on negative earnings and suppressed rather than shown negative. TTM includes one-offs, so a single impairment can distort it for four quarters.",
+    "name": "P/E ratio"
+   },
+   {
+    "formula": "-",
+    "id": "cp_revenue_segments",
+    "interpretation": "The input to any sum-of-the-parts view, and the fastest way to see whether a \"software company\" is actually a hardware company.",
+    "limits": "Segment definitions are the company own and change between years without restatement. The activity split (fees vs trading) only exists for financials.",
+    "name": "Revenue by segment, geography and activity"
+   },
+   {
+    "formula": "shares short; shares short / float; shares short / shares outstanding",
+    "id": "cp_shares_short",
+    "interpretation": "Percent of float is the meaningful version: 20% of a small float is a very different setup from 20% of outstanding on a mega cap.",
+    "limits": "Float is sourced separately from the short figure and the two can be dated differently, so the ratio can be internally inconsistent by a couple of weeks.",
+    "name": "Shares short and short % of float"
+   },
+   {
+    "formula": "-",
+    "id": "si_level",
+    "interpretation": "The raw position. On its own it says little: percentage of float and days to cover are the readings that matter.",
+    "limits": "Biweekly and lagged: settlement is roughly two weeks behind and publication a week further, so this is never current.",
+    "name": "Short interest"
+   },
+   {
+    "formula": "mean daily volume over the trailing window",
+    "id": "cp_avg_volume",
+    "interpretation": "The liquidity check that decides whether a position is exitable, and the denominator for days-to-cover.",
+    "limits": "Shares, not dollars, so it is not comparable across price levels. A single block trade skews a short window.",
+    "name": "Average daily volume"
+   },
+   {
+    "formula": "cov(stock returns, market returns) / var(market returns)",
+    "id": "cp_capm_beta",
+    "interpretation": "The textbook figure, shown so the divergence against the Scholes-Williams estimate beside it is visible rather than hidden.",
+    "limits": "Biased toward 1 for thinly traded names because the stock return desynchronises from the same-day market move. That bias is exactly what the adjacent estimate corrects.",
+    "name": "CAPM beta"
+   },
+   {
+    "formula": "shares short / average daily volume, as published by FINRA",
+    "id": "si_days_cover",
+    "interpretation": "Above 3 is the crowding threshold the panel colours amber at. This is the squeeze-risk number, because it measures the exit, not the position.",
+    "limits": "Uses the volume regime at the settlement date. A subsequent volume surge makes the position far easier to cover than the published figure implies.",
+    "name": "Days to cover"
+   },
+   {
+    "formula": "consensus EPS now vs 7/30/60/90 days ago per fiscal period, as a percentage; up/down analyst counts over 7 and 30 days; price-target raises and cuts over 120 days",
+    "id": "estimate_revisions",
+    "interpretation": "Revision breadth is one of the more durable equity factors. NVDA currently reads rising: FY consensus +7.9% over 90 days, 4 analysts up and 0 down, 24 target raises and no cuts. A rising price on falling estimates is the configuration to be wary of.",
+    "limits": "Counts are reported as counts and no score is derived from them, because four upgrades is four upgrades. yfinance reports a new coverage initiation with a prior target of 0, which is an absence rather than a target of zero and is nulled. Sparse or absent for small caps and most non-US listings.",
+    "name": "Estimate revision momentum"
+   },
+   {
+    "formula": "annualised standard deviation of the factor-regression residuals (IVOL); annualised stdev of raw returns (TVOL)",
+    "id": "cp_idio_vol",
+    "interpretation": "High idiosyncratic volatility means the name moves on its own news, which is what a stock-picker wants and a diversifier does not.",
+    "limits": "Residual to a specific factor set, so a missing factor shows up as idiosyncratic risk that is actually systematic.",
+    "name": "Idiosyncratic and total volatility"
+   },
+   {
+    "formula": "target_mean / price - 1",
+    "id": "cp_implied_upside",
+    "interpretation": "Moves as much on price as on any change of view, so a rising implied upside during a selloff is usually the price falling, not analysts turning bullish.",
+    "limits": "Inherits every bias in the target set. Not a forecast and not a probability.",
+    "name": "Implied upside"
+   },
+   {
+    "formula": "min(price/cummax(price) - 1); relative return vs benchmark over the window",
+    "id": "cp_max_dd",
+    "interpretation": "The pair answers \"how much pain, for how much reward\" in one line.",
+    "limits": "Window-dependent and close-based, so intraday depth is understated.",
+    "name": "Max drawdown and market performance"
+   },
+   {
+    "formula": "per-holder pct_change since the prior filing; counts split at +/-0.5%; net = sum(shares * pct/(100+pct))",
+    "id": "institutional_changes",
+    "interpretation": "The holders table is nearly static quarter to quarter; the change is the part that carries information and answers \"what are funds accumulating\". AAPL last filing: 5 added, 2 trimmed.",
+    "limits": "yfinance reports a brand-new position as +100%, indistinguishable from a doubled one, so both are counted as \"added\" rather than guessed at. Same 45-day 13F lag as the ownership figures.",
+    "name": "Quarter-over-quarter position changes"
+   },
+   {
+    "formula": "cov(ln(1+r_i), mr3) / cov(ln(1+r_m), mr3) where mr3 sums the previous, current and next market log return",
+    "id": "cp_sw_beta",
+    "interpretation": "The estimate to trust for an illiquid name. The app flags divergence from CAPM beta past 15% as a thin-trading warning.",
+    "limits": "The 15% flag is a starting threshold, not a statistically derived cutoff, and the code says so. Daily frequency only; the lead-lag correction is meaningless at lower frequency.",
+    "name": "Scholes-Williams beta"
+   },
+   {
+    "formula": "interest coverage mapped to a rating through the Damodaran synthetic-rating table; Altman Z from the standard five-ratio formula; implied default spread from the same table",
+    "id": "credit_quality",
+    "interpretation": "A cheap sanity check on balance-sheet risk when no agency rating exists. Interest coverage under 2x and debt/EBITDA over 4x are the two thresholds the panel colours red at.",
+    "limits": "Model-based, explicitly NOT an S&P/Moody's/Fitch rating, and the panel says so. Altman Z was fitted on manufacturers and is unreliable for financials, REITs and asset-light software. Falls back to a bundled Damodaran snapshot when live financials are missing.",
+    "name": "Synthetic credit rating and Altman Z"
+   }
+  ],
+  "dividends": [
+   {
+    "formula": "-",
+    "id": "pm_dividends",
+    "interpretation": "Turns a price-return book into something closer to total return. Ex-dates matter for anyone hedging around them.",
+    "limits": "Historical dividends only; a forward estimate is an extrapolation of the last declared rate. Special dividends distort a trailing yield badly.",
+    "name": "Dividends"
+   },
+   {
+    "formula": "sum(shares * price) recomputed on each poll and appended to an in-session series",
+    "id": "pm_intraday_curve",
+    "interpretation": "Shows the day path rather than just the endpoint. The axis is deliberately a fixed numeric time axis with a stable value domain, because auto-scaling on a polling chart makes the line appear to jump on every tick.",
+    "limits": "In-session only and not persisted, so a refresh restarts the curve. Built from polled marks, so a gap in polling appears as a straight line rather than as missing data.",
+    "name": "Intraday book-value curve"
+   },
+   {
+    "formula": "shares * live price; weight = position value / book value",
+    "id": "pm_market_value",
+    "interpretation": "The live cockpit. Weight here is the input the Allocator rebalance reads as the current state.",
+    "limits": "Options and futures are marked on a separate path and are excluded from the weighted equity legs handed to other tools, surfaced as a note rather than dropped silently.",
+    "name": "Market value and weight per position"
+   },
+   {
+    "formula": "shares * (price - avg cost); return = price / avg cost - 1",
+    "id": "pm_unrealized",
+    "interpretation": "Cost basis is user-entered, so this is only as accurate as what was typed. Imported books carry the basis from the import where the source had one.",
+    "limits": "No lot-level tracking, so a position built in several tranches shows one blended basis and cannot produce tax-lot reporting.",
+    "name": "Unrealized P&L and return"
+   },
+   {
+    "formula": "-",
+    "id": "pm_book",
+    "interpretation": "The input every portfolio tool keys off. Books are importable into Allocator, Analysis, Compare, Backtester, Factor Decomposition and the drawdown alert through PMImportPicker.",
+    "limits": "localStorage only, so it is per browser and never synced server-side. A drawdown alert therefore has to carry its holdings in the alert payload, the same way a strategy alert carries its rules. Clearing site data deletes the book.",
+    "name": "Holdings, options, futures and cash"
+   }
+  ],
+  "earnings": [
+   {
+    "formula": "-",
+    "id": "es_insider_rows",
+    "interpretation": "Insider selling into a print is the context most often missing from an earnings preview.",
+    "limits": "Same two-day filing lag and 10b5-1 noise as the Company Profile panel. Sparse for smaller names.",
+    "name": "Insider transactions in the expanded row"
+   },
+   {
+    "formula": "-",
+    "id": "es_price_series",
+    "interpretation": "Context for the countdown without leaving the page. Falls back to the OHLCV route when the primary path returns nothing so the cell is never permanently blank.",
+    "limits": "A short window, so it shows the run into the print rather than the trend. Not adjusted for the reaction gap being plotted alongside it.",
+    "name": "Recent price series"
+   },
+   {
+    "formula": "-",
+    "id": "es_date",
+    "interpretation": "Two spines share one row type: a calendar window for the market and a countdown for names in your book, selectable per portfolio.",
+    "limits": "The Finnhub free calendar is future-only and omits large caps such as NKE, which is why Nasdaq is merged in. yfinance drops the just-reported quarter for one to three days, which previously read in the UI as a date rescheduled months out.",
+    "name": "Report date and session"
+   },
+   {
+    "formula": "ATM straddle mid as a percentage of spot on the nearest expiry after the report",
+    "id": "es_implied_move",
+    "interpretation": "Compare with the historical average absolute reaction below it: options consistently rich or cheap to realised is the tradable observation.",
+    "limits": "Chain-derived from mid prices, so a wide spread inflates it. Needs a listed expiry close to the event; a name with sparse expiries gives a poor estimate.",
+    "name": "Implied move into the print"
+   },
+   {
+    "formula": "next-session close-to-close return following the report date",
+    "id": "es_reaction",
+    "interpretation": "The pairing with surprise is the whole point: a positive surprise with a negative reaction says the print was already in the price.",
+    "limits": "A whole-session return attributes everything that day to the earnings print. For a before-the-bell report the reaction session is the same day, for after-the-bell it is the next.",
+    "name": "Reaction: next-session move"
+   },
+   {
+    "formula": "actual EPS - consensus EPS, and the same as a percentage of the estimate",
+    "id": "es_eps_surprise",
+    "interpretation": "Only populates once a company has reported, so a blank means pending rather than missing. The percentage is the comparable version across price levels.",
+    "limits": "Consensus is as captured near the print, not as it stood months earlier, so it understates how far estimates moved into the event. GAAP vs adjusted mismatches produce spurious large surprises.",
+    "name": "Result: EPS vs estimate"
+   },
+   {
+    "formula": "retrieval over the filing and release text, summarised by the LLM stack",
+    "id": "es_ai_summary",
+    "interpretation": "A reading aid over documents already fetched, generated on demand rather than for every row, with a visible progress percentage while it runs.",
+    "limits": "Generated text: it can miss context and restate boilerplate as a finding. Never used to populate a numeric field on the page.",
+    "name": "Quarter summary"
+   }
+  ],
+  "factor-decomposition": [
+   {
+    "formula": "multivariate OLS of book returns on factor returns; risk shares from the variance contribution of each loading; annualised alpha from the intercept",
+    "id": "factor_decomposition",
+    "interpretation": "Tells you what a book is actually exposed to as opposed to what it holds. Risk shares sum to the systematic portion; the remainder is name-specific.",
+    "limits": "Factor set is fixed at five and does not include size, value or momentum, so a style tilt shows up as unexplained alpha. OLS betas are unstable on under a year of data.",
+    "name": "Factor exposures and alpha"
+   }
+  ],
+  "fx-matrix": [
+   {
+    "formula": "cross rates derived from USD pairs; vol = stdev of weekly returns",
+    "id": "fx_matrix",
+    "interpretation": "The grid view for spotting which leg of a move is doing the work. The diagonal is blank by construction.",
+    "limits": "Crosses are derived from USD legs, so a synthetic cross carries both legs bid-ask, not the real quoted cross spread.",
+    "name": "Cross-rate matrix and volatility"
+   }
+  ],
+  "global-markets": [
+   {
+    "formula": "last close in the selected window against the window base; 10m/30m/1h use intraday bars, longer windows use daily",
+    "id": "gm_board_quote",
+    "interpretation": "One request covers the whole board, so the page is a single round trip. Outside the US cash session the Americas index rows swap to their CME futures proxy and are flagged as such.",
+    "limits": "A CME proxy is a different instrument from the cash index and is labelled `is_cme_proxy`. Row status is one of intraday / delayed / end_of_day / unavailable and should be read before the number.",
+    "name": "Board price and change"
+   },
+   {
+    "formula": "-",
+    "id": "gm_commodities",
+    "interpretation": "Front-month futures, so a roll shows as a price jump that is not a market move.",
+    "limits": "No term structure, roll yield or contango indication anywhere in the app; that would need a futures data vendor. Contract months are not labelled on the board.",
+    "name": "Commodities"
+   },
+   {
+    "formula": "-",
+    "id": "gm_crypto",
+    "interpretation": "Trades continuously, so these are the only rows that are live at the weekend.",
+    "limits": "Spot only. No dominance, funding rate or open interest, which are perpetual-swap data and would need a derivatives source; Binance.US does not list perps.",
+    "name": "Crypto"
+   },
+   {
+    "formula": "-",
+    "id": "gm_fx",
+    "interpretation": "Quoting convention differs by pair and is shown as labelled (EUR/USD versus USD/JPY), so the sign of a move means opposite things across rows.",
+    "limits": "yfinance FX is indicative rather than a tradable quote and carries no spread. Weekend prints are stale from the Friday close.",
+    "name": "FX pairs"
+   },
+   {
+    "formula": "-",
+    "id": "gm_yields",
+    "interpretation": "The board switches these rows to basis-point changes rather than percentage returns, because a yield going 4.00 to 4.66 has not returned 16%.",
+    "limits": "The 2-year comes from FRED and updates on a different schedule from the yfinance rows beside it, so the curve can be internally inconsistent intraday.",
+    "name": "US Treasury yields"
+   },
+   {
+    "formula": "-",
+    "id": "gm_indices",
+    "interpretation": "One batched request covers the whole board. Outside the US cash session the Americas rows swap to CME futures proxies and are flagged is_cme_proxy.",
+    "limits": "A futures proxy is a different instrument from the cash index. Foreign indices show their last completed session, so a green row can be many hours old.",
+    "name": "World equity indices"
+   },
+   {
+    "formula": "std(daily returns, last 30) * sqrt(252) * 100; min(price/cummax(price) - 1) over 366 days",
+    "id": "asset_vol_dd",
+    "interpretation": "The volatility figure is a 30-session window, so it reacts fast and will look extreme after a shock: the KOSPI reads 90% against a 52% one-year figure. The drawdown is the honest worst case an investor would have lived through.",
+    "limits": "Realised, not implied, and backward-looking. The 30-day window and the 1-year drawdown are different horizons and should not be compared to each other.",
+    "name": "30-day volatility and deepest 1-year fall"
+   },
+   {
+    "formula": "min/max of the last 366 calendar days of closes; position = (last-low)/(high-low)*100",
+    "id": "asset_52w_range",
+    "interpretation": "Position near 100% of the band means the asset is at its yearly high. Distance from high is the plain drawdown reading.",
+    "limits": "Closing prices only, so it will differ from a vendor 52-week high computed on intraday extremes.",
+    "name": "52-week range and position"
+   },
+   {
+    "formula": "counts of member day change sign; top-N cap sum / total cap",
+    "id": "index_breadth_today",
+    "interpretation": "Concentration is the number that explains why an index and its average member can disagree. The Dow shows 71.8% in its top 5.",
+    "limits": "Day change is close-to-close from the batched download, so for a foreign index it is the last completed session, not live.",
+    "name": "Constituent breadth and concentration"
+   },
+   {
+    "formula": "last / close_at_or_before(today - window) - 1, per window; YTD uses 1 January",
+    "id": "asset_return_ladder",
+    "interpretation": "Reading several windows together separates a trend from a bounce. Works for every row on the board, not just equities.",
+    "limits": "Uses the last close at or before the anchor date, so a long market closure shifts the base. Price return only: no dividends, so equity index figures understate total return by roughly the yield.",
+    "name": "Return ladder (1W-5Y)"
+   },
+   {
+    "formula": "sequence of closes over the selected window",
+    "id": "gm_spark",
+    "interpretation": "Status is one of intraday, delayed, end_of_day or unavailable and should be read before the number itself.",
+    "limits": "The sparkline is drawn from the same window as the selected performance period, so changing the window changes the shape as well as the number.",
+    "name": "Row sparkline and status"
+   },
+   {
+    "formula": "group members by sector; weight = sector cap / total cap; change = cap-weighted mean of member day changes",
+    "id": "index_sectors",
+    "interpretation": "Weighted by capital, not by headcount: the S&P has 75 Financials against 73 Information Technology names, but IT is 34.9% of the index and Financials 10.3%. Counting names would invert the picture.",
+    "limits": "Each index publishes its own taxonomy and they are left alone: the Hang Seng ships 4 buckets, the FTSE 44. Not comparable across indices. 1,588 of 1,620 members carry a sector; the Straits Times table publishes none.",
+    "name": "Sector mix"
+   },
+   {
+    "formula": "last_level - level_at_or_before(anchor), rendered as basis points",
+    "id": "asset_yield_bp",
+    "interpretation": "A 10-year going 4.00 to 4.66 has not returned 16%, it has risen 66 basis points. The panel switches to this reading automatically for the yield rows.",
+    "limits": "Applies only to the yield section of the board. The frontend decides which reading to show from a `yields` flag, so a yield surfaced elsewhere would still print a percentage.",
+    "name": "Yield change in basis points"
+   },
+   {
+    "formula": "Scholes-Williams (1977): beta = cov(ln(1+r_asset), mr3) / cov(ln(1+r_mkt), mr3) where mr3 is the sum of the previous, current and next market log return. Correlation is taken at whichever of lag 0 or lag 1 reads stronger by at least 0.05.",
+    "id": "asset_beta_corr",
+    "interpretation": "Beta near 1 means the asset moves with the S&P point for point. The Scholes-Williams form is used because most of the world does not trade while New York is open: Seoul closes at 06:00 UTC and New York at 21:00, so a same-day comparison put the KOSPI at beta 0.52 while it carried four times the S&P volatility. Corrected it reads 2.09. The panel says when a session offset was applied.",
+    "limits": "The correction is near a no-op where sessions overlap, which is the check that it is not simply inflating everything: FTSE moves 0.31 to 0.36 while the KOSPI moves 0.52 to 2.09. Correlation cannot be summed the same way, so the lag is chosen from the data rather than a table of exchange hours. Needs 60 overlapping observations.",
+    "name": "Beta and correlation vs S&P 500"
+   },
+   {
+    "formula": "members from a bundled list; market cap = stored shares outstanding x live price x FX to USD",
+    "id": "index_constituents",
+    "interpretation": "Answers what an index is actually made of. Caps are computed live from a stored share count rather than a stored cap, because a cap is wrong by the next session while a share count moves a few times a year. Concentration (top 5 / top 10) is the fastest read on whether an index is really a basket.",
+    "limits": "1,620 of 1,741 scraped names resolved on Yahoo; the rest were dropped rather than shipped unpriced. Coverage is stated per index in the payload. London quotes in pence, so the FX conversion divides by 100 (case-sensitive on GBp vs GBP). The Dow and Nikkei are price-weighted, so a market-cap share column there is context, not influence, and the caption says so. Eight board indices have no free member list.",
+    "name": "Index members with live caps"
+   }
+  ],
+  "housing": [
+   {
+    "formula": "-",
+    "id": "hm_prices",
+    "interpretation": "The two inputs whose ratio drives affordability. Rate moves transmit to demand within a quarter; prices respond over years.",
+    "limits": "Some series in this tool run on a deterministic three-year mock cycle rather than live data, which is not distinguished in the UI.",
+    "name": "Home price index and mortgage rate"
+   },
+   {
+    "formula": "-",
+    "id": "hm_construction",
+    "interpretation": "Permits lead starts, and starts lead completions by roughly a year, so permits are the forward-looking series of the three.",
+    "limits": "Extremely volatile month to month and revised heavily. Multi-family and single-family behave differently and are frequently reported together.",
+    "name": "Housing starts and permits"
+   },
+   {
+    "formula": "inventory / monthly sales pace",
+    "id": "hm_inventory",
+    "interpretation": "Six months is the conventional balance point. Below four is a seller market and is where price acceleration comes from.",
+    "limits": "National aggregates hide enormous regional dispersion, and no regional view exists in the UI despite a regional endpoint being available.",
+    "name": "Inventory and months of supply"
+   }
+  ],
+  "implied-probability": [
+   {
+    "formula": "ATM straddle mid price as a percentage of spot",
+    "id": "implied_move",
+    "interpretation": "The break-even move for an ATM straddle buyer, and the market consensus range into an event. Compare with the historical average move for the same event to see whether options are cheap or dear.",
+    "limits": "A single-expiry snapshot from mid prices; a wide bid-ask on either leg inflates it. Says nothing about direction.",
+    "name": "Implied move and straddle"
+   },
+   {
+    "formula": "Black-Scholes risk-neutral probability from the chain implied vol surface, rendered as a density and a cumulative curve",
+    "id": "risk_neutral_density",
+    "interpretation": "Answers \"what odds is the market giving this level\". The cumulative curve is the directly usable one for a strike decision.",
+    "limits": "Risk-neutral, not real-world: it embeds the risk premium, so it is not a forecast of actual probability. Assumes lognormal BS dynamics, which understates tails. Unavailable when the ticker has no listed options, and the page says so rather than showing an empty chart.",
+    "name": "Probability of finishing above a strike"
+   }
+  ],
+  "insider-activity": [
+   {
+    "formula": "-  (implied upside = target_mean / price - 1)",
+    "id": "analyst_ratings",
+    "interpretation": "The level of consensus. Implied upside against the current price is the headline, but the distribution matters more: a mean target hiding a 200-point spread is not consensus.",
+    "limits": "Sell-side ratings skew structurally positive. Target dates are not published, so a stale target from a departed analyst can sit in the mean indefinitely.",
+    "name": "Analyst ratings and price targets"
+   },
+   {
+    "formula": "counts of strongBuy/buy/hold/sell/strongSell; mean recommendation score",
+    "id": "cp_consensus",
+    "interpretation": "Read the distribution, not the mean. Sell-side ratings are compressed into the top half of the scale, so \"hold\" often functions as a sell.",
+    "limits": "Coverage counts vary wildly by size; a mean over three analysts is not consensus.",
+    "name": "Consensus recommendation and distribution"
+   },
+   {
+    "formula": "-",
+    "id": "cp_price",
+    "interpretation": "The anchor every ratio on the page divides by, so a stale quote silently ages every multiple beside it.",
+    "limits": "Delayed outside market hours. Extended-hours prints are shown where the source supplies them but are thin and can be crossed.",
+    "name": "Current price and day change"
+   },
+   {
+    "formula": "current assets / current liabilities",
+    "id": "cp_current_ratio",
+    "interpretation": "The liquidity floor. Below 1 means the company cannot cover a year of obligations from current assets, which is normal for some models and fatal for others.",
+    "limits": "A crude measure that treats inventory as liquid. The quick ratio, which does not, is not computed here.",
+    "name": "Current ratio"
+   },
+   {
+    "formula": "total debt / EBITDA",
+    "id": "cp_debt_ebitda",
+    "interpretation": "Above 4x is where the credit panel colours red, and roughly where lenders begin imposing covenants.",
+    "limits": "EBITDA is not cash flow. Meaningless for banks and insurers, which still render a value.",
+    "name": "Debt / EBITDA"
+   },
+   {
+    "formula": "-",
+    "id": "cp_debt_maturity",
+    "interpretation": "A wall of maturities inside two years at rates above the existing coupon is a refinancing risk the leverage ratios alone will not show.",
+    "limits": "Only issues captured in the filing extraction appear. Revolvers and undrawn facilities are usually absent, which understates flexibility.",
+    "name": "Debt maturity ladder"
+   },
+   {
+    "formula": "trailing 12m dividends / price * 100",
+    "id": "cp_div_yield",
+    "interpretation": "Rises mechanically when the price falls, so a high yield is as often a warning as an attraction. Check it against the payout trend rather than in isolation.",
+    "limits": "Trailing, so a cut already announced but not yet effective still shows the old rate. Special dividends inflate it for a year.",
+    "name": "Dividend yield"
+   },
+   {
+    "formula": "sum of the last four reported quarterly diluted EPS",
+    "id": "cp_eps",
+    "interpretation": "The numerator behind P/E and the cleanest single profitability figure per share.",
+    "limits": "Diluted or basic depends on what the source reported. Restatements are picked up silently on the next refresh.",
+    "name": "EPS (TTM)"
+   },
+   {
+    "formula": "gross profit / revenue",
+    "id": "cp_gross_margin",
+    "interpretation": "Where pricing power shows first. A gross margin that erodes while revenue grows is the earliest sign of competitive pressure.",
+    "limits": "Cost-of-revenue classification differs between filers and between SEC and vendor normalisations.",
+    "name": "Gross margin"
+   },
+   {
+    "formula": "-",
+    "id": "insider_transactions",
+    "interpretation": "Cluster buying by several insiders is the classic signal; a single sale is usually a scheduled 10b5-1 disposal and carries little information. Read the transaction classification, not just the direction.",
+    "limits": "Form 4 has a two-business-day filing deadline, so the data is days old at best. Option exercises and tax withholding sales appear as transactions and dominate the raw counts. LSEG coverage is partial; most tickers fall through to yfinance.",
+    "name": "Insider transactions (Form 4)"
+   },
+   {
+    "formula": "-",
+    "id": "es_insider_rows",
+    "interpretation": "Insider selling into a print is the context most often missing from an earnings preview.",
+    "limits": "Same two-day filing lag and 10b5-1 noise as the Company Profile panel. Sparse for smaller names.",
+    "name": "Insider transactions in the expanded row"
+   },
+   {
+    "formula": "-  (passive/active split comes from the LSEG rollup where it exists)",
+    "id": "institutional_ownership",
+    "interpretation": "High institutional ownership means the register is concentrated in hands that move in size. The passive/active split matters more than the headline: a name that is 40% index-held has a different float dynamic from one that is 40% actively held.",
+    "limits": "From 13F filings, which cover long US equity positions only: no shorts, no derivatives, no non-US managers. Filed up to 45 days after quarter end, so it is up to four months stale at the end of a cycle.",
+    "name": "Institutional and insider ownership"
+   },
+   {
+    "formula": "EBIT / interest expense",
+    "id": "cp_interest_coverage",
+    "interpretation": "The input to the synthetic credit rating, and the threshold the panel colours red below 2x.",
+    "limits": "Uses reported interest expense, which nets capitalised interest inconsistently. Undefined for a debt-free company, where it renders blank rather than infinite.",
+    "name": "Interest coverage"
+   },
+   {
+    "formula": "-",
+    "id": "cp_ma_activity",
+    "interpretation": "Context for a valuation gap: a name trading at a discount with recent approach activity is a different situation from one without.",
+    "limits": "From a static bundled extract with no as-of date shown in the UI, so recent deals may be missing entirely.",
+    "name": "M&A activity"
+   },
+   {
+    "formula": "shares outstanding x price",
+    "id": "cp_market_cap",
+    "interpretation": "The size classification everything else keys off, and the denominator for the concentration figures in other tools.",
+    "limits": "yfinance reports one share class, so a multi-class issuer (Alphabet, Berkshire, Ford) is understated against a full-float figure. Not adjusted for treasury stock.",
+    "name": "Market cap"
+   },
+   {
+    "formula": "-",
+    "id": "cp_target_spread",
+    "interpretation": "The spread matters more than the mean. A tight cluster is real consensus; a 3x range between high and low means the sell side disagrees about the business, not about the price.",
+    "limits": "No target dates are published, so a stale target from a departed analyst sits in the mean indefinitely. Structurally optimistic.",
+    "name": "Mean, high and low price target"
+   },
+   {
+    "formula": "total debt - cash and equivalents",
+    "id": "cp_net_debt",
+    "interpretation": "The figure that bridges enterprise value to equity value in every valuation model in the app.",
+    "limits": "Period-end cash is seasonal for many businesses, so a single balance sheet date can misstate the steady-state position.",
+    "name": "Net debt"
+   },
+   {
+    "formula": "net income / revenue",
+    "id": "cp_net_margin",
+    "interpretation": "Read the gap against operating margin rather than the level. A widening gap is a financing or tax story.",
+    "limits": "Contaminated by asset sales, impairments and tax one-offs that persist in TTM for a year.",
+    "name": "Net margin"
+   },
+   {
+    "formula": "operating income / revenue",
+    "id": "cp_op_margin",
+    "interpretation": "The operating leverage read: compare its trajectory against revenue growth to see whether scale is actually converting.",
+    "limits": "One-off restructuring charges sit inside operating income for most filers and are not stripped out here.",
+    "name": "Operating margin"
+   },
+   {
+    "formula": "price / EPS (TTM)",
+    "id": "cp_pe",
+    "interpretation": "The most-quoted multiple and the least comparable across sectors. Only useful against the same company history or a genuine peer set.",
+    "limits": "Meaningless on negative earnings and suppressed rather than shown negative. TTM includes one-offs, so a single impairment can distort it for four quarters.",
+    "name": "P/E ratio"
+   },
+   {
+    "formula": "-",
+    "id": "es_price_series",
+    "interpretation": "Context for the countdown without leaving the page. Falls back to the OHLCV route when the primary path returns nothing so the cell is never permanently blank.",
+    "limits": "A short window, so it shows the run into the print rather than the trend. Not adjusted for the reaction gap being plotted alongside it.",
+    "name": "Recent price series"
+   },
+   {
+    "formula": "-",
+    "id": "es_date",
+    "interpretation": "Two spines share one row type: a calendar window for the market and a countdown for names in your book, selectable per portfolio.",
+    "limits": "The Finnhub free calendar is future-only and omits large caps such as NKE, which is why Nasdaq is merged in. yfinance drops the just-reported quarter for one to three days, which previously read in the UI as a date rescheduled months out.",
+    "name": "Report date and session"
+   },
+   {
+    "formula": "-",
+    "id": "cp_revenue_segments",
+    "interpretation": "The input to any sum-of-the-parts view, and the fastest way to see whether a \"software company\" is actually a hardware company.",
+    "limits": "Segment definitions are the company own and change between years without restatement. The activity split (fees vs trading) only exists for financials.",
+    "name": "Revenue by segment, geography and activity"
+   },
+   {
+    "formula": "shares short; shares short / float; shares short / shares outstanding",
+    "id": "cp_shares_short",
+    "interpretation": "Percent of float is the meaningful version: 20% of a small float is a very different setup from 20% of outstanding on a mega cap.",
+    "limits": "Float is sourced separately from the short figure and the two can be dated differently, so the ratio can be internally inconsistent by a couple of weeks.",
+    "name": "Shares short and short % of float"
+   },
+   {
+    "formula": "-",
+    "id": "si_level",
+    "interpretation": "The raw position. On its own it says little: percentage of float and days to cover are the readings that matter.",
+    "limits": "Biweekly and lagged: settlement is roughly two weeks behind and publication a week further, so this is never current.",
+    "name": "Short interest"
+   },
+   {
+    "formula": "mean daily volume over the trailing window",
+    "id": "cp_avg_volume",
+    "interpretation": "The liquidity check that decides whether a position is exitable, and the denominator for days-to-cover.",
+    "limits": "Shares, not dollars, so it is not comparable across price levels. A single block trade skews a short window.",
+    "name": "Average daily volume"
+   },
+   {
+    "formula": "cov(stock returns, market returns) / var(market returns)",
+    "id": "cp_capm_beta",
+    "interpretation": "The textbook figure, shown so the divergence against the Scholes-Williams estimate beside it is visible rather than hidden.",
+    "limits": "Biased toward 1 for thinly traded names because the stock return desynchronises from the same-day market move. That bias is exactly what the adjacent estimate corrects.",
+    "name": "CAPM beta"
+   },
+   {
+    "formula": "shares short / average daily volume, as published by FINRA",
+    "id": "si_days_cover",
+    "interpretation": "Above 3 is the crowding threshold the panel colours amber at. This is the squeeze-risk number, because it measures the exit, not the position.",
+    "limits": "Uses the volume regime at the settlement date. A subsequent volume surge makes the position far easier to cover than the published figure implies.",
+    "name": "Days to cover"
+   },
+   {
+    "formula": "consensus EPS now vs 7/30/60/90 days ago per fiscal period, as a percentage; up/down analyst counts over 7 and 30 days; price-target raises and cuts over 120 days",
+    "id": "estimate_revisions",
+    "interpretation": "Revision breadth is one of the more durable equity factors. NVDA currently reads rising: FY consensus +7.9% over 90 days, 4 analysts up and 0 down, 24 target raises and no cuts. A rising price on falling estimates is the configuration to be wary of.",
+    "limits": "Counts are reported as counts and no score is derived from them, because four upgrades is four upgrades. yfinance reports a new coverage initiation with a prior target of 0, which is an absence rather than a target of zero and is nulled. Sparse or absent for small caps and most non-US listings.",
+    "name": "Estimate revision momentum"
+   },
+   {
+    "formula": "annualised standard deviation of the factor-regression residuals (IVOL); annualised stdev of raw returns (TVOL)",
+    "id": "cp_idio_vol",
+    "interpretation": "High idiosyncratic volatility means the name moves on its own news, which is what a stock-picker wants and a diversifier does not.",
+    "limits": "Residual to a specific factor set, so a missing factor shows up as idiosyncratic risk that is actually systematic.",
+    "name": "Idiosyncratic and total volatility"
+   },
+   {
+    "formula": "ATM straddle mid as a percentage of spot on the nearest expiry after the report",
+    "id": "es_implied_move",
+    "interpretation": "Compare with the historical average absolute reaction below it: options consistently rich or cheap to realised is the tradable observation.",
+    "limits": "Chain-derived from mid prices, so a wide spread inflates it. Needs a listed expiry close to the event; a name with sparse expiries gives a poor estimate.",
+    "name": "Implied move into the print"
+   },
+   {
+    "formula": "target_mean / price - 1",
+    "id": "cp_implied_upside",
+    "interpretation": "Moves as much on price as on any change of view, so a rising implied upside during a selloff is usually the price falling, not analysts turning bullish.",
+    "limits": "Inherits every bias in the target set. Not a forecast and not a probability.",
+    "name": "Implied upside"
+   },
+   {
+    "formula": "min(price/cummax(price) - 1); relative return vs benchmark over the window",
+    "id": "cp_max_dd",
+    "interpretation": "The pair answers \"how much pain, for how much reward\" in one line.",
+    "limits": "Window-dependent and close-based, so intraday depth is understated.",
+    "name": "Max drawdown and market performance"
+   },
+   {
+    "formula": "per-holder pct_change since the prior filing; counts split at +/-0.5%; net = sum(shares * pct/(100+pct))",
+    "id": "institutional_changes",
+    "interpretation": "The holders table is nearly static quarter to quarter; the change is the part that carries information and answers \"what are funds accumulating\". AAPL last filing: 5 added, 2 trimmed.",
+    "limits": "yfinance reports a brand-new position as +100%, indistinguishable from a doubled one, so both are counted as \"added\" rather than guessed at. Same 45-day 13F lag as the ownership figures.",
+    "name": "Quarter-over-quarter position changes"
+   },
+   {
+    "formula": "next-session close-to-close return following the report date",
+    "id": "es_reaction",
+    "interpretation": "The pairing with surprise is the whole point: a positive surprise with a negative reaction says the print was already in the price.",
+    "limits": "A whole-session return attributes everything that day to the earnings print. For a before-the-bell report the reaction session is the same day, for after-the-bell it is the next.",
+    "name": "Reaction: next-session move"
+   },
+   {
+    "formula": "actual EPS - consensus EPS, and the same as a percentage of the estimate",
+    "id": "es_eps_surprise",
+    "interpretation": "Only populates once a company has reported, so a blank means pending rather than missing. The percentage is the comparable version across price levels.",
+    "limits": "Consensus is as captured near the print, not as it stood months earlier, so it understates how far estimates moved into the event. GAAP vs adjusted mismatches produce spurious large surprises.",
+    "name": "Result: EPS vs estimate"
+   },
+   {
+    "formula": "retrieval over the filing and release text, summarised by the LLM stack",
+    "id": "es_ai_summary",
+    "interpretation": "A reading aid over documents already fetched, generated on demand rather than for every row, with a visible progress percentage while it runs.",
+    "limits": "Generated text: it can miss context and restate boilerplate as a finding. Never used to populate a numeric field on the page.",
+    "name": "Quarter summary"
+   },
+   {
+    "formula": "cov(ln(1+r_i), mr3) / cov(ln(1+r_m), mr3) where mr3 sums the previous, current and next market log return",
+    "id": "cp_sw_beta",
+    "interpretation": "The estimate to trust for an illiquid name. The app flags divergence from CAPM beta past 15% as a thin-trading warning.",
+    "limits": "The 15% flag is a starting threshold, not a statistically derived cutoff, and the code says so. Daily frequency only; the lead-lag correction is meaningless at lower frequency.",
+    "name": "Scholes-Williams beta"
+   },
+   {
+    "formula": "interest coverage mapped to a rating through the Damodaran synthetic-rating table; Altman Z from the standard five-ratio formula; implied default spread from the same table",
+    "id": "credit_quality",
+    "interpretation": "A cheap sanity check on balance-sheet risk when no agency rating exists. Interest coverage under 2x and debt/EBITDA over 4x are the two thresholds the panel colours red at.",
+    "limits": "Model-based, explicitly NOT an S&P/Moody's/Fitch rating, and the panel says so. Altman Z was fitted on manufacturers and is unreliable for financials, REITs and asset-light software. Falls back to a bundled Damodaran snapshot when live financials are missing.",
+    "name": "Synthetic credit rating and Altman Z"
+   }
+  ],
+  "institutional-ownership": [
+   {
+    "formula": "-  (implied upside = target_mean / price - 1)",
+    "id": "analyst_ratings",
+    "interpretation": "The level of consensus. Implied upside against the current price is the headline, but the distribution matters more: a mean target hiding a 200-point spread is not consensus.",
+    "limits": "Sell-side ratings skew structurally positive. Target dates are not published, so a stale target from a departed analyst can sit in the mean indefinitely.",
+    "name": "Analyst ratings and price targets"
+   },
+   {
+    "formula": "counts of strongBuy/buy/hold/sell/strongSell; mean recommendation score",
+    "id": "cp_consensus",
+    "interpretation": "Read the distribution, not the mean. Sell-side ratings are compressed into the top half of the scale, so \"hold\" often functions as a sell.",
+    "limits": "Coverage counts vary wildly by size; a mean over three analysts is not consensus.",
+    "name": "Consensus recommendation and distribution"
+   },
+   {
+    "formula": "-",
+    "id": "cp_price",
+    "interpretation": "The anchor every ratio on the page divides by, so a stale quote silently ages every multiple beside it.",
+    "limits": "Delayed outside market hours. Extended-hours prints are shown where the source supplies them but are thin and can be crossed.",
+    "name": "Current price and day change"
+   },
+   {
+    "formula": "current assets / current liabilities",
+    "id": "cp_current_ratio",
+    "interpretation": "The liquidity floor. Below 1 means the company cannot cover a year of obligations from current assets, which is normal for some models and fatal for others.",
+    "limits": "A crude measure that treats inventory as liquid. The quick ratio, which does not, is not computed here.",
+    "name": "Current ratio"
+   },
+   {
+    "formula": "total debt / EBITDA",
+    "id": "cp_debt_ebitda",
+    "interpretation": "Above 4x is where the credit panel colours red, and roughly where lenders begin imposing covenants.",
+    "limits": "EBITDA is not cash flow. Meaningless for banks and insurers, which still render a value.",
+    "name": "Debt / EBITDA"
+   },
+   {
+    "formula": "-",
+    "id": "cp_debt_maturity",
+    "interpretation": "A wall of maturities inside two years at rates above the existing coupon is a refinancing risk the leverage ratios alone will not show.",
+    "limits": "Only issues captured in the filing extraction appear. Revolvers and undrawn facilities are usually absent, which understates flexibility.",
+    "name": "Debt maturity ladder"
+   },
+   {
+    "formula": "trailing 12m dividends / price * 100",
+    "id": "cp_div_yield",
+    "interpretation": "Rises mechanically when the price falls, so a high yield is as often a warning as an attraction. Check it against the payout trend rather than in isolation.",
+    "limits": "Trailing, so a cut already announced but not yet effective still shows the old rate. Special dividends inflate it for a year.",
+    "name": "Dividend yield"
+   },
+   {
+    "formula": "sum of the last four reported quarterly diluted EPS",
+    "id": "cp_eps",
+    "interpretation": "The numerator behind P/E and the cleanest single profitability figure per share.",
+    "limits": "Diluted or basic depends on what the source reported. Restatements are picked up silently on the next refresh.",
+    "name": "EPS (TTM)"
+   },
+   {
+    "formula": "gross profit / revenue",
+    "id": "cp_gross_margin",
+    "interpretation": "Where pricing power shows first. A gross margin that erodes while revenue grows is the earliest sign of competitive pressure.",
+    "limits": "Cost-of-revenue classification differs between filers and between SEC and vendor normalisations.",
+    "name": "Gross margin"
+   },
+   {
+    "formula": "-",
+    "id": "insider_transactions",
+    "interpretation": "Cluster buying by several insiders is the classic signal; a single sale is usually a scheduled 10b5-1 disposal and carries little information. Read the transaction classification, not just the direction.",
+    "limits": "Form 4 has a two-business-day filing deadline, so the data is days old at best. Option exercises and tax withholding sales appear as transactions and dominate the raw counts. LSEG coverage is partial; most tickers fall through to yfinance.",
+    "name": "Insider transactions (Form 4)"
+   },
+   {
+    "formula": "-  (passive/active split comes from the LSEG rollup where it exists)",
+    "id": "institutional_ownership",
+    "interpretation": "High institutional ownership means the register is concentrated in hands that move in size. The passive/active split matters more than the headline: a name that is 40% index-held has a different float dynamic from one that is 40% actively held.",
+    "limits": "From 13F filings, which cover long US equity positions only: no shorts, no derivatives, no non-US managers. Filed up to 45 days after quarter end, so it is up to four months stale at the end of a cycle.",
+    "name": "Institutional and insider ownership"
+   },
+   {
+    "formula": "EBIT / interest expense",
+    "id": "cp_interest_coverage",
+    "interpretation": "The input to the synthetic credit rating, and the threshold the panel colours red below 2x.",
+    "limits": "Uses reported interest expense, which nets capitalised interest inconsistently. Undefined for a debt-free company, where it renders blank rather than infinite.",
+    "name": "Interest coverage"
+   },
+   {
+    "formula": "-",
+    "id": "cp_ma_activity",
+    "interpretation": "Context for a valuation gap: a name trading at a discount with recent approach activity is a different situation from one without.",
+    "limits": "From a static bundled extract with no as-of date shown in the UI, so recent deals may be missing entirely.",
+    "name": "M&A activity"
+   },
+   {
+    "formula": "shares outstanding x price",
+    "id": "cp_market_cap",
+    "interpretation": "The size classification everything else keys off, and the denominator for the concentration figures in other tools.",
+    "limits": "yfinance reports one share class, so a multi-class issuer (Alphabet, Berkshire, Ford) is understated against a full-float figure. Not adjusted for treasury stock.",
+    "name": "Market cap"
+   },
+   {
+    "formula": "-",
+    "id": "cp_target_spread",
+    "interpretation": "The spread matters more than the mean. A tight cluster is real consensus; a 3x range between high and low means the sell side disagrees about the business, not about the price.",
+    "limits": "No target dates are published, so a stale target from a departed analyst sits in the mean indefinitely. Structurally optimistic.",
+    "name": "Mean, high and low price target"
+   },
+   {
+    "formula": "total debt - cash and equivalents",
+    "id": "cp_net_debt",
+    "interpretation": "The figure that bridges enterprise value to equity value in every valuation model in the app.",
+    "limits": "Period-end cash is seasonal for many businesses, so a single balance sheet date can misstate the steady-state position.",
+    "name": "Net debt"
+   },
+   {
+    "formula": "net income / revenue",
+    "id": "cp_net_margin",
+    "interpretation": "Read the gap against operating margin rather than the level. A widening gap is a financing or tax story.",
+    "limits": "Contaminated by asset sales, impairments and tax one-offs that persist in TTM for a year.",
+    "name": "Net margin"
+   },
+   {
+    "formula": "operating income / revenue",
+    "id": "cp_op_margin",
+    "interpretation": "The operating leverage read: compare its trajectory against revenue growth to see whether scale is actually converting.",
+    "limits": "One-off restructuring charges sit inside operating income for most filers and are not stripped out here.",
+    "name": "Operating margin"
+   },
+   {
+    "formula": "price / EPS (TTM)",
+    "id": "cp_pe",
+    "interpretation": "The most-quoted multiple and the least comparable across sectors. Only useful against the same company history or a genuine peer set.",
+    "limits": "Meaningless on negative earnings and suppressed rather than shown negative. TTM includes one-offs, so a single impairment can distort it for four quarters.",
+    "name": "P/E ratio"
+   },
+   {
+    "formula": "-",
+    "id": "cp_revenue_segments",
+    "interpretation": "The input to any sum-of-the-parts view, and the fastest way to see whether a \"software company\" is actually a hardware company.",
+    "limits": "Segment definitions are the company own and change between years without restatement. The activity split (fees vs trading) only exists for financials.",
+    "name": "Revenue by segment, geography and activity"
+   },
+   {
+    "formula": "shares short; shares short / float; shares short / shares outstanding",
+    "id": "cp_shares_short",
+    "interpretation": "Percent of float is the meaningful version: 20% of a small float is a very different setup from 20% of outstanding on a mega cap.",
+    "limits": "Float is sourced separately from the short figure and the two can be dated differently, so the ratio can be internally inconsistent by a couple of weeks.",
+    "name": "Shares short and short % of float"
+   },
+   {
+    "formula": "-",
+    "id": "si_level",
+    "interpretation": "The raw position. On its own it says little: percentage of float and days to cover are the readings that matter.",
+    "limits": "Biweekly and lagged: settlement is roughly two weeks behind and publication a week further, so this is never current.",
+    "name": "Short interest"
+   },
+   {
+    "formula": "mean daily volume over the trailing window",
+    "id": "cp_avg_volume",
+    "interpretation": "The liquidity check that decides whether a position is exitable, and the denominator for days-to-cover.",
+    "limits": "Shares, not dollars, so it is not comparable across price levels. A single block trade skews a short window.",
+    "name": "Average daily volume"
+   },
+   {
+    "formula": "cov(stock returns, market returns) / var(market returns)",
+    "id": "cp_capm_beta",
+    "interpretation": "The textbook figure, shown so the divergence against the Scholes-Williams estimate beside it is visible rather than hidden.",
+    "limits": "Biased toward 1 for thinly traded names because the stock return desynchronises from the same-day market move. That bias is exactly what the adjacent estimate corrects.",
+    "name": "CAPM beta"
+   },
+   {
+    "formula": "shares short / average daily volume, as published by FINRA",
+    "id": "si_days_cover",
+    "interpretation": "Above 3 is the crowding threshold the panel colours amber at. This is the squeeze-risk number, because it measures the exit, not the position.",
+    "limits": "Uses the volume regime at the settlement date. A subsequent volume surge makes the position far easier to cover than the published figure implies.",
+    "name": "Days to cover"
+   },
+   {
+    "formula": "consensus EPS now vs 7/30/60/90 days ago per fiscal period, as a percentage; up/down analyst counts over 7 and 30 days; price-target raises and cuts over 120 days",
+    "id": "estimate_revisions",
+    "interpretation": "Revision breadth is one of the more durable equity factors. NVDA currently reads rising: FY consensus +7.9% over 90 days, 4 analysts up and 0 down, 24 target raises and no cuts. A rising price on falling estimates is the configuration to be wary of.",
+    "limits": "Counts are reported as counts and no score is derived from them, because four upgrades is four upgrades. yfinance reports a new coverage initiation with a prior target of 0, which is an absence rather than a target of zero and is nulled. Sparse or absent for small caps and most non-US listings.",
+    "name": "Estimate revision momentum"
+   },
+   {
+    "formula": "annualised standard deviation of the factor-regression residuals (IVOL); annualised stdev of raw returns (TVOL)",
+    "id": "cp_idio_vol",
+    "interpretation": "High idiosyncratic volatility means the name moves on its own news, which is what a stock-picker wants and a diversifier does not.",
+    "limits": "Residual to a specific factor set, so a missing factor shows up as idiosyncratic risk that is actually systematic.",
+    "name": "Idiosyncratic and total volatility"
+   },
+   {
+    "formula": "target_mean / price - 1",
+    "id": "cp_implied_upside",
+    "interpretation": "Moves as much on price as on any change of view, so a rising implied upside during a selloff is usually the price falling, not analysts turning bullish.",
+    "limits": "Inherits every bias in the target set. Not a forecast and not a probability.",
+    "name": "Implied upside"
+   },
+   {
+    "formula": "min(price/cummax(price) - 1); relative return vs benchmark over the window",
+    "id": "cp_max_dd",
+    "interpretation": "The pair answers \"how much pain, for how much reward\" in one line.",
+    "limits": "Window-dependent and close-based, so intraday depth is understated.",
+    "name": "Max drawdown and market performance"
+   },
+   {
+    "formula": "per-holder pct_change since the prior filing; counts split at +/-0.5%; net = sum(shares * pct/(100+pct))",
+    "id": "institutional_changes",
+    "interpretation": "The holders table is nearly static quarter to quarter; the change is the part that carries information and answers \"what are funds accumulating\". AAPL last filing: 5 added, 2 trimmed.",
+    "limits": "yfinance reports a brand-new position as +100%, indistinguishable from a doubled one, so both are counted as \"added\" rather than guessed at. Same 45-day 13F lag as the ownership figures.",
+    "name": "Quarter-over-quarter position changes"
+   },
+   {
+    "formula": "cov(ln(1+r_i), mr3) / cov(ln(1+r_m), mr3) where mr3 sums the previous, current and next market log return",
+    "id": "cp_sw_beta",
+    "interpretation": "The estimate to trust for an illiquid name. The app flags divergence from CAPM beta past 15% as a thin-trading warning.",
+    "limits": "The 15% flag is a starting threshold, not a statistically derived cutoff, and the code says so. Daily frequency only; the lead-lag correction is meaningless at lower frequency.",
+    "name": "Scholes-Williams beta"
+   },
+   {
+    "formula": "interest coverage mapped to a rating through the Damodaran synthetic-rating table; Altman Z from the standard five-ratio formula; implied default spread from the same table",
+    "id": "credit_quality",
+    "interpretation": "A cheap sanity check on balance-sheet risk when no agency rating exists. Interest coverage under 2x and debt/EBITDA over 4x are the two thresholds the panel colours red at.",
+    "limits": "Model-based, explicitly NOT an S&P/Moody's/Fitch rating, and the panel says so. Altman Z was fitted on manufacturers and is unreliable for financials, REITs and asset-light software. Falls back to a bundled Damodaran snapshot when live financials are missing.",
+    "name": "Synthetic credit rating and Altman Z"
+   }
+  ],
+  "ipo-calendar": [
+   {
+    "formula": "proceeds = shares x midpoint of the range",
+    "id": "ipo_pricing",
+    "interpretation": "Deal size against the range is the read on demand: an upsized deal priced above the range is a different signal from one cut and priced below.",
+    "limits": "Finnhub free coverage is inconsistent for smaller listings, withdrawn deals linger, and there is no post-listing performance tracking.",
+    "name": "Price range, shares and expected proceeds"
+   },
+   {
+    "formula": "-",
+    "id": "ipo_calendar",
+    "interpretation": "A watchlist of supply coming to market. No enrichment, so it is a schedule rather than an analysis.",
+    "limits": "Finnhub free coverage is inconsistent for smaller listings and withdrawn deals linger. No post-listing performance tracking.",
+    "name": "Upcoming and recent IPOs"
+   }
+  ],
+  "macro-cycle": [
+   {
+    "formula": "current index / index 12 months prior - 1",
+    "id": "mm_cpi",
+    "interpretation": "Plotted against the 2% target alongside core and PCE so the three can be read together rather than in isolation.",
+    "limits": "Headline includes food and energy and is therefore the noisiest of the three. The Fed does not target it.",
+    "name": "CPI year over year"
+   },
+   {
+    "formula": "same, on the core index",
+    "id": "mm_core_cpi",
+    "interpretation": "The persistence read. Core moving while headline falls means the disinflation is energy, not demand.",
+    "limits": "Shelter is roughly a third of the basket and is measured with a long lag, so core turns later than the underlying reality.",
+    "name": "Core CPI year over year"
+   },
+   {
+    "formula": "current level minus prior month level, in thousands",
+    "id": "mm_payrolls",
+    "interpretation": "Roughly 100k a month keeps pace with labour-force growth, which is the line the cycle panel scores against. The single most market-moving monthly release.",
+    "limits": "Revised twice and the revisions are frequently larger than the surprise that moved markets on the day. Establishment survey, so it counts jobs rather than people.",
+    "name": "Nonfarm payrolls"
+   },
+   {
+    "formula": "same, on the PCE price index",
+    "id": "mm_pce",
+    "interpretation": "Structurally runs below CPI because of different weights and substitution assumptions. This is the series the 2% target actually refers to.",
+    "limits": "Released later than CPI and revised more. The core variant, not shown separately here, is the one the Fed cites.",
+    "name": "PCE year over year"
+   },
+   {
+    "formula": "-",
+    "id": "mm_unemployment",
+    "interpretation": "The Fed half-mandate in one number, and the input to the Sahm gap in the cycle panel. The level matters less than the direction: unemployment rises non-linearly once it turns.",
+    "limits": "U-3 excludes discouraged workers and the underemployed. Household-survey based, so it is noisier month to month than payrolls.",
+    "name": "Unemployment rate"
+   },
+   {
+    "formula": "each component scored -1 to +1 by linear interpolation between a \"good\" and \"bad\" level; composite is the mean of whichever components resolved. Components: 10y-2y spread, initial claims vs their 12-month low, the Sahm gap (3-month unemployment average minus its prior 12-month minimum), 3-month average payroll growth, and the HY spread",
+    "id": "cycle_composite",
+    "interpretation": "Deliberately NOT a recession probability. Every component prints its level, its reading and the threshold it is judged against, so a reader who disagrees with one can see exactly which to discount. Currently Expansion at +0.46 with payrolls the single weak leg.",
+    "limits": "A hand-set scoring rule, not a fitted model, and no probability is claimed from it. Thresholds (Sahm 0.50pp, claims 15% above trough, HY 6 points) are documented rules of thumb, not estimated parameters. A dead feed narrows the base rather than scoring neutral, which would make the panel less decisive the more broken it got.",
+    "name": "Cycle position"
+   }
+  ],
+  "macro-events": [
+   {
+    "formula": "-",
+    "id": "macro_calendar",
+    "interpretation": "The forward diary. Drives the macro_event_within_days alert, which can watch marquee movers, Fed/Treasury only, or everything high-importance.",
+    "limits": "Consensus is NOT in FRED. Expected figures come from an Investing.com scrape covering a subset of releases only, which is why an economic surprise index over the full calendar is not a free synthesis of data already held.",
+    "name": "Release schedule"
+   },
+   {
+    "formula": "same-day return of ^GSPC, DX-Y.NYB and ^TNX on the release date, from the shared price cache",
+    "id": "macro_release_reaction",
+    "interpretation": "Attaches a market consequence to a print, which is more useful than the print alone. Repeated large reactions mark which releases actually matter this cycle.",
+    "limits": "Whole-day returns, so it attributes everything that happened that day to the release. A release at 08:30 shares its day with the rest of the session.",
+    "name": "Release-day cross-asset reaction"
+   }
+  ],
+  "market-compare": [
+   {
+    "formula": "indexed: price / price_at_window_start * 100; pct: price / base - 1",
+    "id": "asset_overlay",
+    "interpretation": "Indexing to 100 is the honest way to compare instruments of different price. Multiples and ratios plot on a separate right axis at their real level, because normalising a P/E destroys the thing you wanted to see.",
+    "limits": "Indexing is sensitive to the start date: shifting the window start changes every line. Price return only, so a high-yield asset is understated against a low-yield one over long windows.",
+    "name": "Normalised multi-asset comparison"
+   }
+  ],
+  "mover": [
+   {
+    "formula": "stock return minus benchmark return over the same session",
+    "id": "mr_excess",
+    "interpretation": "Strips out the day beta. A 4% move on a 3% market day is a much smaller story than the headline number suggests.",
+    "limits": "Simple difference rather than a beta-adjusted residual, so a high-beta name shows spurious excess return on a large market day.",
+    "name": "Excess return vs the market"
+   },
+   {
+    "formula": "z = (today return - mean) / stdev over the trailing window; relative volume = today volume / 20-day average",
+    "id": "mr_zscore",
+    "interpretation": "A z-score above 2 with no evidence found is itself the finding: the move is not explained by anything public. Relative volume separates a real move from a thin-tape drift.",
+    "limits": "The trailing distribution includes the current regime, so during a volatile period everything looks normal. Relative volume is distorted by index rebalance days.",
+    "name": "Move z-score and relative volume"
+   },
+   {
+    "formula": "z_score of the day return against a trailing distribution; relative_volume against a 20-day average; excess return vs the market",
+    "id": "mover_radar",
+    "interpretation": "Separates a real catalyst from noise. A z-score above 2 with no evidence found is itself informative: it says the move is not explained by anything public.",
+    "limits": "The LLM synthesis is a summary of the evidence listed below it, and when the summarizer is unavailable the page shows the raw evidence rather than nothing. Social coverage is limited by the same dead Reddit path as the sentiment tool.",
+    "name": "Why a name is moving"
+   }
+  ],
+  "news": [
+   {
+    "formula": "stock return minus benchmark return over the same session",
+    "id": "mr_excess",
+    "interpretation": "Strips out the day beta. A 4% move on a 3% market day is a much smaller story than the headline number suggests.",
+    "limits": "Simple difference rather than a beta-adjusted residual, so a high-beta name shows spurious excess return on a large market day.",
+    "name": "Excess return vs the market"
+   },
+   {
+    "formula": "z = (today return - mean) / stdev over the trailing window; relative volume = today volume / 20-day average",
+    "id": "mr_zscore",
+    "interpretation": "A z-score above 2 with no evidence found is itself the finding: the move is not explained by anything public. Relative volume separates a real move from a thin-tape drift.",
+    "limits": "The trailing distribution includes the current regime, so during a volatile period everything looks normal. Relative volume is distorted by index rebalance days.",
+    "name": "Move z-score and relative volume"
+   },
+   {
+    "formula": "z_score of the day return against a trailing distribution; relative_volume against a 20-day average; excess return vs the market",
+    "id": "mover_radar",
+    "interpretation": "Separates a real catalyst from noise. A z-score above 2 with no evidence found is itself informative: it says the move is not explained by anything public.",
+    "limits": "The LLM synthesis is a summary of the evidence listed below it, and when the summarizer is unavailable the page shows the raw evidence rather than nothing. Social coverage is limited by the same dead Reddit path as the sentiment tool.",
+    "name": "Why a name is moving"
+   }
+  ],
+  "options": [
+   {
+    "formula": "ATM IV minus annualised 30-day realised volatility (the IV premium)",
+    "id": "vol_iv_hv",
+    "interpretation": "The variance risk premium in one number. Persistently positive is the structural norm; a negative reading means options are cheap relative to how the stock is actually moving.",
+    "limits": "Compares a forward-looking implied number against a backward-looking realised one over different windows, which is standard practice but not an apples-to-apples comparison.",
+    "name": "IV against realised volatility"
+   },
+   {
+    "formula": "iv_rank = (current - min) / (max - min) * 100; iv_percentile = share of days below current * 100",
+    "id": "iv_rank",
+    "interpretation": "Rank answers \"how expensive is vol against its own year\" and is the standard trigger for premium selling above ~50 and buying below ~20. Percentile is the more robust of the two because a single spike sets the range that rank divides by. Also available as an alert condition.",
+    "limits": "Both need a year of accrued snapshots; a ticker only recently tracked has a short and therefore flattering range. There is no historical IV surface from any current vendor, so the series starts when this app started recording it, not when the option started trading.",
+    "name": "IV rank and IV percentile"
+   },
+   {
+    "formula": "ATM IV per expiry across up to 16 expiries, with the front-to-back slope",
+    "id": "vol_term_structure",
+    "interpretation": "Backwardation, where the front is above the back, marks an event or a stress. Contango is the resting state. The slope figure is what the scanner sorts on.",
+    "limits": "Chain-derived and point-in-time. Expiries are unevenly spaced, so the slope between adjacent expiries is not a constant-maturity measure.",
+    "name": "Term structure"
+   },
+   {
+    "formula": "per-strike IV from the chain, normalised through one shared _normalize_iv rule; 25-delta risk reversal and butterfly reported alongside",
+    "id": "vol_skew_curve",
+    "interpretation": "A steep put skew means downside protection is bid, which is normal for an index and a signal in a single name. The 25-delta risk reversal is the compact numeric version of the same read.",
+    "limits": "IV is normalised by one shared rule because the two sources quote it differently; before that fix the same contract could read 25% in one pane and 0% in another. No historical surface, so today skew cannot be compared with its own history.",
+    "name": "Volatility skew"
+   },
+   {
+    "formula": "first derivative of BS price with respect to spot",
+    "id": "op_delta",
+    "interpretation": "The hedge ratio, and loosely the risk-neutral probability of finishing in the money. Aggregating it across legs gives the structure directional exposure.",
+    "limits": "Loses meaning as a probability under a skewed surface, which is exactly when people reach for it.",
+    "name": "Delta"
+   },
+   {
+    "formula": "second derivative of BS price with respect to spot",
+    "id": "op_gamma",
+    "interpretation": "How fast the hedge goes wrong. Largest at the money and near expiry, which is why short-dated ATM positions are the dangerous ones.",
+    "limits": "Assumes constant volatility, so it understates the true convexity when vol moves with spot.",
+    "name": "Gamma"
+   },
+   {
+    "formula": "derivative of BS price with respect to the risk-free rate",
+    "id": "op_rho",
+    "interpretation": "Negligible for short-dated equity options and material for LEAPS, which is the only time it is worth reading.",
+    "limits": "Uses a single flat rate rather than a term structure.",
+    "name": "Rho"
+   },
+   {
+    "formula": "closed-form BS on spot, strike, time to expiry, rate, volatility and type",
+    "id": "op_theo_price",
+    "interpretation": "The reference against the market mid. A persistent gap is usually the IV input, not a mispricing.",
+    "limits": "European exercise with no dividends. US single-name equity options are American, so the model is wrong for deep in-the-money puts and around ex-dividend dates.",
+    "name": "Theoretical price"
+   },
+   {
+    "formula": "derivative of BS price with respect to time, per calendar day",
+    "id": "op_theta",
+    "interpretation": "The carry cost of being long options and the income of being short. Accelerates into expiry rather than running linearly.",
+    "limits": "Quoted per calendar day while decay actually concentrates around trading sessions, so a weekend overstates the daily figure.",
+    "name": "Theta"
+   },
+   {
+    "formula": "derivative of BS price with respect to volatility",
+    "id": "op_vega",
+    "interpretation": "The volatility exposure. Two structures with identical delta can have opposite vega, which decides how they behave through an event.",
+    "limits": "Assumes a parallel shift in the surface. Real vol moves are not parallel, so a vega number across expiries overstates hedge accuracy.",
+    "name": "Vega"
+   }
+  ],
+  "options-unusual": [
+   {
+    "formula": "volume / open_interest per contract, filtered by min_volume and min_vol_oi thresholds",
+    "id": "flow_vol_oi",
+    "interpretation": "A ratio above 1 means more contracts traded today than were outstanding, which is the standard screen for new positioning rather than closing trades. Grouped by underlying so a name appearing on several strikes is visible as one story.",
+    "limits": "This is the whole of what the tool calls \"flow\". Sweep, block and premium tagging are NOT derivable: Tradier returns 11 fields and volume is a daily aggregate with no trade-level prints, so the tagging column was removed rather than fabricated. Real flow tagging needs an OPRA-derived vendor. Tradier failures fall back to the chain and are reported per symbol in a `failed` map.",
+    "name": "Volume / open interest ratio"
+   }
+  ],
+  "pairs": [
+   {
+    "formula": "statistical test for a stationary linear combination of the two price series",
+    "id": "pairs_cointegration",
+    "interpretation": "The gate that decides whether mean reversion is a reasonable expectation at all, rather than a curve fit. Without it a pairs trade is two correlated bets.",
+    "limits": "Cointegration over a chosen window frequently fails out of sample. A pair can test cointegrated historically and be structurally broken today, and no test distinguishes those.",
+    "name": "Cointegration test"
+   },
+   {
+    "formula": "OLS of A on B gives beta; spread = A - beta x B",
+    "id": "pairs_hedge_spread",
+    "interpretation": "The spread is the tradable series, not either leg. A hedge ratio far from 1 means the position is materially unbalanced in dollar terms.",
+    "limits": "An OLS hedge ratio is unstable and drifts; it is estimated over the whole window rather than rolling, so a structural break is averaged away.",
+    "name": "Hedge ratio and spread"
+   },
+   {
+    "formula": "(spread - rolling mean) / rolling stdev",
+    "id": "pairs_zscore",
+    "interpretation": "The entry and exit trigger. Conventional thresholds are 2 to enter and 0 to exit, both visible on the chart.",
+    "limits": "Assumes the spread is stationary. If the pair has genuinely decoupled, the z-score keeps signalling entry all the way down.",
+    "name": "Spread z-score"
+   }
+  ],
+  "peer-valuation": [
+   {
+    "formula": "per-peer multiples from financials; peer set from sector/industry match",
+    "id": "peer_valuation",
+    "interpretation": "The relative-value read: where a name sits against its own peer group rather than against its own history. Read the median, not the mean, since one loss-making peer distorts a P/E average.",
+    "limits": "Peer selection is by classification, not by business model, so a diversified company gets an incoherent set. Multiples on negative earnings are suppressed rather than shown as negative. Free-tier FMP caps enrichment, so some peers fall back to the bundled seed.",
+    "name": "Trading comps"
+   },
+   {
+    "formula": "peer median multiple x company metric (earnings, EBITDA, sales, book), converted to per-share equity value",
+    "id": "multiples_valuation",
+    "interpretation": "Fast and market-anchored. The spread between methods (P/E vs EV/EBITDA vs P/S) is informative: a wide spread means the capital structure or the margin profile differs from the peers.",
+    "limits": "Assumes the peer group is fairly valued, which is exactly what is in question in a bubble or a washout. Meaningless on negative earnings, and the tool suppresses rather than prints those.",
+    "name": "Peer-multiple implied value"
+   }
+  ],
+  "portfolio": [
+   {
+    "formula": "-",
+    "id": "pm_dividends",
+    "interpretation": "Turns a price-return book into something closer to total return. Ex-dates matter for anyone hedging around them.",
+    "limits": "Historical dividends only; a forward estimate is an extrapolation of the last declared rate. Special dividends distort a trailing yield badly.",
+    "name": "Dividends"
+   },
+   {
+    "formula": "sum(shares * price) recomputed on each poll and appended to an in-session series",
+    "id": "pm_intraday_curve",
+    "interpretation": "Shows the day path rather than just the endpoint. The axis is deliberately a fixed numeric time axis with a stable value domain, because auto-scaling on a polling chart makes the line appear to jump on every tick.",
+    "limits": "In-session only and not persisted, so a refresh restarts the curve. Built from polled marks, so a gap in polling appears as a straight line rather than as missing data.",
+    "name": "Intraday book-value curve"
+   },
+   {
+    "formula": "shares * live price; weight = position value / book value",
+    "id": "pm_market_value",
+    "interpretation": "The live cockpit. Weight here is the input the Allocator rebalance reads as the current state.",
+    "limits": "Options and futures are marked on a separate path and are excluded from the weighted equity legs handed to other tools, surfaced as a note rather than dropped silently.",
+    "name": "Market value and weight per position"
+   },
+   {
+    "formula": "shares * (price - avg cost); return = price / avg cost - 1",
+    "id": "pm_unrealized",
+    "interpretation": "Cost basis is user-entered, so this is only as accurate as what was typed. Imported books carry the basis from the import where the source had one.",
+    "limits": "No lot-level tracking, so a position built in several tranches shows one blended basis and cannot produce tax-lot reporting.",
+    "name": "Unrealized P&L and return"
+   },
+   {
+    "formula": "-",
+    "id": "pm_book",
+    "interpretation": "The input every portfolio tool keys off. Books are importable into Allocator, Analysis, Compare, Backtester, Factor Decomposition and the drawdown alert through PMImportPicker.",
+    "limits": "localStorage only, so it is per browser and never synced server-side. A drawdown alert therefore has to carry its holdings in the alert payload, the same way a strategy alert carries its rules. Clearing site data deletes the book.",
+    "name": "Holdings, options, futures and cash"
+   }
+  ],
+  "portfolio-risk": [
+   {
+    "formula": "stdev(daily returns) * sqrt(252) * 100",
+    "id": "pa_vol",
+    "interpretation": "The denominator of Sharpe and the plain measure of how bumpy the ride was. Above roughly 20% is equity-like; below 10% means significant bond or cash weight.",
+    "limits": "Treats upside and downside deviation identically, which is why Sortino exists. Assumes returns are iid, so it understates risk for a trending or autocorrelated book.",
+    "name": "Annualized volatility"
+   },
+   {
+    "formula": "cov(book returns, benchmark returns) / var(benchmark returns)",
+    "id": "pa_beta",
+    "interpretation": "Above 1 means the book amplifies market moves. Read with the factor decomposition: a beta of 1 can hide offsetting sector and rate exposures.",
+    "limits": "Contemporaneous OLS beta with no lead-lag correction, unlike the Global Markets asset panel. A book holding foreign equities will read low for the session-offset reason documented there.",
+    "name": "Beta"
+   },
+   {
+    "formula": "annualised return / |max drawdown|",
+    "id": "pa_calmar",
+    "interpretation": "Answers \"return per unit of the worst thing that actually happened\", which is the number a drawdown-sensitive allocator cares about most.",
+    "limits": "Driven entirely by a single historical event. A book that missed one crash by luck shows a flattering Calmar that says nothing about the next one.",
+    "name": "Calmar"
+   },
+   {
+    "formula": "marginal contribution to risk = weight * (covariance row . weights) / portfolio vol, normalised to 100%",
+    "id": "pa_risk_contribution",
+    "interpretation": "The gap between the two bars is the point. A 5% position supplying 20% of the risk is the position that will decide the outcome, regardless of what the weight says.",
+    "limits": "Covariance is estimated over the chosen window and is unstable for short ones. Assumes a linear risk model, so it understates option and convexity exposure.",
+    "name": "Capital weight vs risk contribution"
+   },
+   {
+    "formula": "deterministic thresholds over concentration, covariance risk contribution, beta and historical return",
+    "id": "pa_downtrend_watch",
+    "interpretation": "Deliberately deterministic so every flag can be traced to a rule. The page states plainly that these are review flags, not generated investment advice.",
+    "limits": "Threshold-based, so it flags on level rather than on trajectory and will keep flagging a position that is already being fixed. No forward-looking input at all.",
+    "name": "Downtrend watch and decision ledger"
+   },
+   {
+    "formula": "HHI = sum(weight^2); effective holdings = 1 / HHI",
+    "id": "pa_hhi",
+    "interpretation": "A 20-position book with an effective count of 4 is a 4-position book wearing a disguise. This is the fastest read on whether diversification is real.",
+    "limits": "Counts positions, not risk: two names in the same sector count as two. The risk-contribution panel is the version that accounts for covariance.",
+    "name": "HHI and effective holdings"
+   },
+   {
+    "formula": "min(equity / cummax(equity) - 1) * 100",
+    "id": "pa_max_dd",
+    "interpretation": "The honest worst case an investor would have had to sit through. More predictive of whether someone actually holds a strategy than any return figure.",
+    "limits": "Path-dependent and window-dependent: extending the window can only make it worse, never better. Uses closing values, so intraday depth is understated.",
+    "name": "Max drawdown"
+   },
+   {
+    "formula": "final value / initial value - 1",
+    "id": "pa_period_return",
+    "interpretation": "The un-annualised number, which is the one that matches a brokerage statement over the same dates.",
+    "limits": "Not comparable across windows of different length. Price return over the book; dividends are handled separately.",
+    "name": "Period return"
+   },
+   {
+    "formula": "(final/initial)^(252/observations) - 1",
+    "id": "pa_cagr",
+    "interpretation": "The headline return, annualised so windows of different length compare. Read it beside Max drawdown: a 20% CAGR bought with a 60% drawdown is a different product from the same CAGR at 15%.",
+    "limits": "Geometric, so it is dominated by the window endpoints. A window that starts at a crash low flatters it badly. Assumes the current weights were held throughout, with no rebalancing drag.",
+    "name": "Portfolio CAGR"
+   },
+   {
+    "formula": "sum of position weights grouped by sector",
+    "id": "pa_sector_exposure",
+    "interpretation": "The cross-check on a book that looks diversified by name count. Read it against the risk contribution panel rather than on its own.",
+    "limits": "Sector tags come from yfinance own taxonomy, not GICS, and a conglomerate gets one tag. Cash, options and futures fall outside the sector split.",
+    "name": "Sector allocation"
+   },
+   {
+    "formula": "(annualised arithmetic return - risk free) / annualised vol",
+    "id": "pa_sharpe",
+    "interpretation": "The standard risk-adjusted comparator. Above 1 is good, above 2 is rare and usually means a short window or a hidden tail risk.",
+    "limits": "Penalises upside volatility as heavily as downside. Highly unstable on under two years of data, and trivially gamed by a strategy that sells tails.",
+    "name": "Sharpe"
+   },
+   {
+    "formula": "each book valued as a weighted basket over history; the same metric set as Portfolio Analysis; liquidation flagged when levered equity goes to zero",
+    "id": "portfolio_compare",
+    "interpretation": "The A/B test for allocation decisions. Leverage and borrow rate are inputs, so the cost of a levered version is charged rather than assumed away, and a book that would have been liquidated is flagged rather than shown with a fictional recovery.",
+    "limits": "Assumes fixed weights with no rebalancing drag or transaction cost. Borrow is a flat rate, not a term structure, so a long backtest under changing rates is optimistic or pessimistic depending on the period.",
+    "name": "Side-by-side book comparison"
+   },
+   {
+    "formula": "(annualised arithmetic return - risk free) / downside deviation",
+    "id": "pa_sortino",
+    "interpretation": "The more honest ratio for an asymmetric book, because it stops punishing the volatility you want. A large Sortino/Sharpe gap means the book upside is lumpy, which is usually a feature.",
+    "limits": "Downside deviation is estimated from fewer observations than total volatility, so it is noisier. Sensitive to the choice of minimum acceptable return, which is fixed at the risk-free rate here.",
+    "name": "Sortino"
+   },
+   {
+    "formula": "quantile(terminal returns, 0.05)",
+    "id": "pa_p5",
+    "interpretation": "The pessimistic planning case. Pair it with Liquidation odds: a bad percentile matters far more when leverage means the path cannot be held.",
+    "limits": "Simulated, not historical. The tail is a model output, and the model assumptions are the input that moves it most.",
+    "name": "5th percentile outcome"
+   },
+   {
+    "formula": "quantile(terminal returns, 0.95)",
+    "id": "pa_p95",
+    "interpretation": "The optimistic case, useful mainly as a width check: a very wide p5-to-p95 band means the horizon is too long or the vol too high for the median to mean much.",
+    "limits": "Same model dependence as the downside. Right tail is less policy-relevant than the left but is quoted for symmetry.",
+    "name": "95th percentile outcome"
+   },
+   {
+    "formula": "mean of the simulated terminal returns below the 5th percentile",
+    "id": "pa_cvar95",
+    "interpretation": "The number to actually read. Unlike VaR it is sensitive to the shape of the tail, so it distinguishes a book that loses 6% in a bad case from one that loses 40%.",
+    "limits": "Entirely determined by the simulation model. A Gaussian engine cannot produce the fat tails that make real crashes, so CVaR from a GBM run is optimistic by construction.",
+    "name": "CVaR 95"
+   },
+   {
+    "formula": "intercept of the multivariate factor regression, annualised; rolling beta over an N-day window",
+    "id": "pa_factor_alpha",
+    "interpretation": "Alpha here means \"unexplained by these five factors\", not \"skill\". A rising rolling beta during a rally usually means the book is drifting more aggressive without anyone deciding to.",
+    "limits": "Only five factors, with no size, value or momentum leg, so a style tilt reports as alpha. Alpha estimates need years of data to separate from noise and are rarely significant over a single year.",
+    "name": "Factor alpha and rolling beta"
+   },
+   {
+    "formula": "count(paths breaching the maintenance requirement) / total paths * 100",
+    "id": "pa_liquidation_odds",
+    "interpretation": "The number that turns leverage from an abstraction into a probability. A book with an attractive median and 15% liquidation odds is not the same product as one at 0%.",
+    "limits": "Depends on the long and short maintenance percentages entered, which are user inputs rather than broker-verified. Assumes no intra-path deleveraging or margin top-up.",
+    "name": "Liquidation odds"
+   },
+   {
+    "formula": "quantile(terminal returns, 0.50)",
+    "id": "pa_p50",
+    "interpretation": "The central expectation, and a better planning number than the mean because the terminal distribution of a compounding series is right-skewed.",
+    "limits": "The median of a simulation is not a forecast. It inherits the drift assumption, which is usually estimated from the same history being simulated.",
+    "name": "Median outcome"
+   },
+   {
+    "formula": "percentile envelope of the simulated equity paths at each step",
+    "id": "pa_outcome_fan",
+    "interpretation": "Shows the cone widening with time, which is the single best visual argument that a long-horizon point forecast is meaningless.",
+    "limits": "The cone is not a confidence interval on reality, only on the model. Correlations are held fixed across the horizon, which is exactly when they break.",
+    "name": "Monte Carlo outcome fan"
+   },
+   {
+    "formula": "5th percentile of the simulated terminal return distribution",
+    "id": "pa_var95",
+    "interpretation": "Where the tail starts. Useful as a budget line, not as a worst case: by construction one path in twenty is worse than this, and VaR says nothing about how much worse.",
+    "limits": "A quantile, so it is blind to everything beyond it. Two books with identical VaR can have wildly different disaster profiles, which is the whole reason CVaR sits next to it.",
+    "name": "VaR 95"
+   },
+   {
+    "formula": "-",
+    "id": "pa_horizon",
+    "interpretation": "Longer horizons widen the cone superlinearly. Path count affects only the smoothness of the percentile estimates, not their centre.",
+    "limits": "Percentile estimates in the far tail need far more paths to stabilise than the median does, so a low path count makes CVaR noisy while the median looks fine.",
+    "name": "Horizon and path count"
+   },
+   {
+    "formula": "GBM draws iid lognormal; Student-t adds fat tails via a degrees-of-freedom parameter; block bootstrap resamples real historical returns in 10-day blocks",
+    "id": "pa_sim_model",
+    "interpretation": "The block bootstrap is the one to use for any drawdown question, because it preserves the serial correlation that produces real crashes. GBM structurally cannot generate them.",
+    "limits": "Exposing the model is honest but shifts the burden: the same book can show very different CVaR under each. Bootstrap can only reproduce crashes already in the sample window.",
+    "name": "Simulation model"
+   }
+  ],
+  "price-history": [
+   {
+    "formula": "-",
+    "id": "cs_events",
+    "interpretation": "Turns an unexplained gap into a labelled one, which is the fastest way to rule a move in or out as a data artefact.",
+    "limits": "Coverage depends on filing data and is sparse for non-US names. Split adjustment is applied to prices, so an unmarked historical split would show as a real move.",
+    "name": "Corporate event markers"
+   },
+   {
+    "formula": "-",
+    "id": "cs_candles",
+    "interpretation": "The base layer. Alpaca supplies up to 119 days of 5-minute bars against yfinance 60-day cap, so intraday history is materially deeper when the key is set.",
+    "limits": "Alpaca covers US equities and ETFs only; indices, futures, FX and crypto are screened out and served by yfinance or Binance. Feed is IEX, not full-market SIP, so volume is a fraction of consolidated tape.",
+    "name": "OHLCV candles"
+   },
+   {
+    "formula": "SMA(close, N) plus and minus k standard deviations of close over the same window",
+    "id": "cs_bollinger",
+    "interpretation": "Band width is a volatility read in itself: a squeeze usually precedes an expansion, regardless of direction.",
+    "limits": "Assumes returns are normally distributed around the mean, which they are not, so touches of the band are more frequent than the nominal probability implies.",
+    "name": "Bollinger bands"
+   },
+   {
+    "formula": "net GEX and flip from the options exposure engine, resampled onto the chart timeline",
+    "id": "cs_gex_lane",
+    "interpretation": "Putting the flip level on the same time axis as price is the point: it shows when price crossed into a negative-gamma regime rather than just that it is there now.",
+    "limits": "Sparse relative to price, so the lane syncs one-way from the main chart and never back. A two-way sync would drag the price axis to the sparse series range.",
+    "name": "Dealer GEX lane"
+   },
+   {
+    "formula": "IV rank and percentile from the snapshot history, resampled onto the chart timeline",
+    "id": "cs_iv_lane",
+    "interpretation": "Shows whether the current option pricing is unusual in the context of the plotted price move.",
+    "limits": "Limited by the accrued snapshot history, which starts when this app began recording rather than when the option started trading.",
+    "name": "IV rank and percentile lane"
+   },
+   {
+    "formula": "indicators computed client-side in lib/indicators.ts over the fetched OHLCV; events from the chart-events endpoint",
+    "id": "chart_studio_overlays",
+    "interpretation": "Follower lanes sync one-way from the main chart, never two-way, because a sparse lane (IV, GEX) has fewer points than price and a two-way sync would drag the price axis to the sparse series range.",
+    "limits": "Indicators are computed on the loaded window only, so an indicator with a long lookback is undefined at the left edge of a short window rather than borrowing prior history. Event markers depend on filing coverage and are sparse for non-US names.",
+    "name": "Indicator and event overlays"
+   },
+   {
+    "formula": "MACD = EMA(12) - EMA(26); signal = EMA(9) of MACD; histogram = MACD - signal",
+    "id": "cs_macd",
+    "interpretation": "The histogram is the useful part: it crosses zero before the lines do, which is the earliest mechanical read of a momentum turn.",
+    "limits": "Lagging by construction. Whipsaws badly in a range, generating crossovers with no follow-through.",
+    "name": "MACD"
+   },
+   {
+    "formula": "each series fetched from its own source and resampled onto the chart timeline",
+    "id": "cs_macro_lanes",
+    "interpretation": "The reason this tool exists: it is the only place a single equity can be plotted against a macro series and a chokepoint transit count on one timeline.",
+    "limits": "Monthly macro series step rather than move, so on an intraday chart they render as flat plateaus. Mixing frequencies on one axis is visually honest only because each lane is separate.",
+    "name": "Macro overlay lanes"
+   },
+   {
+    "formula": "SMA = mean(close, N); EMA = exponentially weighted mean with span N",
+    "id": "cs_ma",
+    "interpretation": "Both the type and period are user-set, so the overlay matches whatever convention the reader already uses rather than imposing one.",
+    "limits": "Computed on the loaded window only, so an average with a long period is undefined at the left edge rather than borrowing prior history.",
+    "name": "Moving averages"
+   },
+   {
+    "formula": "100 - 100/(1 + average gain / average loss) over the period, Wilder smoothing",
+    "id": "cs_rsi",
+    "interpretation": "Above 70 and below 30 are the conventional extremes, drawn as reference lines. In a strong trend RSI stays extreme for a long time, which is why it is a lane and not a signal.",
+    "limits": "Bounded, so it compresses information at the extremes. Divergence readings are subjective and not computed here.",
+    "name": "RSI"
+   },
+   {
+    "formula": "cumulative(price x volume) / cumulative(volume), reset per session",
+    "id": "cs_vwap",
+    "interpretation": "The execution benchmark. Price above VWAP with rising volume is the classic intraday strength read.",
+    "limits": "On the IEX feed the volume is a partial tape, so VWAP is computed off a subset of prints and will differ from a consolidated VWAP.",
+    "name": "VWAP"
+   }
+  ],
+  "rate-engine": [
+   {
+    "formula": "-",
+    "id": "sep_dots",
+    "interpretation": "The Fed own projection against the market path is the interesting comparison; a wide gap usually resolves toward the market.",
+    "limits": "Median, central tendency and range only. Individual participant dots are NOT plotted because they are not published as attributable data, and inventing them would be fabrication.",
+    "name": "SEP dot plot"
+   },
+   {
+    "formula": "-",
+    "id": "yield_curve",
+    "interpretation": "The base rate structure everything else prices off. Shape matters more than level: an inverted curve has preceded every US recession since 1970.",
+    "limits": "Constant-maturity par yields, not zero-coupon or forward rates, so they are not directly usable for discounting a cash flow at a specific date.",
+    "name": "US Treasury yield curve"
+   },
+   {
+    "formula": "yield(long) - yield(short) per pair, with a 6-month trend",
+    "id": "curve_spreads",
+    "interpretation": "Negative is inversion. The 10y-2y is the headline; the 10y-3m is the one most cited in the academic recession literature. Both feed the cycle composite.",
+    "limits": "Inversion leads recessions by 6 to 18 months, a lag long and variable enough that the signal is close to useless for timing.",
+    "name": "Curve spreads"
+   },
+   {
+    "formula": "CME Fed funds futures (ZQ), unblended for meeting-month timing; falls back to the FRED Treasury curve where a contract has no data",
+    "id": "fed_path",
+    "interpretation": "What the market expects, not what the Fed has said. Meetings priced off the curve fallback are flagged in gold so the reader knows which are futures-implied and which are inferred.",
+    "limits": "Futures imply a distribution of the average effective rate over the month, not a clean per-meeting probability; the unblending is an approximation. The curve fallback is materially weaker.",
+    "name": "Implied FOMC path"
+   }
+  ],
+  "regression": [
+   {
+    "formula": "cov/var beta; flagged when |CAPM - Scholes-Williams| exceeds 15% of the CAPM value",
+    "id": "reg_capm_beta",
+    "interpretation": "The divergence is the signal. A large gap means the naive beta is biased toward 1 by thin trading and should not be used for hedging.",
+    "limits": "The 15% threshold is a starting point for flagging, not a statistically derived cutoff, and the code says so explicitly.",
+    "name": "CAPM beta and the thin-trading flag"
+   },
+   {
+    "formula": "multivariate OLS of excess returns on the Ken French FF3 or FF4 factor set",
+    "id": "reg_ff_loadings",
+    "interpretation": "Separates a return into style exposures. A \"stock picker\" whose returns are explained by a small-value tilt has a factor portfolio, not a skill.",
+    "limits": "Factors are US-centric and the library updates monthly with a lag. Loadings over a single year are noisy and rarely significant.",
+    "name": "Fama-French factor loadings"
+   }
+  ],
+  "seasonality": [
+   {
+    "formula": "resample to month-end, pct_change, group by calendar month; mean, median, share positive, best, worst",
+    "id": "season_month_mean",
+    "interpretation": "Read the hit rate before the mean: a +2.8% average on a 55% hit rate is one enormous year, while the same average at 80% is a pattern. SPY comes out November best and September worst, which is the documented shape and a useful sanity check that the calculation is sound.",
+    "limits": "Ten to forty observations per bucket. No significance test is reported and none is implied. Month-end to month-end, so it captures the move you would have held rather than an average of daily returns, which would drop compounding.",
+    "name": "Average return by month"
+   },
+   {
+    "formula": "group daily pct_change by index.dayofweek; mean, median, share positive",
+    "id": "season_weekday",
+    "interpretation": "Texture, not an edge. Effects are a few hundredths of a percent on samples of a few thousand days, and the page says so next to the table.",
+    "limits": "Differences are well inside the noise for any realistic sample. Ignores holidays and half-days, which cluster on particular weekdays.",
+    "name": "Day of week"
+   },
+   {
+    "formula": "flag last 1 and first 3 sessions of each month; compare mean daily return of the flagged set against the remainder",
+    "id": "season_turn_of_month",
+    "interpretation": "A long-documented pattern usually attributed to pension and payroll flows. The comparison figure matters more than the level: SPY prints 0.07% against 0.04% for the rest of the month.",
+    "limits": "Session-based, not calendar-based, so a month ending on a weekend shifts the window. No control for month-end index rebalancing, which overlaps the same days.",
+    "name": "Turn of month"
+   },
+   {
+    "formula": "monthly returns pivoted to year x month",
+    "id": "season_year_grid",
+    "interpretation": "The audit trail for the averages above it. Scan the column for a month before trusting its mean: one 2008 or one 2020 can carry an entire average on its own.",
+    "limits": "Partial first and last years appear as short rows, so the top and bottom of the grid are not comparable with the full years between them. Colour intensity is capped at a fixed scale, so two very different large moves shade identically.",
+    "name": "Year-by-year grid"
+   }
+  ],
+  "sector-rotation": [
+   {
+    "formula": "quadrant from sign of (x-100, y-100); tail is the last N weekly coordinate pairs",
+    "id": "rrg_quadrant",
+    "interpretation": "Rotation runs clockwise, so the tail carries more information than the dot: a sector in Weakening arriving from Leading is a position unwinding, while the same dot arriving from Lagging is one being built. Zero sectors in Leading means no sector is out in front and the index is being carried by individual names.",
+    "limits": "This is the standard public construction of the graph, not a reproduction of the commercial product, whose exact smoothing is proprietary. Shape and readings are right; decimals will not match a paid terminal.",
+    "name": "Quadrant and tail"
+   },
+   {
+    "formula": "100 + zscore(RS-Ratio.diff(4 weeks), 52w baseline), then a 3-week average",
+    "id": "rrg_momentum",
+    "interpretation": "The y axis, and the derivative of the x axis: strength is position, momentum is velocity. Above 100 means strength is building faster than that sector typically manages. XLK reads 98.6 while still at 102 strength, which is a leader rolling over.",
+    "limits": "Also normalised against the sector own history, so a sector whose strength rose slightly can still print below 100 if it normally rises faster. Not a measure of volatility or jumpiness. Before 2026-08-08 this used a 12-week baseline and a one-week difference, which produced coordinates that swung 2-4 points a week and rendered as a mesh.",
+    "name": "RS-Momentum"
+   },
+   {
+    "formula": "100 + zscore(EMA_10w(sector_close / SPY_close), 52w baseline), then a 3-week average",
+    "id": "rrg_strength",
+    "interpretation": "The x axis. 102 is roughly two standard deviations ahead of its own normal. Left of 100 is underperforming. XLK currently reads 102.0 on the back of +21% against SPY over six months.",
+    "limits": "Self-referential: both axes are z-scores against the sector own history, so two sectors at 101 are each two sigma strong relative to themselves, not equally strong in absolute terms. Cannot be read as \"XLK beat XLV by this much\".",
+    "name": "RS-Ratio (relative strength)"
+   },
+   {
+    "formula": "return_1M - (return_3M / 3)",
+    "id": "sector_momentum",
+    "interpretation": "Positive means the last month outpaced the quarterly run rate, so the trend is accelerating. This is the simple sortable version; the RRG view is the same idea done properly with smoothing and a normalised baseline.",
+    "limits": "A crude approximation of acceleration that assumes a linear 3-month path. It will flag a sector that fell hard two months ago and merely stopped falling.",
+    "name": "Sector momentum score"
+   },
+   {
+    "formula": "sector_return(period) - SPY_return(period), per period",
+    "id": "sector_rel_strength",
+    "interpretation": "The heatmap. Positive means the sector beat the index over that window. Reading several periods together separates a durable leader from a one-week bounce.",
+    "limits": "Sector ETFs are proxies for the GICS sectors, so they carry their own fees and tracking error. Eleven sectors only; no industry-level detail.",
+    "name": "Sector relative return"
+   }
+  ],
+  "sector-rrg": [
+   {
+    "formula": "quadrant from sign of (x-100, y-100); tail is the last N weekly coordinate pairs",
+    "id": "rrg_quadrant",
+    "interpretation": "Rotation runs clockwise, so the tail carries more information than the dot: a sector in Weakening arriving from Leading is a position unwinding, while the same dot arriving from Lagging is one being built. Zero sectors in Leading means no sector is out in front and the index is being carried by individual names.",
+    "limits": "This is the standard public construction of the graph, not a reproduction of the commercial product, whose exact smoothing is proprietary. Shape and readings are right; decimals will not match a paid terminal.",
+    "name": "Quadrant and tail"
+   },
+   {
+    "formula": "100 + zscore(RS-Ratio.diff(4 weeks), 52w baseline), then a 3-week average",
+    "id": "rrg_momentum",
+    "interpretation": "The y axis, and the derivative of the x axis: strength is position, momentum is velocity. Above 100 means strength is building faster than that sector typically manages. XLK reads 98.6 while still at 102 strength, which is a leader rolling over.",
+    "limits": "Also normalised against the sector own history, so a sector whose strength rose slightly can still print below 100 if it normally rises faster. Not a measure of volatility or jumpiness. Before 2026-08-08 this used a 12-week baseline and a one-week difference, which produced coordinates that swung 2-4 points a week and rendered as a mesh.",
+    "name": "RS-Momentum"
+   },
+   {
+    "formula": "100 + zscore(EMA_10w(sector_close / SPY_close), 52w baseline), then a 3-week average",
+    "id": "rrg_strength",
+    "interpretation": "The x axis. 102 is roughly two standard deviations ahead of its own normal. Left of 100 is underperforming. XLK currently reads 102.0 on the back of +21% against SPY over six months.",
+    "limits": "Self-referential: both axes are z-scores against the sector own history, so two sectors at 101 are each two sigma strong relative to themselves, not equally strong in absolute terms. Cannot be read as \"XLK beat XLV by this much\".",
+    "name": "RS-Ratio (relative strength)"
+   },
+   {
+    "formula": "return_1M - (return_3M / 3)",
+    "id": "sector_momentum",
+    "interpretation": "Positive means the last month outpaced the quarterly run rate, so the trend is accelerating. This is the simple sortable version; the RRG view is the same idea done properly with smoothing and a normalised baseline.",
+    "limits": "A crude approximation of acceleration that assumes a linear 3-month path. It will flag a sector that fell hard two months ago and merely stopped falling.",
+    "name": "Sector momentum score"
+   },
+   {
+    "formula": "sector_return(period) - SPY_return(period), per period",
+    "id": "sector_rel_strength",
+    "interpretation": "The heatmap. Positive means the sector beat the index over that window. Reading several periods together separates a durable leader from a one-week bounce.",
+    "limits": "Sector ETFs are proxies for the GICS sectors, so they carry their own fees and tracking error. Eleven sectors only; no industry-level detail.",
+    "name": "Sector relative return"
+   }
+  ],
+  "sentiment": [
+   {
+    "formula": "shingle/Jaccard similarity over titles groups duplicates; the representative carries a seen_in_sources count",
+    "id": "sentiment_breaking",
+    "interpretation": "A story appearing across N feeds is weighted once, not N times, with an \"N FEEDS\" badge. Prevents a single syndicated wire story from moving the composite.",
+    "limits": "Similarity is lexical, so a genuinely independent story on the same event with different wording is not merged, and a rewritten headline can escape the grouping.",
+    "name": "Breaking headlines and cross-source dedup"
+   },
+   {
+    "formula": "a deterministic horizon classifier splits each headline, then forward and backward subscores are aggregated separately",
+    "id": "sent_horizon",
+    "interpretation": "\"The news is bad\" and \"the news says things will be bad\" are different claims, and only the forward series has any predictive pretension at all.",
+    "limits": "The classifier is rule-based, so a headline mixing a result and a guidance change is assigned one horizon. History is aggregate rather than per ticker.",
+    "name": "Forward and backward-looking sentiment"
+   },
+   {
+    "formula": "headline scores grouped by the asset class the lexicon assigns",
+    "id": "sent_asset_class",
+    "interpretation": "A single market sentiment number hides that crypto and macro news frequently point in opposite directions. Four classes only, because FX and fixed income proved too ambiguous to score and were dropped rather than left noisy.",
+    "limits": "Assignment is lexical, so a story touching two classes lands in one. Commodities coverage is thin relative to Equities.",
+    "name": "Sentiment by asset class"
+   },
+   {
+    "formula": "lexicon scoring per headline, weighted by source reliability; low-confidence headlines (<=0.55) go to one batched temperature-0 LLM call that can override direction; aggregated to a composite",
+    "id": "sentiment_composite",
+    "interpretation": "The lexicon stays primary and the LLM only corrects the uncertain tail, which keeps the score deterministic and cheap. Split into forward-looking and backward-looking subscores, and by asset class, because \"the news is bad\" and \"the news says things will be bad\" are different claims.",
+    "limits": "Reddit is configured with 8 subreddit sources but production returns one, sitting at the neutral default: Reddit blocks datacenter IPs, so any mention-velocity feature built on it would be measuring nothing. Asset-class breakdown covers Equities, Crypto, Macro and Commodities only; FX and fixed income were dropped as too ambiguous to score. History is aggregate, not per ticker.",
+    "name": "Composite sentiment score"
+   }
+  ],
+  "volatility-skew": [
+   {
+    "formula": "ATM IV minus annualised 30-day realised volatility (the IV premium)",
+    "id": "vol_iv_hv",
+    "interpretation": "The variance risk premium in one number. Persistently positive is the structural norm; a negative reading means options are cheap relative to how the stock is actually moving.",
+    "limits": "Compares a forward-looking implied number against a backward-looking realised one over different windows, which is standard practice but not an apples-to-apples comparison.",
+    "name": "IV against realised volatility"
+   },
+   {
+    "formula": "iv_rank = (current - min) / (max - min) * 100; iv_percentile = share of days below current * 100",
+    "id": "iv_rank",
+    "interpretation": "Rank answers \"how expensive is vol against its own year\" and is the standard trigger for premium selling above ~50 and buying below ~20. Percentile is the more robust of the two because a single spike sets the range that rank divides by. Also available as an alert condition.",
+    "limits": "Both need a year of accrued snapshots; a ticker only recently tracked has a short and therefore flattering range. There is no historical IV surface from any current vendor, so the series starts when this app started recording it, not when the option started trading.",
+    "name": "IV rank and IV percentile"
+   },
+   {
+    "formula": "ATM IV per expiry across up to 16 expiries, with the front-to-back slope",
+    "id": "vol_term_structure",
+    "interpretation": "Backwardation, where the front is above the back, marks an event or a stress. Contango is the resting state. The slope figure is what the scanner sorts on.",
+    "limits": "Chain-derived and point-in-time. Expiries are unevenly spaced, so the slope between adjacent expiries is not a constant-maturity measure.",
+    "name": "Term structure"
+   },
+   {
+    "formula": "per-strike IV from the chain, normalised through one shared _normalize_iv rule; 25-delta risk reversal and butterfly reported alongside",
+    "id": "vol_skew_curve",
+    "interpretation": "A steep put skew means downside protection is bid, which is normal for an index and a signal in a single name. The 25-delta risk reversal is the compact numeric version of the same read.",
+    "limits": "IV is normalised by one shared rule because the two sources quote it differently; before that fix the same contract could read 25% in one pane and 0% in another. No historical surface, so today skew cannot be compared with its own history.",
+    "name": "Volatility skew"
+   }
+  ]
+ },
+ "unreachableMetricIds": [
+  "ais_nowcast",
+  "al_drawdown",
+  "al_earnings",
+  "al_gex_flip",
+  "al_iv_rank",
+  "al_macro_event",
+  "al_macro_print",
+  "al_pct_change",
+  "al_price",
+  "al_rsi",
+  "al_sentiment",
+  "al_sma",
+  "al_strategy",
+  "algo_signals",
+  "algo_sizing",
+  "alloc_frontier",
+  "alloc_max_sharpe",
+  "bond_convexity",
+  "bond_duration",
+  "bond_lookup",
+  "bond_price",
+  "bond_ytm",
+  "bt_ann_vol",
+  "bt_calmar",
+  "bt_daily_alpha",
+  "bt_max_dd",
+  "bt_num_trades",
+  "bt_r_squared",
+  "bt_sharpe",
+  "bt_sortino",
+  "bt_strategy_cagr",
+  "bt_total_return",
+  "bt_win_rate",
+  "comtrade_flows",
+  "ddm_value",
+  "energy_infrastructure",
+  "etf_holdings",
+  "fm_chokepoint_history",
+  "market_hours",
+  "master_blend",
+  "mc_breakevens",
+  "mc_exact_replay",
+  "mc_exit_rules",
+  "mc_max_dd_median",
+  "mc_max_loss",
+  "mc_median_final",
+  "mc_median_peak_margin",
+  "mc_p5_p95",
+  "mc_prob_profit",
+  "mc_prob_ruin",
+  "mc_sim_model",
+  "mc_vol_drag",
+  "mm_simulator",
+  "mv_ai_suggestions",
+  "mv_base_revenue",
+  "mv_blended",
+  "mv_dcf_leg",
+  "mv_fcff",
+  "mv_market_gap",
+  "mv_multiples_leg",
+  "mv_net_debt",
+  "mv_revenue_cagr",
+  "mv_terminal_growth",
+  "mv_terminal_margin",
+  "mv_wacc",
+  "nav_premium",
+  "pt_equity",
+  "pt_orders",
+  "pt_positions",
+  "pt_realized",
+  "pt_scheduler",
+  "rebalance_trades",
+  "report_clips",
+  "reverse_dcf",
+  "sc_facilities",
+  "scr_30d_vol",
+  "scr_52w_high",
+  "scr_ev_ebitda",
+  "scr_gross_margin",
+  "scr_net_margin",
+  "scr_op_margin",
+  "scr_pb",
+  "scr_pe",
+  "scr_peg",
+  "scr_ps",
+  "scr_roe",
+  "scr_rsi",
+  "scr_vs_200dma",
+  "scr_vs_50dma",
+  "screener_universe",
+  "sotp_value",
+  "strategy_payoff",
+  "supply_chain_peers",
+  "tf_partners",
+  "trade_journal",
+  "valuation_sensitivity"
+ ]
+}

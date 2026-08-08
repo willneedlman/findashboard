@@ -743,6 +743,40 @@ function ResearchPanel({
             </div>
           )}
 
+          {/* What the objective was broken into, and what the evidence covers.
+              Worth showing: a plan that reads thin here is thin, and the reader
+              can fix it by editing the objective rather than by rerunning. */}
+          {!!plan.questions?.length && (
+            <div style={{ border: `1px solid ${T.borderFaint}`, background: T.bg }}>
+              <div style={{ minHeight: 27, padding: '0 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderBottom: `1px solid ${T.borderFaint}` }}>
+                <span style={{ fontFamily: T.label, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted }}>
+                  Questions the objective contains
+                </span>
+                {!!plan.coverage && (
+                  <span style={{ fontFamily: T.mono, fontSize: 8.5, color: plan.coverage.missingClasses.length ? T.warn : T.muted }}>
+                    {plan.coverage.distinctClasses} evidence type{plan.coverage.distinctClasses === 1 ? '' : 's'}
+                    {plan.coverage.missingClasses.length ? ` · missing ${plan.coverage.missingClasses.join(', ')}` : ' · all required types covered'}
+                  </span>
+                )}
+              </div>
+              <div style={{ padding: '7px 10px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {plan.questions.map(question => (
+                  <div key={question.q} style={{ display: 'flex', alignItems: 'baseline', gap: 7, flexWrap: 'wrap' }}>
+                    <span style={{ fontFamily: T.label, fontSize: 9.5, color: T.text, lineHeight: 1.45 }}>{question.q}</span>
+                    <span style={{ fontFamily: T.mono, fontSize: 7.5, color: T.muted }}>
+                      {question.tags.map(tag => tag.replace(/_/g, ' ')).join(' · ')}
+                    </span>
+                  </div>
+                ))}
+                {!!plan.planNotes?.length && (
+                  <div style={{ marginTop: 3, paddingTop: 5, borderTop: `1px solid ${T.borderFaint}`, fontFamily: T.mono, fontSize: 8, color: T.muted, lineHeight: 1.5 }}>
+                    {plan.planNotes.join(' · ')}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {planningError && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, border: `1px solid ${T.warn}`, background: T.goldTint(5), color: T.warn, fontFamily: T.label, fontSize: 10.5, padding: '8px 10px' }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>

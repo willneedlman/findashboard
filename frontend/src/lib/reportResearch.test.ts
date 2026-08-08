@@ -1553,3 +1553,100 @@ describe('relationship tools get more than one subject', () => {
     expect(enhanced.sources.find(s => s.id === 'dcf-valuation')!.targets).toEqual(['NVDA'])
   })
 })
+
+describe('tools reached by the evidence-selection rebuild', () => {
+  const scope = { ...defaultScope(), goal: 'Assess AAPL' }
+  const src = (id: any, targets: string[] = ['AAPL']) => ({
+    id, label: id, tool: id, route: `/${id}`, reason: 'test',
+    targets, domain: 'issuer' as const, critical: false,
+  })
+  const run = (source: any, get: (url: string) => any) => collectReportResearch(
+    { objective: 'x', intent: 'company', symbols: ['AAPL'], sources: [source] },
+    scope, emptyPortfolio, undefined,
+    { get: async (url: string) => get(url), post: async () => ({}) },
+  )
+
+  it('reports the seasonal record with the sample size behind every figure', async () => {
+    // A hit rate quoted without its n is the misreading this tool invites, so
+    // the observation count has to survive into the clip, not just the chart.
+    const result = await run(src('seasonality'), () => ({
+      available: true, ticker: 'AAPL', years_covered: 20, sessions: 5048, first_date: '2006-07-14',
+      months: [{ label: 'Jan', n: 20, mean_pct: -1.68, median_pct: -0.81, hit_rate_pct: 45, best_pct: 12.7, worst_pct: -31.7 }],
+      best_month: { label: 'Jul', n: 20, mean_pct: 6.69, hit_rate_pct: 90 },
+      worst_month: { label: 'Jan', n: 20, mean_pct: -1.68, hit_rate_pct: 45 },
+      current_month: { label: 'Aug', n: 21, mean_pct: 4.43, hit_rate_pct: 66.7 },
+    }))
+    const kpi = result.clips.find(clip => clip.payload.kind === 'kpi')
+    expect(kpi).toBeTruthy()
+    if (kpi?.payload.kind === 'kpi') {
+      const current = kpi.payload.cells.find(cell => cell.label.includes('Aug'))
+      expect(current?.sub).toContain('n=21')
+    }
+    const table = result.clips.find(clip => clip.payload.kind === 'table')
+    if (table?.payload.kind === 'table') {
+      expect(table.payload.columns).toContain('Observations')
+    }
+  })
+
+  it('keeps the 10b5-1 split visible beside insider buy and sell totals', async () => {
+    // A scheduled sale carries no signal. Totals without the split get over-read.
+    const result = await run(src('insider-activity'), () => ({
+      transactions: [
+        { date: '2026-07-01', insider: 'A Person', title: 'CFO', side: 'sell', shares: 100, value: 20000, is_10b51: true },
+        { date: '2026-06-01', insider: 'B Person', title: 'CEO', side: 'buy', shares: 50, value: 9000, is_10b51: false },
+      ],
+      held_pct_insiders: 0.0165,
+    }))
+    const kpi = result.clips.find(clip => clip.payload.kind === 'kpi')
+    if (kpi?.payload.kind === 'kpi') {
+      expect(kpi.payload.cells.find(cell => cell.label.includes('10b5-1'))?.value).toBe('1 of 2')
+    }
+  })
+
+  it('states plainly when a pair is not cointegrated', async () => {
+    // Without stationarity the z-score has no mean to revert to, so a bare
+    // z-score of 1.48 would read as a live signal when it is nothing of the sort.
+    const result = await run(src('pairs', ['AAPL', 'MSFT']), () => ({
+      hedge_ratio: -0.3513, correlation: 0.111, hedge_method: 'ols', signal: 'flat',
+      adf: { stat: -1.267, crit_5: -2.86, stationary: false },
+      zscore: { current: 1.48, entry: 2, exit: 0.5, window: 60 },
+      half_life_days: 42.4, backtest: { sharpe: 0.54, trades: 4, win_rate: 50 },
+    }))
+    const kpi = result.clips.find(clip => clip.payload.kind === 'kpi')
+    if (kpi?.payload.kind === 'kpi') {
+      expect(kpi.payload.cells.find(cell => cell.label === 'Cointegrated')?.value).toBe('No')
+      expect(kpi.payload.cells.find(cell => cell.label === 'Spread z-score')?.sub)
+        .toBe('Not mean-reverting on this window')
+    }
+  })
+
+  it('carries the breadth participation history as its own visual', async () => {
+    const result = await run({ ...src('breadth', []), domain: 'benchmark' as const }, () => ({
+      available: true, index: '^GSPC', as_of: '2026-08-07',
+      coverage: { listed: 501, priced: 501 },
+      today: { advancing: 322, declining: 177, ad_ratio: 1.82, new_highs: 21, new_lows: 1 },
+      participation: { pct_above_50: 66.4, pct_above_200: 73.8, pct_above_50_change: 1.8, pct_above_200_change: 2.2 },
+      divergence: { state: 'aligned', sessions: 21, index_change_pct: 2.41 },
+      history: Array.from({ length: 10 }, (_, i) => ({
+        date: `2026-07-${String(i + 1).padStart(2, '0')}`, ad_line: 100 + i, pct_above_50: 60 + i, pct_above_200: 70 + i,
+      })),
+    }))
+    const charts = result.clips.filter(clip => clip.payload.kind === 'chart')
+    expect(charts.length).toBe(2)
+    expect(result.clips.some(clip => clip.payload.kind === 'kpi')).toBe(true)
+  })
+
+  it('records a thin source as a gap instead of failing the report', async () => {
+    // Every new fetcher returns [] rather than throwing when the source has
+    // nothing, so one empty answer degrades that pull, not the whole run.
+    const result = await run(src('debt-maturity'), () => ({ buckets: [] }))
+    expect(result.clips).toEqual([])
+    expect(result.failed).toEqual([{
+      sourceId: 'debt-maturity',
+      label: 'debt-maturity',
+      target: 'AAPL',
+      researchKey: 'debt-maturity:AAPL',
+      message: 'No usable data returned for AAPL.',
+    }])
+  })
+})

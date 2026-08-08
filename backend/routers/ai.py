@@ -35,7 +35,21 @@ from reporting.pipeline import (
     validate_data_bank,
     validate_template_sections,
 )
-from reporting.tool_registry import REPORT_TOOL_BY_ID, report_tool_manifest
+from reporting.tool_registry import REPORT_TOOL_BY_ID, QUESTION_TAGS, report_tool_manifest
+from reporting.evidence_plan import (
+    Availability,
+    MAX_PICKS_PER_QUESTION,
+    allowed_visuals,
+    coverage_report,
+    enforce,
+    limits_for,
+    normalize_questions,
+    record_selection,
+    repair_instruction,
+    shortlist,
+    shortlist_payload,
+    validate_selection,
+)
 import fmp
 
 logger = logging.getLogger(__name__)
@@ -1872,10 +1886,11 @@ def options_strategy_chat(req: StrategyChatRequest):
 
 
 # ── Report Creator: plan research and synthesize clipped evidence ─────────────
-
-# Beyond the deterministic baseline. Four was tight enough that a broad objective
-# could not reach the evidence it needed.
-_RESEARCH_MAX_ADDITIONS = 8
+#
+# Selection runs decompose -> shortlist -> pick -> enforce -> validate. The two
+# model calls are deliberately small: the first names the questions without
+# seeing any tool, the second picks inside a shortlist of at most ten. How much
+# a report may pull is a function of its length, not of a fixed addition cap.
 
 
 class ReportResearchPlanRequest(BaseModel):
@@ -1885,97 +1900,129 @@ class ReportResearchPlanRequest(BaseModel):
     symbols: list[str] = Field(default_factory=list)
     portfolio: dict = Field(default_factory=dict)
     baselineSourceIds: list[str] = Field(default_factory=list)
+    templateId: str = "equity-note"
+    length: str = "medium"
+    # Tools the client cannot run for this report — horizon-disabled, mostly.
+    disabledSourceIds: list[str] = Field(default_factory=list)
 
 
-_REPORT_RESEARCH_PLANNER_SYSTEM = """You are Phase 1 of AlphaTape's deterministic report pipeline: Objective and Thesis Formation.
-Form a preliminary analytical thesis, enumerate the exact data points and valuation/statistical checks needed to test it, then choose only ADDITIONAL tools that materially improve the deterministic baseline.
-The thesis is a hypothesis to test, not a conclusion supported by evidence you have not collected yet.
-The deterministic baseline tools are already included. Do not repeat them.
-Prefer a chart-producing tool when a visual relationship, trend, distribution, or comparison would make the conclusion clearer.
-Do not add tools merely for breadth. Every selection must close a specific evidence gap.
-Respect targetMode: symbol tools need symbols, portfolio tools need a supported active portfolio, and market tools need neither.
-You also DIRECT each tool you want configured, rather than accepting its default view.
-A directive is one plain-English sentence saying how to set that tool up for this objective:
-which lines, indicators, overlays, comparisons, or windows it should show. Write directives
-only where a non-default setup genuinely helps; a tool with no directive runs its default view.
-Examples of useful directives:
-  "price-history": "chart it against SPY with 50 and 200 day moving averages and RSI"
-  "market-compare": "index all names to 100 at the start of the lookback"
-  "correlation": "use a 90 day rolling window against the benchmark"
-Name overlays by ticker and indicators by their common name and period.
+# Call 1 of 2. Decomposition only: no tool names appear in this prompt, so the
+# model cannot anchor on a familiar id before it has worked out what is being
+# asked. Tags are a closed set, which is the kind of choice a small model is
+# reliable at.
+_REPORT_QUESTION_SYSTEM = """You break a research objective into the separate analytical questions it contains.
+
+Return 3 to 6 questions. Each question must be one thing a reader needs answered
+before the objective can be answered. Do not answer them.
+
+Tag every question with 1 to 3 tags from this exact list. Use no other words:
+""" + "\n".join(f"  {tag}" for tag in QUESTION_TAGS) + """
+
+Rules:
+- An objective almost always contains more than one question. "Is it cheap" and
+  "what could go wrong" are two questions, not one.
+- Tag what the question needs, not what words the objective used.
+- priority 1 is the question the objective is really about.
+
+Return only valid JSON:
+{"questions": [{"q": "the question", "tags": ["tag", "tag"], "priority": 1}]}"""
+
+
+# Call 2 of 2. The model sees a per-question shortlist of at most ten tools, each
+# with the measurements it actually returns and what it cannot support. It never
+# sees the full registry, so it cannot fall back to picking familiar names.
+_REPORT_PICK_SYSTEM = """You choose which AlphaTape tools to run for a research report.
+
+You are given a list of questions. Each question comes with its own candidate
+tools. For each question choose the 1 to %d candidates that best answer THAT
+question. Judge on what a tool returns ("gives" and "measurements"), not on its
+name.
+
+Rules:
+- Only ids from that question's own candidate list. Ids from another question's
+  list are invalid for this question.
+- Do not pick a tool whose "limits" say it cannot support the question.
+- Prefer a tool that adds an evidence class the plan does not have yet over a
+  second tool that repeats one it already has.
+- Fewer, better-fitting pulls beat more pulls.
+
+You also write a preliminary thesis to test, and may DIRECT how a tool is set up.
+A directive is one plain sentence naming lines, overlays, indicators, comparisons
+or windows, for example "chart it against SPY with the 50 and 200 day averages".
+Write a directive only where the default view would miss the point.
 
 Return only valid JSON:
 {
-  "thesis": "one preliminary analytical thesis that directly answers the objective",
+  "thesis": "one preliminary analytical thesis that answers the objective",
   "requiredDataPoints": ["specific measurement needed to test the thesis"],
   "requiredChecks": ["specific valuation or statistical check needed"],
   "summary": "one short sentence describing the evidence strategy",
-  "additions": [
-    {"id": "exact catalog id", "reason": "specific evidence gap this tool closes"}
-  ],
-  "directives": {"exact catalog id": "one sentence configuring that tool"}
-}
-Directives may target baseline tools as well as additions.
-Select at most 8 additions. An empty additions array is valid when the baseline is sufficient."""
+  "picks": [{"question": 1, "id": "exact candidate id", "reason": "what this settles"}],
+  "directives": {"exact candidate id": "one sentence configuring that tool"}
+}""" % MAX_PICKS_PER_QUESTION
 
 
-def _normalize_report_research_plan(raw, allowed: set[str], baseline: set[str]) -> dict:
+def _clean(text: object, limit: int = 220) -> str:
+    return re.sub(r"\s+", " ", str(text or "").strip())[:limit]
+
+
+def _normalize_picks(raw, shortlists: dict[int, set[str]]) -> tuple[dict[str, str], list[str]]:
+    """Model picks -> {tool_id: reason}, dropping anything off its own shortlist.
+
+    Cross-question leakage is the common failure: the model sees ten ids under
+    question 2 and offers one of them for question 4. That id may be perfectly
+    reasonable, but accepting it would reopen the flat-menu behaviour this stage
+    exists to close, so it is rejected and reported as a validation note.
+    """
+    reasons: dict[str, str] = {}
+    rejected: list[str] = []
     data = raw if isinstance(raw, dict) else {}
-    thesis = re.sub(r"\s+", " ", str(data.get("thesis", "")).strip())[:500]
-    required_data_points = [
-        re.sub(r"\s+", " ", str(item).strip())[:220]
-        for item in data.get("requiredDataPoints", [])
-        if str(item).strip()
-    ][:12]
-    required_checks = [
-        re.sub(r"\s+", " ", str(item).strip())[:220]
-        for item in data.get("requiredChecks", [])
-        if str(item).strip()
-    ][:10]
-    summary = re.sub(r"\s+", " ", str(data.get("summary", "")).strip())[:240]
-    additions: list[dict] = []
-    seen: set[str] = set()
-    for item in data.get("additions", []):
+    per_question: dict[int, int] = {}
+    for item in data.get("picks", []) or []:
         if not isinstance(item, dict):
             continue
-        source_id = str(item.get("id", "")).strip()
-        if source_id not in allowed or source_id in baseline or source_id in seen:
+        tool_id = str(item.get("id", "")).strip()
+        try:
+            index = int(item.get("question", 0))
+        except (TypeError, ValueError):
+            index = 0
+        allowed_here = shortlists.get(index, set())
+        if tool_id not in allowed_here:
+            if tool_id:
+                rejected.append(f"{tool_id} was not a candidate for question {index}")
             continue
-        reason = re.sub(r"\s+", " ", str(item.get("reason", "")).strip())[:220]
-        if not reason:
+        if per_question.get(index, 0) >= MAX_PICKS_PER_QUESTION:
             continue
-        additions.append({"id": source_id, "reason": reason})
-        seen.add(source_id)
-        if len(additions) >= _RESEARCH_MAX_ADDITIONS:
-            break
+        per_question[index] = per_question.get(index, 0) + 1
+        reasons.setdefault(tool_id, _clean(item.get("reason")) or "Selected for this question.")
+    return reasons, rejected
 
-    # Per-tool setup instructions, for baseline tools as well as additions. Kept
-    # as prose: the client resolves each one against what that tool can actually
-    # do, so an unusable instruction degrades to the default view.
-    directives: dict[str, str] = {}
-    raw_directives = data.get("directives")
-    if isinstance(raw_directives, dict):
-        for source_id, text in raw_directives.items():
-            key = str(source_id).strip()
-            if key not in allowed:
-                continue
-            body = re.sub(r"\s+", " ", str(text).strip())[:240]
-            if body:
-                directives[key] = body
-    required_source_ids = sorted(baseline, key=lambda source_id: list(REPORT_TOOL_BY_ID).index(source_id))
-    required_source_ids.extend(item["id"] for item in additions)
+
+def _objective_plan(raw) -> dict:
+    data = raw if isinstance(raw, dict) else {}
     return {
-        "phase": "tool-discovery",
-        "objectivePlan": {
-            "thesis": thesis,
-            "requiredDataPoints": required_data_points,
-            "requiredChecks": required_checks,
-        },
-        "summary": summary,
-        "requiredSourceIds": required_source_ids,
-        "additions": additions,
-        "directives": directives,
+        "thesis": _clean(data.get("thesis"), 500),
+        "requiredDataPoints": [
+            _clean(item) for item in (data.get("requiredDataPoints") or []) if _clean(item)
+        ][:12],
+        "requiredChecks": [
+            _clean(item) for item in (data.get("requiredChecks") or []) if _clean(item)
+        ][:10],
     }
+
+
+def _directives(raw, allowed: set[str]) -> dict[str, str]:
+    """Per-tool setup instructions. Kept as prose: the client resolves each one
+    against what that tool can actually do, so an unusable instruction degrades
+    to the default view rather than failing the run."""
+    out: dict[str, str] = {}
+    source = raw if isinstance(raw, dict) else {}
+    for tool_id, text in source.items():
+        key = str(tool_id).strip()
+        body = _clean(text, 240)
+        if key in allowed and body:
+            out[key] = body
+    return out
 
 
 @router.get("/report-tools")
@@ -1985,48 +2032,160 @@ def get_report_tools():
 
 @router.post("/report-research-plan")
 def plan_report_research(req: ReportResearchPlanRequest):
+    """Decompose the objective, shortlist per question, let the model pick inside
+    each shortlist, then enforce coverage deterministically.
+
+    The model makes two small closed-set decisions. Everything that decides
+    breadth — which tools are even eligible, what the report must cover, what it
+    may not repeat — is settled here in code.
+    """
     objective = req.objective.strip()
     if not objective:
         raise HTTPException(400, "Report objective is required")
-    tools = report_tool_manifest()
     allowed = set(REPORT_TOOL_BY_ID)
-    baseline = {source_id for source_id in req.baselineSourceIds if source_id in allowed}
-    if not allowed:
-        raise HTTPException(400, "No supported research tools supplied")
-    prompt = json.dumps({
+    baseline = [source_id for source_id in req.baselineSourceIds if source_id in allowed]
+    template_id = req.templateId if req.templateId else "equity-note"
+    length = req.length if req.length in {"short", "medium", "long"} else "medium"
+
+    portfolio = req.portfolio if isinstance(req.portfolio, dict) else {}
+    availability = Availability(
+        has_symbols=bool(req.symbols),
+        symbol_count=len(req.symbols),
+        has_portfolio=bool(portfolio.get("included")) and not portfolio.get("futuresCount"),
+        allow_slow=length != "short",
+        disabled_tool_ids=frozenset(
+            source_id for source_id in req.disabledSourceIds if source_id in allowed
+        ),
+    )
+
+    # ── Call 1: decompose ────────────────────────────────────────────────────
+    question_prompt = json.dumps({
         "objective": objective[:1200],
         "mustInclude": req.mustInclude[:1200],
-        "timeframe": req.timeframe[:160],
-        "symbols": req.symbols,
-        "portfolio": req.portfolio,
-        "baselineSourceIds": sorted(baseline),
-        "toolCatalog": [
-            {
-                "id": tool["id"],
-                "label": tool["label"][:80],
-                "description": tool["description"][:240],
-                "targetMode": tool["targetMode"],
-                "producesVisuals": tool["producesVisuals"],
-                "domain": tool["domain"],
-            }
-            for tool in tools
-        ],
+        "reportType": template_id,
+        "hasSymbols": bool(req.symbols),
+        "hasPortfolio": availability.has_portfolio,
     }, separators=(",", ":"))
-    raw = groq_complete(
-        prompt,
-        max_tokens=800,
-        model=MODEL_SMART,
-        system=_REPORT_RESEARCH_PLANNER_SYSTEM,
+    try:
+        raw_questions = parse_json(groq_complete(
+            question_prompt, max_tokens=500, model=MODEL_SMART,
+            system=_REPORT_QUESTION_SYSTEM,
+        ))
+        questions = normalize_questions(
+            (raw_questions or {}).get("questions"), f"{objective} {req.mustInclude}", template_id,
+        )
+    except Exception:
+        # A failed decomposition must not collapse the plan back to one label.
+        questions = normalize_questions(None, f"{objective} {req.mustInclude}", template_id)
+
+    # ── Shortlist each question, deterministically ───────────────────────────
+    selected_so_far = set(baseline)
+    class_counts: dict[str, int] = {}
+    for tool_id in baseline:
+        cls = REPORT_TOOL_BY_ID[tool_id].evidence_class
+        class_counts[cls] = class_counts.get(cls, 0) + 1
+
+    # Everything the objective asked about, so a deterministic floor-fill can
+    # prefer a tool that is relevant over one that merely supplies the class.
+    asked_tags = frozenset(tag for question in questions for tag in question.tags)
+    shortlists: dict[int, set[str]] = {}
+    prompt_questions: list[dict] = []
+    for index, question in enumerate(questions, start=1):
+        candidates = shortlist(
+            question, availability,
+            already_selected=frozenset(selected_so_far),
+            class_counts=class_counts,
+        )
+        if not candidates:
+            continue
+        shortlists[index] = {tool.id for tool in candidates}
+        prompt_questions.append({
+            "n": index,
+            "q": question.text,
+            "tags": list(question.tags),
+            "candidates": shortlist_payload(candidates),
+        })
+
+    # ── Call 2: pick inside each shortlist, with one bounded repair ──────────
+    pick_prompt = {
+        "objective": objective[:1200],
+        "mustInclude": req.mustInclude[:800],
+        "timeframe": req.timeframe[:160],
+        "symbols": req.symbols[:12],
+        "alreadyRunning": sorted(baseline),
+        "questions": prompt_questions,
+    }
+    reasons: dict[str, str] = {}
+    rejected: list[str] = []
+    plan_raw: dict = {}
+    notes: list[str] = []
+    if prompt_questions:
+        repair = ""
+        for attempt in range(2):
+            try:
+                plan_raw = parse_json(groq_complete(
+                    json.dumps(pick_prompt, separators=(",", ":")),
+                    max_tokens=900, model=MODEL_SMART,
+                    system=_REPORT_PICK_SYSTEM + (f"\n\n{repair}" if repair else ""),
+                )) or {}
+            except Exception:
+                plan_raw = {}
+            reasons, rejected = _normalize_picks(plan_raw, shortlists)
+            trial = enforce(
+                list(reasons), dict(reasons), availability,
+                template_id=template_id, length=length, baseline=baseline,
+                question_tags=asked_tags,
+            )
+            errors = validate_selection(
+                trial, availability, template_id=template_id, length=length,
+            )
+            if not errors or attempt == 1:
+                if errors:
+                    notes.append(f"proceeded with {len(errors)} unresolved planning error(s)")
+                break
+            repair = repair_instruction(errors, availability, template_id)
+            notes.append("re-planned once after validation failed")
+
+    selection = enforce(
+        list(reasons), dict(reasons), availability,
+        template_id=template_id, length=length, baseline=baseline,
+        question_tags=asked_tags,
     )
-    result = _normalize_report_research_plan(parse_json(raw), allowed, baseline)
-    if not result["objectivePlan"]["thesis"]:
-        result["objectivePlan"]["thesis"] = f"Test the evidence needed to answer: {objective[:420]}"
-    if not result["objectivePlan"]["requiredDataPoints"]:
-        result["objectivePlan"]["requiredDataPoints"] = [
-            f"Decision-relevant evidence from {REPORT_TOOL_BY_ID[source_id].label}"
-            for source_id in result["requiredSourceIds"][:8]
+    notes.extend(selection.notes)
+    if rejected:
+        notes.append(f"ignored {len(rejected)} pick(s) outside their own shortlist")
+
+    objective_plan = _objective_plan(plan_raw)
+    if not objective_plan["thesis"]:
+        objective_plan["thesis"] = f"Test the evidence needed to answer: {objective[:420]}"
+    if not objective_plan["requiredDataPoints"]:
+        objective_plan["requiredDataPoints"] = [
+            f"{REPORT_TOOL_BY_ID[tool_id].label}: {REPORT_TOOL_BY_ID[tool_id].yields[0]}"
+            if REPORT_TOOL_BY_ID[tool_id].yields
+            else f"Decision-relevant evidence from {REPORT_TOOL_BY_ID[tool_id].label}"
+            for tool_id in selection.tool_ids[:8]
         ]
-    return result
+
+    additions = [
+        {"id": tool_id, "reason": selection.reasons.get(tool_id) or "Selected to answer a question in the objective."}
+        for tool_id in selection.tool_ids
+        if tool_id not in set(baseline)
+    ]
+    record_selection(template_id, selection.tool_ids)
+
+    return {
+        "phase": "tool-discovery",
+        "objectivePlan": objective_plan,
+        "summary": _clean(plan_raw.get("summary"), 240),
+        "requiredSourceIds": selection.tool_ids,
+        "additions": additions,
+        "directives": _directives(plan_raw.get("directives"), set(selection.tool_ids)),
+        "questions": [question.as_dict() for question in questions],
+        "coverage": coverage_report(selection.tool_ids, template_id),
+        "allowedVisuals": allowed_visuals(selection.tool_ids),
+        "evidenceLimits": limits_for(selection.tool_ids),
+        "planNotes": notes,
+    }
 
 class ReportClipIn(BaseModel):
     id: str
@@ -4315,6 +4474,57 @@ def _apply_section_layout_architecture(
                 index += 1
 
 
+def _evidence_utilisation(data_bank_meta: dict, cited_clip_ids: set[str]) -> dict:
+    """Which pulls the finished report actually leaned on.
+
+    A tool counts as used when at least one of its clips ends up attached to a
+    section or to the appendix. Everything else was fetched and ignored, which is
+    the single most useful signal for tuning retrieval: a tool that is repeatedly
+    pulled and never cited is being selected on name rather than on fit.
+
+    Prose mentions are deliberately not counted. Matching a number back to the
+    clip that produced it is unreliable, and a citation metric that quietly
+    over-counts is worse than one that under-counts consistently.
+    """
+    runs = data_bank_meta.get("runs") or []
+    used_tools: list[str] = []
+    unused_tools: list[str] = []
+    for run in runs:
+        if not isinstance(run, dict):
+            continue
+        source_id = str(run.get("sourceId", ""))
+        clip_ids = {str(clip_id) for clip_id in (run.get("clipIds") or [])}
+        if not source_id or not clip_ids:
+            continue
+        (used_tools if clip_ids & cited_clip_ids else unused_tools).append(source_id)
+    total = len(used_tools) + len(unused_tools)
+    return {
+        "citedSourceIds": sorted(set(used_tools)),
+        "uncitedSourceIds": sorted(set(unused_tools)),
+        "citationRate": round(len(used_tools) / total, 3) if total else None,
+    }
+
+
+def _record_evidence_utilisation(template_id: str, utilisation: dict) -> None:
+    """Persist the cited/uncited split so retrieval can learn from it.
+
+    Best-effort by design: a report must never fail because a telemetry write
+    did, so every error here is swallowed.
+    """
+    try:
+        from disk_cache import disk_get, disk_set
+        key = f"report:citations:{template_id}"
+        history = disk_get(key)
+        history = history if isinstance(history, list) else []
+        history.append({
+            "cited": utilisation.get("citedSourceIds", []),
+            "uncited": utilisation.get("uncitedSourceIds", []),
+        })
+        disk_set(key, history[-20:], ttl=60 * 60 * 24 * 60)
+    except Exception:  # noqa: BLE001 — telemetry is never load-bearing
+        pass
+
+
 def _select_report_appendix_clip_ids(raw_ids, clips: list[ReportClipIn], used: set[str]) -> list[str]:
     clip_type = {clip.id: clip.dataType.strip().lower() for clip in clips}
     appendix: list[str] = []
@@ -5469,6 +5679,12 @@ def generate_report(req: ReportGenRequest):
             section["analysis"] = guard_evidence_domain_text(str(section.get("analysis", "")), req.clips)
 
     _apply_section_layout_architecture(sections, req.clips, (req.layoutPreset or "").strip())
+    # Close the selection loop: which pulls the finished report actually cited.
+    utilisation = _evidence_utilisation(
+        data_bank_meta,
+        {str(section.get("clipId")) for section in sections if section.get("clipId")} | set(appendix),
+    )
+    _record_evidence_utilisation(contract["id"], utilisation)
     template_errors = validate_template_sections(sections, contract)
     if template_errors:
         logger.error("report template validation failed: %s", template_errors)
@@ -5491,6 +5707,7 @@ def generate_report(req: ReportGenRequest):
             "requiredSourceIds": data_bank_meta.get("requiredSourceIds", []),
             "coverage": data_bank_meta.get("coverage", {}),
             "unresolvedGaps": data_bank_meta.get("unresolvedGaps", []),
+            "evidenceUtilisation": utilisation,
         },
     }
 
