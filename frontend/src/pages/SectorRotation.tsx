@@ -232,7 +232,7 @@ export function SectorRotationContent() {
 
         {/* Help panel */}
         {showHelp && (
-          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.gold}`, padding: '14px 16px', marginBottom: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderLeft: `2px solid ${T.gold}`, padding: '14px 16px', marginBottom: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
             <div>
               <div style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.gold, marginBottom: 8 }}>
                 Return

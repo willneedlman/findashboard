@@ -83,7 +83,7 @@ export default function AlertToastQueue({ alerts }: Props) {
           pointerEvents: 'auto',
           background: 'var(--theme-surface)',
           border: `1px solid ${T.gold}`,
-          borderLeft: `3px solid ${T.gold}`,
+          borderLeft: `2px solid ${T.gold}`,
           padding: '10px 12px',
           minWidth: 240, maxWidth: 320,
           boxShadow: '0 4px 24px rgba(0,0,0,0.5)',

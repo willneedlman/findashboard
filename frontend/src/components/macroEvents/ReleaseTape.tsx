@@ -84,7 +84,7 @@ function Row({ e, zebra, expanded, onToggle, alerted, onAlert }: {
   const stop = (fn: () => void) => (ev: React.MouseEvent) => { ev.stopPropagation(); fn() }
 
   return (
-    <div style={{ borderLeft: `3px solid ${rail}`, background: bg, borderBottom: `1px solid ${T.borderFaint}` }}>
+    <div style={{ borderLeft: `2px solid ${rail}`, background: bg, borderBottom: `1px solid ${T.borderFaint}` }}>
       <div
         onClick={onToggle} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
         style={{ display: 'grid', gridTemplateColumns: GRID, columnGap: GAP, alignItems: 'center', padding: '11px 16px', cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}>

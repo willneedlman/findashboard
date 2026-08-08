@@ -64,7 +64,7 @@ export default function UnusualFlowWidget({ config }: { config: WidgetConfig }) 
           const isCall = f.type === 'call'
           const c = isCall ? T.pos : T.neg
           return (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 10px 6px 8px', borderBottom: `1px solid rgba(255,255,255,0.04)`, borderLeft: `3px solid ${c}` }}>
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 10px 6px 8px', borderBottom: `1px solid rgba(255,255,255,0.04)`, borderLeft: `2px solid ${c}` }}>
               <TickerLogo ticker={f.ticker} size={16} />
               <TickerLink ticker={f.ticker} caret={false} style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.gold, width: 44, flexShrink: 0 }} />
               <span style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, color: c, border: `1px solid ${c}`, padding: '0 4px', flexShrink: 0 }}>{isCall ? 'C' : 'P'}</span>

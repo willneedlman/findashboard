@@ -465,7 +465,7 @@ export function DealerGEXContent() {
         <>
           {/* ── Regime band ───────────────────────────────────────────────── */}
           <div style={{
-            background: QUIET, border: `1px solid ${T.border}`, borderLeft: `3px solid ${long ? cc.gain : cc.loss}`,
+            background: QUIET, border: `1px solid ${T.border}`, borderLeft: `2px solid ${long ? cc.gain : cc.loss}`,
             padding: '14px 16px',
           }}>
             <div style={{

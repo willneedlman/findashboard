@@ -27,7 +27,7 @@ export default function Footer() {
       <div style={{
         background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 4%, var(--theme-surface, #0d1826))',
         border: `1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 20%, transparent)`,
-        borderLeft: `3px solid var(--theme-primary, #c9a84c)`,
+        borderLeft: `2px solid var(--theme-primary, #c9a84c)`,
         borderRadius: 3,
         padding: '10px 16px',
         marginBottom: 18,
