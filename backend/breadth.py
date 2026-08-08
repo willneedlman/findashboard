@@ -91,7 +91,12 @@ def _pct_of(count: pd.Series, priced: pd.Series, stamp) -> float | None:
     return round(float(count.loc[stamp]) / float(denom) * 100, 1)
 
 
-@cached(ttl=1800, maxsize=32, persist=True)
+# Six hours, not the usual few minutes. Every input is a daily close, so an
+# intraday refresh cannot change a single number, and the cost of a miss is
+# real: 500 members over 400 sessions takes Yahoo about two and a half minutes
+# on the production box. Persisted, so a deploy does not make someone pay it
+# again.
+@cached(ttl=6 * 3600, maxsize=32, persist=True)
 def breadth(index_symbol: str, schema: int = 1) -> dict:
     entry = _load().get("indices", {}).get(index_symbol)
     if not entry or entry.get("unavailable") or not entry.get("members"):
