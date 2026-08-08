@@ -21,10 +21,14 @@ import pandas as pd
 from cache import get_download, cached
 from index_profile import _load
 
-# Enough history to compute a 200-day average on the first plotted bar, plus a
-# margin for holidays and half-days.
-_LOOKBACK_DAYS = 420
+# The 200-day average has to be defined on the *first* plotted bar, so the
+# download needs 200 sessions of run-up before the window even starts: 326
+# sessions, which is about 470 calendar days before holidays. 520 leaves margin.
+# Sizing this to 420 shipped a chart whose 200-day line read 0% for its first
+# thirty-seven bars.
+_LOOKBACK_DAYS = 520
 _WINDOW_SESSIONS = 126        # roughly six months of plotted breadth
+_MA_WINDOWS = (50, 200)
 
 
 def _closes(symbols: list[str]) -> pd.DataFrame | None:
@@ -54,8 +58,17 @@ def _series(frame: pd.DataFrame, index_symbol: str) -> dict:
     declining = (daily < 0).sum(axis=1)
     net = (advancing - declining).astype(float)
 
-    above50 = (members > members.rolling(50).mean()).sum(axis=1)
-    above200 = (members > members.rolling(200).mean()).sum(axis=1)
+    # Count only members whose average is actually defined. `price > NaN` is
+    # False in pandas, so summing the raw comparison silently reports "we do not
+    # know yet" as "not above" — which is how a flat 0% line ends up on a chart.
+    # The same guard handles a recent index addition with no 200-day history:
+    # it drops out of the denominator instead of dragging the reading down.
+    above, breadth_denom = {}, {}
+    for window in _MA_WINDOWS:
+        average = members.rolling(window).mean()
+        defined = average.notna() & members.notna()
+        above[window] = ((members > average) & defined).sum(axis=1)
+        breadth_denom[window] = defined.sum(axis=1)
     priced = members.notna().sum(axis=1).replace(0, np.nan)
 
     # A 52-week extreme needs a full year behind it, so the rolling windows are
@@ -73,8 +86,8 @@ def _series(frame: pd.DataFrame, index_symbol: str) -> dict:
             "date": stamp.date().isoformat(),
             "ad_line": round(float(ad_line.loc[stamp]), 1),
             "net_advancers": int(net.loc[stamp]) if pd.notna(net.loc[stamp]) else None,
-            "pct_above_50": _pct_of(above50, priced, stamp),
-            "pct_above_200": _pct_of(above200, priced, stamp),
+            "pct_above_50": _pct_of(above[50], breadth_denom[50], stamp),
+            "pct_above_200": _pct_of(above[200], breadth_denom[200], stamp),
             "new_highs": int(high52.loc[stamp]),
             "new_lows": int(low52.loc[stamp]),
         }
@@ -84,8 +97,11 @@ def _series(frame: pd.DataFrame, index_symbol: str) -> dict:
     return {"points": points}
 
 
-def _pct_of(count: pd.Series, priced: pd.Series, stamp) -> float | None:
-    denom = priced.loc[stamp]
+def _pct_of(count: pd.Series, denominator: pd.Series, stamp) -> float | None:
+    """None, never zero, when nothing qualifies. A gap in the line is honest
+    about missing history; a zero is a claim that no member is above its
+    average."""
+    denom = denominator.loc[stamp]
     if pd.isna(denom) or denom == 0:
         return None
     return round(float(count.loc[stamp]) / float(denom) * 100, 1)
