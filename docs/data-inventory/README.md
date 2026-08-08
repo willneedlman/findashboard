@@ -5,7 +5,7 @@ surfaces, what is computed but never shown, and what is plumbed but dead.
 
 | File | Rows | What it is |
 |---|---|---|
-| `surfaced.csv` | 105 | Values a user can reach in the UI, with provenance, formula, interpretation and limits |
+| `surfaced.csv` | 274 | Values a user can reach in the UI, with provenance, formula, interpretation and limits |
 | `computed_not_surfaced.csv` | 31 | Backend endpoints with no frontend caller |
 | `dormant.csv` | 10 | Ingestion paths that return nothing in production, and why |
 
@@ -36,7 +36,12 @@ one row, not 40.
 
 This is deliberately not one row per rendered label: a sweep of the pages finds
 ~1,400 label strings, most of which are buttons, axis titles, form fields and
-duplicates. The 105 rows here are the values that carry an interpretation.
+duplicates. The 274 rows here are the values that carry an interpretation.
+
+Sharpe, Sortino, Calmar, volatility, max drawdown and beta are six rows, not
+one, because each answers a different question and carries a different caveat.
+A handful of rows still name two or three figures where they are genuinely one
+reading: mean/high/low price target is a range, not three numbers.
 
 ## Rules applied
 

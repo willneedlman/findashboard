@@ -719,6 +719,25 @@
   --at-series-red:    #8c2e36;
 }
 
+/* ── Numeral tracking, per data face ─────────────────────────────────────
+   --theme-num-tracking is set by the theme and is `normal` for every font
+   except Hanken Grotesk, whose figures are drawn tight enough that "$13,666"
+   runs its comma into the digits at display sizes.
+
+   The attribute selector is not a hack of convenience: this codebase styles
+   with inline styles, so `fontFamily: var(--theme-mono)` renders the variable
+   name into the element's own style attribute. Matching on it reaches all
+   ~1,300 mono call sites without touching one of them. The class list below
+   covers the handful that take the font from a stylesheet instead. */
+[style*="--theme-mono"],
+.ft-metric-value,
+.ft-input,
+.ft-control,
+.recharts-text,
+.recharts-default-tooltip {
+  letter-spacing: var(--theme-num-tracking, normal);
+}
+
 /* ── Recharts — consistent font + grid ──────────────────────────────────── */
 .recharts-text,
 .recharts-cartesian-axis-tick-value,

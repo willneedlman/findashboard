@@ -26,14 +26,6 @@ row('gex_walls','derived_metric','Dealer GEX','Call wall / put wall',
     'Commonly read as magnet or resistance levels because dealer hedging concentrates there. Most useful near expiry, when gamma is largest and the effect is strongest.',
     'A wall is only the biggest strike in the current chain; it moves when a single large position rolls. No implication that price will respect it.')
 
-row('gex_greeks_surface','derived_metric','Dealer GEX','Delta / vanna / charm by strike and expiry',
-    'Dealer exposure to the other second-order greeks, laid out per strike and per expiry.',
-    'Black-Scholes greeks per contract times open interest times 100, aggregated on the same grid as gamma',
-    'chain + in-house greeks', prov('/api/options/exposure', f'{O}:1020 dealer_exposure()'),
-    'intraday, 24 expiries',
-    'Vanna is exposure to spot/vol correlation and charm is exposure to time decay of delta; both drive hedging flows that gamma alone misses, especially into an opex week. The three panels share one column geometry so a level lines up across all of them.',
-    'Greeks are computed from the chain implied vol, which is itself derived from a mid price that can be stale or crossed on illiquid strikes. No dealer inventory data exists publicly; the entire surface rests on the sign convention above.')
-
 row('flow_vol_oi','derived_metric','Options Scanner','Volume / open interest ratio',
     'How today contract volume compares with the standing open interest at that strike.',
     'volume / open_interest per contract, filtered by min_volume and min_vol_oi thresholds',
@@ -51,14 +43,6 @@ row('iv_rank','derived_metric','Volatility Scanner','IV rank and IV percentile',
     'Rank answers "how expensive is vol against its own year" and is the standard trigger for premium selling above ~50 and buying below ~20. Percentile is the more robust of the two because a single spike sets the range that rank divides by. Also available as an alert condition.',
     'Both need a year of accrued snapshots; a ticker only recently tracked has a short and therefore flattering range. There is no historical IV surface from any current vendor, so the series starts when this app started recording it, not when the option started trading.')
 
-row('vol_skew','derived_metric','Volatility Scanner','Volatility skew and term structure',
-    'Implied vol across strikes at one expiry, and ATM vol across expiries.',
-    'per-strike IV from the chain, normalised by a shared _normalize_iv rule; term structure is ATM IV per expiry across up to 16 expiries',
-    'Tradier / yfinance chains', prov('/api/prob/skew'),
-    'intraday on request',
-    'A steep put skew means downside protection is bid, which is the usual state for an index and a signal when it appears in a single name. Term structure in backwardation (front above back) marks an event or a stress.',
-    'IV is normalised through one shared rule because the two sources quote it differently; before that fix the same contract could read 25% in one pane and 0% in another. Chain-derived only: no historical surface, so skew cannot be compared against its own history.')
-
 row('implied_move','derived_metric','Implied Probability','Implied move and straddle',
     'The move the options market is pricing into an expiry.',
     'ATM straddle mid price as a percentage of spot',
@@ -74,15 +58,6 @@ row('risk_neutral_density','model','Implied Probability','Probability of finishi
     'intraday on request',
     'Answers "what odds is the market giving this level". The cumulative curve is the directly usable one for a strike decision.',
     'Risk-neutral, not real-world: it embeds the risk premium, so it is not a forecast of actual probability. Assumes lognormal BS dynamics, which understates tails. Unavailable when the ticker has no listed options, and the page says so rather than showing an empty chart.')
-
-row('options_pricer_greeks','model','Options Pricer','Theoretical price and greeks',
-    'Black-Scholes value, delta, gamma, theta, vega and rho for a contract or a multi-leg structure.',
-    'closed-form Black-Scholes on user-supplied or chain-sourced spot, strike, DTE, rate and vol',
-    'in-house pricing module, chain for defaults',
-    prov('/api/options/price'),
-    'on request, no cache (pure function of inputs)',
-    'The sandbox for "what if". Loading a real contract from the chain grounds the inputs in live strikes and premiums rather than in a blank form.',
-    'European exercise, no dividends, constant vol. Single-name US equity options are American, so the model is wrong for deep-ITM puts and around dividends. A structure priced here is theoretical, not executable.')
 
 row('strategy_payoff','model','Options Strategy','Payoff and P&L at expiry',
     'Profit and loss across underlying prices for a multi-leg structure, with break-evens.',

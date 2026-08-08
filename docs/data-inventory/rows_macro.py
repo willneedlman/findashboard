@@ -38,14 +38,6 @@ row('credit_spreads','feed_field','Credit Spreads','IG and HY option-adjusted sp
     'The cleanest single read on financial stress. HY past roughly 6 points is genuine funding stress; CCC is the most recession-sensitive bucket and widens first.',
     'Daily and index-level, so it lags an intraday risk event by a session. Option-adjusted, so it embeds a model of embedded optionality.')
 
-row('macro_economy','feed_field','Macro Monitor','Unemployment, payrolls, CPI, core CPI, PCE',
-    'The headline US labour and inflation series with a 24-month trend.',
-    'payroll change is month-over-month difference of the level series; inflation gauges are year-over-year',
-    'FRED', prov('/api/rates/economy', f'{R}:1571'),
-    'monthly on release, disk-cached 15m',
-    'The four numbers that move the rates market. Inflation gauges are plotted against the 2% target on one axis so CPI, core and PCE can be compared directly.',
-    'FRED publishes no consensus, so there is no expected figure here and none is invented. Revisions are silent: a prior month can change without notice.')
-
 row('cycle_composite','model','Macro Monitor','Cycle position',
     'Where the business cycle stands, from five indicators each scored against a published rule.',
     'each component scored -1 to +1 by linear interpolation between a "good" and "bad" level; composite is the mean of whichever components resolved. Components: 10y-2y spread, initial claims vs their 12-month low, the Sahm gap (3-month unemployment average minus its prior 12-month minimum), 3-month average payroll growth, and the HY spread',
@@ -77,15 +69,6 @@ row('cot_positioning','feed_field','Trader Positioning','CFTC commitments of tra
     'Extreme net positioning is a contrarian marker at the tails. Read the percentile against history rather than the raw contract count.',
     'Published Friday for Tuesday, so it is always at least three days stale and often more. Covers futures positioning only: no term structure, no roll yield, and no commodity curve, which would need a futures vendor.')
 
-row('housing_market','model','Housing Market','Prices, mortgage rates, affordability, supply',
-    'A housing cycle board: price index, 30-year rate, NAR-style affordability, supply and construction.',
-    'HAI = median family income / income required to qualify for a mortgage on the median home x 100, at the current 30-year rate; 100 means the median family exactly qualifies',
-    'FRED, Census, NAR-style construction in-house',
-    prov('/api/housing/market', 'backend/housing_market.py:147 affordability_index()'),
-    'monthly on release',
-    'HAI at 100 is the balance point; below it the median family cannot afford the median home. It is the cleanest way to see rate moves transmitting into housing demand.',
-    'HAI is NAR-style, reconstructed here rather than taken from NAR, so it will not match their published figure exactly. Some series in this tool run on a deterministic three-year mock cycle rather than live data.')
-
 row('fx_matrix','derived_metric','FX Matrix','Cross-rate matrix and volatility',
     'Every pair among the tracked currencies, with 1-week realised volatility.',
     'cross rates derived from USD pairs; vol = stdev of weekly returns',
@@ -93,15 +76,6 @@ row('fx_matrix','derived_metric','FX Matrix','Cross-rate matrix and volatility',
     'intraday, cached',
     'The grid view for spotting which leg of a move is doing the work. The diagonal is blank by construction.',
     'Crosses are derived from USD legs, so a synthetic cross carries both legs bid-ask, not the real quoted cross spread.')
-
-row('bond_analytics','model','Bond Analytics','Price, yield, duration, convexity',
-    'Fixed-income analytics for a bond given coupon, maturity and price or yield.',
-    'standard discounted cash flow: YTM solved by bisection; Macaulay and modified duration; convexity from the second derivative of price with respect to yield',
-    'in-house bond math (frontend/src/lib/bondMath.ts and backend/routers/bond.py)',
-    prov('/api/bond/analytics'),
-    'on request, pure function',
-    'Modified duration is the first-order price move per 100bp; convexity is the correction that matters for large moves and for comparing bonds of similar duration.',
-    'Assumes fixed coupons, no embedded options and no credit migration. A callable or a floater priced here is wrong.')
 
 row('bond_lookup','feed_field','Bond Lookup','CUSIP resolution and marks',
     'Identify a bond from its CUSIP and attach an issuer, terms and where possible a price.',

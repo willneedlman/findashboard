@@ -1,23 +1,6 @@
 from build_inv import row, prov
 C = 'backend/routers/corporate.py'
 
-row('profile_overview','feed_field','Company Profile','Price, market cap, sector, description',
-    'The identity block for a company: quote, size, classification and business summary.',
-    '-', 'yfinance info, FMP and FactSet Overview where available',
-    prov('/api/corporate/hub', f'{C}:311 get_corporate_hub()'),
-    'quote 5m, profile fields 12h',
-    'The orientation panel. Market cap is the number most other tools key off, so a stale one here shows up downstream.',
-    'yfinance market cap uses one share class, so a multi-class company (Alphabet, Berkshire) is understated relative to a full-float figure. Sector is yfinance own taxonomy, not GICS.')
-
-row('short_interest','feed_field','Company Profile','Short interest, days to cover, % of float',
-    'Shares sold short at the last settlement, and how many days of average volume it would take to cover.',
-    '-  (days_to_cover is FINRA published; % of float computed against float shares)',
-    'FINRA consolidated biweekly short interest file, free CDN, no key',
-    prov('/api/corporate/short-interest', 'backend/short_interest.py:101'),
-    'biweekly Reg SHO settlement, parsed once per release and cached',
-    'Days to cover above ~3 is the crowding threshold the panel colours amber at. High short interest plus a catalyst is the squeeze setup; on its own it is often a hedge leg rather than a directional bet.',
-    'Biweekly and lagged: the settlement date is roughly two weeks behind and publication a further week, so this is never a current figure. Not a live borrow rate or utilisation, which need a paid vendor (S3, Markit). A name absent from the latest file is thinly traded, delisted or not yet published, and the empty state says which.')
-
 row('insider_transactions','feed_field','Company Profile','Insider transactions (Form 4)',
     'Recent open-market buys and sells by officers, directors and 10% holders.',
     '-', 'LSEG insider tables where present, yfinance fallback',
@@ -88,14 +71,6 @@ row('screener_universe','bundled_dataset','Stock Screener','Screenable universe 
     'The seed is the durable fallback so US names always show stats even when the live budget is spent. Region filter and ETF/international universes extend it.',
     'FMP free tier binds at roughly 250 calls per day, so live enrichment is capped at SCREENER_LIVE_ENRICH=25 per run, 30-day cached, with an in-app daily budget. Beyond that, fields come from the bundled seed and are as old as the last rebuild. Non-US coverage is thinner than US.')
 
-row('screener_filters','derived_metric','Stock Screener','Screen results and saved screens',
-    'Rows matching a filter set, with technical and fundamental columns, saved and re-runnable.',
-    'filter predicates applied over the universe; technical filters computed from price history',
-    'universe above + price history', prov('/api/screener/run'),
-    'on request',
-    'Saved screens persist in localStorage under fdb_screener_saved_screens_v1 and the result set exports to CSV. Parameterised price-change filters let one screen cover several windows.',
-    'No alerting on a screen: the alert engine has no screen condition, so a saved screen must be re-run by hand. Results are only as current as the enrichment budget allows.')
-
 row('sentiment_composite','model','Sentiment Tracker','Composite sentiment score',
     'A 0-100 market sentiment reading built from scored headlines across 19 sources.',
     'lexicon scoring per headline, weighted by source reliability; low-confidence headlines (<=0.55) go to one batched temperature-0 LLM call that can override direction; aggregated to a composite',
@@ -121,15 +96,6 @@ row('etf_holdings','feed_field','ETF Analyzer','ETF look-through holdings and ov
     'cached 24h',
     'Answers what you actually own across several funds. Overlap is the number that surprises people: two "different" large-cap ETFs frequently share most of their weight.',
     'Alpha Vantage returns holdings for US-equity ETFs but NOT for foreign-market funds (INDA, EWJ return zero holdings), so an international ETF falls back to a partial top-25 flagged `partial`. Free AV key is 25 calls/day, hence the 24h cache.')
-
-row('earnings_calendar','feed_field','Earnings Scanner','Earnings dates, EPS vs estimate, reaction',
-    'Upcoming and reported earnings with the surprise and the next-day price reaction.',
-    'surprise = actual EPS - estimate; reaction = next-session return',
-    'Finnhub calendar merged with Nasdaq, yfinance for EPS history',
-    prov('/api/earnings/calendar'),
-    'daily',
-    'Two spines: a calendar window for the market, and a countdown for names in your book. Result and Reaction only populate once a company has reported.',
-    'The Finnhub free calendar is future-only and incomplete, omitting large caps such as NKE, which is why Nasdaq is merged in. yfinance omits the just-reported quarter for one to three days after a print, which the UI previously misread as a rescheduled date months out.')
 
 row('ipo_calendar','feed_field','IPO Scanner','Upcoming and recent IPOs',
     'Pricing date, range, shares and exchange for listings.',

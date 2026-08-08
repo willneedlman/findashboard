@@ -173,6 +173,12 @@ export function applyTheme(t: Theme) {
     ? 'ui-monospace, monospace'
     : `'${t.primaryFont}', sans-serif`
 
+  // Hanken Grotesk sets its figures tighter than the other data faces, and at
+  // display sizes the digits and the thousands comma run into each other. A
+  // touch of tracking fixes it. Per-font on purpose: applying this to every
+  // face would loosen the ones that are already correctly spaced.
+  const numTracking = t.primaryFont === 'Hanken Grotesk' ? '0.02em' : 'normal'
+
   // Load Google Fonts if no custom URL provided
   const monoSrc = t.primaryFontUrl   || gfUrl(t.primaryFont)
   const sansSrc = t.secondaryFontUrl || gfUrl(t.secondaryFont)
@@ -205,6 +211,7 @@ export function applyTheme(t: Theme) {
       --theme-surface:        ${t.surfaceColor};
       --theme-chart-neutral:  ${t.chartNeutralColor ?? '#4a7fa5'};
       --theme-mono:      ${monoFamily};
+      --theme-num-tracking: ${numTracking};
       --theme-sans:      '${t.secondaryFont}', sans-serif;
       --theme-text:        ${textColor};
       --theme-text-muted:  ${textMuted};
@@ -240,6 +247,7 @@ export function applyTheme(t: Theme) {
   // Also push as real CSS custom props onto :root so var() works everywhere
   const root = document.documentElement
   root.style.setProperty('--theme-mono', monoFamily)
+  root.style.setProperty('--theme-num-tracking', numTracking)
   root.style.setProperty('--theme-sans', `'${t.secondaryFont}', sans-serif`)
   // Native form controls (date inputs, etc.) render their own browser chrome
   // based on CSS color-scheme — hardcoding 'dark' here paints a light-preset

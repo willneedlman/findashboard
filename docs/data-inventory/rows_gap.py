@@ -16,13 +16,6 @@ row('report_clips','user_input','Report Creator','Captured clips',
     'The clip records the data as it was when captured, so a report is a snapshot rather than a live view. Export goes through a dedicated print route rather than a canvas rasteriser, which is why the PDF has selectable text and vector charts.',
     'A clip does not refresh: reopening a project shows the numbers as captured, with the capture time. Any tool that has not registered a capture cannot be clipped, and there is no error when you try.')
 
-row('credit_stress','feed_field','Credit Stress','Bank lending standards, delinquencies and charge-offs',
-    'Federal Reserve series on financial stress, senior loan officer standards and consumer credit performance.',
-    '-', 'FRED (SLOOS, delinquency and charge-off series)',
-    prov('/api/credit/summary'), 'quarterly on release',
-    'Delinquencies are a lagging read on the consumer and charge-offs lag further, but tightening lending standards lead: the SLOOS turn usually precedes the delinquency turn by several quarters. Read the direction of standards first.',
-    'Quarterly and heavily revised. The SLOOS is a survey of senior loan officers, not a measurement, so it captures intent rather than realised lending. The bank cross-section is FDIC call-report data and is one quarter behind.')
-
 row('market_hours','derived_metric','Market Hours','Global session clock',
     'Which exchanges are open, closed, pre-market or after-hours right now, and when each next opens.',
     'exchange session windows plus a holiday calendar evaluated against the current time in each venue timezone',
@@ -48,14 +41,6 @@ row('asset_overlay','derived_metric','Asset Overlay','Normalised multi-asset com
     'on request, cached',
     'Indexing to 100 is the honest way to compare instruments of different price. Multiples and ratios plot on a separate right axis at their real level, because normalising a P/E destroys the thing you wanted to see.',
     'Indexing is sensitive to the start date: shifting the window start changes every line. Price return only, so a high-yield asset is understated against a low-yield one over long windows.')
-
-row('correlation_matrix','derived_metric','Correlation','Correlation matrix, rolling drift and beta',
-    'Pairwise correlation across a set of assets, how it drifts over time, and each asset beta to a benchmark.',
-    'Pearson correlation of daily returns over the chosen period; rolling correlation over an N-day window; beta = cov/var against the benchmark',
-    'yfinance history', prov('/api/correlation/matrix'),
-    'on request',
-    'Rolling correlation is the useful panel: a static matrix hides that diversification tends to disappear precisely when it is needed. Spikes toward +1 mean the pair is converging.',
-    'Correlation of daily returns across venues in different time zones is understated by the same session-offset problem the Global Markets beta corrects for, and this tool does NOT apply that correction. A cross-region matrix will read lower than the real relationship.')
 
 row('portfolio_compare','derived_metric','Portfolio Compare','Side-by-side book comparison',
     'Two or more candidate books compared on CAGR, vol, Sharpe, Sortino, Calmar, max drawdown and beta, with leverage and borrow cost.',
