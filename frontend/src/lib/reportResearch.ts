@@ -513,7 +513,7 @@ export function planReportResearch(
       : targets
     sources.push({
       ...SOURCE_META[id],
-      reason,
+      reason: `${reason}${truncationNote(id, targets, resolved)}`,
       targets: resolved,
       critical: isCriticalSource(intent, id),
       selectionOrigin: 'baseline',
@@ -979,8 +979,35 @@ export function researchSourceProducesVisuals(sourceId: ReportResearchSourceId):
 // them fail every time the planner chose them for a portfolio or macro report.
 const MULTI_ASSET_SOURCES = new Set<ReportResearchSourceId>(['correlation', 'regression', 'market-compare', 'pairs'])
 
-function targetsForSource(_sourceId: ReportResearchSourceId, symbols: string[]): string[] {
-  return unique(symbols.map(normalizeTicker).filter(Boolean))
+// What each relationship tool can actually take. Correlation rejects more than
+// twelve tickers with a 400, which is not retryable and surfaced as the generic
+// "Research source did not complete" — so every book with more than twelve
+// holdings lost its correlation evidence and the message never said why.
+// Pairs takes exactly two, and an overlay past eight lines is unreadable.
+const MULTI_ASSET_LIMIT: Partial<Record<ReportResearchSourceId, number>> = {
+  correlation: 12,
+  'market-compare': 8,
+  pairs: 2,
+}
+
+function targetsForSource(sourceId: ReportResearchSourceId, symbols: string[]): string[] {
+  // Symbols arrive ordered by position size, so truncating keeps the holdings
+  // that actually move the book.
+  const resolved = unique(symbols.map(normalizeTicker).filter(Boolean))
+  const limit = MULTI_ASSET_LIMIT[sourceId]
+  return limit ? resolved.slice(0, limit) : resolved
+}
+
+/** Says so when a relationship tool could not take every subject.
+ *
+ * A truncated basket that reports 100% coverage reads as "all holdings are this
+ * correlated", which is a stronger claim than the evidence supports. The note
+ * rides on the source's reason so it shows in the plan and in the data bank.
+ */
+function truncationNote(sourceId: ReportResearchSourceId, requested: string[], resolved: string[]): string {
+  const asked = unique(requested.map(normalizeTicker).filter(Boolean)).length
+  if (resolved.length >= asked) return ''
+  return ` Covers the largest ${resolved.length} of ${asked} subjects by position size; ${asked - resolved.length} excluded.`
 }
 
 export async function enhanceReportResearchPlan(
@@ -1061,17 +1088,19 @@ export async function enhanceReportResearchPlan(
     if (MULTI_ASSET_SOURCES.has(id) && portfolioRelationshipTargets.length < 2) continue
     const reason = String(addition.reason ?? '').replace(/\s+/g, ' ').trim().slice(0, 220)
     if (!reason) continue
+    const requested = MULTI_ASSET_SOURCES.has(id)
+      ? portfolioRelationshipTargets
+      : baseline.intent === 'comparison' || baseline.intent === 'portfolio'
+        ? baseline.symbols
+        : baseline.symbols.slice(0, 1)
+    const resolved = item.targetMode === 'market' || item.targetMode === 'portfolio'
+      ? []
+      : targetsForSource(id, requested)
     sources.push({
       ...SOURCE_META[id],
-      reason,
+      reason: `${reason}${resolved.length ? truncationNote(id, requested, resolved) : ''}`,
       critical: isCriticalSource(baseline.intent, id),
-      targets: item.targetMode === 'market' || item.targetMode === 'portfolio'
-        ? []
-        : targetsForSource(id, MULTI_ASSET_SOURCES.has(id)
-          ? portfolioRelationshipTargets
-          : baseline.intent === 'comparison' || baseline.intent === 'portfolio'
-            ? baseline.symbols
-          : baseline.symbols.slice(0, 1)),
+      targets: resolved,
       selectionOrigin: 'ai',
     })
   }
@@ -1119,13 +1148,21 @@ export async function enhanceReportResearchPlan(
   }
 }
 
-async function perTicker(
+async function perTickerWith(
   source: ReportResearchSource,
   run: (ticker: string) => Promise<ClipDraft | ClipDraft[] | null>,
+  targetErrors?: Map<string, string>,
 ): Promise<ClipDraft[]> {
   const settled = await mapSettledWithConcurrency(source.targets, 2, run)
-  return settled.flatMap(result => {
-    if (result.status !== 'fulfilled' || !result.value) return []
+  return settled.flatMap((result, index) => {
+    if (result.status === 'rejected') {
+      // Without this the reason was discarded and every per-ticker failure read
+      // "No usable data returned", whether the source was throttled, rejected
+      // the request, or genuinely had nothing for that name.
+      targetErrors?.set(`${source.id}:${source.targets[index]}`, failureMessage(result.reason))
+      return []
+    }
+    if (!result.value) return []
     return Array.isArray(result.value) ? result.value : [result.value]
   })
 }
@@ -1135,7 +1172,14 @@ async function runSource(
   scope: ReportScope,
   portfolio: ActivePortfolioContext,
   client: ResearchClient,
+  targetErrors?: Map<string, string>,
 ): Promise<ClipDraft[]> {
+  // Shadows the module helper so every per-ticker case records why a target
+  // failed without each of the seventeen call sites having to pass the sink.
+  const perTicker = (
+    forSource: ReportResearchSource,
+    run: (ticker: string) => Promise<ClipDraft | ClipDraft[] | null>,
+  ) => perTickerWith(forSource, run, targetErrors)
   switch (source.id) {
     case 'company':
       return perTicker(source, async ticker => {
@@ -1414,7 +1458,15 @@ async function runSource(
         const fundamentals = record(await client.get(`/api/dcf/fundamentals?ticker=${encodeURIComponent(ticker)}`))
         const revenue = finite(fundamentals.revenue)
         const shares = finite(fundamentals.shares)
-        if (revenue == null || revenue <= 0 || shares == null || shares <= 0) return null
+        // Naming the blocker beats a bare "no usable data": a pre-revenue or
+        // newly listed name is a fact about the company, not a source outage,
+        // and the report should say which.
+        if (revenue == null || revenue <= 0) {
+          throw new Error('No reported revenue, so a discounted cash flow cannot be built.')
+        }
+        if (shares == null || shares <= 0) {
+          throw new Error('No share count reported, so a per-share value cannot be derived.')
+        }
         const currentMargin = finite(fundamentals.op_margin) ?? 15
         const baseGrowth = clamp(finite(fundamentals.rev_growth) ?? 10, -20, 40)
         let suggested: Record<string, any> = {}
@@ -2923,7 +2975,7 @@ async function runSource(
               vsBenchmark.session_offset ? ` · lagged ${lag}d for non-overlapping sessions` : ''}`,
           })
         }
-        return tagClip(kpiClip('Global Markets', `${ticker} · instrument profile`, cells), source, ticker)
+        return tagClip(kpiClip('Global Markets', `${ticker} · instrument profile`, cells), source, ticker, ticker)
       })
 
     case 'dividends': {
@@ -2958,7 +3010,7 @@ async function runSource(
             { label: 'Total debt', value: moneyMillions(data.total) },
             { label: 'Fiscal year', value: plain(data.fiscal_year), sub: `Filed ${plain(data.filed)}` },
             { label: 'Source', value: 'SEC 10-K (XBRL)', sub: `As of ${plain(data.as_of)}` },
-          ]), source, `${ticker}:debt`),
+          ]), source, ticker, ticker),
           tagClip(chartClip(
             'Company Profile',
             `${ticker} · debt maturing by period`,
@@ -2966,7 +3018,7 @@ async function runSource(
             'bucket',
             buckets.map(row => ({ bucket: row.bucket, amount: +(row.amount! / scale).toFixed(2) })),
             [{ key: 'amount', label: 'Maturing $bn', unit: 'number' }],
-          ), source, `${ticker}:maturity-wall`),
+          ), source, `${ticker}:maturity-wall`, ticker),
         ]
       })
 
@@ -2990,7 +3042,7 @@ async function runSource(
             { label: `Best month (${plain(best.label)})`, value: percent(best.mean_pct), sub: describe(best) },
             { label: `Worst month (${plain(worst.label)})`, value: percent(worst.mean_pct), sub: describe(worst) },
             { label: 'Sample', value: `${finite(data.years_covered)?.toFixed(0) ?? '—'} years`, sub: `${plain(data.sessions)} sessions from ${plain(data.first_date)}` },
-          ]), source, `${ticker}:seasonal-summary`),
+          ]), source, ticker, ticker),
           tagClip(chartClip(
             'Seasonality',
             `${ticker} · mean return by calendar month`,
@@ -3003,7 +3055,7 @@ async function runSource(
             })),
             [{ key: 'mean', label: 'Mean return %', unit: 'percent' }],
             { details: [{ key: 'hitRate', label: 'Hit rate %', unit: 'percent' }] },
-          ), source, `${ticker}:monthly-pattern`),
+          ), source, `${ticker}:monthly-pattern`, ticker),
           tagClip(tableClip(
             'Seasonality',
             `${ticker} · monthly detail with sample size`,
@@ -3012,7 +3064,7 @@ async function runSource(
               plain(row.label), finite(row.mean_pct), finite(row.median_pct),
               finite(row.hit_rate_pct), finite(row.best_pct), finite(row.worst_pct), finite(row.n),
             ]),
-          ), source, `${ticker}:monthly-table`),
+          ), source, `${ticker}:monthly-table`, ticker),
         ]
       })
 
@@ -3031,7 +3083,7 @@ async function runSource(
             { label: 'Call share', value: rows.length ? `${((calls / rows.length) * 100).toFixed(0)}%` : '—', sub: `${calls} calls / ${rows.length - calls} puts` },
             { label: 'Highest volume/OI', value: finite(top[0]?.volOiRatio)?.toFixed(1) ?? '—', sub: `${plain(top[0]?.strike)} ${plain(top[0]?.type)} ${plain(top[0]?.expiry)}` },
             { label: 'Screen', value: `vol/OI ≥ ${plain(record(data.params).minVolOi)}`, sub: `min volume ${plain(record(data.params).minVolume)}` },
-          ]), source, `${ticker}:unusual-summary`),
+          ]), source, ticker, ticker),
           tagClip(tableClip(
             'Options Scanner',
             `${ticker} · contracts trading above open interest`,
@@ -3041,7 +3093,7 @@ async function runSource(
               finite(row.volume), finite(row.openInterest), finite(row.volOiRatio),
               finite(row.iv) == null ? null : +(finite(row.iv)! * 100).toFixed(1), finite(row.premium),
             ]),
-          ), source, `${ticker}:unusual-contracts`),
+          ), source, `${ticker}:unusual-contracts`, ticker),
         ]
       })
 
@@ -3065,7 +3117,7 @@ async function runSource(
             // beside the totals or the totals will be over-read.
             { label: 'Under a 10b5-1 plan', value: `${planned} of ${rows.length}`, sub: 'Pre-scheduled, not discretionary' },
             { label: 'Held by insiders', value: percent(data.held_pct_insiders) },
-          ]), source, `${ticker}:insider-summary`),
+          ]), source, ticker, ticker),
           tagClip(tableClip(
             'Company Profile',
             `${ticker} · recent insider transactions`,
@@ -3074,7 +3126,7 @@ async function runSource(
               plain(row.date), plain(row.insider), plain(row.title), plain(row.side),
               finite(row.shares), finite(row.value), row.is_10b51 ? 'Yes' : 'No',
             ]),
-          ), source, `${ticker}:insider-transactions`),
+          ), source, `${ticker}:insider-transactions`, ticker),
         ]
       })
 
@@ -3092,7 +3144,7 @@ async function runSource(
             { label: 'Net share change', value: finite(changes.net_share_change) == null ? '—' : finite(changes.net_share_change)!.toLocaleString() },
             // 13F is a rear-view mirror; the filing date belongs next to the number.
             { label: 'Filing quarter', value: plain(changes.filed), sub: 'Filed up to 45 days after quarter end' },
-          ]), source, `${ticker}:ownership-summary`),
+          ]), source, ticker, ticker),
         ]
         if (holders.length) {
           clips.push(tagClip(tableClip(
@@ -3104,7 +3156,7 @@ async function runSource(
               finite(row.pct_out) == null ? null : +(finite(row.pct_out)! * 100).toFixed(2),
               finite(row.pct_change), plain(row.date),
             ]),
-          ), source, `${ticker}:holders`))
+          ), source, `${ticker}:holders`, ticker))
         }
         return clips
       })
@@ -3414,8 +3466,9 @@ async function runSource(
         )) as unknown as MasterValuationFundamentals
         const blocker = masterValuationBlocker(fundamentals)
         // Refusing here is the point: a valuation built on invented revenue or
-        // a two-year forecast is worse than no valuation section at all.
-        if (blocker) return null
+        // a two-year forecast is worse than no valuation section at all. The
+        // blocker text already says which, so it travels as the failure reason.
+        if (blocker) throw new Error(blocker)
         const analysis = record(await client.post(
           '/api/master-valuation/analyze',
           seedMasterValuationRequest(fundamentals),
@@ -3448,13 +3501,13 @@ async function runSource(
               sub: 'Widest gap between methods, not a confidence interval',
             },
             { label: 'Assumption source', value: plain(fundamentals.source) },
-          ]), source, `${ticker}:valuation-summary`),
+          ]), source, ticker, ticker),
           tagClip(tableClip(
             'Master Valuation',
             `${ticker} · value per share by method`,
             ['Method', 'Value per share $', 'Upside vs market %'],
             methodRows as (string | number | null)[][],
-          ), source, `${ticker}:valuation-methods`),
+          ), source, `${ticker}:valuation-methods`, ticker),
         ]
         if (methodRows.length > 1) {
           clips.push(tagClip(chartClip(
@@ -3464,7 +3517,7 @@ async function runSource(
             'method',
             methodRows.map(row => ({ method: String(row[0]), value: row[1] as number | null })),
             [{ key: 'value', label: 'Value per share $', unit: 'number' }],
-          ), source, `${ticker}:valuation-visual`))
+          ), source, `${ticker}:valuation-visual`, ticker))
         }
         if (finite(reverse.implied_revenue_cagr) != null) {
           clips.push(tagClip(kpiClip('Reverse DCF', `${ticker} · what the market price already assumes`, [
@@ -3472,7 +3525,7 @@ async function runSource(
             { label: 'Implied terminal margin', value: finite(reverse.implied_terminal_margin) == null ? '—' : `${finite(reverse.implied_terminal_margin)!.toFixed(1)}%` },
             { label: 'Implied discount rate', value: finite(reverse.implied_wacc) == null ? '—' : `${finite(reverse.implied_wacc)!.toFixed(2)}%` },
             { label: 'Implied exit multiple', value: finite(reverse.implied_exit_multiple) == null ? '—' : `${finite(reverse.implied_exit_multiple)!.toFixed(1)}x`, sub: `Year ${plain(reverse.implied_exit_year)}` },
-          ]), source, `${ticker}:reverse-dcf`))
+          ]), source, `${ticker}:reverse-dcf`, ticker))
         }
         return clips
       })
@@ -3713,11 +3766,24 @@ export function hasSavedStrategyForBacktest(): boolean {
 }
 
 const failureMessage = (error: unknown) => {
-  const status = (error as { response?: { status?: number } })?.response?.status
+  const response = (error as { response?: { status?: number; data?: unknown } })?.response
+  const status = response?.status
   if (status === 404) return 'No usable data returned.'
   if (status === 429) return 'Source rate limit reached. Retry shortly.'
   if (status && status >= 500) return 'Source is temporarily unavailable.'
-  return 'Research source did not complete.'
+  // A 4xx is the source rejecting the request, and its detail says why — a
+  // twelve-ticker cap, a period it does not accept, too few overlapping bars.
+  // Collapsing that into "did not complete" is what made a correlation failure
+  // on a thirteen-holding book impossible to diagnose from the report.
+  if (status && status >= 400) {
+    const detail = (record(response?.data).detail ?? '') as unknown
+    const text = typeof detail === 'string' ? detail.trim() : ''
+    if (text) return `Source rejected the request: ${text.slice(0, 160)}`
+    return 'Source rejected the request.'
+  }
+  const thrown = (error as { message?: string })?.message
+  if (thrown && thrown !== 'empty source') return thrown.slice(0, 160)
+  return 'Returned no usable rows for this scope.'
 }
 
 const PER_TICKER_SOURCES = new Set<ReportResearchSourceId>([
@@ -3753,8 +3819,9 @@ export async function collectReportResearch(
 
   await mapWithConcurrency(plan.sources, 3, async source => {
     onProgress?.({ sourceId: source.id, status: 'running' })
+    const targetErrors = new Map<string, string>()
     try {
-      const clips = await runSource(source, scope, portfolio, client)
+      const clips = await runSource(source, scope, portfolio, client, targetErrors)
       const missingTargets = PER_TICKER_SOURCES.has(source.id)
         ? source.targets.filter(target => !clips.some(clip => clip.researchKey === `${source.id}:${target}`))
         : []
@@ -3763,7 +3830,9 @@ export async function collectReportResearch(
         label: source.label,
         target,
         researchKey: `${source.id}:${target}`,
-        message: `No usable data returned for ${target}.`,
+        // The recorded reason when the request failed; otherwise the source
+        // answered and simply had nothing usable for this name.
+        message: targetErrors.get(`${source.id}:${target}`) ?? `No usable data returned for ${target}.`,
       }))
       if (!clips.length) {
         if (!missingTargets.length) throw new Error('empty source')

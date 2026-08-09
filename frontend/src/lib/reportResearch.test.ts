@@ -121,10 +121,16 @@ describe('Report Creator AlphaTape research', () => {
     expect(plan.sources.some(source => source.id === 'earnings')).toBe(true)
     expect(plan.sources.find(source => source.id === 'portfolio')).toMatchObject({ domain: 'portfolio', targets: [] })
     expect(plan.sources.find(source => source.id === 'portfolio-risk')).toMatchObject({ domain: 'portfolio', targets: [] })
-    expect(plan.sources.find(source => source.id === 'correlation')).toMatchObject({
+    // Correlation is capped at what its endpoint accepts. Sending all sixteen
+    // returned a 400 and the book lost its correlation evidence entirely, so the
+    // cap is the difference between partial evidence and none.
+    const correlation = plan.sources.find(source => source.id === 'correlation')
+    expect(correlation).toMatchObject({
       domain: 'portfolio',
-      targets: portfolioReview16Symbols,
+      targets: portfolioReview16Symbols.slice(0, 12),
     })
+    // And it says so, rather than reporting full coverage of a truncated basket.
+    expect(correlation?.reason).toContain('largest 12 of 16')
     for (const sourceId of ['company', 'price-history', 'news', 'earnings', 'peer-valuation', 'dcf-valuation']) {
       expect(plan.sources.find(source => source.id === sourceId)).toMatchObject({
         domain: 'issuer',
@@ -191,19 +197,26 @@ describe('Report Creator AlphaTape research', () => {
     })
     expect(issuerGap.unresolvedGaps).toEqual([expect.stringContaining('TSLL')])
 
+    // Correlation runs on the twelve its endpoint accepts, not all sixteen, so
+    // its coverage is measured against twelve. Use a symbol it actually holds.
+    const correlationTarget = portfolioReview16Symbols[0]
     const criticalGapResult = {
       ...completeResult,
       failed: [{
         sourceId: 'correlation' as const,
         label: 'Correlation structure',
         message: 'One holding lacked matched history.',
-        target: 'TSLL',
-        researchKey: 'correlation:TSLL',
+        target: correlationTarget,
+        researchKey: `correlation:${correlationTarget}`,
       }],
     }
     const criticalGap = buildReportDataBank(plan, criticalGapResult, clips)
     expect(criticalGap.phase).toBe('blocked')
-    expect(criticalGap.runs.find(run => run.sourceId === 'correlation')?.coveragePct).toBe(93.8)
+    expect(criticalGap.runs.find(run => run.sourceId === 'correlation')).toMatchObject({
+      requestedTargetCount: 12,
+      coveredTargetCount: 11,
+      coveragePct: 91.7,
+    })
   })
 
   it('parses explicit symbols and ignores common uppercase prose', () => {
@@ -1720,6 +1733,9 @@ describe('modelled tools', () => {
       post: async () => { throw new Error('analyze must not be called') },
     })
     expect(result.clips).toEqual([])
+    // And the report says which fundamental was missing, rather than implying
+    // the source was down.
+    expect(result.failed[0].message).toContain('three annual periods')
   })
 
   it('weights the simulator by live market value, not cost basis', async () => {
@@ -1815,5 +1831,140 @@ describe('modelled tools', () => {
         .toBe('The rule set, not the holdings')
     }
     localStorage.removeItem('fdb_algo_universe_monte_carlo_handoff')
+  })
+})
+
+describe('per-ticker sources report real coverage', () => {
+  const scope = { ...defaultScope(), goal: 'Assess AAPL' }
+
+  /** Every per-ticker source must emit one clip keyed with the bare ticker.
+   *
+   * collectReportResearch marks a target missing unless some clip has
+   * researchKey `${sourceId}:${target}` exactly. A source whose clips all use a
+   * suffixed key returns full data and is still reported as a total failure —
+   * which is what "No usable data returned for X" meant on a tool that worked. */
+  const payloads: Record<string, any> = {
+    '/api/market/seasonality': {
+      available: true, ticker: 'AAPL', years_covered: 20, sessions: 5048, first_date: '2006-07-14',
+      months: [{ label: 'Jan', n: 20, mean_pct: 1, median_pct: 1, hit_rate_pct: 50, best_pct: 2, worst_pct: -2 }],
+      best_month: { label: 'Jul', n: 20, mean_pct: 6 }, worst_month: { label: 'Jan', n: 20, mean_pct: -1 },
+      current_month: { label: 'Aug', n: 21, mean_pct: 4 },
+    },
+    '/api/corporate/debt-maturity': { buckets: [{ label: '2027', amount: 1e9 }], total: 1e9, fiscal_year: 2025 },
+    '/api/corporate/hub/insider': { transactions: [{ date: '2026-07-01', insider: 'A', title: 'CFO', side: 'buy', shares: 1, value: 100 }] },
+    '/api/corporate/institutional': { pct_institutions: 0.66, holders: [{ holder: 'X', shares: 1, value: 1, pct_out: 0.01, date: '2026-03-31' }], changes: {} },
+    '/api/options/unusual': { count: 1, rows: [{ ticker: 'AAPL', type: 'call', strike: 300, expiry: '2026-09-18', volume: 900, openInterest: 100, volOiRatio: 9, iv: 0.4, premium: 5 }], params: {} },
+    '/api/market/asset-profile': { ticker: 'AAPL', stats: { last: 313, returns: {}, range_52w: {}, vs_benchmark: {} } },
+  }
+
+  const cases: [string, string][] = [
+    ['seasonality', '/api/market/seasonality'],
+    ['debt-maturity', '/api/corporate/debt-maturity'],
+    ['insider-activity', '/api/corporate/hub/insider'],
+    ['institutional-ownership', '/api/corporate/institutional'],
+    ['options-unusual', '/api/options/unusual'],
+    ['asset-profile', '/api/market/asset-profile'],
+  ]
+
+  it.each(cases)('%s records no phantom gap when it returns data', async (id, endpoint) => {
+    const source = {
+      id: id as any, label: id, tool: id, route: `/${id}`, reason: 'test',
+      targets: ['AAPL'], domain: 'issuer' as const, critical: false,
+    }
+    const result = await collectReportResearch(
+      { objective: 'x', intent: 'company', symbols: ['AAPL'], sources: [source] },
+      scope, emptyPortfolio, undefined,
+      { get: async () => payloads[endpoint], post: async () => ({}) },
+    )
+
+    expect(result.clips.length).toBeGreaterThan(0)
+    expect(result.failed).toEqual([])
+    expect(result.clips.some(clip => clip.researchKey === `${id}:AAPL`)).toBe(true)
+    // The route link keeps the symbol, so "open tool" lands on the right page.
+    expect(result.clips[0].sourceRoute).toContain('AAPL')
+  })
+
+  it('master valuation keys its primary clip on the bare ticker', async () => {
+    const source = {
+      id: 'master-valuation' as any, label: 'mv', tool: 'mv', route: '/master-valuation',
+      reason: 'test', targets: ['AAPL'], domain: 'issuer' as const, critical: false,
+    }
+    const result = await collectReportResearch(
+      { objective: 'x', intent: 'company', symbols: ['AAPL'], sources: [source] },
+      scope, emptyPortfolio, undefined,
+      {
+        get: async () => ({
+          ticker: 'AAPL', revenue: 1000, shares: 100, net_debt: 0, market_price: 50,
+          schedule: [1, 2, 3].map(year => ({ year, growth: 5, margin: 20 })),
+          current_multiples: {}, business_segments: [], dividend_per_share: null,
+        }),
+        post: async () => ({
+          ticker: 'AAPL', market_price: 50,
+          methods: { dcf: 60, multiples: null, ddm: null, sotp: null },
+          composite: { value_per_share: 60, range_low: 60, range_high: 60 },
+          reverse: {},
+        }),
+      },
+    )
+    expect(result.failed).toEqual([])
+    expect(result.clips.some(clip => clip.researchKey === 'master-valuation:AAPL')).toBe(true)
+  })
+})
+
+describe('failure messages name the real cause', () => {
+  const scope = { ...defaultScope(), goal: 'Assess AAPL' }
+  const httpError = (status: number, detail?: string) =>
+    Object.assign(new Error('Request failed'), { response: { status, data: detail ? { detail } : undefined } })
+
+  it('surfaces what a 4xx source actually rejected', async () => {
+    // "Research source did not complete" hid a hard twelve-ticker cap, so a book
+    // with thirteen holdings lost its correlation evidence with no way to tell why.
+    const source = {
+      id: 'correlation' as const, label: 'Correlation structure', tool: 'Correlation',
+      route: '/correlation', reason: 'test', targets: ['AAPL', 'MSFT'],
+      domain: 'portfolio' as const, critical: false,
+    }
+    const result = await collectReportResearch(
+      { objective: 'x', intent: 'portfolio', symbols: ['AAPL', 'MSFT'], sources: [source] },
+      scope, emptyPortfolio, undefined,
+      { get: async () => ({}), post: async () => { throw httpError(400, 'Maximum 12 tickers') } },
+    )
+    expect(result.failed[0].message).toContain('Maximum 12 tickers')
+  })
+
+  it('distinguishes a throttled ticker from one with genuinely no data', async () => {
+    const source = {
+      id: 'news' as const, label: 'Recent news', tool: 'Mover Radar', route: '/mover-radar',
+      reason: 'test', targets: ['ORCL', 'MSFT'], domain: 'issuer' as const, critical: false,
+    }
+    const result = await collectReportResearch(
+      { objective: 'x', intent: 'company', symbols: ['ORCL', 'MSFT'], sources: [source] },
+      scope, emptyPortfolio, undefined,
+      {
+        get: async (url: string) => {
+          if (url.includes('ORCL')) throw httpError(429)
+          return { news: [] }          // answered, but had nothing
+        },
+        post: async () => ({}),
+      },
+    )
+    const byTarget = Object.fromEntries(result.failed.map(f => [f.target, f.message]))
+    expect(byTarget.ORCL).toContain('rate limit')
+    expect(byTarget.MSFT).toBe('No usable data returned for MSFT.')
+  })
+
+  it('caps a relationship tool at what its endpoint accepts', () => {
+    const book: ActivePortfolioContext = {
+      ...portfolio,
+      holdings: Array.from({ length: 15 }, (_, i) => ({ ticker: `T${i}`, shares: 15 - i, avgCost: 100 })),
+      positionCount: 15,
+    }
+    const plan = planReportResearch(
+      { ...defaultScope(), includePortfolio: true, goal: 'Review my portfolio diversification' },
+      book,
+    )
+    const correlation = plan.sources.find(source => source.id === 'correlation')
+    expect(correlation?.targets).toHaveLength(12)
+    expect(correlation?.reason).toContain('largest 12 of 15')
   })
 })
