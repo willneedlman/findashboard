@@ -177,14 +177,58 @@ _TEMPLATE_SECTIONS = {
 }
 
 
-def template_contract(template_id: str, length: str) -> dict:
+def template_max_sections(template_id: str) -> int:
+    """How many sections a template's argument actually has to say.
+
+    The long variant is the full arc, so it is the ceiling. Asking for more would
+    mean inventing a section the template has no purpose text for, and an empty
+    purpose produces a section the writer pads.
+    """
+    resolved = template_id if template_id in _TEMPLATE_SECTIONS else "equity-note"
+    return len(_TEMPLATE_SECTIONS[resolved]["long"])
+
+
+TEMPLATE_MIN_SECTIONS = 2
+
+
+def _custom_rows(template_id: str, section_count: int) -> tuple[tuple[str, str, str], ...]:
+    """A section set of an exact size, derived from the template's full arc.
+
+    Trimming happens in the middle. The first section states the call and the
+    last one argues against it, so dropping either leaves a report that either
+    never answers the question or never challenges its own answer — which is
+    exactly what an arbitrary truncation would do.
+    """
+    full = _TEMPLATE_SECTIONS[template_id]["long"]
+    wanted = max(TEMPLATE_MIN_SECTIONS, min(section_count, len(full)))
+    if wanted >= len(full):
+        return full
+    if wanted == TEMPLATE_MIN_SECTIONS:
+        return (full[0], full[-1])
+    middle = full[1:-1][: wanted - 2]
+    return (full[0], *middle, full[-1])
+
+
+def template_contract(template_id: str, length: str, section_count: int | None = None) -> dict:
     resolved_template = template_id if template_id in _TEMPLATE_SECTIONS else "equity-note"
+    if length == "custom" and section_count:
+        rows = _custom_rows(resolved_template, int(section_count))
+        return {
+            "id": resolved_template,
+            "length": "custom",
+            "sectionCount": len(rows),
+            "sections": [
+                {"key": key, "label": label, "purpose": purpose}
+                for key, label, purpose in rows
+            ],
+        }
     resolved_length = length if length in {"short", "medium", "long"} else "medium"
     by_length = _TEMPLATE_SECTIONS[resolved_template]
     rows = by_length.get(resolved_length) or by_length.get("medium") or next(iter(by_length.values()))
     return {
         "id": resolved_template,
         "length": resolved_length,
+        "sectionCount": len(rows),
         "sections": [
             {"key": key, "label": label, "purpose": purpose}
             for key, label, purpose in rows

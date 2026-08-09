@@ -106,7 +106,10 @@ export type LookforwardPreset =
   | 'next10y'
   | 'unlimited'
   | 'custom'
-export type ReportLength = 'short' | 'medium' | 'long'
+export type ReportLength = 'short' | 'medium' | 'long' | 'custom'
+/** Prose carried per section. Independent of how many sections there are, so a
+ *  six-section tight brief and a three-section deep note are both askable. */
+export type ReportDepth = 'tight' | 'standard' | 'deep'
 export type EvidenceMode = 'manual' | 'alphatape'
 /** What the note is, which decides its argument shape and what counts as a verdict. */
 export type ReportType =
@@ -142,6 +145,11 @@ export interface ReportScope {
   goal: string
   /** How much depth the generated report should have. Defaults to 'medium'. */
   length: ReportLength
+  /** Custom size only: exactly how many sections the note has. Clamped server
+   *  side to what the chosen template's argument actually has to say. */
+  customSections?: number
+  /** Custom size only: how much prose each section carries. */
+  customDepth?: ReportDepth
   /** Free-text requirements (one per line) the report must satisfy — a stat, a
    * verdict, a chart — even if the model wouldn't otherwise curate them in. */
   mustInclude: string
@@ -287,7 +295,14 @@ const LOOKBACK_OK = new Set<LookbackPreset>(['none', 'last7', 'last30', 'last90'
 const LOOKFORWARD_OK = new Set<LookforwardPreset>([
   'none', 'next7', 'next30', 'next90', 'next180', 'next365', 'next3y', 'next5y', 'next10y', 'unlimited', 'custom',
 ])
-const LENGTH_OK = new Set<ReportLength>(['short', 'medium', 'long'])
+const LENGTH_OK = new Set<ReportLength>(['short', 'medium', 'long', 'custom'])
+const DEPTH_OK = new Set<ReportDepth>(['tight', 'standard', 'deep'])
+/** Section-count bounds shared with the backend contract builder. */
+export const REPORT_SECTION_MIN = 2
+export const REPORT_SECTION_MAX_BY_TYPE: Record<ReportType, number> = {
+  'equity-note': 6, comparison: 6, 'macro-brief': 6,
+  'portfolio-review': 7, 'screen-summary': 5, thesis: 6,
+}
 const TYPE_OK = new Set<ReportType>([
   'equity-note', 'comparison', 'macro-brief', 'portfolio-review', 'screen-summary', 'thesis',
 ])
@@ -334,6 +349,9 @@ export function normalizeScope(raw: Partial<ReportScope> | null | undefined): Re
     purpose,
     goal,
     length: LENGTH_OK.has(raw.length as ReportLength) ? (raw.length as ReportLength) : base.length,
+    customSections: Number.isFinite(Number(raw.customSections)) && Number(raw.customSections) > 0
+      ? Math.round(Number(raw.customSections)) : undefined,
+    customDepth: DEPTH_OK.has(raw.customDepth as ReportDepth) ? (raw.customDepth as ReportDepth) : undefined,
     mustInclude: typeof raw.mustInclude === 'string' ? raw.mustInclude : '',
     evidenceMode: raw.evidenceMode === 'alphatape' ? 'alphatape' : 'manual',
     researchSymbols: typeof raw.researchSymbols === 'string' ? raw.researchSymbols : '',

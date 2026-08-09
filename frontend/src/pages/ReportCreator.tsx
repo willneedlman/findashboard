@@ -1082,6 +1082,10 @@ export default function ReportCreator() {
         purpose: active.scope.purpose,
         goal: active.scope.goal,
         length: active.scope.length,
+        // Custom size only. The server clamps sectionCount to what the chosen
+        // template's argument arc supports and ignores both on a preset.
+        sectionCount: active.scope.customSections ?? 0,
+        depth: active.scope.customDepth ?? 'standard',
         reportType: active.scope.reportType,
         layoutPreset: active.scope.layoutPreset,
         evidenceMode: active.scope.evidenceMode,

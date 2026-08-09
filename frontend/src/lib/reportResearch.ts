@@ -1026,6 +1026,9 @@ export async function enhanceReportResearchPlan(
     // so they have to travel with the request rather than be inferred from prose.
     templateId: scope.reportType,
     length: scope.length,
+    // Costs the evidence budget from the real section count rather than mapping
+    // a custom size onto the nearest preset.
+    sectionCount: scope.customSections ?? 0,
     // Anything the horizon rules out is unavailable, not merely unattractive.
     // Telling the planner keeps it from spending a shortlist slot on a tool the
     // client would then silently refuse to run.

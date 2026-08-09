@@ -5,8 +5,9 @@ import {
 } from 'lucide-react'
 import { T } from '../../lib/theme'
 import type {
-  LayoutPreset, LookbackPreset, LookforwardPreset, ReportLength, ReportScope, ReportType,
+  LayoutPreset, LookbackPreset, LookforwardPreset, ReportDepth, ReportLength, ReportScope, ReportType,
 } from '../../lib/reportCreator'
+import { REPORT_SECTION_MIN, REPORT_SECTION_MAX_BY_TYPE } from '../../lib/reportCreator'
 import { readPMBooks, CASH_SYMBOL } from '../../lib/pmImport'
 import {
   readSavedScreens, runSavedScreen, screenReportSymbols,
@@ -99,6 +100,13 @@ const LENGTH: { k: ReportLength; label: string; hint: string }[] = [
   { k: 'short', label: 'Short', hint: '1-2 sections · headline verdict only' },
   { k: 'medium', label: 'Medium', hint: '3-6 sections · expands when evidence requires' },
   { k: 'long', label: 'Long', hint: '6-12 sections · full supporting detail' },
+  { k: 'custom', label: 'Custom', hint: 'Set the section count and the prose depth separately' },
+]
+
+const DEPTH: { k: ReportDepth; label: string; hint: string }[] = [
+  { k: 'tight', label: 'Tight', hint: '2-3 sentences and 2-3 figures per section' },
+  { k: 'standard', label: 'Standard', hint: '1-2 paragraphs and 2-4 figures per section' },
+  { k: 'deep', label: 'Deep', hint: '2-4 paragraphs, secondary drivers and sensitivities' },
 ]
 const LOOKBACK: { k: LookbackPreset; label: string }[] = [
   { k: 'none', label: 'None' }, { k: 'last7', label: '7D' }, { k: 'last30', label: '30D' },
@@ -147,6 +155,35 @@ function ChipRow<K extends string>({ options, value, onPick }: {
       {options.map(p => (
         <button key={p.k} type="button" onClick={() => onPick(p.k)} style={chipOn(value === p.k)}>{p.label}</button>
       ))}
+    </div>
+  )
+}
+
+/** Bounded numeric picker. Buttons rather than a number input: the range is
+ *  small, the bounds are template-dependent, and a typed value out of range
+ *  would have to be silently clamped, which reads as the control ignoring you. */
+function Stepper({ value, min, max, onChange }: {
+  value: number; min: number; max: number; onChange: (n: number) => void
+}) {
+  const nudge = (delta: number) => onChange(Math.max(min, Math.min(max, value + delta)))
+  const btn = (enabled: boolean) => ({
+    fontFamily: T.mono, fontSize: 13, fontWeight: 700, lineHeight: 1,
+    width: 26, minHeight: 26, cursor: enabled ? 'pointer' : 'default',
+    background: 'transparent', border: `1px solid ${T.border}`,
+    color: enabled ? T.text : T.muted, opacity: enabled ? 1 : 0.45,
+  } as const)
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+      <button type="button" aria-label="One fewer section" disabled={value <= min}
+        onClick={() => nudge(-1)} style={btn(value > min)}>-</button>
+      <span style={{
+        fontFamily: T.mono, fontSize: 12, fontWeight: 700, color: T.text,
+        minWidth: 34, minHeight: 26, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`,
+        fontVariantNumeric: 'tabular-nums',
+      }}>{value}</span>
+      <button type="button" aria-label="One more section" disabled={value >= max}
+        onClick={() => nudge(1)} style={btn(value < max)}>+</button>
     </div>
   )
 }
@@ -506,6 +543,10 @@ export default function ReportSetupWizard({
   evidence: WizardEvidence
 }) {
   const [step, setStep] = useState(0)
+  // The ceiling is the template's own argument arc: asking for more sections
+  // than it has purposes for would mean inventing one the writer then pads.
+  const maxSections = REPORT_SECTION_MAX_BY_TYPE[scope.reportType] ?? 6
+  const sections = Math.max(REPORT_SECTION_MIN, Math.min(scope.customSections ?? 4, maxSections))
   // Re-entering setup on a configured project (the Change button) should not make
   // you click Next through answers you already gave — open every step at once.
   const [furthest, setFurthest] = useState(
@@ -699,10 +740,48 @@ export default function ReportSetupWizard({
             </div>
             <div>
               <span style={label}>Length</span>
-              <ChipRow options={LENGTH} value={scope.length} onPick={k => onChange({ length: k })} />
+              <ChipRow options={LENGTH} value={scope.length} onPick={k => onChange({
+                length: k,
+                // Seed the custom dials from the current preset so switching to
+                // Custom starts where the note already was, not at a default.
+                ...(k === 'custom' && !scope.customSections ? {
+                  customSections: scope.length === 'short' ? 2 : scope.length === 'long' ? maxSections : 4,
+                  customDepth: scope.length === 'short' ? 'tight' : scope.length === 'long' ? 'deep' : 'standard',
+                } : {}),
+              })} />
               <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, marginTop: 6 }}>
                 {LENGTH.find(l => l.k === scope.length)?.hint}
               </div>
+              {scope.length === 'custom' && (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.borderFaint}`, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div>
+                    <span style={label}>Sections</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Stepper
+                        value={sections}
+                        min={REPORT_SECTION_MIN}
+                        max={maxSections}
+                        onChange={n => onChange({ customSections: n })}
+                      />
+                      <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>
+                        {REPORT_SECTION_MIN} to {maxSections} for a {REPORT_TYPES.find(entry => entry.k === scope.reportType)?.label.toLowerCase() ?? 'note'}
+                      </span>
+                    </div>
+                    <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, marginTop: 6, lineHeight: 1.5 }}>
+                      {/* Trimming happens in the middle: the opening states the call
+                          and the closing argues against it, so neither is ever cut. */}
+                      The verdict and the counter-case always stay. Fewer sections drop supporting detail between them.
+                    </div>
+                  </div>
+                  <div>
+                    <span style={label}>Depth per section</span>
+                    <ChipRow options={DEPTH} value={scope.customDepth ?? 'standard'} onPick={k => onChange({ customDepth: k })} />
+                    <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, marginTop: 6 }}>
+                      {DEPTH.find(d => d.k === (scope.customDepth ?? 'standard'))?.hint}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -727,7 +806,11 @@ export default function ReportSetupWizard({
             ['Subjects', subjectsText()],
             ['Portfolio', scope.includePortfolio ? 'Included as context' : 'Excluded'],
             ['Horizon', horizonText()],
-            ['Layout', `${LAYOUTS.find(l => l.k === scope.layoutPreset)?.label} · ${LENGTH.find(l => l.k === scope.length)?.label}`],
+            ['Layout', `${LAYOUTS.find(l => l.k === scope.layoutPreset)?.label} · ${
+              scope.length === 'custom'
+                ? `${sections} sections, ${scope.customDepth ?? 'standard'}`
+                : LENGTH.find(l => l.k === scope.length)?.label
+            }`],
           ]} />
           {clipCount === 0 && scope.evidenceMode === 'manual' && (
             <div style={{ fontFamily: T.mono, fontSize: 10, color: T.warn, lineHeight: 1.6, marginTop: 12 }}>

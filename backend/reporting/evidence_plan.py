@@ -74,6 +74,22 @@ BUDGET_BY_LENGTH: dict[str, int] = {"short": 5, "medium": 8, "long": 12}
 # by report length because a long note can carry more of everything.
 SERIES_CAP_BY_LENGTH: dict[str, int] = {"short": 2, "medium": 3, "long": 4}
 
+
+def budget_for(length: str, section_count: int = 0) -> tuple[int, int]:
+    """(evidence budget, series cap) for a preset or a custom size.
+
+    A custom size is costed from its section count rather than mapped onto the
+    nearest preset: two pulls per section, which is enough for a figure and a
+    visual, with the same floor and ceiling the presets already span.
+    """
+    if length == "custom" and section_count:
+        budget = max(4, min(14, section_count * 2))
+        return budget, max(2, min(5, 1 + section_count // 2))
+    return (
+        BUDGET_BY_LENGTH.get(length, BUDGET_BY_LENGTH["medium"]),
+        SERIES_CAP_BY_LENGTH.get(length, SERIES_CAP_BY_LENGTH["medium"]),
+    )
+
 _NOVELTY_TTL_SECONDS = 60 * 60 * 24 * 30
 _NOVELTY_DEPTH = 5          # how many prior reports of a template we remember
 _NOVELTY_PENALTY = 0.6      # per appearance in recent history
@@ -376,6 +392,7 @@ def enforce(
     length: str,
     baseline: list[str] | None = None,
     question_tags: frozenset[str] = frozenset(),
+    section_count: int = 0,
 ) -> SelectionResult:
     """Apply the coverage floor, the shape budget, and redundancy pruning.
 
@@ -385,8 +402,7 @@ def enforce(
     """
     baseline = baseline or []
     asked = set(question_tags)
-    budget = BUDGET_BY_LENGTH.get(length, BUDGET_BY_LENGTH["medium"])
-    series_cap = SERIES_CAP_BY_LENGTH.get(length, SERIES_CAP_BY_LENGTH["medium"])
+    budget, series_cap = budget_for(length, section_count)
     notes: list[str] = []
 
     ordered = [tool_id for tool_id in dict.fromkeys([*baseline, *picked])
@@ -491,6 +507,7 @@ def validate_selection(
     *,
     template_id: str,
     length: str,
+    section_count: int = 0,
 ) -> list[str]:
     """Levels L0-L4, cheapest first. L5 and L6 need the drafted outline."""
     errors: list[str] = []
@@ -515,7 +532,7 @@ def validate_selection(
                  if tool_id in REPORT_TOOL_BY_ID
                  and tool_id not in exempt
                  and REPORT_TOOL_BY_ID[tool_id].output_shapes[:1] == ("series",))
-    cap = SERIES_CAP_BY_LENGTH.get(length, SERIES_CAP_BY_LENGTH["medium"])
+    _, cap = budget_for(length, section_count)
     if series > cap:                                                      # L4
         errors.append(f"L4: {series} series visuals exceeds the budget of {cap}")
     if len(selection.tool_ids) != len(set(selection.tool_ids)):           # L4

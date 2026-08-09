@@ -2,6 +2,8 @@ from .pipeline import (
     ReportDataBankIn,
     guard_evidence_domain_text,
     template_contract,
+    template_max_sections,
+    TEMPLATE_MIN_SECTIONS,
     validate_data_bank,
     validate_template_sections,
 )
@@ -13,6 +15,8 @@ __all__ = [
     "guard_evidence_domain_text",
     "report_tool_manifest",
     "template_contract",
+    "template_max_sections",
+    "TEMPLATE_MIN_SECTIONS",
     "validate_data_bank",
     "validate_template_sections",
 ]

@@ -1902,6 +1902,9 @@ class ReportResearchPlanRequest(BaseModel):
     baselineSourceIds: list[str] = Field(default_factory=list)
     templateId: str = "equity-note"
     length: str = "medium"
+    # Custom size only: how many sections the note will have. The evidence budget
+    # is costed from this rather than mapped onto the nearest preset.
+    sectionCount: int = 0
     # Tools the client cannot run for this report — horizon-disabled, mostly.
     disabledSourceIds: list[str] = Field(default_factory=list)
 
@@ -2045,14 +2048,18 @@ def plan_report_research(req: ReportResearchPlanRequest):
     allowed = set(REPORT_TOOL_BY_ID)
     baseline = [source_id for source_id in req.baselineSourceIds if source_id in allowed]
     template_id = req.templateId if req.templateId else "equity-note"
-    length = req.length if req.length in {"short", "medium", "long"} else "medium"
+    length = req.length if req.length in {"short", "medium", "long", "custom"} else "medium"
+    section_count = max(0, min(int(req.sectionCount or 0), 20))
+    if length == "custom" and not section_count:
+        length = "medium"
 
     portfolio = req.portfolio if isinstance(req.portfolio, dict) else {}
     availability = Availability(
         has_symbols=bool(req.symbols),
         symbol_count=len(req.symbols),
         has_portfolio=bool(portfolio.get("included")) and not portfolio.get("futuresCount"),
-        allow_slow=length != "short",
+        # A slow scan is worth the wait unless the note is genuinely small.
+        allow_slow=length != "short" and not (length == "custom" and section_count <= 2),
         disabled_tool_ids=frozenset(
             source_id for source_id in req.disabledSourceIds if source_id in allowed
         ),
@@ -2134,10 +2141,11 @@ def plan_report_research(req: ReportResearchPlanRequest):
             trial = enforce(
                 list(reasons), dict(reasons), availability,
                 template_id=template_id, length=length, baseline=baseline,
-                question_tags=asked_tags,
+                question_tags=asked_tags, section_count=section_count,
             )
             errors = validate_selection(
                 trial, availability, template_id=template_id, length=length,
+                section_count=section_count,
             )
             if not errors or attempt == 1:
                 if errors:
@@ -2149,7 +2157,7 @@ def plan_report_research(req: ReportResearchPlanRequest):
     selection = enforce(
         list(reasons), dict(reasons), availability,
         template_id=template_id, length=length, baseline=baseline,
-        question_tags=asked_tags,
+        question_tags=asked_tags, section_count=section_count,
     )
     notes.extend(selection.notes)
     if rejected:
@@ -2204,8 +2212,14 @@ class ReportGenRequest(BaseModel):
     # Optional subject hint for API clients. Clear company/ticker language in the
     # objective remains authoritative so stale UI state cannot retarget a report.
     subjectTicker: str = ""
-    # 'short' | 'medium' | 'long' — how much depth the note should have. Unknown/missing → 'medium'.
+    # 'short' | 'medium' | 'long' | 'custom' — how much depth the note should have.
+    # Unknown/missing → 'medium'.
     length: str = "medium"
+    # Custom size only. sectionCount is clamped to what the template's argument
+    # actually has to say; depth sets prose per section independently of it, so a
+    # six-section tight brief and a three-section deep one are both askable.
+    sectionCount: int = 0
+    depth: str = "standard"
     # What kind of note this is, chosen in setup. Decides the argument shape.
     # Unknown/missing → no type-specific direction is added.
     reportType: str = ""
@@ -2250,8 +2264,63 @@ _LENGTH_SPEC = {
     },
 }
 
+# Custom size is two dials rather than one preset: how many sections, and how
+# much prose each one carries. Section count alone would make a 6-section tight
+# brief impossible to ask for, which is the case the presets already miss.
+_DEPTH_SPEC = {
+    "tight": (
+        "Keep each required section to 2-3 tight sentences and 2-3 keyFigures. No secondary "
+        "colour and no minor caveats. Executive summary is 1-2 sentences. Conclusion is 1 sentence."
+    ),
+    "standard": (
+        "Use 1-2 short paragraphs per required section with 2-4 keyFigures. Executive summary is "
+        "one tight paragraph. Conclusion covers the verdict, the main risk to it, and the "
+        "supported implication."
+    ),
+    "deep": (
+        "Each section can run 2-4 paragraphs with 2-4 keyFigures. Cover secondary drivers, "
+        "sensitivities, and peer or segment detail that a shorter note would cut. Executive "
+        "summary can run 2-3 sentences. Conclusion should also name secondary risks and a "
+        "monitoring checklist."
+    ),
+}
+
+
+def _depth_key(depth: str | None) -> str:
+    value = (depth or "").strip().lower()
+    return value if value in _DEPTH_SPEC else "standard"
+
+
+def _length_guidance(length_key: str, section_count: int, depth: str | None) -> str:
+    """Prose-depth direction for the writer, for a preset or a custom size."""
+    if length_key != "custom":
+        return _LENGTH_SPEC[length_key]["guidance"]
+    return (
+        f"Custom: follow the selected template contract exactly. It has {section_count} "
+        f"section{'' if section_count == 1 else 's'} and you must write all of them and no others. "
+        f"{_DEPTH_SPEC[_depth_key(depth)]} "
+        "Still cut clips that add nothing — the size is a ceiling on depth, not a quota to fill "
+        "with restated numbers."
+    )
+
+
+def _report_token_budget(length_key: str, section_count: int, depth: str | None) -> int:
+    """Response ceiling for the writer.
+
+    A preset keeps its tuned value. A custom size is costed from what it actually
+    asks for: a floor for the summary and conclusion, plus a per-section
+    allowance that widens with the depth dial.
+    """
+    if length_key != "custom":
+        return {"short": 2200, "medium": 4000, "long": 6500}[length_key]
+    per_section = {"tight": 420, "standard": 700, "deep": 1_050}[_depth_key(depth)]
+    return max(2_200, min(8_000, 1_200 + per_section * max(1, section_count)))
+
+
 def _length_key(length: str | None) -> str:
     v = (length or "").strip().lower()
+    if v == "custom":
+        return "custom"
     return v if v in _LENGTH_SPEC else "medium"
 
 def _must_include_section(raw: str | None, extra: list[str] | None = None) -> str:
@@ -2530,7 +2599,7 @@ _BOOK_LEVEL_VERDICT_GUIDANCE = (
 
 def _report_system_prompt(mode: str, length_key: str, must_include: str,
                           report_type: str = "", book_level: bool = False,
-                          contract: dict | None = None) -> str:
+                          contract: dict | None = None, depth: str | None = None) -> str:
     mode_key = "range" if mode == "range" else "open"
     mode_guidance = _REPORT_RANGE_GUIDANCE if mode_key == "range" else _REPORT_OPEN_GUIDANCE
     # Independent of report type: a project stored before the setup flow existed
@@ -2559,7 +2628,9 @@ def _report_system_prompt(mode: str, length_key: str, must_include: str,
     return (
         _REPORT_SYSTEM
         .replace("{{MODE_GUIDANCE}}", mode_guidance)
-        .replace("{{LENGTH_GUIDANCE}}", _LENGTH_SPEC[length_key]["guidance"])
+        .replace("{{LENGTH_GUIDANCE}}", _length_guidance(
+            length_key, len(template.get("sections") or []), depth,
+        ))
         .replace("{{MUST_INCLUDE_SECTION}}", must_include)
         .replace("{{EDITORIAL_STANDARD}}", _RESEARCH_NOTE_EDITORIAL_STANDARD)
         .replace("{{TEMPLATE_CONTRACT}}", template_prompt)
@@ -3373,8 +3444,14 @@ def _report_prompt_clips(
     receives a decision-grade subset so outline and drafting stay within the
     edge proxy's response window.
     """
-    base_cap = {"short": 16, "medium": 24, "long": 32}.get(_length_key(length), 24)
-    data_cap = {"short": 650, "medium": 850, "long": 1_050}.get(_length_key(length), 850)
+    key = _length_key(length)
+    if key == "custom":
+        # A custom note gets the medium allowance; the writer trims to its own
+        # contract, and starving it of clips would bias every custom report short.
+        base_cap, data_cap = 24, 850
+    else:
+        base_cap = {"short": 16, "medium": 24, "long": 32}[key]
+        data_cap = {"short": 650, "medium": 850, "long": 1_050}[key]
     priority_rules = [
         (r"current allocation|current option positions", 1_000),
         (r"risk metrics|performance methodology|vs spy|active return|drawdown", 960),
@@ -5342,7 +5419,8 @@ def generate_report(req: ReportGenRequest):
         raise HTTPException(400, "No clips to synthesize")
     valid_ids = {c.id for c in req.clips}
     length_key = _length_key(req.length)
-    contract = template_contract((req.reportType or "").strip(), length_key)
+    contract = template_contract((req.reportType or "").strip(), length_key, req.sectionCount)
+    section_count = len(contract["sections"])
     if req.evidenceMode.strip().lower() == "alphatape":
         if req.dataBank is None:
             raise HTTPException(409, "AlphaTape research must complete before report assembly")
@@ -5405,6 +5483,7 @@ def generate_report(req: ReportGenRequest):
     valuation_context = {
         "reportMode": mode,
         "reportLength": length_key,
+        "templateContract": contract,
         "subjectTicker": subject,
         "subjectName": quote.get("name"),
         "marketPrice": round(market, 4) if market else None,
@@ -5519,12 +5598,15 @@ def generate_report(req: ReportGenRequest):
         (req.reportType or "").strip(),
         book_level,
         contract,
+        req.depth,
     )
     messages = [
         {"role": "system", "content": sys_prompt},
         {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
     ]
-    max_tokens = {"short": 2200, "medium": 4000, "long": 6500}[length_key]
+    # Was keyed by preset, which has no entry for a custom size. Scale by the
+    # section count and the depth dial so the ceiling tracks the real request.
+    max_tokens = _report_token_budget(length_key, section_count, req.depth)
     resp = groq_chat(messages, model=MODEL_SMART, max_tokens=max_tokens, temperature=0.3)
     raw = (resp.choices[0].message.content or "").strip()
     result = parse_json(raw)

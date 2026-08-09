@@ -285,3 +285,64 @@ def test_report_generation_blocks_when_a_required_tool_never_finished():
         assert "dcf-valuation" in str(error.detail)
     else:
         raise AssertionError("generation should block while a required tool is not terminal")
+
+
+def test_a_custom_size_trims_from_the_middle_never_the_ends():
+    """The opening states the call and the closing argues against it. An
+    arbitrary truncation would leave a report that either never answers the
+    question or never challenges its own answer."""
+    from reporting.pipeline import template_contract, template_max_sections
+
+    full = [section["key"] for section in template_contract("equity-note", "long")["sections"]]
+    for count in range(2, len(full) + 1):
+        keys = [section["key"] for section in template_contract("equity-note", "custom", count)["sections"]]
+        assert len(keys) == count
+        assert keys[0] == full[0]
+        assert keys[-1] == full[-1]
+        assert keys == [key for key in full if key in keys], "order must follow the template's arc"
+
+    # Beyond the template's own arc there is nothing left to say, so it clamps
+    # rather than inventing a section with no purpose text.
+    ceiling = template_max_sections("equity-note")
+    assert len(template_contract("equity-note", "custom", 40)["sections"]) == ceiling
+    assert len(template_contract("equity-note", "custom", 1)["sections"]) == 2
+
+
+def test_a_custom_size_without_a_count_falls_back_to_a_preset():
+    from reporting.pipeline import template_contract
+
+    assert template_contract("equity-note", "custom", 0)["length"] == "medium"
+    assert template_contract("equity-note", "custom", None)["length"] == "medium"
+
+
+def test_the_writer_budget_is_costed_from_the_custom_request():
+    """Keyed by preset before, which had no entry for a custom size at all."""
+    import routers.ai as ai
+
+    assert ai._report_token_budget("medium", 4, None) == 4000
+    tight = ai._report_token_budget("custom", 4, "tight")
+    deep = ai._report_token_budget("custom", 4, "deep")
+    assert tight < deep
+    assert ai._report_token_budget("custom", 2, "tight") >= 2200      # floor
+    assert ai._report_token_budget("custom", 20, "deep") <= 8000      # ceiling
+
+
+def test_depth_is_independent_of_section_count():
+    """A six-section tight brief and a three-section deep note are both askable;
+    one dial could express neither."""
+    import routers.ai as ai
+
+    six_tight = ai._length_guidance("custom", 6, "tight")
+    three_deep = ai._length_guidance("custom", 3, "deep")
+    assert "6 sections" in six_tight and "2-3 tight sentences" in six_tight
+    assert "3 sections" in three_deep and "2-4 paragraphs" in three_deep
+
+
+def test_the_evidence_budget_scales_with_a_custom_section_count():
+    from reporting.evidence_plan import budget_for
+
+    assert budget_for("medium") == (8, 3)
+    small, _ = budget_for("custom", 2)
+    large, _ = budget_for("custom", 7)
+    assert small < large
+    assert budget_for("custom", 0) == budget_for("medium"), "no count means no custom size"
