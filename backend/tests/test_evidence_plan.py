@@ -217,10 +217,14 @@ def test_novelty_pushes_a_repeated_report_toward_different_evidence(monkeypatch)
     repeated = fresh[0].id
 
     monkeypatch.setattr(plan, "_novelty_counts", lambda template_id: {repeated: 3})
-    after = shortlist(question, EQUITY, novelty={repeated: 3})
+    # Ask for the whole ranked pool, not the top ten: with more than ten tools
+    # answering this tag, a demoted tool falling off a fixed-size cut would look
+    # like a ban when it is only truncation.
+    after = shortlist(question, EQUITY, novelty={repeated: 3}, size=40)
 
     assert after[0].id != repeated, "an over-used tool should not stay top of the list"
     assert repeated in {tool.id for tool in after}, "demoted, not removed"
+    assert [tool.id for tool in after].index(repeated) > 0
 
 
 def test_every_template_floor_is_satisfiable_with_the_availability_it_implies():
@@ -259,3 +263,43 @@ def test_the_visual_budget_cannot_drop_the_only_evidence_of_a_required_class():
     classes = {REPORT_TOOL_BY_ID[tool_id].evidence_class for tool_id in result.tool_ids}
     assert "trend" in classes
     assert not validate_selection(result, MACRO, template_id="macro-brief", length="medium")
+
+
+def test_a_superseding_tool_removes_the_one_it_contains():
+    """Master Valuation runs the DCF as one of its four methods, so selecting
+    both spends a slot to state the same number twice."""
+    result = enforce(
+        ["company", "dcf-valuation", "master-valuation", "price-history"],
+        {}, EQUITY, template_id="equity-note", length="medium",
+    )
+
+    assert "master-valuation" in result.tool_ids
+    assert "dcf-valuation" not in result.tool_ids
+    assert any("already contains it" in note for note in result.notes)
+
+
+def test_the_modelled_tools_are_offered_only_where_they_can_run():
+    """A simulator needs a book or named symbols; an optimiser needs a book. A
+    market-only macro brief has neither, and offering them wastes a slot."""
+    question = Question("What is the downside?", ("risk_downside", "scenario_forward"))
+
+    macro = {tool.id for tool in shortlist(question, MACRO)}
+    assert "monte-carlo" not in macro
+    assert "portfolio-optimizer" not in macro
+
+    book = Availability(has_symbols=True, symbol_count=4, has_portfolio=True)
+    with_book = {tool.id for tool in shortlist(question, book, size=20)}
+    assert "monte-carlo" in with_book
+
+
+def test_a_backtest_the_client_cannot_run_is_never_offered():
+    """The client disables it when no saved strategy exists, because there is no
+    default rule set worth reporting and inventing one would attribute a
+    strategy the user never chose."""
+    question = Question("How would the rules have done?", ("scenario_forward",))
+    book = Availability(has_symbols=True, symbol_count=4, has_portfolio=True)
+    assert "portfolio-backtest" in {tool.id for tool in shortlist(question, book, size=20)}
+
+    gated = Availability(has_symbols=True, symbol_count=4, has_portfolio=True,
+                         disabled_tool_ids=frozenset({"portfolio-backtest"}))
+    assert "portfolio-backtest" not in {tool.id for tool in shortlist(question, gated, size=20)}

@@ -76,6 +76,9 @@ class ReportToolSpec:
     cost: str = "normal"
     yields: tuple[str, ...] = ()
     limits: str = ""
+    # Tools this one makes redundant. A multi-method valuation already contains
+    # the single-method DCF, so running both spends a slot to say it twice.
+    supersedes: tuple[str, ...] = ()
 
 
 def _spec(*args, **kwargs) -> ReportToolSpec:
@@ -476,6 +479,58 @@ REPORT_TOOL_REGISTRY: tuple[ReportToolSpec, ...] = (
                 "disruption score", "most exposed tickers and the chokepoints driving it"),
         limits="Exposure is a curated company-to-chokepoint map, not a measured revenue dependency. The PortWatch baseline lags by three to four days.",
     ),
+
+    # ── Modelled valuation and portfolio construction ────────────────────────
+    # These four build their request from a preceding fetch rather than taking a
+    # ticker, which is why they were not in the first pass. Every assumption is
+    # seeded deterministically from the same helper the corresponding page uses.
+    _spec(
+        "master-valuation", "Multi-method valuation",
+        "One model carrying DCF, exit multiples, dividend discount and sum-of-the-parts side by side, plus the reverse-DCF read of what the market price already assumes.",
+        "symbols", True, "issuer",
+        question_tags=("valuation_level", "scenario_forward", "quality_fundamental"),
+        evidence_class="level", output_shapes=("scalar", "table", "series"), cost="slow",
+        yields=("value per share from DCF, multiples, DDM and SOTP",
+                "weighted composite value and the spread between methods",
+                "implied upside or downside against the market price",
+                "reverse-DCF implied revenue CAGR, terminal margin and WACC",
+                "per-driver sensitivity ranked by effect per point"),
+        limits="Every method rests on one seeded assumption set. The spread between methods is the honest measure of confidence; the composite alone is not.",
+        supersedes=("dcf-valuation",),
+    ),
+    _spec(
+        "monte-carlo", "Simulated outcome range",
+        "Forward distribution of portfolio value from simulated paths, with tail loss measures.",
+        "portfolio-or-symbols", True, "portfolio",
+        question_tags=("risk_downside", "scenario_forward", "volatility_regime"),
+        evidence_class="risk", output_shapes=("distribution", "scalar"), cost="normal",
+        yields=("5th to 95th percentile terminal value", "median terminal value",
+                "95% VaR and CVaR", "simulated CAGR and volatility",
+                "volatility drag", "simulated maximum drawdown and Sharpe"),
+        limits="Paths are simulated from drift and volatility fitted to the lookback window, so the output restates that window's regime. It is a range of outcomes under that assumption, not a forecast.",
+    ),
+    _spec(
+        "portfolio-optimizer", "Allocation efficiency",
+        "The current book scored against max-Sharpe, minimum-variance, risk-parity and equal-weight allocations on one efficient frontier.",
+        "portfolio", True, "portfolio",
+        question_tags=("concentration", "correlation_struct", "relative_performance"),
+        evidence_class="relative", output_shapes=("series", "table"), cost="normal",
+        yields=("current portfolio return, volatility and Sharpe",
+                "max-Sharpe and minimum-variance weights and their metrics",
+                "risk-parity and equal-weight comparison",
+                "efficient frontier", "per-asset return, volatility and beta"),
+        limits="Optimised on realised moments from the chosen window, so the optimum is in-sample and will not repeat out of sample. Treat the gap to the frontier as a diagnostic, not a trade list.",
+    ),
+    _spec(
+        "portfolio-backtest", "Strategy backtest",
+        "The saved rule-based strategy replayed over history across the book, with its trade record.",
+        "portfolio-or-symbols", True, "portfolio",
+        question_tags=("scenario_forward", "risk_downside", "trend_direction"),
+        evidence_class="risk", output_shapes=("series", "table"), cost="slow",
+        yields=("strategy equity curve", "CAGR, Sharpe and maximum drawdown",
+                "trade count and win rate", "time in market", "per-position contribution"),
+        limits="Replays one specific saved rule set. It measures that strategy, not the holdings, and it is a single historical path with no allowance for slippage beyond the configured costs.",
+    ),
 )
 
 
@@ -508,6 +563,7 @@ def report_tool_manifest() -> list[dict]:
             "cost": tool.cost,
             "yields": list(tool.yields),
             "limits": tool.limits,
+            "supersedes": list(tool.supersedes),
         }
         for tool in REPORT_TOOL_REGISTRY
     ]

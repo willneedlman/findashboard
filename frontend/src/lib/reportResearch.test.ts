@@ -1650,3 +1650,170 @@ describe('tools reached by the evidence-selection rebuild', () => {
     }])
   })
 })
+
+describe('modelled tools', () => {
+  const scope = { ...defaultScope(), goal: 'Value AAPL' }
+  const src = (id: any, targets: string[] = ['AAPL'], domain: any = 'issuer') => ({
+    id, label: id, tool: id, route: `/${id}`, reason: 'test',
+    targets, domain, critical: false,
+  })
+  const run = (source: any, client: any, book = emptyPortfolio) => collectReportResearch(
+    { objective: 'x', intent: 'company', symbols: ['AAPL'], sources: [source] },
+    scope, book, undefined, client,
+  )
+
+  const FUNDAMENTALS = {
+    ticker: 'AAPL', revenue: 416161, shares: 15004.7, net_debt: 54744,
+    market_price: 313.33, beta: 1.07, source: 'computed CAPM',
+    schedule: [1, 2, 3, 4, 5].map(year => ({
+      year, growth: 6, margin: 32, tax_rate: 15.6, da_pct: 2.8, capex_pct: 3.1,
+      change_nwc_pct: 0, sbc_pct: 0, cash_adjustment_pct: 0, fcf_conversion_pct: 100,
+      net_interest_pct: 0, dilution_pct: 0, payout_pct: 0,
+    })),
+    current_multiples: { ev_revenue: 11.4, ev_ebitda: 26.2 },
+    business_segments: [{ name: 'Products', revenue_share: 75, price_to_sales_multiple: 8 }],
+    business_segments_source: 'SEC', business_segments_fiscal_year: 2025,
+    dividend_per_share: 1.08, dividend_yield: 0.34,
+  }
+
+  it('seeds the valuation request from fundamentals and reports the method spread', async () => {
+    // The composite alone hides a DCF and a multiples value 80% apart, so the
+    // spread has to reach the clip beside it.
+    let posted: any = null
+    const result = await run(src('master-valuation'), {
+      get: async () => FUNDAMENTALS,
+      post: async (_url: string, body: any) => {
+        posted = body
+        return {
+          ticker: 'AAPL', market_price: 313.33,
+          methods: { dcf: 143.66, multiples: 263.0, ddm: null, sotp: 144.05 },
+          composite: { value_per_share: 185.43, range_low: 143.66, range_high: 263.0 },
+          reverse: { implied_revenue_cagr: 15.08, implied_terminal_margin: 74.08, implied_wacc: 6.09, implied_exit_multiple: 35.4, implied_exit_year: 3 },
+        }
+      },
+    })
+
+    expect(posted.schedule).toHaveLength(5)
+    expect(posted.multiple_targets.map((t: any) => t.metric)).toEqual(['ev_revenue', 'ev_ebitda'])
+    expect(posted.weights).toEqual({ dcf: 65, multiples: 35, ddm: 0, sotp: 0 })
+    expect(posted.schedule[0].payout_pct).toBeGreaterThan(0)   // pays a dividend
+
+    const kpi = result.clips.find(clip => clip.payload.kind === 'kpi')
+    if (kpi?.payload.kind === 'kpi') {
+      expect(kpi.payload.cells.find(cell => cell.label === 'Method spread')?.value)
+        .toBe('$143.66 to $263.00')
+    }
+    const table = result.clips.find(clip => clip.payload.kind === 'table')
+    if (table?.payload.kind === 'table') {
+      // DDM returned null, so it is absent rather than rendered as a dash.
+      expect(table.payload.rows.map(row => row[0])).toEqual([
+        'Discounted cash flow', 'Exit multiples', 'Sum of the parts',
+      ])
+    }
+    expect(result.clips.some(clip => clip.payload.title?.includes('already assumes'))).toBe(true)
+  })
+
+  it('refuses to value a company whose fundamentals cannot support the model', async () => {
+    // A valuation built on a two-year forecast is worse than no valuation.
+    const result = await run(src('master-valuation'), {
+      get: async () => ({ ...FUNDAMENTALS, schedule: FUNDAMENTALS.schedule.slice(0, 2) }),
+      post: async () => { throw new Error('analyze must not be called') },
+    })
+    expect(result.clips).toEqual([])
+  })
+
+  it('weights the simulator by live market value, not cost basis', async () => {
+    // A book that has moved is misweighted by cost, which would misstate the tail.
+    const book: ActivePortfolioContext = {
+      ...portfolio,
+      holdings: [{ ticker: 'AAPL', shares: 10, avgCost: 100 }, { ticker: 'MSFT', shares: 10, avgCost: 100 }],
+    }
+    let posted: any = null
+    await run(src('monte-carlo', [], 'portfolio'), {
+      get: async () => ({ AAPL: { current_price: 300 }, MSFT: { current_price: 100 } }),
+      post: async (_url: string, body: any) => {
+        posted = body
+        return { percentiles: { p5: 0.87, p25: 1.1, p50: 1.26, p75: 1.43, p95: 1.76 }, var_95: 12.58, cvar_95: 19.13, core_metrics: {}, mu: 0.24, sigma: 0.21 }
+      },
+    }, book)
+
+    expect(posted.tickers).toEqual(['AAPL', 'MSFT'])
+    expect(posted.weights).toEqual([0.75, 0.25])   // by value, not the 50/50 cost split
+  })
+
+  it('labels the optimiser gap as in-sample so it does not read as free money', async () => {
+    const book: ActivePortfolioContext = {
+      ...portfolio,
+      holdings: [{ ticker: 'AAPL', shares: 10, avgCost: 100 }, { ticker: 'MSFT', shares: 10, avgCost: 100 }],
+    }
+    const result = await run(src('portfolio-optimizer', [], 'portfolio'), {
+      get: async () => ({ AAPL: { current_price: 300 }, MSFT: { current_price: 100 } }),
+      post: async () => ({
+        tickers: ['AAPL', 'MSFT'], dropped: [], days: 896,
+        span: { start: '2023-01-04', end: '2026-07-31' },
+        portfolios: {
+          current: { return: 20, vol: 22, sharpe: 0.9 },
+          max_sharpe: { return: 24, vol: 20, sharpe: 1.2 },
+          min_variance: { return: 12, vol: 14, sharpe: 0.6 },
+          risk_parity: { return: 18, vol: 19, sharpe: 0.8 },
+          equal_weight: { return: 19, vol: 21, sharpe: 0.85 },
+        },
+        frontier: Array.from({ length: 12 }, (_, i) => ({ vol: 14 + i, return: 12 + i })),
+      }),
+    }, book)
+
+    const kpi = result.clips.find(clip => clip.payload.kind === 'kpi')
+    if (kpi?.payload.kind === 'kpi') {
+      const gap = kpi.payload.cells.find(cell => cell.label === 'Sharpe gap')
+      expect(gap?.value).toBe('0.30')
+      expect(gap?.sub).toContain('In-sample')
+    }
+    expect(result.clips.some(clip => clip.payload.kind === 'chart')).toBe(true)
+  })
+
+  const stubStorage = () => {
+    const store = new Map<string, string>()
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => { store.set(k, v) },
+      removeItem: (k: string) => { store.delete(k) },
+    })
+  }
+
+  it('runs no backtest when the user has saved no strategy', async () => {
+    stubStorage()
+    const result = await run(src('portfolio-backtest', [], 'portfolio'), {
+      get: async () => ({}),
+      post: async () => { throw new Error('backtest must not be called without a strategy') },
+    })
+    expect(result.clips).toEqual([])
+  })
+
+  it('replays the saved strategy and says it measures the rule, not the holdings', async () => {
+    stubStorage()
+    localStorage.setItem('fdb_algo_universe_monte_carlo_handoff', JSON.stringify({
+      version: 1, createdAt: '2026-08-01', start: '2023-01-01', end: '2026-08-01',
+      timeframe: '1d', tradeSizePct: 10, leverage: 1, effectiveAnnualRate: 0,
+      strategy: { name: 'RSI Mean Reversion', buy: [{ x: 1 }], sell: [{ y: 2 }], risk: { stopLossPct: 5 } },
+      positions: [{ ticker: 'AAPL', side: 'long' }, { ticker: 'MSFT', side: 'long' }],
+    }))
+    let posted: any = null
+    const result = await run(src('portfolio-backtest', [], 'portfolio'), {
+      get: async () => ({}),
+      post: async (_url: string, body: any) => {
+        posted = body
+        return { metrics: { total_return: 34.2, cagr: 9.8, sharpe: 0.71, max_drawdown: -18.4, trades: 42, win_rate: 55, exposure_pct: 61 }, equity_curve: [] }
+      },
+    })
+
+    expect(posted.positions).toHaveLength(2)
+    expect(posted.positions[0].rules).toEqual({ buy: [{ x: 1 }], sell: [{ y: 2 }] })
+    expect(posted.positions[0].stop_loss).toBe(5)
+    const kpi = result.clips.find(clip => clip.payload.kind === 'kpi')
+    if (kpi?.payload.kind === 'kpi') {
+      expect(kpi.payload.cells.find(cell => cell.label === 'Measures')?.value)
+        .toBe('The rule set, not the holdings')
+    }
+    localStorage.removeItem('fdb_algo_universe_monte_carlo_handoff')
+  })
+})

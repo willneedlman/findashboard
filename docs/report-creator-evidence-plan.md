@@ -242,7 +242,7 @@ cited rise.
 | # | Step | Where |
 |---|---|---|
 | 1 | Metric catalog generated from the inventory | `backend/scripts/build_report_catalog.py` → `backend/data/report_metric_catalog.json` |
-| 2 | Registry expanded 23 → 40 tools, each with tags, class, shapes, cost, yields, limits | `backend/reporting/tool_registry.py` |
+| 2 | Registry expanded 23 → 44 tools, each with tags, class, shapes, cost, yields, limits | `backend/reporting/tool_registry.py` |
 | 3 | Question decomposition over a 17-tag closed vocabulary | `_REPORT_QUESTION_SYSTEM`, `normalize_questions()` |
 | 4 | Deterministic retrieval and shortlist ranking | `evidence_plan.shortlist()` |
 | 5 | Coverage floor, shape budget, novelty, redundancy | `evidence_plan.enforce()` |
@@ -254,31 +254,54 @@ cited rise.
 
 |  | before | after |
 |---|---|---|
-| Report tools | 23 | **40** |
-| Inventory values reachable | 143 of 274 (52%) | **178 of 274 (65%)** |
-| Values unreachable | 131 | **96** |
+| Report tools | 23 | **44** |
+| Inventory values reachable | 143 of 274 (52%) | **223 of 274 (81%)** |
+| Values unreachable | 131 | **51** |
 
-The 17 new tools, all wired against verified response shapes: `asset-profile`,
-`dividends`, `debt-maturity`, `seasonality`, `options-unusual`,
-`insider-activity`, `institutional-ownership`, `cot-positioning`, `breadth`,
-`sector-rrg`, `pairs`, `fx-matrix`, `macro-cycle`, `credit-stress`, `housing`,
-`ipo-calendar`, `chokepoint-exposure`.
+The 17 direct-fetch tools: `asset-profile`, `dividends`, `debt-maturity`,
+`seasonality`, `options-unusual`, `insider-activity`,
+`institutional-ownership`, `cot-positioning`, `breadth`, `sector-rrg`, `pairs`,
+`fx-matrix`, `macro-cycle`, `credit-stress`, `housing`, `ipo-calendar`,
+`chokepoint-exposure`.
 
-### Deliberately not wired
+### The four modelled tools
 
-Each of these needs a preceding fetch to build a POST body — a full assumption
-schedule, a holdings list, a weight vector — which makes each one its own small
-project rather than a fetcher:
+These build a request from a preceding fetch rather than taking a ticker, which
+is why they came second. Every assumption is seeded deterministically — no LLM
+is involved in constructing any of these bodies.
 
-Master Valuation, SOTP, DDM, Reverse DCF, Monte Carlo, Portfolio Backtester,
-Portfolio Allocator, Stock Screener (already reachable by a separate path via
-`screenReportSymbols`), ETF Analyzer, Bond Analytics, Trade Flows, Supply Chain
-Map, NAV Tracker, Energy Flows, Options Strategy.
+| Tool | How the request is built |
+|---|---|
+| `master-valuation` | `GET /master-valuation/fundamentals` → `seedMasterValuationRequest()` → `POST /analyze`. Returns DCF, exit multiples, DDM, SOTP **and** the reverse-DCF read in one call, so it reaches five app tools at once. |
+| `monte-carlo` | Book weights from live marks → `POST /portfolio/montecarlo`. Percentile cone, VaR, CVaR, volatility drag. |
+| `portfolio-optimizer` | Same weight basis, passed as `weights` so the **current** book is scored on the frontier against max-Sharpe, min-variance, risk-parity and equal-weight. |
+| `portfolio-backtest` | Replays the strategy the user saved from the Algo Strategy Builder. |
+
+Two design decisions worth keeping:
+
+- **`seedMasterValuationRequest()` lives in `lib/masterValuationSeed.ts` and the
+  Master Valuation page uses it too.** A report that valued a company on
+  different assumptions from the page showing the same company would be worse
+  than a report with no valuation in it.
+- **The backtester is gated on a saved strategy.** There is no default rule set
+  worth reporting, and inventing one would attribute a strategy to the user that
+  they never chose. With no handoff the client disables the tool and the planner
+  never offers it.
+
+`master-valuation` declares `supersedes=("dcf-valuation",)`: it runs the DCF as
+one of its four methods, so selecting both would spend a slot to state the same
+number twice.
+
+### Still unreachable
+
+Bond Analytics, Bond Lookup, ETF Analyzer, Energy Flows, NAV Tracker, Options
+Strategy, Stock Screener (already reachable by a separate path via
+`screenReportSymbols`), Supply Chain Map, Trade Flows.
 
 Not evidence, and never will be: Market Hours, Report Creator, Trade Journal,
-Paper Trading, Market Maker leaderboard, Price Alerts, Algo Builder.
+Paper Trading, Market Maker leaderboard, Price Alerts.
 
-That accounts for the remaining 96 values.
+That accounts for the remaining 51 values.
 
 ### Not done
 

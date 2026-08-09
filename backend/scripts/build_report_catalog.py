@@ -78,6 +78,12 @@ TOOL_SOURCES: dict[str, tuple[str, ...]] = {
     "housing": ("Housing Market",),
     "ipo-calendar": ("IPO Scanner",),
     "chokepoint-exposure": ("Chokepoint Exposure", "Freight Map"),
+    # One model surfaces DCF, multiples, DDM, SOTP and the reverse-DCF read, so
+    # it maps to all five of the app tools that present those methods.
+    "master-valuation": ("Master Valuation", "Dividend Discount", "Sum of the Parts", "Reverse DCF", "Multiples"),
+    "monte-carlo": ("Monte Carlo",),
+    "portfolio-optimizer": ("Portfolio Allocator",),
+    "portfolio-backtest": ("Portfolio Backtester", "Algo Builder"),
 }
 
 

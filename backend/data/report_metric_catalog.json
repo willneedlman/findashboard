@@ -1616,6 +1616,220 @@
     "name": "Normalised multi-asset comparison"
    }
   ],
+  "master-valuation": [
+   {
+    "formula": "recompute the blend across a 2-D grid (discount rate, CAGR and margin, growth and risk, or margin and EV/EBITDA); outline the current model cell",
+    "id": "valuation_sensitivity",
+    "interpretation": "The most honest output in the valuation hub: it shows the range the model supports rather than a single number. If the grid spans 2x, the point estimate is not a price target.",
+    "limits": "Two dimensions at a time, so interactions with a third assumption are invisible. The grid bounds are chosen, not derived, so the visible range is itself an assumption.",
+    "name": "Sensitivity grid"
+   },
+   {
+    "formula": "weighted mean of the enabled methods; weights renormalise over methods that produced a value (active_weights)",
+    "id": "master_blend",
+    "interpretation": "The blend forces the disagreement between methods into the open. Effective weights are shown separately from requested weights, so a method that failed to produce a value does not silently drag the blend.",
+    "limits": "Averaging four models does not reduce the error if they share an input, and they do: three of the four use the same share count and net debt. A confident-looking blend can rest on one bad balance sheet.",
+    "name": "Blended fair value"
+   },
+   {
+    "formula": "weighted mean over methods that produced a value, using renormalised active weights",
+    "id": "mv_blended",
+    "interpretation": "Effective weights are displayed separately from requested weights, so a method that failed to produce a value visibly drops out instead of silently dragging the blend toward zero.",
+    "limits": "Averaging four models does not reduce error when they share inputs, and three of the four use the same share count and net debt. A confident blend can rest on one bad balance sheet.",
+    "name": "Blended value"
+   },
+   {
+    "formula": "Gordon growth or multi-stage: PV = sum(D_t/(1+r)^t) + terminal D(1+g)/(r-g)",
+    "id": "ddm_value",
+    "interpretation": "Only meaningful for a mature payer with a stable policy. For those it is the most direct valuation available because the cash flow to the shareholder is observed rather than modelled.",
+    "limits": "Useless for non-payers and misleading for irregular payers. Requires r > g. Buybacks, which are the dominant return-of-capital route for US large caps, are invisible to it.",
+    "name": "Dividend discount value"
+   },
+   {
+    "formula": "retrieval over filing text, summarised by the LLM stack",
+    "id": "mv_ai_suggestions",
+    "interpretation": "Grounds the assumptions in the actual filing rather than in the modeller priors. Dismissible, and never writes an assumption on its own.",
+    "limits": "Generated text over retrieved passages: it can miss context and can restate a risk factor boilerplate as a finding. Nothing here changes a number unless a human accepts it.",
+    "name": "Filing evidence, risks and watch items"
+   },
+   {
+    "formula": "solve for the revenue growth that makes the DCF output equal the market price, holding other assumptions fixed",
+    "id": "reverse_dcf",
+    "interpretation": "Reframes the question from \"what is it worth\" to \"what does the market already believe\", which is a far more answerable question. Compare the implied rate against the company own history and the industry.",
+    "limits": "Inherits every DCF assumption. Solving for one variable while holding the rest fixed attributes all disagreement to growth, when it may live in the margin or the discount rate.",
+    "name": "Implied expectations"
+   },
+   {
+    "formula": "sum of discounted FCFF plus discounted terminal value, less net debt, per diluted share",
+    "id": "mv_dcf_leg",
+    "interpretation": "The only leg that does not depend on other companies being priced correctly, which is its whole argument.",
+    "limits": "Also the leg with the most assumptions, and terminal value dominates it. Independence from the market is bought with dependence on the modeller.",
+    "name": "Intrinsic DCF value"
+   },
+   {
+    "formula": "each selected target multiple applied to the matching company metric, blended by the target weights",
+    "id": "mv_multiples_leg",
+    "interpretation": "Market-anchored and fast. The spread across targets tells you whether the peer set actually agrees.",
+    "limits": "Assumes the peer group is fairly valued, which is precisely what is in question during a bubble or a washout.",
+    "name": "Market multiples value"
+   },
+   {
+    "formula": "blended value / market price - 1",
+    "id": "mv_market_gap",
+    "interpretation": "The output the whole tool exists to produce. Read it against the sensitivity grid: if the grid spans 2x, a 20% gap is inside the noise of the model.",
+    "limits": "A gap is a statement about the assumptions, not about the market. The Reverse DCF tool inverts the question and is usually the more disciplined way to ask it.",
+    "name": "Market price vs blended value"
+   },
+   {
+    "formula": "peer median multiple x company metric (earnings, EBITDA, sales, book), converted to per-share equity value",
+    "id": "multiples_valuation",
+    "interpretation": "Fast and market-anchored. The spread between methods (P/E vs EV/EBITDA vs P/S) is informative: a wide spread means the capital structure or the margin profile differs from the peers.",
+    "limits": "Assumes the peer group is fairly valued, which is exactly what is in question in a bubble or a washout. Meaningless on negative earnings, and the tool suppresses rather than prints those.",
+    "name": "Peer-multiple implied value"
+   },
+   {
+    "formula": "per-segment revenue share x segment multiple, summed, less net debt, per share",
+    "id": "sotp_value",
+    "interpretation": "The right frame for a conglomerate, where a blended multiple is meaningless. Reported segments load automatically so the starting point is the company own disclosure rather than a guess.",
+    "limits": "Segment disclosure is coarse and inconsistent between companies. Revenue shares normalise to 100%, so an omitted segment silently inflates the rest. No conglomerate discount is applied.",
+    "name": "Segment-based value"
+   },
+   {
+    "formula": "seeded from the latest reported TTM revenue",
+    "id": "mv_base_revenue",
+    "interpretation": "Everything downstream scales off this one number, so a wrong base is the most expensive input error available.",
+    "limits": "Seeded from TTM, which lags a turn. For a company mid-acquisition the base is pre-deal unless overridden.",
+    "name": "Base revenue"
+   },
+   {
+    "formula": "EBIT x (1 - tax) + D&A - capex - change in working capital",
+    "id": "mv_fcff",
+    "interpretation": "The actual thing being discounted. The reconciliation from margin to cash is where capital intensity shows up, and it is the step most skipped.",
+    "limits": "Working capital is modelled as a share of revenue rather than from the individual line items, so a business with unusual payables dynamics is mis-modelled.",
+    "name": "Cash from profit (FCFF)"
+   },
+   {
+    "formula": "equity value = enterprise value - net debt; per share = equity value / diluted shares",
+    "id": "mv_net_debt",
+    "interpretation": "The unglamorous step where a good enterprise valuation becomes a wrong per-share number. Dilution from options and converts is frequently understated.",
+    "limits": "Diluted share count is as reported and excludes announced but unissued dilution. Net debt uses period-end cash, which is seasonal for many businesses.",
+    "name": "Net debt and diluted shares"
+   },
+   {
+    "formula": "user rate, faded toward terminal growth over the horizon",
+    "id": "mv_revenue_cagr",
+    "interpretation": "The single assumption the output is most sensitive to after WACC. Sanity-check it against the company own history and the industry, both of which are on the page.",
+    "limits": "A constant CAGR is a fiction for any real business. The fade toward terminal growth softens it but the shape is still imposed rather than modelled.",
+    "name": "Revenue CAGR"
+   },
+   {
+    "formula": "g in TV = FCFF_final x (1+g) / (WACC - g)",
+    "id": "mv_terminal_growth",
+    "interpretation": "Terminal value is typically 60-80% of total DCF value, so this single number dominates the answer. Anything above long-run nominal GDP is a claim the company grows forever faster than the economy.",
+    "limits": "The model is hypersensitive here: the gap (WACC - g) sits in a denominator, so small changes produce large swings as the two converge.",
+    "name": "Terminal growth"
+   },
+   {
+    "formula": "linear glide from the current margin to the terminal target across the horizon",
+    "id": "mv_terminal_margin",
+    "interpretation": "Where most optimism hides. A terminal margin above the best year the company or its industry has ever posted is the most common way a DCF is talked into a target price.",
+    "limits": "Damodaran industry data is available as a reality check but is not enforced. Nothing prevents an unattainable value.",
+    "name": "Terminal margin"
+   },
+   {
+    "formula": "cost of equity from CAPM (risk free + beta x ERP) blended with after-tax cost of debt at target weights",
+    "id": "mv_wacc",
+    "interpretation": "Together with terminal growth it usually moves fair value more than any operating assumption, which is why the sensitivity grid defaults to this axis.",
+    "limits": "Must exceed terminal growth or the perpetuity formula diverges and the model is nonsense. Beta silently backstops from the bundled Damodaran snapshot when the vendor has none.",
+    "name": "WACC"
+   }
+  ],
+  "monte-carlo": [
+   {
+    "formula": "roots of the expiry payoff function across the price grid",
+    "id": "mc_breakevens",
+    "interpretation": "The deterministic frame around the probabilistic result. Distance from spot to the nearest break-even is the honest read on how much has to go right.",
+    "limits": "Expiry-only: ignores the path, early assignment and financing. A structure can be profitable at expiry and still be closed at a loss on a margin call.",
+    "name": "Break-even prices"
+   },
+   {
+    "formula": "the strategy evaluated on the realised price series rather than on simulated ones",
+    "id": "mc_exact_replay",
+    "interpretation": "The control for the simulation. A large gap between replay and median simulated return means the model assumptions, not the strategy, are producing the result.",
+    "limits": "A single path, so it is an anecdote by construction. Included as a sanity check, not as evidence.",
+    "name": "Exact replay return"
+   },
+   {
+    "formula": "minimum and maximum of the expiry payoff across the evaluated price grid",
+    "id": "mc_max_loss",
+    "interpretation": "Max loss is the number that should size the position, not probability of profit. A 70% win rate with a 5:1 loss ratio is a losing structure.",
+    "limits": "Bounded by the evaluated grid, so an unbounded short leg shows a finite max loss that is an artefact of the grid width rather than a real limit.",
+    "name": "Max loss and max profit"
+   },
+   {
+    "formula": "quantile(terminal equity, 0.50)",
+    "id": "mc_median_final",
+    "interpretation": "The central case. Reported as a median rather than a mean because terminal wealth of a compounding series is right-skewed and the mean sits above almost every path.",
+    "limits": "Inherits the drift assumption directly. If drift is estimated from the same history being simulated, this is close to circular.",
+    "name": "Median final value"
+   },
+   {
+    "formula": "median of the per-path maximum drawdown",
+    "id": "mc_max_dd_median",
+    "interpretation": "More useful than a single historical drawdown because it is a distribution: it answers \"what drawdown should I expect\", not \"what happened once\".",
+    "limits": "Only as good as the path generator. GBM cannot produce clustered volatility, so its drawdowns are systematically too shallow.",
+    "name": "Median max drawdown"
+   },
+   {
+    "formula": "median across paths of the maximum margin requirement as a share of equity",
+    "id": "mc_median_peak_margin",
+    "interpretation": "The early-warning number for a levered structure: a book that peaks at 90% utilisation on the median path will breach on plenty of others.",
+    "limits": "Peak is per-path, so the median peak is not the peak of the median path and cannot be read off the equity fan.",
+    "name": "Median peak margin"
+   },
+   {
+    "formula": "quantile(terminal equity, 0.05) and (0.95)",
+    "id": "mc_p5_p95",
+    "interpretation": "The width between them is the real output. A band spanning 5x means the horizon is too long or the volatility too high for any point estimate to be meaningful.",
+    "limits": "Tail quantiles need far more paths to stabilise than the median. A run with few paths shows a steady median and a jittery band.",
+    "name": "P5 and P95 outcomes"
+   },
+   {
+    "formula": "count(terminal > initial) / paths * 100",
+    "id": "mc_prob_profit",
+    "interpretation": "The most intuitive output and the easiest to over-read. For an options structure it is the headline, but a 70% win probability with a 5:1 loss ratio is a losing trade.",
+    "limits": "Says nothing about magnitude. Always read beside max loss and CVaR, which is why they are on the same strip.",
+    "name": "Probability of profit"
+   },
+   {
+    "formula": "count(paths breaching ruin or the maintenance requirement) / paths * 100",
+    "id": "mc_prob_ruin",
+    "interpretation": "The constraint that makes median outcomes irrelevant: a path that liquidates cannot recover, so leverage turns a good median into a bad expectation.",
+    "limits": "Depends on user-entered maintenance percentages. Assumes no top-up and no discretionary deleveraging, which is conservative but not always realistic.",
+    "name": "Probability of ruin and forced liquidation"
+   },
+   {
+    "formula": "arithmetic mean return - geometric mean return, approximately variance / 2",
+    "id": "mc_vol_drag",
+    "interpretation": "Explains why a strategy with a positive average return can still lose money. The drag grows with the square of volatility, which is the mathematical case against leverage.",
+    "limits": "The variance/2 approximation breaks down at high volatility, where the true drag is larger than the formula suggests.",
+    "name": "Volatility drag"
+   },
+   {
+    "formula": "physical GBM uses estimated drift; risk-neutral sets drift to the risk-free rate; Student-t adds a tail degrees-of-freedom parameter; block bootstrap resamples real returns in 10-day blocks",
+    "id": "mc_sim_model",
+    "interpretation": "Risk-neutral is the correct choice for pricing an option structure; physical is the correct choice for forecasting a portfolio. Using the wrong one is the most common error this selector prevents.",
+    "limits": "The same structure produces materially different probability-of-profit under each. The choice is exposed rather than hidden precisely because it is not neutral.",
+    "name": "Simulation model"
+   },
+   {
+    "formula": "count of paths hitting the stop, the target, or running to the horizon",
+    "id": "mc_exit_rules",
+    "interpretation": "The distribution of exit reasons is the clearest picture of whether the exit rules are doing anything. If 95% of paths hold to cap, the stop is decorative.",
+    "limits": "Stops are evaluated at bar close, so a path that would have gapped through a stop is filled at the stop level rather than at the gap.",
+    "name": "Stop-loss, take-profit and hold-to-cap outcomes"
+   }
+  ],
   "mover": [
    {
     "formula": "stock return minus benchmark return over the same session",
@@ -1817,6 +2031,122 @@
     "interpretation": "The input every portfolio tool keys off. Books are importable into Allocator, Analysis, Compare, Backtester, Factor Decomposition and the drawdown alert through PMImportPicker.",
     "limits": "localStorage only, so it is per browser and never synced server-side. A drawdown alert therefore has to carry its holdings in the alert payload, the same way a strategy alert carries its rules. Clearing site data deletes the book.",
     "name": "Holdings, options, futures and cash"
+   }
+  ],
+  "portfolio-backtest": [
+   {
+    "formula": "stdev(strategy daily returns) * sqrt(bars_per_year) * 100",
+    "id": "bt_ann_vol",
+    "interpretation": "A strategy in cash most of the time posts low volatility for a reason that has nothing to do with skill. Read alongside time-in-market.",
+    "limits": "Computed over all bars including flat ones, so a rarely-traded strategy looks far calmer than it is when actually positioned.",
+    "name": "Annualized volatility"
+   },
+   {
+    "formula": "annualised return / |max drawdown|",
+    "id": "bt_calmar",
+    "interpretation": "The ratio most aligned with whether a strategy is actually holdable through its bad period.",
+    "limits": "One historical drawdown sets the denominator, so the figure changes discontinuously when the window crosses a crash.",
+    "name": "Calmar"
+   },
+   {
+    "formula": "intercept of the OLS of strategy daily returns on benchmark daily returns",
+    "id": "bt_daily_alpha",
+    "interpretation": "The excess the strategy produced per day after accounting for its market exposure. Annualise it mentally by multiplying by roughly 252 to judge whether it is material.",
+    "limits": "No t-statistic or p-value is reported on this panel, so there is nothing here to distinguish alpha from luck. The Regression tools do report significance; this does not.",
+    "name": "Daily alpha"
+   },
+   {
+    "formula": "Pearson r between strategy and benchmark daily returns, and its square",
+    "id": "bt_r_squared",
+    "interpretation": "A high R-squared means the strategy is a levered or delevered index position whatever its rules claim. Low correlation with positive alpha is the only combination worth paying for.",
+    "limits": "Measures linear co-movement only. A strategy that is flat most of the time and fully long occasionally can show low R-squared while carrying full market risk when it matters.",
+    "name": "Market correlation and R-squared"
+   },
+   {
+    "formula": "min(equity / cummax(equity) - 1) * 100",
+    "id": "bt_max_dd",
+    "interpretation": "The number that decides whether a backtest is investable. A 25% CAGR with a 70% drawdown is a strategy nobody holds to the recovery.",
+    "limits": "Close-to-close on the bar interval, so intraday depth and any stop that would have triggered inside a bar are invisible.",
+    "name": "Max drawdown"
+   },
+   {
+    "formula": "size array clamped to [0,1], NaN to 0; position value = cash * allocation * size[i]",
+    "id": "algo_sizing",
+    "interpretation": "Turns a binary signal into a conviction-weighted one. All three P&L engines honour it.",
+    "limits": "A wrong-shaped size array raises 422 rather than being broadcast, deliberately: silently recycling a short array would misalign every subsequent bar.",
+    "name": "Per-bar position sizing"
+   },
+   {
+    "formula": "mean(strategy daily return) / stdev(strategy daily return) * sqrt(bars_per_year)",
+    "id": "bt_sharpe",
+    "interpretation": "The standard comparator across strategies on the same instrument. Anything above 2 on a daily-bar backtest of a simple rule set should be assumed to be overfitting until proven otherwise.",
+    "limits": "No risk-free subtraction in this engine, so it is a raw information-ratio-style figure and reads high against a textbook Sharpe in a high-rate environment.",
+    "name": "Sharpe ratio"
+   },
+   {
+    "formula": "mean return / downside deviation * sqrt(bars_per_year)",
+    "id": "bt_sortino",
+    "interpretation": "The right ratio for a trend strategy, whose whole design is to have lumpy upside and clipped downside.",
+    "limits": "Downside deviation on a sparse trade count is estimated from very few observations and is correspondingly unstable.",
+    "name": "Sortino"
+   },
+   {
+    "formula": "(final/initial)^(periods_per_year/observations) - 1",
+    "id": "bt_strategy_cagr",
+    "interpretation": "Makes windows of different length comparable. The paired Portfolio CAGR column is the same figure for the underlying held passively.",
+    "limits": "Annualising a short backtest is the most common way to make noise look like edge. Under about three years it says very little.",
+    "name": "Strategy CAGR"
+   },
+   {
+    "formula": "final equity / starting capital - 1",
+    "id": "bt_total_return",
+    "interpretation": "The raw result before any risk adjustment. Always read against the buy-and-hold line on the same chart: a strategy that underperforms holding is not a strategy.",
+    "limits": "No commission, slippage, spread or borrow. Fills are at the close of the signal bar, which is unachievable in practice and flatters any signal that keys off the close.",
+    "name": "Total return"
+   },
+   {
+    "formula": "count of entry-to-exit pairs; mean bars held, converted to days",
+    "id": "bt_num_trades",
+    "interpretation": "The sample size behind every other statistic here. Fewer than about 30 trades means the Sharpe and win rate are anecdotes.",
+    "limits": "A high trade count on daily bars implies costs this engine does not model, so the more trades a strategy makes the more optimistic its result.",
+    "name": "Trades and average hold"
+   },
+   {
+    "formula": "winning trades / total trades * 100",
+    "id": "bt_win_rate",
+    "interpretation": "Almost useless alone and routinely misread. A 35% win rate with 4:1 winners beats a 70% win rate with 1:3, which is why the P&L and average-hold columns sit next to it.",
+    "limits": "Sensitive to how a trade is defined: this engine closes a trade on the exit signal, so a strategy that scales out registers differently from one that exits at once.",
+    "name": "Win rate"
+   },
+   {
+    "formula": "rule blocks compile to Python through backend/algo_runtime/compiler.py; generated code runs in an AST-allowlist sandbox on a forkserver process with resource limits",
+    "id": "algo_signals",
+    "interpretation": "Both paths produce the same (entries, exits, size) contract, so a strategy can move between the visual builder and code without changing the P&L engine. Saved strategies carry a PY badge showing which path is active.",
+    "limits": "Generated code is validated at seven levels including a causality check by future perturbation (rewriting data after bar k and confirming earlier output is byte-identical), which catches lookahead that prefix truncation misses. Validation rejects genuine lookahead but cannot prove a strategy is economically sound.",
+    "name": "Rule and Python strategy signals"
+   }
+  ],
+  "portfolio-optimizer": [
+   {
+    "formula": "current shares = (baseline weight/100 x book value)/price; target the same at the slider weights; delta = target - current; trades filtered to |drift| >= 0.1pp",
+    "id": "rebalance_trades",
+    "interpretation": "Turns an optimiser output into something actionable. Turnover is shown alongside so the cost of the rebalance is visible before the trade list. A position exited to zero appears as a row rather than disappearing.",
+    "limits": "No commission, spread, tax lot or wash-sale handling. Anything inside 0.1 percentage points is treated as noise and omitted. CSV export only: there is no hand-off to Paper Trading, because that bridge is options-only today.",
+    "name": "Drift and rebalance trade list"
+   },
+   {
+    "formula": "mean-variance optimisation across the ticker set under the chosen bounds",
+    "id": "alloc_frontier",
+    "interpretation": "The curve is the menu; a book plotted below it is giving up return for no reason. The shape matters more than any single point on it.",
+    "limits": "Notoriously sensitive to the expected-return estimate. Small changes in the input move the whole curve, which is why the CAPM option exists as an alternative to raw historical means.",
+    "name": "Efficient frontier"
+   },
+   {
+    "formula": "the frontier point maximising (return - risk free) / volatility, with locked tickers held fixed and the remainder redistributed",
+    "id": "alloc_max_sharpe",
+    "interpretation": "Locking positions and redistributing the rest is what makes this usable on a real book rather than a blank slate. The proposal feeds directly into the rebalance trade list.",
+    "limits": "Concentrates aggressively into whichever asset had the best historical Sharpe, which is why bounds and locks exist. Unconstrained output is rarely investable.",
+    "name": "Max-Sharpe portfolio and target weights"
    }
   ],
   "portfolio-risk": [
@@ -2286,67 +2616,24 @@
   "al_sentiment",
   "al_sma",
   "al_strategy",
-  "algo_signals",
-  "algo_sizing",
-  "alloc_frontier",
-  "alloc_max_sharpe",
   "bond_convexity",
   "bond_duration",
   "bond_lookup",
   "bond_price",
   "bond_ytm",
-  "bt_ann_vol",
-  "bt_calmar",
-  "bt_daily_alpha",
-  "bt_max_dd",
-  "bt_num_trades",
-  "bt_r_squared",
-  "bt_sharpe",
-  "bt_sortino",
-  "bt_strategy_cagr",
-  "bt_total_return",
-  "bt_win_rate",
   "comtrade_flows",
-  "ddm_value",
   "energy_infrastructure",
   "etf_holdings",
   "fm_chokepoint_history",
   "market_hours",
-  "master_blend",
-  "mc_breakevens",
-  "mc_exact_replay",
-  "mc_exit_rules",
-  "mc_max_dd_median",
-  "mc_max_loss",
-  "mc_median_final",
-  "mc_median_peak_margin",
-  "mc_p5_p95",
-  "mc_prob_profit",
-  "mc_prob_ruin",
-  "mc_sim_model",
-  "mc_vol_drag",
   "mm_simulator",
-  "mv_ai_suggestions",
-  "mv_base_revenue",
-  "mv_blended",
-  "mv_dcf_leg",
-  "mv_fcff",
-  "mv_market_gap",
-  "mv_multiples_leg",
-  "mv_net_debt",
-  "mv_revenue_cagr",
-  "mv_terminal_growth",
-  "mv_terminal_margin",
-  "mv_wacc",
   "nav_premium",
   "pt_equity",
   "pt_orders",
   "pt_positions",
   "pt_realized",
   "pt_scheduler",
-  "rebalance_trades",
   "report_clips",
-  "reverse_dcf",
   "sc_facilities",
   "scr_30d_vol",
   "scr_52w_high",
@@ -2363,11 +2650,9 @@
   "scr_vs_200dma",
   "scr_vs_50dma",
   "screener_universe",
-  "sotp_value",
   "strategy_payoff",
   "supply_chain_peers",
   "tf_partners",
-  "trade_journal",
-  "valuation_sensitivity"
+  "trade_journal"
  ]
 }

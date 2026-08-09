@@ -3,6 +3,11 @@ import { chartClip, kpiClip, tableClip, textClip } from './reportCaptureRegistry
 import type { ActivePortfolioContext } from './pmImport'
 import { smaArr, emaArr, rsiArr, hvArr, bollinger } from './indicators'
 import { parseChartDirective } from './researchDirective'
+import {
+  masterValuationBlocker,
+  seedMasterValuationRequest,
+  type MasterValuationFundamentals,
+} from './masterValuationSeed'
 import { normalizeTicker } from './pmImport'
 import type { ClipDraft, EvidenceDomain, ReportClip, ReportScope } from './reportCreator'
 
@@ -59,6 +64,12 @@ export type ReportResearchSourceId =
   | 'housing'
   | 'ipo-calendar'
   | 'chokepoint-exposure'
+  // Modelled tools. Each builds its request from a preceding fetch rather than
+  // taking a bare ticker, which is why they came after the first pass.
+  | 'master-valuation'
+  | 'monte-carlo'
+  | 'portfolio-optimizer'
+  | 'portfolio-backtest'
 
 export interface ReportResearchSource {
   id: ReportResearchSourceId
@@ -298,6 +309,10 @@ const SOURCE_META: Record<ReportResearchSourceId, Omit<ReportResearchSource, 're
   housing: { id: 'housing', label: 'Housing market', tool: 'Housing Market', route: '/housing', domain: 'macro' },
   'ipo-calendar': { id: 'ipo-calendar', label: 'IPO calendar', tool: 'IPO Scanner', route: '/ipo-calendar', domain: 'macro' },
   'chokepoint-exposure': { id: 'chokepoint-exposure', label: 'Chokepoint exposure', tool: 'Chokepoint Exposure', route: '/chokepoint-exposure', domain: 'macro' },
+  'master-valuation': { id: 'master-valuation', label: 'Multi-method valuation', tool: 'Master Valuation', route: '/master-valuation', domain: 'issuer' },
+  'monte-carlo': { id: 'monte-carlo', label: 'Simulated outcome range', tool: 'Monte Carlo', route: '/montecarlo', domain: 'portfolio' },
+  'portfolio-optimizer': { id: 'portfolio-optimizer', label: 'Allocation efficiency', tool: 'Portfolio Allocator', route: '/portfolio-optimizer', domain: 'portfolio' },
+  'portfolio-backtest': { id: 'portfolio-backtest', label: 'Strategy backtest', tool: 'Portfolio Backtester', route: '/backtest', domain: 'portfolio' },
 }
 
 type ResearchTargetMode = 'market' | 'symbols' | 'portfolio' | 'portfolio-or-symbols'
@@ -352,6 +367,10 @@ const REPORT_RESEARCH_TOOL_CATALOG_BASE: Omit<ReportResearchToolCatalogItem, 'do
   { id: 'housing', label: 'Housing market', description: 'Mortgage rates, median price, affordability, months of supply, and delinquency.', targetMode: 'market', producesVisuals: false },
   { id: 'ipo-calendar', label: 'IPO calendar', description: 'Priced and upcoming listings with deal size, as a read on primary-market risk appetite.', targetMode: 'market', producesVisuals: false },
   { id: 'chokepoint-exposure', label: 'Chokepoint exposure', description: 'Maritime chokepoint transit stress and the listed companies most exposed to it.', targetMode: 'market', producesVisuals: true },
+  { id: 'master-valuation', label: 'Multi-method valuation', description: 'One model carrying DCF, exit multiples, dividend discount and sum-of-the-parts side by side, plus the reverse-DCF read of what the market price already assumes.', targetMode: 'symbols', producesVisuals: true },
+  { id: 'monte-carlo', label: 'Simulated outcome range', description: 'Forward distribution of portfolio value from simulated paths, with tail loss measures.', targetMode: 'portfolio-or-symbols', producesVisuals: true },
+  { id: 'portfolio-optimizer', label: 'Allocation efficiency', description: 'The current book scored against max-Sharpe, minimum-variance, risk-parity and equal-weight allocations on one efficient frontier.', targetMode: 'portfolio', producesVisuals: true },
+  { id: 'portfolio-backtest', label: 'Strategy backtest', description: 'The saved rule-based strategy replayed over history across the book, with its trade record.', targetMode: 'portfolio-or-symbols', producesVisuals: true },
 ]
 
 export const REPORT_RESEARCH_TOOL_CATALOG: ReportResearchToolCatalogItem[] = REPORT_RESEARCH_TOOL_CATALOG_BASE.map(item => ({
@@ -373,6 +392,10 @@ const HISTORICAL_RESEARCH_SOURCES = new Set<ReportResearchSourceId>([
   'sector-rrg',
   'pairs',
   'cot-positioning',
+  'master-valuation',
+  'monte-carlo',
+  'portfolio-optimizer',
+  'portfolio-backtest',
 ])
 
 const FORWARD_RESEARCH_SOURCES = new Set<ReportResearchSourceId>([
@@ -609,6 +632,10 @@ const record = (value: unknown): Record<string, any> =>
   value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {}
 const array = (value: unknown): any[] => Array.isArray(value) ? value : []
 const finite = (value: unknown): number | null => {
+  // Number(null) is 0 and Number('') is 0, so coercing first turns an explicit
+  // "not computed" from an API into a hard zero. A null DDM leg rendered as
+  // $0.00 with -100% upside is a fabricated number in a report, not a gap.
+  if (value == null || value === '') return null
   const number = typeof value === 'number' ? value : Number(value)
   return Number.isFinite(number) ? number : null
 }
@@ -1003,7 +1030,10 @@ export async function enhanceReportResearchPlan(
     // Telling the planner keeps it from spending a shortlist slot on a tool the
     // client would then silently refuse to run.
     disabledSourceIds: REPORT_RESEARCH_TOOL_CATALOG
-      .filter(tool => !sourceMatchesHorizon(tool.id, scope))
+      .filter(tool => !sourceMatchesHorizon(tool.id, scope)
+        // A strategy backtest with no saved strategy has nothing to replay, and
+        // inventing a rule set would attribute a strategy the user never chose.
+        || (tool.id === 'portfolio-backtest' && !hasSavedStrategyForBacktest()))
       .map(tool => tool.id),
   }))
   const additions = array(response.additions)
@@ -3368,7 +3398,315 @@ async function runSource(
       }
       return clips
     }
+
+    // ── Modelled tools ───────────────────────────────────────────────────────
+    // These build a request instead of taking a ticker. The assumptions come
+    // from the same helpers their pages use, so a report and the page it links
+    // to cannot show different numbers for the same company or book.
+
+    case 'master-valuation':
+      return perTicker(source, async ticker => {
+        const fundamentals = record(await client.get(
+          `/api/master-valuation/fundamentals?ticker=${encodeURIComponent(ticker)}`,
+        )) as unknown as MasterValuationFundamentals
+        const blocker = masterValuationBlocker(fundamentals)
+        // Refusing here is the point: a valuation built on invented revenue or
+        // a two-year forecast is worse than no valuation section at all.
+        if (blocker) return null
+        const analysis = record(await client.post(
+          '/api/master-valuation/analyze',
+          seedMasterValuationRequest(fundamentals),
+        ))
+        const methods = record(analysis.methods)
+        const composite = record(analysis.composite)
+        const reverse = record(analysis.reverse)
+        const price = finite(analysis.market_price)
+        const value = finite(composite.value_per_share)
+        if (value == null) return null
+        const upside = price && price > 0 ? (value / price - 1) * 100 : null
+        const methodRows = ([
+          ['Discounted cash flow', methods.dcf],
+          ['Exit multiples', methods.multiples],
+          ['Dividend discount', methods.ddm],
+          ['Sum of the parts', methods.sotp],
+        ] as const)
+          .map(([label, raw]) => [label, finite(raw), price && finite(raw) ? +((finite(raw)! / price - 1) * 100).toFixed(1) : null])
+          .filter(row => row[1] != null)
+        const clips: ClipDraft[] = [
+          tagClip(kpiClip('Master Valuation', `${ticker} · multi-method valuation`, [
+            { label: 'Blended value per share', value: `$${value.toFixed(2)}`, sub: `Weighted across ${methodRows.length} method${methodRows.length === 1 ? '' : 's'}` },
+            { label: 'Market price', value: price == null ? '—' : `$${price.toFixed(2)}` },
+            { label: 'Implied upside', value: upside == null ? '—' : `${upside.toFixed(1)}%` },
+            // The spread is the honest confidence measure. A composite quoted
+            // alone hides a DCF and a multiples value 80% apart.
+            {
+              label: 'Method spread',
+              value: `$${finite(composite.range_low)?.toFixed(2) ?? '—'} to $${finite(composite.range_high)?.toFixed(2) ?? '—'}`,
+              sub: 'Widest gap between methods, not a confidence interval',
+            },
+            { label: 'Assumption source', value: plain(fundamentals.source) },
+          ]), source, `${ticker}:valuation-summary`),
+          tagClip(tableClip(
+            'Master Valuation',
+            `${ticker} · value per share by method`,
+            ['Method', 'Value per share $', 'Upside vs market %'],
+            methodRows as (string | number | null)[][],
+          ), source, `${ticker}:valuation-methods`),
+        ]
+        if (methodRows.length > 1) {
+          clips.push(tagClip(chartClip(
+            'Master Valuation',
+            `${ticker} · valuation by method`,
+            'bar',
+            'method',
+            methodRows.map(row => ({ method: String(row[0]), value: row[1] as number | null })),
+            [{ key: 'value', label: 'Value per share $', unit: 'number' }],
+          ), source, `${ticker}:valuation-visual`))
+        }
+        if (finite(reverse.implied_revenue_cagr) != null) {
+          clips.push(tagClip(kpiClip('Reverse DCF', `${ticker} · what the market price already assumes`, [
+            { label: 'Implied revenue CAGR', value: `${finite(reverse.implied_revenue_cagr)!.toFixed(1)}%`, sub: 'To justify the current price on these other assumptions' },
+            { label: 'Implied terminal margin', value: finite(reverse.implied_terminal_margin) == null ? '—' : `${finite(reverse.implied_terminal_margin)!.toFixed(1)}%` },
+            { label: 'Implied discount rate', value: finite(reverse.implied_wacc) == null ? '—' : `${finite(reverse.implied_wacc)!.toFixed(2)}%` },
+            { label: 'Implied exit multiple', value: finite(reverse.implied_exit_multiple) == null ? '—' : `${finite(reverse.implied_exit_multiple)!.toFixed(1)}x`, sub: `Year ${plain(reverse.implied_exit_year)}` },
+          ]), source, `${ticker}:reverse-dcf`))
+        }
+        return clips
+      })
+
+    case 'monte-carlo': {
+      const { start, end } = lookbackRange(scope)
+      const basis = await portfolioWeightBasis(source, portfolio, client)
+      if (!basis) return []
+      const data = record(await client.post('/api/portfolio/montecarlo', {
+        tickers: basis.tickers,
+        weights: basis.weights,
+        start,
+        end,
+        n_sims: 500,
+        horizon_days: 252,
+      }))
+      const percentiles = record(data.percentiles)
+      const core = record(data.core_metrics)
+      if (finite(percentiles.p50) == null) return []
+      const asPct = (value: unknown) => finite(value) == null ? '—' : `${((finite(value)! - 1) * 100).toFixed(1)}%`
+      return [
+        tagClip(kpiClip('Monte Carlo', `${basis.label} · simulated one-year outcome range`, [
+          { label: 'Median outcome', value: asPct(percentiles.p50), sub: '500 paths over 252 sessions' },
+          { label: '5th percentile', value: asPct(percentiles.p5), sub: 'One year in twenty is worse than this' },
+          { label: '95th percentile', value: asPct(percentiles.p95) },
+          { label: '95% VaR', value: finite(data.var_95) == null ? '—' : `${finite(data.var_95)!.toFixed(1)}%` },
+          // CVaR is the average of the tail, so it is always worse than VaR and
+          // is the number that describes the loss you actually take when it goes.
+          { label: '95% CVaR', value: finite(data.cvar_95) == null ? '—' : `${finite(data.cvar_95)!.toFixed(1)}%`, sub: 'Mean loss across the worst 5% of paths' },
+          { label: 'Simulated CAGR', value: finite(core.cagr) == null ? '—' : `${finite(core.cagr)!.toFixed(1)}%`, sub: `Volatility drag ${finite(core.volatility_drag)?.toFixed(1) ?? '—'}%` },
+          { label: 'Simulated max drawdown', value: finite(core.max_drawdown) == null ? '—' : `${finite(core.max_drawdown)!.toFixed(1)}%` },
+          { label: 'Calibration window', value: `${start} to ${end}`, sub: `Drift ${((finite(data.mu) ?? 0) * 100).toFixed(1)}% · vol ${((finite(data.sigma) ?? 0) * 100).toFixed(1)}%` },
+        ]), source, 'monte-carlo-summary'),
+        tagClip(chartClip(
+          'Monte Carlo',
+          `${basis.label} · simulated terminal value by percentile`,
+          'bar',
+          'percentile',
+          (['p5', 'p25', 'p50', 'p75', 'p95'] as const).map(key => ({
+            percentile: key.replace('p', '') + 'th',
+            change: finite(percentiles[key]) == null ? null : +((finite(percentiles[key])! - 1) * 100).toFixed(1),
+          })),
+          [{ key: 'change', label: 'Change over one year %', unit: 'percent' }],
+        ), source, 'monte-carlo-distribution'),
+      ]
+    }
+
+    case 'portfolio-optimizer': {
+      const { start, end } = lookbackRange(scope)
+      const basis = await portfolioWeightBasis(source, portfolio, client)
+      // Two assets is the minimum for a frontier to exist at all.
+      if (!basis || basis.tickers.length < 2) return []
+      const weightMap: Record<string, number> = {}
+      basis.tickers.forEach((ticker, index) => { weightMap[ticker] = basis.weights[index] })
+      const data = record(await client.post('/api/portfolio-opt/optimize', {
+        tickers: basis.tickers.slice(0, 20),
+        start,
+        end,
+        weights: weightMap,
+      }))
+      const portfolios = record(data.portfolios)
+      const rows = ([
+        ['Current book', portfolios.current],
+        ['Max Sharpe', portfolios.max_sharpe],
+        ['Minimum variance', portfolios.min_variance],
+        ['Risk parity', portfolios.risk_parity],
+        ['Equal weight', portfolios.equal_weight],
+      ] as const)
+        .map(([label, raw]) => {
+          const row = record(raw)
+          return [label, finite(row.return), finite(row.vol), finite(row.sharpe)]
+        })
+        .filter(row => row[1] != null)
+      if (!rows.length) return []
+      const current = record(portfolios.current)
+      const best = record(portfolios.max_sharpe)
+      const frontier = array(data.frontier).map(item => record(item))
+      const clips: ClipDraft[] = [
+        tagClip(kpiClip('Portfolio Allocator', `${basis.label} · allocation efficiency`, [
+          { label: 'Current Sharpe', value: finite(current.sharpe)?.toFixed(2) ?? '—', sub: `${finite(current.return)?.toFixed(1) ?? '—'}% return at ${finite(current.vol)?.toFixed(1) ?? '—'}% volatility` },
+          { label: 'Best attainable Sharpe', value: finite(best.sharpe)?.toFixed(2) ?? '—', sub: 'Max-Sharpe weights on this window' },
+          {
+            label: 'Sharpe gap',
+            value: finite(best.sharpe) != null && finite(current.sharpe) != null
+              ? (finite(best.sharpe)! - finite(current.sharpe)!).toFixed(2) : '—',
+            // In-sample by construction. Saying so here stops the gap being read
+            // as money left on the table.
+            sub: 'In-sample optimum; not repeatable out of sample',
+          },
+          { label: 'Assets priced', value: `${array(data.tickers).length}`, sub: array(data.dropped).length ? `${array(data.dropped).length} dropped` : 'All holdings covered' },
+          { label: 'Window', value: `${plain(record(data.span).start)} to ${plain(record(data.span).end)}`, sub: `${plain(data.days)} sessions` },
+        ]), source, 'optimizer-summary'),
+        tagClip(tableClip(
+          'Portfolio Allocator',
+          `${basis.label} · the book against standard allocations`,
+          ['Allocation', 'Return %', 'Volatility %', 'Sharpe'],
+          rows as (string | number | null)[][],
+        ), source, 'optimizer-comparison'),
+      ]
+      if (frontier.length > 2) {
+        clips.push(tagClip(chartClip(
+          'Portfolio Allocator',
+          `${basis.label} · efficient frontier`,
+          'line',
+          'vol',
+          frontier.map(point => ({ vol: finite(point.vol), return: finite(point.return) })),
+          [{ key: 'return', label: 'Expected return %', unit: 'percent' }],
+          { xUnit: 'percent' },
+        ), source, 'optimizer-frontier'))
+      }
+      return clips
+    }
+
+    case 'portfolio-backtest': {
+      const handoff = readAlgoStrategyHandoff()
+      // Gated on a strategy the user actually built. There is no default rule
+      // set worth reporting: inventing one would attribute a strategy to them
+      // that they never chose.
+      if (!handoff) return []
+      const risk = record(record(handoff.strategy).risk)
+      const positions = array(handoff.positions).map(raw => {
+        const position = record(raw)
+        return {
+          ticker: plain(position.ticker),
+          side: plain(position.side) === '—' ? 'long' : plain(position.side),
+          rules: { buy: record(handoff.strategy).buy, sell: record(handoff.strategy).sell },
+          position_size: finite(position.tradeSize) ?? finite(handoff.tradeSizePct) ?? 10,
+          stop_loss: finite(risk.stopLossPct) || undefined,
+          take_profit: finite(risk.takeProfitPct) || undefined,
+          trailing_stop: finite(risk.trailingStopPct) || undefined,
+          max_hold_bars: finite(risk.maxHoldBars) || undefined,
+        }
+      }).filter(position => position.ticker && position.ticker !== '—')
+      if (!positions.length) return []
+      const data = record(await client.post('/api/strategy/portfolio-backtest', {
+        positions,
+        start: plain(handoff.start) === '—' ? lookbackRange(scope).start : plain(handoff.start),
+        end: plain(handoff.end) === '—' ? lookbackRange(scope).end : plain(handoff.end),
+        timeframe: plain(handoff.timeframe) === '—' ? '1d' : plain(handoff.timeframe),
+        initial_capital: 10_000,
+        position_size: finite(handoff.tradeSizePct) ?? 10,
+        leverage: finite(handoff.leverage) ?? 1,
+        effective_annual_rate: finite(handoff.effectiveAnnualRate) ?? 0,
+      }))
+      const metrics = record(data.metrics ?? data)
+      if (finite(metrics.total_return) == null && finite(metrics.cagr) == null) return []
+      const strategyName = plain(record(handoff.strategy).name) === '—' ? 'Saved strategy' : plain(record(handoff.strategy).name)
+      const equity = array(data.equity_curve ?? data.equity).map(item => record(item))
+      const clips: ClipDraft[] = [
+        tagClip(kpiClip('Portfolio Backtester', `${strategyName} · replayed across ${positions.length} position${positions.length === 1 ? '' : 's'}`, [
+          { label: 'Total return', value: percent(metrics.total_return) },
+          { label: 'CAGR', value: percent(metrics.cagr) },
+          { label: 'Sharpe', value: finite(metrics.sharpe)?.toFixed(2) ?? '—' },
+          { label: 'Max drawdown', value: percent(metrics.max_drawdown) },
+          { label: 'Trades', value: plain(metrics.trades ?? metrics.trade_count), sub: `${finite(metrics.win_rate)?.toFixed(0) ?? '—'}% win rate` },
+          { label: 'Time in market', value: percent(metrics.exposure_pct) },
+          // The measurement is of the rule, not of holding these names.
+          { label: 'Measures', value: 'The rule set, not the holdings', sub: `${plain(handoff.timeframe)} bars from ${plain(handoff.start)}` },
+        ]), source, 'backtest-summary'),
+      ]
+      if (equity.length > 4) {
+        clips.push(tagClip(chartClip(
+          'Portfolio Backtester',
+          `${strategyName} · equity curve`,
+          'line',
+          'date',
+          thin(equity.map(point => ({ date: plain(point.date ?? point.t), equity: finite(point.equity ?? point.value) }))),
+          [{ key: 'equity', label: 'Portfolio value $', unit: 'number' }],
+        ), source, 'backtest-equity'))
+      }
+      return clips
+    }
   }
+}
+
+/** Live-marked book weights, shared by the simulator and the optimizer.
+ *
+ * Both need the same thing: the tickers and the fractions they represent right
+ * now. Cost basis would misweight a book that has moved, so live quotes lead and
+ * saved cost is only the fallback.
+ */
+async function portfolioWeightBasis(
+  source: ReportResearchSource,
+  portfolio: ActivePortfolioContext,
+  client: ResearchClient,
+): Promise<{ tickers: string[]; weights: number[]; label: string } | null> {
+  const holdings = (portfolio.hasData ? portfolio.holdings : [])
+    .map(holding => ({ ...holding, ticker: normalizeTicker(holding.ticker) }))
+    .filter(holding => holding.ticker && holding.shares > 0)
+  // Falls back to the researched symbols equally weighted, so a symbol-scoped
+  // report can still simulate without an active book.
+  if (!holdings.length) {
+    const symbols = unique(source.targets.map(normalizeTicker).filter(Boolean)).slice(0, 20)
+    if (!symbols.length) return null
+    return {
+      tickers: symbols,
+      weights: symbols.map(() => 1 / symbols.length),
+      label: symbols.length === 1 ? symbols[0] : `${symbols.length} named assets, equally weighted`,
+    }
+  }
+  let quotes: Record<string, unknown> = {}
+  try {
+    quotes = record(await client.get(`/api/alerts/quotes?tickers=${encodeURIComponent(holdings.map(holding => holding.ticker).join(','))}`))
+  } catch {
+    quotes = {}
+  }
+  const valued = holdings
+    .map(holding => {
+      const mark = finite(record(quotes[holding.ticker]).current_price) ?? (holding.avgCost > 0 ? holding.avgCost : null)
+      return { ticker: holding.ticker, value: mark == null ? 0 : Math.max(0, holding.shares * mark) }
+    })
+    .filter(row => row.value > 0)
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 20)
+  const total = valued.reduce((sum, row) => sum + row.value, 0)
+  if (!valued.length || total <= 0) return null
+  return {
+    tickers: valued.map(row => row.ticker),
+    weights: valued.map(row => +(row.value / total).toFixed(6)),
+    label: /^default$/i.test(portfolio.name.trim()) ? 'Portfolio' : portfolio.name,
+  }
+}
+
+/** The strategy the user sent from the Algo Strategy Builder, if there is one. */
+function readAlgoStrategyHandoff(): Record<string, any> | null {
+  try {
+    const raw = JSON.parse(localStorage.getItem('fdb_algo_universe_monte_carlo_handoff') || 'null')
+    if (!raw || raw.version !== 1 || !raw.strategy || !Array.isArray(raw.positions) || !raw.positions.length) return null
+    return raw
+  } catch {
+    return null
+  }
+}
+
+/** Whether a strategy backtest can run at all. Drives the planner's disabled set. */
+export function hasSavedStrategyForBacktest(): boolean {
+  return readAlgoStrategyHandoff() != null
 }
 
 const failureMessage = (error: unknown) => {
@@ -3396,6 +3734,7 @@ const PER_TICKER_SOURCES = new Set<ReportResearchSourceId>([
   'options-unusual',
   'insider-activity',
   'institutional-ownership',
+  'master-valuation',
 ])
 
 export async function collectReportResearch(

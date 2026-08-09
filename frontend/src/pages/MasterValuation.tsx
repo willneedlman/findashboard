@@ -19,26 +19,15 @@ FIRST VIEWPORT: Fetch and AI actions lead into a five-step spine, one focused wo
 FORM: Guided spine from the supplied 1a handoff, preserving the established terminal system and its compact operating density.
 */
 
-type AnnualAssumption = {
-  year: number
-  growth: number
-  margin: number
-  tax_rate: number
-  da_pct: number
-  capex_pct: number
-  change_nwc_pct: number
-  sbc_pct: number
-  cash_adjustment_pct: number
-  fcf_conversion_pct: number
-  net_interest_pct: number
-  dilution_pct: number
-  payout_pct: number
-}
-
-type MetricKey = 'ev_revenue' | 'ev_ebitda'
-type MultipleTarget = { metric: MetricKey; multiple: number; weight: number; year: number }
-type SotpSegment = { name: string; revenue_share: number; price_to_sales_multiple: number }
-type MethodKey = 'dcf' | 'multiples' | 'ddm' | 'sotp'
+import {
+  seedMasterValuationRequest,
+  type AnnualAssumption,
+  type MasterValuationFundamentals,
+  type MethodKey,
+  type MetricKey,
+  type MultipleTarget,
+  type SotpSegment,
+} from '../lib/masterValuationSeed'
 type DriverKey = keyof Pick<AnnualAssumption, 'growth' | 'margin' | 'tax_rate' | 'da_pct' | 'capex_pct' | 'change_nwc_pct' | 'sbc_pct' | 'cash_adjustment_pct' | 'fcf_conversion_pct' | 'net_interest_pct' | 'dilution_pct' | 'payout_pct'>
 type DriverView = 'endpoints' | 'annual'
 type StepKey = 1 | 2 | 3 | 4 | 5
@@ -56,22 +45,7 @@ type SensitivityTable = {
   base_column_index: number
 }
 
-type Fundamentals = {
-  ticker: string
-  revenue: number
-  shares: number
-  net_debt: number
-  market_price: number | null
-  beta: number | null
-  source: string | null
-  schedule: AnnualAssumption[]
-  current_multiples: Record<string, number | null>
-  business_segments: SotpSegment[]
-  business_segments_source: string | null
-  business_segments_fiscal_year: number | string | null
-  dividend_per_share: number | null
-  dividend_yield: number | null
-}
+type Fundamentals = MasterValuationFundamentals
 
 type ForecastRow = AnnualAssumption & {
   revenue: number
@@ -418,24 +392,17 @@ export function MasterValuationContent() {
       setShares(data.shares)
       setNetDebt(data.net_debt)
       setMarketPrice(data.market_price)
-      const normalizedSchedule = data.schedule.map(row => ({ ...row, fcf_conversion_pct: row.fcf_conversion_pct ?? 100, net_interest_pct: row.net_interest_pct ?? 0 }))
-      const seededTargets: MultipleTarget[] = []
-      if ((data.current_multiples.ev_revenue || 0) > 0) seededTargets.push({ metric: 'ev_revenue', multiple: clamp(data.current_multiples.ev_revenue!, .01, 200), weight: 50, year: 3 })
-      if ((data.current_multiples.ev_ebitda || 0) > 0) seededTargets.push({ metric: 'ev_ebitda', multiple: clamp(data.current_multiples.ev_ebitda!, .01, 200), weight: 50, year: 3 })
-      const paysDividend = Boolean(data.dividend_per_share && data.dividend_per_share > 0)
-      if (paysDividend) {
-        const payout = clamp(((data.dividend_per_share || 0) * data.shares) / Math.max(data.revenue * Math.max(normalizedSchedule[0]?.margin || 10, 1) / 100 * .79, 1) * 100, 0, 80)
-        normalizedSchedule.forEach(row => { row.payout_pct = Number(payout.toFixed(1)) })
-      }
-      setSchedule(normalizedSchedule)
-      setTargets(seededTargets)
-      setSegments((data.business_segments || []).map(segment => ({ ...segment })))
-      setWacc(9.5)
-      setCostOfEquity(10)
-      setTerminalGrowth(3)
-      setDividendGrowth(3)
-      const multiplesWeight = seededTargets.length ? 35 : 0
-      setWeights({ dcf: 100 - multiplesWeight, multiples: multiplesWeight, ddm: 0, sotp: 0 })
+      // Shared with the Report Creator so the two cannot value the same company
+      // on different assumptions. See lib/masterValuationSeed.
+      const seeded = seedMasterValuationRequest(data)
+      setSchedule(seeded.schedule)
+      setTargets(seeded.multiple_targets)
+      setSegments(seeded.sotp_segments)
+      setWacc(seeded.wacc)
+      setCostOfEquity(seeded.cost_of_equity)
+      setTerminalGrowth(seeded.terminal.perpetual_growth)
+      setDividendGrowth(seeded.dividend_terminal_growth)
+      setWeights(seeded.weights)
       recordRecentTicker(nextTicker)
       setSearchParams({ ticker: nextTicker }, { replace: true })
     } catch (reason) {

@@ -133982,3 +133982,950 @@ INFO:     127.0.0.1:58440 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8
 INFO:     127.0.0.1:58442 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
 INFO:     127.0.0.1:58502 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
 INFO:     127.0.0.1:58504 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58574 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58577 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58638 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58640 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58734 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58736 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58797 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58799 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58868 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58870 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58917 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58919 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58979 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58981 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59033 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59035 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59091 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59093 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59155 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59157 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59200 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59202 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59281 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59283 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59333 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59335 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59397 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59399 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59449 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59451 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59489 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59491 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59561 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59563 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59640 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59651 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59657 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59670 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59682 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59699 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59702 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59730 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59732 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59788 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59791 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59842 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59844 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59874 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59876 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59911 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59913 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59946 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59948 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59993 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59995 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+2026-08-07 22:28:03,637 WARNING routers.screener: FMP snapshot error: HTTPSConnectionPool(host='financialmodelingprep.com', port=443): Max retries exceeded with url: /stable/stock-screener?limit=3000&apikey=DOKSWPGUWWDbuOGOuoBTrXpB879kVeWI (Caused by ResponseError('too many 429 error responses'))
+INFO:     127.0.0.1:60071 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60073 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60104 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60106 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60141 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60144 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60175 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60177 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60225 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60228 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60266 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60268 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60305 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60307 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60349 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60351 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60379 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60381 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60413 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60415 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60457 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60459 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60480 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60482 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60510 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60512 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60537 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60539 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60588 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60591 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60635 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60637 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60663 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60665 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60732 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60734 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60787 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60789 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60832 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60834 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60883 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60885 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60930 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60932 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60977 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60979 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61035 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61037 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61089 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61091 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61143 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61145 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61191 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61193 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61249 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61251 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61288 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61292 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61377 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61379 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61454 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61456 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61517 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61519 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61601 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61603 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61666 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61664 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61668 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61665 - "GET /api/users/appdata/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61667 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61672 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61670 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61678 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61676 - "GET /api/users/appdata/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61677 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61681 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61683 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61688 - "GET /api/snapshots/series?kind=gex&ticker=SPY&compute=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61689 - "GET /api/options/exposure?ticker=SPY&expiries=24&min_volume=500&min_vol_oi=1.5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61700 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61698 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61701 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61704 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61706 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61699 - "GET /api/users/appdata/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61702 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61709 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61712 - "GET /api/users/appdata/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61713 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61716 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61718 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61729 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61727 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61728 - "GET /api/users/appdata/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61730 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61732 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61734 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61738 - "GET /api/users/appdata/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61740 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61741 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61745 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61746 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61748 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61763 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61761 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61762 - "GET /api/users/appdata/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61764 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61765 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61767 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61774 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61772 - "GET /api/users/appdata/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61773 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61776 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61779 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61781 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61816 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61817 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61843 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61844 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61865 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61868 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61892 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61893 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61921 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61922 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61959 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61961 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61985 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61983 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61988 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61990 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61984 - "GET /api/users/appdata/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61986 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61994 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62000 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61998 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61996 - "GET /api/users/appdata/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62003 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62001 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62005 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62009 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62043 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62046 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62072 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62074 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62097 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62100 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62118 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62120 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62144 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62148 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62216 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62217 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62306 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62309 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62392 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62393 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62454 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62456 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62518 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62520 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62604 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62606 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62670 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62674 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62758 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62761 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62852 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62858 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62941 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62947 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62961 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62959 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62964 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62966 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62960 - "GET /api/users/appdata/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62962 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62971 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62970 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62973 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62975 - "GET /api/users/appdata/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62978 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62979 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62982 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62984 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63014 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63016 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63045 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63047 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63064 - "GET /api/options/exposure?ticker=SPY&expiries=24&min_volume=500&min_vol_oi=1.5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63067 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63068 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63093 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63095 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63127 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63129 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63213 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63215 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63271 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63278 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63334 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63336 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63386 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63388 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63477 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63479 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63560 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63562 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63622 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63623 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63653 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63654 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63681 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63683 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63702 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63703 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63737 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63738 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63759 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63760 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63763 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63761 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63768 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63767 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63792 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63794 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63825 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63827 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63850 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63852 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63869 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63871 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63892 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63894 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63957 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63959 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64008 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64010 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64065 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64067 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64125 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64127 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64185 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64188 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64264 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64266 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64277 - "GET /api/options/exposure?ticker=SPY&expiries=24&min_volume=500&min_vol_oi=1.5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64336 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64338 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64392 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64394 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64436 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64455 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64461 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64472 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64490 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64516 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64518 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64592 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64594 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64692 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64694 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64753 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64756 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64837 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64839 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64894 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64896 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64960 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64962 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65006 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65008 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65063 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65065 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65117 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65119 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65183 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65186 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65242 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65244 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65308 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65310 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65381 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65384 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65437 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65440 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65505 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65509 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49163 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49165 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49225 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49228 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49312 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49314 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49354 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49356 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49388 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49395 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49455 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49457 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49490 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49493 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49540 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49542 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49578 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49582 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49615 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49619 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49696 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49698 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49723 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49728 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49795 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49819 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49850 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49859 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49897 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49902 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49933 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49935 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49966 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49972 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50011 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50014 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50043 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50045 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50088 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50091 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50123 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50125 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50179 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50187 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50219 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50221 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50253 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50266 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50312 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50316 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50366 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50368 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50395 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50399 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50426 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50430 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50458 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50461 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50533 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50535 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50561 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50565 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50597 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50604 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50632 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50634 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50675 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50678 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+2026-08-08 00:28:05,110 WARNING routers.screener: FMP snapshot error: HTTPSConnectionPool(host='financialmodelingprep.com', port=443): Max retries exceeded with url: /stable/stock-screener?limit=3000&apikey=DOKSWPGUWWDbuOGOuoBTrXpB879kVeWI (Caused by ResponseError('too many 429 error responses'))
+INFO:     127.0.0.1:50747 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50751 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+2026-08-08 00:29:01,299 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/expirations?symbol=SPY&includeAllRoots=true "HTTP/1.1 200 "
+2026-08-08 00:29:01,719 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=SPY&expiration=2026-08-10&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:29:02,080 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=SPY&expiration=2026-08-11&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:29:02,557 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=SPY&expiration=2026-08-12&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:29:02,944 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=SPY&expiration=2026-08-13&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:29:03,342 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=SPY&expiration=2026-08-14&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:29:03,670 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=SPY&expiration=2026-08-17&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:29:04,092 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=SPY&expiration=2026-08-18&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:29:04,502 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=SPY&expiration=2026-08-19&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:29:21,325 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/expirations?symbol=QQQ&includeAllRoots=true "HTTP/1.1 200 "
+2026-08-08 00:29:21,676 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=QQQ&expiration=2026-08-10&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:29:22,009 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=QQQ&expiration=2026-08-11&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:29:22,409 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=QQQ&expiration=2026-08-12&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:29:22,800 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=QQQ&expiration=2026-08-13&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:29:23,214 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=QQQ&expiration=2026-08-14&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:29:23,549 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=QQQ&expiration=2026-08-17&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:29:23,963 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=QQQ&expiration=2026-08-18&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:29:24,392 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=QQQ&expiration=2026-08-19&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:29:41,248 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/expirations?symbol=AAPL&includeAllRoots=true "HTTP/1.1 200 "
+2026-08-08 00:29:41,524 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=AAPL&expiration=2026-08-10&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:29:41,773 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=AAPL&expiration=2026-08-12&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:29:42,085 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=AAPL&expiration=2026-08-14&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:29:42,339 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=AAPL&expiration=2026-08-17&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:29:42,647 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=AAPL&expiration=2026-08-19&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:29:42,938 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=AAPL&expiration=2026-08-21&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:29:43,290 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=AAPL&expiration=2026-08-28&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:29:43,512 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=AAPL&expiration=2026-09-04&greeks=true "HTTP/1.1 200 "
+INFO:     127.0.0.1:50820 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50822 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+2026-08-08 00:30:00,400 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/expirations?symbol=NVDA&includeAllRoots=true "HTTP/1.1 200 "
+2026-08-08 00:30:00,707 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=NVDA&expiration=2026-08-10&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:30:01,115 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=NVDA&expiration=2026-08-12&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:30:02,283 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=NVDA&expiration=2026-08-14&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:30:02,690 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=NVDA&expiration=2026-08-17&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:30:03,022 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=NVDA&expiration=2026-08-19&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:30:03,429 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=NVDA&expiration=2026-08-21&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:30:03,816 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=NVDA&expiration=2026-08-28&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:30:04,155 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=NVDA&expiration=2026-09-04&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:30:20,980 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/expirations?symbol=MSFT&includeAllRoots=true "HTTP/1.1 200 "
+2026-08-08 00:30:21,369 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=MSFT&expiration=2026-08-10&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:30:21,934 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=MSFT&expiration=2026-08-12&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:30:22,287 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=MSFT&expiration=2026-08-14&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:30:22,594 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=MSFT&expiration=2026-08-17&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:30:22,943 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=MSFT&expiration=2026-08-19&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:30:23,246 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=MSFT&expiration=2026-08-21&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:30:23,606 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=MSFT&expiration=2026-08-28&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:30:23,871 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=MSFT&expiration=2026-09-04&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:30:40,612 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/expirations?symbol=TSLA&includeAllRoots=true "HTTP/1.1 200 "
+2026-08-08 00:30:40,982 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=TSLA&expiration=2026-08-10&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:30:41,332 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=TSLA&expiration=2026-08-12&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:30:41,671 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=TSLA&expiration=2026-08-14&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:30:42,021 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=TSLA&expiration=2026-08-17&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:30:42,385 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=TSLA&expiration=2026-08-19&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:30:42,742 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=TSLA&expiration=2026-08-21&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:30:43,116 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=TSLA&expiration=2026-08-28&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:30:43,431 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=TSLA&expiration=2026-09-04&greeks=true "HTTP/1.1 200 "
+INFO:     127.0.0.1:50907 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50912 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+2026-08-08 00:31:00,045 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/expirations?symbol=AMZN&includeAllRoots=true "HTTP/1.1 200 "
+2026-08-08 00:31:00,392 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=AMZN&expiration=2026-08-10&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:00,692 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=AMZN&expiration=2026-08-12&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:00,949 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=AMZN&expiration=2026-08-14&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:01,217 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=AMZN&expiration=2026-08-17&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:01,454 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=AMZN&expiration=2026-08-19&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:01,741 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=AMZN&expiration=2026-08-21&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:02,009 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=AMZN&expiration=2026-08-28&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:02,266 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=AMZN&expiration=2026-09-04&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:19,219 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/expirations?symbol=BND&includeAllRoots=true "HTTP/1.1 200 "
+2026-08-08 00:31:19,419 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=BND&expiration=2026-08-21&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:19,694 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=BND&expiration=2026-09-18&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:19,942 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=BND&expiration=2026-12-18&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:20,219 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=BND&expiration=2027-03-19&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:36,952 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/expirations?symbol=BRK-B&includeAllRoots=true "HTTP/1.1 200 "
+2026-08-08 00:31:37,255 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=BRK-B&expiration=2026-08-14&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:37,607 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=BRK-B&expiration=2026-08-21&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:37,992 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=BRK-B&expiration=2026-08-28&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:38,439 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=BRK-B&expiration=2026-09-04&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:38,757 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=BRK-B&expiration=2026-09-11&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:39,135 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=BRK-B&expiration=2026-09-18&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:39,565 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=BRK-B&expiration=2026-10-16&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:39,906 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=BRK-B&expiration=2026-12-18&greeks=true "HTTP/1.1 200 "
+INFO:     127.0.0.1:50963 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50965 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+2026-08-08 00:31:56,807 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/expirations?symbol=GOOGL&includeAllRoots=true "HTTP/1.1 200 "
+2026-08-08 00:31:57,067 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=GOOGL&expiration=2026-08-10&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:57,370 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=GOOGL&expiration=2026-08-12&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:57,658 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=GOOGL&expiration=2026-08-14&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:57,955 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=GOOGL&expiration=2026-08-17&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:58,180 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=GOOGL&expiration=2026-08-19&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:58,540 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=GOOGL&expiration=2026-08-21&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:58,855 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=GOOGL&expiration=2026-08-28&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:31:59,130 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=GOOGL&expiration=2026-09-04&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:32:15,873 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/expirations?symbol=META&includeAllRoots=true "HTTP/1.1 200 "
+2026-08-08 00:32:16,199 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=META&expiration=2026-08-10&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:32:16,502 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=META&expiration=2026-08-12&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:32:16,951 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=META&expiration=2026-08-14&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:32:17,332 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=META&expiration=2026-08-17&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:32:17,758 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=META&expiration=2026-08-19&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:32:18,084 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=META&expiration=2026-08-21&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:32:18,472 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=META&expiration=2026-08-28&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:32:18,809 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=META&expiration=2026-09-04&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:32:35,738 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/expirations?symbol=SPYI&includeAllRoots=true "HTTP/1.1 200 "
+2026-08-08 00:32:35,970 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=SPYI&expiration=2026-08-21&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:32:36,242 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=SPYI&expiration=2026-09-18&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:32:36,480 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=SPYI&expiration=2026-12-18&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:32:36,770 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=SPYI&expiration=2027-03-19&greeks=true "HTTP/1.1 200 "
+INFO:     127.0.0.1:51015 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51017 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+2026-08-08 00:32:53,495 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/expirations?symbol=VOO&includeAllRoots=true "HTTP/1.1 200 "
+2026-08-08 00:32:53,760 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=VOO&expiration=2026-08-14&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:32:54,049 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=VOO&expiration=2026-08-21&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:32:54,291 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=VOO&expiration=2026-08-28&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:32:54,623 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=VOO&expiration=2026-09-04&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:32:54,944 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=VOO&expiration=2026-09-11&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:32:55,252 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=VOO&expiration=2026-09-18&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:32:55,571 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=VOO&expiration=2026-09-25&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:32:55,880 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=VOO&expiration=2026-10-16&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:33:12,529 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/expirations?symbol=VXUS&includeAllRoots=true "HTTP/1.1 200 "
+2026-08-08 00:33:12,839 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=VXUS&expiration=2026-08-14&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:33:13,083 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=VXUS&expiration=2026-08-21&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:33:13,397 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=VXUS&expiration=2026-08-28&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:33:13,639 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=VXUS&expiration=2026-09-04&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:33:13,919 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=VXUS&expiration=2026-09-11&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:33:14,140 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=VXUS&expiration=2026-09-18&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:33:14,449 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=VXUS&expiration=2026-09-25&greeks=true "HTTP/1.1 200 "
+2026-08-08 00:33:14,676 INFO httpx: HTTP Request: GET https://api.tradier.com/v1/markets/options/chains?symbol=VXUS&expiration=2026-10-16&greeks=true "HTTP/1.1 200 "
+INFO:     127.0.0.1:51067 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51072 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+2026-08-08 00:33:46,036 ERROR yfinance: CYAB: No earnings dates found, symbol may be delisted
+INFO:     127.0.0.1:51114 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51116 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51162 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51165 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51195 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51199 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51241 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51243 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51276 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51278 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51326 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51331 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51360 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51364 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51391 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51395 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51419 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51421 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51463 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51465 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51497 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51503 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51539 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51541 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51599 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51601 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51644 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51650 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51707 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51709 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51785 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51791 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51842 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51844 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51903 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51905 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51938 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51942 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52008 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52012 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52056 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52058 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52115 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52119 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52157 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52159 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52198 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52237 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52283 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52285 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52348 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52350 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52445 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52447 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52486 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52488 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52530 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52532 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52557 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52559 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52611 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52614 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52648 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52650 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52695 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52699 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52765 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52767 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52828 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52830 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52871 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52873 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52908 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52910 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52947 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52949 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52980 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52983 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52989 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53006 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53028 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53035 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53040 - "GET /api/market/global-board?window=1d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53094 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53133 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53098 - "GET /api/market/global-board?window=ytd HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53155 - "GET /api/market/global-board?window=1m HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53229 - "GET /api/market/history?ticker=%5ENSEI&start=2026-08-07&end=2026-08-08 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53236 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53238 - "GET /api/market/history?ticker=%5ENSEI&start=2021-08-08&end=2026-08-08 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53244 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53260 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53267 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53276 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53307 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53321 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53335 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53354 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53393 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53396 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53474 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53476 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53585 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53587 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53650 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53652 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54244 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54247 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55067 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55069 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55214 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55216 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55676 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55678 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55752 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55754 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56000 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56004 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56076 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56078 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56136 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56138 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56183 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56186 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56245 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56247 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56309 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56311 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56364 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56366 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56428 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56430 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56487 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56489 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56566 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56568 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56636 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56638 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56731 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56735 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56810 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56812 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56883 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56885 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56944 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56945 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56946 - "GET /api/market/asset-profile?ticker=%5ENSEI HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56948 - "GET /api/market/history?ticker=%5ENSEI&start=2021-08-08&end=2026-08-08 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57009 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57011 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57074 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57076 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57141 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57143 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57199 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57202 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57440 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57442 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57499 - "GET /api/market/asset-profile?ticker=%5ENSEI HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57514 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57516 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57573 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57576 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57687 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57689 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57791 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57794 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+2026-08-08 01:49:50,529 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:49:51,674 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:50:17,530 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:50:18,709 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:50:20,923 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:50:22,064 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:50:24,237 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:50:25,397 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:50:27,581 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:50:28,723 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:50:31,342 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:50:32,487 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:50:34,882 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:50:36,027 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:50:38,263 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:50:39,425 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:50:41,649 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:50:42,833 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+INFO:     127.0.0.1:57925 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57928 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+2026-08-08 01:50:45,194 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:50:46,369 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:50:48,880 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:50:50,037 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:50:52,323 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:50:53,462 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:50:57,209 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:50:58,424 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:51:01,047 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:51:02,274 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:51:04,445 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:51:05,591 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:51:07,468 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:51:08,613 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:51:13,840 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:51:14,986 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:51:17,300 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:51:18,489 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:51:21,040 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:51:22,184 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:51:24,733 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:51:25,867 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:51:28,310 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:51:29,498 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:51:32,931 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:51:34,077 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:51:36,531 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:51:37,747 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:51:40,222 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:51:41,417 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+INFO:     127.0.0.1:58247 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+2026-08-08 01:51:44,049 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+INFO:     127.0.0.1:58249 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+2026-08-08 01:51:45,216 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:51:47,709 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:51:48,891 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:51:51,395 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:51:52,571 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:51:55,081 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:51:56,240 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:51:58,421 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:51:59,559 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:52:02,193 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:52:03,343 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:52:06,059 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:52:07,248 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:52:09,761 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:52:10,917 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:52:13,527 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:52:14,670 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:52:17,244 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:52:18,387 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:52:20,739 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:52:21,920 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:52:24,202 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:52:25,348 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:52:27,868 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:52:29,017 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:52:31,414 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:52:32,563 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:52:35,143 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:52:36,286 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:52:38,567 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:52:39,746 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:52:42,051 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:52:43,282 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+INFO:     127.0.0.1:59046 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59049 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+2026-08-08 01:52:45,576 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:52:46,717 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:52:49,187 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:52:50,326 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:52:52,375 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:52:53,512 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:52:55,583 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:52:56,724 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:52:58,727 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:52:59,873 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:53:02,481 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:53:03,622 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:53:05,827 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:53:07,011 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:53:09,361 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:53:10,547 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:53:13,167 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:53:14,351 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:53:16,471 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:53:17,699 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:53:20,412 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:53:21,558 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:53:24,177 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:53:25,360 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:53:31,638 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:53:32,783 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:53:35,432 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:53:36,574 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:53:39,019 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:53:40,154 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:53:43,746 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+INFO:     127.0.0.1:59145 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59147 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+2026-08-08 01:53:44,893 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+2026-08-08 01:53:47,317 WARNING kystverket: Kystverket stream error: socket closed by peer (reconnect in 1s)
+2026-08-08 01:53:48,456 INFO kystverket: Kystverket AIS connected 153.44.253.27:5631
+INFO:     127.0.0.1:59212 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59214 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59277 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59279 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59363 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59365 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59410 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59412 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59477 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59479 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59536 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59593 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59659 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59698 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59755 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59822 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59862 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59906 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59908 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59903 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59907 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59911 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59905 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59904 - "GET /api/users/appdata/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59926 - "GET /api/market/global-board?window=1d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60004 - "GET /api/market/asset-profile?ticker=%5EFTSE HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60005 - "GET /api/market/history?ticker=%5EFTSE&start=2026-08-07&end=2026-08-08 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60011 - "GET /api/market/asset-profile?ticker=%5EGSPC HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60012 - "GET /api/market/history?ticker=ES%3DF&start=2026-08-07&end=2026-08-08 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60021 - "GET /api/market/asset-profile?ticker=%5ENSEI HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60022 - "GET /api/market/history?ticker=%5ENSEI&start=2026-08-07&end=2026-08-08 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60024 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60030 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60050 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60053 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60054 - "GET /api/market/asset-profile?ticker=%5ENSEI HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60065 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60079 - "GET /api/market/history?ticker=%5ENSEI&start=2026-08-07&end=2026-08-08 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60082 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60090 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60120 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60134 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60166 - "GET /api/market/history?ticker=%5ENSEI&start=2026-08-07&end=2026-08-08 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60168 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60293 - "GET /api/market/asset-profile?ticker=%5ENSEI HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60294 - "GET /api/market/history?ticker=%5ENSEI&start=2026-08-07&end=2026-08-08 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60296 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60299 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60389 - "GET /api/market/history?ticker=%5ENSEI&start=2026-08-07&end=2026-08-08 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60392 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60394 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60473 - "GET /api/market/history?ticker=%5ENSEI&start=2026-08-07&end=2026-08-08 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60475 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60477 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60557 - "GET /api/market/history?ticker=%5ENSEI&start=2026-08-07&end=2026-08-08 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60559 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60562 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60635 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60637 - "GET /api/market/history?ticker=%5ENSEI&start=2026-08-07&end=2026-08-08 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60639 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60742 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60746 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60744 - "GET /api/market/history?ticker=%5ENSEI&start=2026-08-07&end=2026-08-08 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60813 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60817 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60815 - "GET /api/market/history?ticker=%5ENSEI&start=2026-08-07&end=2026-08-08 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60917 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60919 - "GET /api/market/history?ticker=%5ENSEI&start=2026-08-07&end=2026-08-08 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60921 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60972 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60974 - "GET /api/market/history?ticker=%5ENSEI&start=2026-08-07&end=2026-08-08 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60976 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61027 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61029 - "GET /api/market/history?ticker=%5ENSEI&start=2026-08-07&end=2026-08-08 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61031 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61108 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61112 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61110 - "GET /api/market/history?ticker=%5ENSEI&start=2026-08-07&end=2026-08-08 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61177 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61214 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61217 - "GET /api/market/history?ticker=%5ENSEI&start=2026-08-07&end=2026-08-08 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61250 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61253 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61248 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61252 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61249 - "GET /api/users/appdata/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61258 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61251 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61265 - "GET /api/market/global-board?window=1d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61311 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61344 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61356 - "GET /api/market/asset-profile?ticker=%5ENSEI HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61368 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61371 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61365 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61370 - "POST /api/analytics/pageview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61367 - "GET /api/users/appdata/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61375 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61369 - "GET /api/users/portfolio/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61383 - "GET /api/market/asset-profile?ticker=%5EGSPC HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61384 - "GET /api/market/history?ticker=ES%3DF&start=2026-08-07&end=2026-08-08 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61407 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61414 - "GET /api/market/asset-profile?ticker=%5EGSPC HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61436 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61439 - "GET /api/alerts/1016b7ae-43cf-4e1c-91bd-d6e61d0c3f8d/pending HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2026-08-08 02:21:44,565 INFO routers.alerts: Alert evaluation loop cancelled
+2026-08-08 02:21:44,566 INFO routers.paper_scheduler: Paper scheduler loop stopped
+INFO:     Application shutdown complete.
+INFO:     Finished server process [63503]

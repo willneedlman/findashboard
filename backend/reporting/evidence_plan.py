@@ -393,6 +393,18 @@ def enforce(
                if tool_id in REPORT_TOOL_BY_ID
                and availability.satisfies(REPORT_TOOL_BY_ID[tool_id])]
 
+    # A superseding tool already contains the one it supersedes, so running both
+    # spends a slot to say the same thing twice.
+    superseded = {
+        victim
+        for tool_id in ordered
+        for victim in REPORT_TOOL_BY_ID[tool_id].supersedes
+    }
+    for victim in sorted(superseded & set(ordered)):
+        winner = next(tool_id for tool_id in ordered if victim in REPORT_TOOL_BY_ID[tool_id].supersedes)
+        notes.append(f"dropped {victim}: {winner} already contains it")
+    ordered = [tool_id for tool_id in ordered if tool_id not in superseded]
+
     # Redundancy: same evidence class from the same source surface twice.
     kept: list[str] = []
     seen_pairs: set[tuple[str, str]] = set()
