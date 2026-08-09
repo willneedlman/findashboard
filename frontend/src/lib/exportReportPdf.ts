@@ -41,6 +41,14 @@ export function semanticPrintCss(backgroundColor = '#ffffff'): string {
       break-after: avoid-page;
       page-break-after: avoid;
     }
+    /* rc-keep marks a block that only reads correctly whole: the masthead, a
+       KPI rail, a figure with its caption. It was applied in nine places and
+       defined in none, which is why a four-cell metric rail could split with
+       two cells stranded at the top of the next page. */
+    .rc-keep {
+      break-inside: avoid-page;
+      page-break-inside: avoid;
+    }
     .rc-atomic, .rc-figure, figure, svg, img {
       break-inside: avoid-page;
       page-break-inside: avoid;

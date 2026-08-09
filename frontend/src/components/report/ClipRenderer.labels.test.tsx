@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { ClipPalette } from '../../lib/reportTheme'
 import TickerLogo from '../TickerLogo'
-import ClipRenderer, { HorizontalCategoryTick, reportChartHeight } from './ClipRenderer'
+import ClipRenderer, { categoricalAxisIsCrowded, HorizontalCategoryTick, reportChartHeight } from './ClipRenderer'
 
 const palette: ClipPalette = {
   ink: '#d7e3fc',
@@ -84,5 +84,49 @@ describe('horizontal chart SVG labels', () => {
 
     expect(markup).toContain('<img')
     expect(markup).not.toContain('>NV<')
+  })
+})
+
+describe('print table wrapping', () => {
+  const table = (columns: string[], rows: (string | number | null)[][]) => renderToStaticMarkup(
+    <ClipRenderer
+      mode="print"
+      palette={palette}
+      payload={{ kind: 'table', title: 'Correlation matrix', columns, rows }}
+    />,
+  )
+
+  it('does not offer mid-word break points in a wide matrix header', () => {
+    // overflow-wrap:anywhere let the browser count breaks inside a word when
+    // sizing the column, so a twelve-ticker matrix split QCOM into "QCO / M".
+    const markup = table(['', 'NVDA', 'QCOM', 'AVGO'], [['NVDA', '1.00', '0.14', '0.35']])
+    expect(markup).not.toContain('anywhere')
+    expect(markup).toContain('break-word')
+  })
+
+  it('keeps every correlation cell at the same precision', () => {
+    // The producer emits strings for this reason: +(1).toFixed(2) is 1, so the
+    // diagonal printed as "1" beside "0.42" and the column would not line up.
+    const markup = table(['', 'NVDA', 'QCOM'], [['NVDA', '1.00', '0.40']])
+    expect(markup).toContain('1.00')
+    expect(markup).toContain('0.40')
+  })
+})
+
+describe('categorical axis crowding', () => {
+  it('angles short labels once there are too many to sit side by side', () => {
+    // Ten four-character tickers passed the length-only test and rendered flat,
+    // running NVDA and AVGO together into "NVDAAVGO".
+    expect(categoricalAxisIsCrowded(
+      ['NVDA', 'AVGO', 'MU', 'AMD', 'INTC', 'TXN', 'MRVL', 'ADI', 'QCOM', 'ON'],
+    )).toBe(true)
+  })
+
+  it('leaves a sparse axis horizontal, which is easier to read', () => {
+    expect(categoricalAxisIsCrowded(['NVDA', 'AVGO', 'MU'])).toBe(false)
+  })
+
+  it('still angles a few long labels', () => {
+    expect(categoricalAxisIsCrowded(['Communication Services', 'Cash'])).toBe(true)
   })
 })

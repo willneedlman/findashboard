@@ -19,6 +19,14 @@ export interface ReportPalette {
   masthead: string
   onMasthead: string
   onMastheadDim: string
+  /** Hairline for chrome sitting on the masthead. */
+  mastheadRule: string
+  /**
+   * Backing tile for brand marks. Deliberately near-white on every preset: a
+   * logo set contains dark marks and light ones, and only a constant light
+   * field keeps both legible without per-logo special casing.
+   */
+  logoTile: string
   panel: string
   cellBg: string
   headBg: string
@@ -161,6 +169,8 @@ export function buildReportPalette(theme: Theme = DEFAULT_THEME): ReportPalette 
   }
 
   const border = isLight ? withAlpha('#0f172a', 0.12) : withAlpha('#ffffff', 0.12)
+  const mastheadRule = withAlpha(onMasthead, 0.22)
+  const logoTile = '#f4f6fb'
   const panel = isLight ? mixHex(surface, '#ffffff', 0.35) : mixHex(surface, bg, 0.35)
   const cellBg = isLight ? '#ffffff' : surface
   const headBg = isLight ? mixHex(surface, '#ffffff', 0.15) : mixHex(surface, '#ffffff', 0.04)
@@ -193,6 +203,8 @@ export function buildReportPalette(theme: Theme = DEFAULT_THEME): ReportPalette 
     masthead,
     onMasthead,
     onMastheadDim,
+    mastheadRule,
+    logoTile,
     panel,
     cellBg,
     headBg,

@@ -34,7 +34,14 @@ function addDays(date: Date, days: number): Date {
   return result
 }
 
-function allocationTickers(clips: ReportClip[], max = 4): string[] {
+// Enough marks to read as the book's character without becoming a logo wall.
+const MASTHEAD_LOGO_LIMIT = 6
+
+function allocationHoldingCount(clips: ReportClip[]): number {
+  return allocationTickers(clips, Number.MAX_SAFE_INTEGER).length
+}
+
+function allocationTickers(clips: ReportClip[], max = MASTHEAD_LOGO_LIMIT): string[] {
   const allocation = clips.find(clip => clip.payload.kind === 'table' && /\bcurrent allocation\b/i.test(clip.payload.title || ''))
   if (!allocation || allocation.payload.kind !== 'table') return []
   const tickerIndex = allocation.payload.columns.findIndex(column => /^ticker$/i.test(column))
@@ -169,6 +176,13 @@ export default function ReportPrint() {
     [renderClips],
   )
   const allClips = renderClips
+  // How many holdings the masthead is not showing, so four marks under a
+  // sixteen-holding book cannot read as the whole book.
+  const reportTickerOverflow = useMemo(
+    () => Math.max(0, allocationHoldingCount(allClips) - MASTHEAD_LOGO_LIMIT),
+    [allClips],
+  )
+
   const reportTickers = useMemo(
     () => {
       const portfolioSubjects = allocationTickers(allClips)
@@ -360,6 +374,10 @@ export default function ReportPrint() {
               .rc-report-section-half { margin-bottom: 12px; }
             }
             .rc-atomic { break-inside: avoid; page-break-inside: avoid; }
+            /* Mirrors the export stylesheet so the on-screen print preview and
+               the generated PDF break in the same places. */
+            .rc-keep { break-inside: avoid; page-break-inside: avoid; }
+            .rc-section-heading, .rc-keep-tight { break-after: avoid; page-break-after: avoid; }
           `}</style>
           <header className="rc-keep" style={{ background: palette.masthead, color: palette.onMasthead }}>
             <div style={{
@@ -403,19 +421,38 @@ export default function ReportPrint() {
                   </p>
                 )}
                 {reportTickers.length > 0 && (
-                  <div aria-label="Report companies" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 9, marginTop: 10 }}>
+                  // Brand marks are every shape there is. `cover` in a circle
+                  // cropped a wide wordmark into a coloured pill and a square
+                  // grid into a disc, and the hashed dark backing made a dark
+                  // mark invisible on this masthead. Contain-fit on one light
+                  // tile shows each mark whole, at a consistent visual weight,
+                  // against the same field.
+                  <div aria-label="Report companies" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 7, marginTop: 12 }}>
                     {reportTickers.map(ticker => (
                       <span key={ticker} title={ticker}>
                         <TickerLogo
                           ticker={ticker}
-                          size={28}
+                          size={26}
                           crossOrigin="anonymous"
-                          fit="cover"
-                          cornerRadius="50%"
-                          showFallbackText={false}
+                          fit="contain"
+                          padding={4}
+                          cornerRadius={5}
+                          logoBackground={palette.logoTile}
+                          normalizeVisualWeight
+                          showFallbackText
                         />
                       </span>
                     ))}
+                    {reportTickerOverflow > 0 && (
+                      // Four marks under a sixteen-holding book read as the whole
+                      // book. Say how many are not shown.
+                      <span style={{
+                        fontFamily: palette.mono, fontSize: 9.5, fontWeight: 700,
+                        color: palette.onMastheadDim, letterSpacing: '0.04em',
+                        border: `1px solid ${palette.mastheadRule}`, borderRadius: 5,
+                        padding: '0 7px', height: 26, display: 'inline-flex', alignItems: 'center',
+                      }}>+{reportTickerOverflow}</span>
+                    )}
                   </div>
                 )}
               </div>

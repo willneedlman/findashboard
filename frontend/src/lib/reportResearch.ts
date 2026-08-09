@@ -659,6 +659,16 @@ const moneyMillions = (value: unknown): string => {
   return `$${number.toFixed(1)}M`
 }
 const plain = (value: unknown): string => value == null || value === '' ? '—' : String(value)
+/** Fixed-precision number for a table cell, or null when unavailable.
+ *
+ * A column of numbers has to share a precision or the eye cannot compare down
+ * it. Returns a number rather than a string so sorting and charting still work.
+ */
+const round = (value: unknown, digits: number): number | null => {
+  const parsed = finite(value)
+  return parsed == null ? null : Number(parsed.toFixed(digits))
+}
+
 const median = (values: number[]): number | null => {
   if (!values.length) return null
   const sorted = [...values].sort((a, b) => a - b)
@@ -2303,9 +2313,12 @@ async function runSource(
           ['', ...tickers],
           tickers.map(rowTicker => [
             rowTicker,
+            // Strings, not numbers: +(1).toFixed(2) is 1, so the diagonal
+            // printed as "1" beside "0.42" and the column could not be read
+            // down. A correlation matrix is display-only, so fixed width wins.
             ...tickers.map(columnTicker => {
               const value = lookup.get(`${rowTicker}|${columnTicker}`)
-              return value == null ? null : +value.toFixed(2)
+              return value == null ? null : value.toFixed(2)
             }),
           ]),
         ), source, `${source.targets.join('-')}:matrix`))
@@ -2431,12 +2444,15 @@ async function runSource(
             'Factor Decomposition',
             'Holding-level beta and portfolio risk contribution',
             ['Holding', 'Weight %', 'Market beta', 'Book variance share %', 'Idiosyncratic share %'],
+            // Rounded here rather than at render: the raw floats printed as a
+            // ragged column of 2.3548 next to 1.181 next to 6, which reads as
+            // four different precisions for the same measurement.
             holdingsDetail.map(holding => [
               plain(holding.ticker),
-              finite(holding.weight),
-              finite(record(holding.betas).market),
-              finite(holding.book_var_share_pct),
-              finite(holding.idiosyncratic_pct),
+              round(holding.weight, 1),
+              round(record(holding.betas).market, 2),
+              round(holding.book_var_share_pct, 1),
+              round(holding.idiosyncratic_pct, 1),
             ]),
           ), source, `${response.mode}:holding-contributions`))
         }

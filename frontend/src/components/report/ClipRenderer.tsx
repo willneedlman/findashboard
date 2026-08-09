@@ -121,7 +121,11 @@ function TableClip({ p, pal, maxRows, print }: { p: TablePayload; pal: Palette; 
                 fontFamily: SANS, fontSize: print ? 9 : 8, fontWeight: 700, letterSpacing: '0.06em',
                 textTransform: 'uppercase', borderBottom: `1px solid ${pal.border}`,
                 background: pal.headBg, whiteSpace: print ? 'normal' : 'nowrap',
-                overflowWrap: print ? 'anywhere' : undefined,
+                // `anywhere` lets the browser count mid-word break points when
+                // sizing the column, so a wide matrix squeezed QCOM into
+                // "QCO / M". `break-word` still wraps long prose at spaces but
+                // keeps a short token whole.
+                overflowWrap: print ? 'break-word' : undefined,
               }}>{c}</th>
             ))}
           </tr>
@@ -134,8 +138,7 @@ function TableClip({ p, pal, maxRows, print }: { p: TablePayload; pal: Palette; 
                   padding: print ? '6px 8px' : '4px 8px', textAlign: isTextColumn(c) ? 'left' : 'right', color: pal.ink,
                   borderBottom: `1px solid ${pal.border}`, fontVariantNumeric: 'tabular-nums',
                   whiteSpace: print ? 'normal' : 'nowrap',
-                  overflowWrap: print ? 'anywhere' : undefined,
-                  wordBreak: print ? 'break-word' : undefined,
+                  overflowWrap: print ? 'break-word' : undefined,
                   verticalAlign: 'top',
                   background: heatBackground(cell, c),
                 }}>
@@ -272,6 +275,17 @@ function compactNumber(v: number): string {
   if (a >= 10) return a.toFixed(1)
   if (a >= 1) return a.toFixed(2)
   return a.toFixed(2)
+}
+
+/** Whether a categorical axis has to angle its labels to stay readable.
+ *
+ * Crowding is a function of how many labels share the width, not just how long
+ * each one is. A length-only test passed ten four-character tickers and let them
+ * render flat, running "NVDA" and "AVGO" together into "NVDAAVGO".
+ */
+export function categoricalAxisIsCrowded(labels: string[]): boolean {
+  if (labels.some(label => label.length > 7)) return true
+  return labels.length > 6
 }
 
 function fmtTick(v: number, kind: TickKind = 'auto'): string {
@@ -561,12 +575,29 @@ function ChartClip({
   // Categorical labels (segment/metric/driver names) are often long ("Professional
   // Visualization", "Operating Margin"). Angle them instead of clipping to "Profe…"
   // so every category stays readable, and give the axis the height to fit.
-  const categoricalX = p.chartType === 'bar' || p.chartType === 'histogram'
-    || p.chartType === 'dot' || p.chartType === 'range'
-  const longLabels = categoricalX && data.some(d => String(d[p.xKey] ?? '').length > 7)
+  const categoricalX = (p.chartType === 'bar' || p.chartType === 'histogram'
+    || p.chartType === 'dot' || p.chartType === 'range')
+    // A horizontal bar chart puts its categories on the Y axis, so nothing here
+    // applies to it.
+    && p.barOrientation !== 'horizontal'
+  const longLabels = categoricalX
+    && categoricalAxisIsCrowded(data.map(d => String(d[p.xKey] ?? '')))
   const xAngle = longLabels ? -28 : 0
   const xAxisHeight = longLabels ? (print ? 52 : 58) : (print ? 28 : 30)
 
+  // Precision has to be a property of the axis, not of each tick. Deciding per
+  // value printed "-35%, -28%, -21%, -14%, -7.0%" on one scale, where only the
+  // last tick fell under ten and picked up a decimal.
+  const axisTickFormatter = (kind: typeof leftKind, values: number[]) => {
+    if (kind !== 'pct') return (v: number) => fmtTick(v, kind)
+    const finiteValues = values.filter(value => Number.isFinite(value))
+    // One decimal only when the whole axis is small enough to need it.
+    const decimals = finiteValues.length && finiteValues.every(value => Math.abs(value) < 10) ? 1 : 0
+    return (v: number) => {
+      if (!Number.isFinite(v)) return ''
+      return `${v < 0 ? '−' : ''}${Math.abs(v).toFixed(decimals)}%`
+    }
+  }
   const yTick = (kind: typeof leftKind) => (v: number) => fmtTick(v, kind)
 
   const margin = print
@@ -622,7 +653,7 @@ function ChartClip({
       tickLine={false}
       axisLine={false}
       width={print ? 52 : 48}
-      tickFormatter={yTick(leftKind)}
+      tickFormatter={axisTickFormatter(leftKind, left.flatMap(series => seriesValues(p, series.key)))}
       domain={leftDomain}
       label={{
         value: leftMeasure,
@@ -643,7 +674,7 @@ function ChartClip({
       tickLine={false}
       axisLine={false}
       width={print ? 46 : 44}
-      tickFormatter={yTick(rightKind)}
+      tickFormatter={axisTickFormatter(rightKind, right.flatMap(series => seriesValues(p, series.key)))}
       domain={['auto', 'auto']}
       label={{
         value: rightMeasure,
@@ -954,7 +985,7 @@ function ChartClip({
               tick={axisTick}
               tickLine={false}
               axisLine={{ stroke: pal.border }}
-              tickFormatter={(value: number) => fmtTick(value, horizontalKind)}
+              tickFormatter={axisTickFormatter(horizontalKind, horizontalValues)}
               domain={leftMinVal >= 0 ? [0, 'auto'] : ['auto', 'auto']}
               label={{
                 value: leftMeasure,
