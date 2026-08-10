@@ -5084,6 +5084,39 @@ def _remove_unverified_numeric_sentences(text: str, clips: list[ReportClipIn], s
     return text
 
 
+def _repair_key_figures(sections: list[dict], clips: list[ReportClipIn]) -> None:
+    """Key figures are prose too, and were escaping every prose repair.
+
+    One report corrected "71% of assets in tech-related categories" down to the
+    table's real 55.94% in the paragraph, then printed a KPI reading
+    "TECHNOLOGY SECTOR WEIGHT 71%" in the rail beside it. The same pass that
+    fixes a sentence has to fix the number in the box next to it.
+    """
+    technology, tech_related, _ = _tech_related_weight(clips)
+    for section in sections:
+        repaired: list[dict] = []
+        for figure in section.get("keyFigures", []):
+            label = str(figure.get("label", ""))
+            value = str(figure.get("value", ""))
+
+            if _UPSIDE_LABEL_RE.search(label) and _impossible_upside(value):
+                continue
+
+            if technology is not None and re.search(r"\btech(?:nology)?\b", label, re.I) and re.search(
+                r"\b(?:weight|sector|allocation|exposure|share)\b", label, re.I
+            ):
+                stated = _first_number(value)
+                target = technology
+                if stated is not None and tech_related is not None and abs(stated - tech_related) <= 0.6:
+                    target = tech_related
+                if stated is None or abs(stated - technology) > 0.6:
+                    if stated is None or abs(stated - target) > 0.6:
+                        figure = {**figure, "value": f"{technology:.2f}%"}
+
+            repaired.append(figure)
+        section["keyFigures"] = repaired
+
+
 def _filter_unverified_key_figures(sections: list[dict], clips: list[ReportClipIn], slot_ctx) -> None:
     supported = _supported_report_numbers(clips, slot_ctx)
     for section in sections:
@@ -5333,6 +5366,182 @@ def _fix_sector_share_claims(text: str, clips: list[ReportClipIn]) -> str:
     return " ".join(repaired).strip()
 
 
+_UPSIDE_LABEL_RE = re.compile(r"\bupside\b|\bto intrinsic\b|\bvs\.?\s+intrinsic\b", re.I)
+
+
+def _impossible_upside(value: str) -> bool:
+    """Upside below -100% cannot happen: intrinsic value floors at zero, so the
+    worst possible move to it is -100%. One report printed -158.7% and called it
+    "deeply undervalued", which is two errors stacked on a broken model."""
+    number = _first_number(value)
+    return number is not None and number < -100
+
+
+_UNDERVALUED_WORDS = re.compile(
+    r"\b(deeply\s+|heavily\s+|modest(?:ly)?\s+)?(undervalued|underpriced|cheap|bargain|discount(?:ed)?)\b",
+    re.I,
+)
+
+
+def _fix_upside_sign_vocabulary(text: str) -> str:
+    """A negative upside is overvaluation. One report read "JOBY is deeply
+    undervalued (-158.7% upside)" and "MSFT shows a modest discount (-59.8%
+    upside)" in the same sentence, with the words fighting their own numbers."""
+    if not text:
+        return text
+    repaired: list[str] = []
+    for sentence in re.split(r"(?<=[.!?])\s+", text):
+        if not _UNDERVALUED_WORDS.search(sentence) or not re.search(r"\bupside\b", sentence, re.I):
+            repaired.append(sentence)
+            continue
+        # Only flip where the number attached to that word is actually negative.
+        def flip(match: re.Match) -> str:
+            window = sentence[match.end(): match.end() + 60]
+            following = re.search(r"\(?\s*([+\-−]?\d+(?:\.\d+)?)\s*%\s*upside", window, re.I)
+            if not following:
+                return match.group(0)
+            raw = following.group(1).replace("−", "-")
+            try:
+                value = float(raw)
+            except ValueError:
+                return match.group(0)
+            if value >= 0:
+                return match.group(0)
+            intensity = (match.group(1) or "").strip()
+            replacement = "overvalued" if match.group(2).lower() in {
+                "undervalued", "underpriced", "cheap", "bargain",
+            } else "premium to intrinsic value"
+            return f"{intensity + ' ' if intensity else ''}{replacement}"
+
+        repaired.append(_UNDERVALUED_WORDS.sub(flip, sentence))
+    return " ".join(repaired).strip()
+
+
+def _drop_impossible_upside_claims(text: str, clips: list[ReportClipIn]) -> str:
+    """Strike any sentence quoting an upside the arithmetic forbids."""
+    if not text or "%" not in text:
+        return text
+    kept: list[str] = []
+    removed = False
+    for sentence in re.split(r"(?<=[.!?])\s+", text):
+        values = [float(value.replace("−", "-")) for value in re.findall(r"([+\-−]?\d+(?:\.\d+)?)\s*%\s*upside", sentence, re.I)]
+        if any(value < -100 for value in values):
+            removed = True
+            continue
+        kept.append(sentence)
+    if not removed:
+        return text
+    kept.append(
+        "One discounted cash flow output implies a move beyond -100%, which is not attainable, "
+        "so that valuation is treated as a failed model rather than a result."
+    )
+    return " ".join(kept).strip()
+
+
+def _market_factor_contribution(clips: list[ReportClipIn]) -> float | None:
+    """Share of return the multi-factor regression attributes to the market."""
+    for clip in clips:
+        for label, value in _parse_kpi_summary(clip.dataSummary).items():
+            if re.search(r"market\s+(?:factor\s+)?contribution", label, re.I):
+                number = _first_number(value)
+                if number is not None:
+                    return number
+        if re.search(r"factor model coefficients|macro factor", clip.title, re.I):
+            parsed = _parse_table_summary(clip.dataSummary)
+            if not parsed:
+                continue
+            columns, rows = parsed
+            index = _column_index(columns, r"contribution")
+            if index is None:
+                continue
+            for row in rows:
+                if row and re.fullmatch(r"\s*market\s*", row[0], re.I) and index < len(row):
+                    number = _first_number(row[index])
+                    if number is not None:
+                        return number
+    return None
+
+
+_EXPLAINS_RE = re.compile(
+    r"\b(?:beta|market\s+exposure)\b[^.!?]{0,60}?\b(?:explains?|accounts?\s+for|drives?)\b\s*"
+    r"(?:~|about\s+|roughly\s+)?(\d+(?:\.\d+)?)\s*%",
+    re.I,
+)
+
+
+def _fix_explanatory_power_claims(text: str, clips: list[ReportClipIn]) -> str:
+    """"Beta explains ~98% of YTD gain" and "the factor model attributes 51.8%
+    of return to the market factor" were the same report's answer to the same
+    question. The first is a ratio of realized to beta-implied return; the
+    second is a regression attribution. Each is named for what it measures."""
+    contribution = _market_factor_contribution(clips)
+    if not text or contribution is None:
+        return text
+    match = _EXPLAINS_RE.search(text)
+    if not match:
+        return text
+    stated = float(match.group(1))
+    if abs(stated - contribution) <= 5:
+        return text
+    return _EXPLAINS_RE.sub(
+        lambda hit: (
+            f"realized return reaches {hit.group(1)}% of the beta-implied return, while the factor "
+            f"model attributes {contribution:.1f}% of return to the market factor"
+        ),
+        text,
+        count=1,
+    )
+
+
+def _holding_weighted_beta(clips: list[ReportClipIn]) -> tuple[float | None, float | None, float | None]:
+    """(weighted average, min, max) beta across holdings, from the risk panel."""
+    for clip in clips:
+        parsed = _parse_table_summary(clip.dataSummary)
+        if not parsed:
+            continue
+        columns, rows = parsed
+        ticker_index = _column_index(columns, r"^\s*(?:ticker|symbol|holding|company)\s*$")
+        beta_index = _column_index(columns, r"\bbeta\b")
+        weight_index = _column_index(columns, r"weight")
+        if None in (ticker_index, beta_index, weight_index):
+            continue
+        pairs: list[tuple[float, float]] = []
+        for row in rows:
+            if max(ticker_index, beta_index, weight_index) >= len(row):
+                continue
+            beta = _first_number(row[beta_index])
+            weight = _first_number(row[weight_index])
+            if beta is not None and weight is not None and weight > 0:
+                pairs.append((weight, beta))
+        if len(pairs) >= 3:
+            total = sum(weight for weight, _ in pairs)
+            if total <= 0:
+                continue
+            weighted = sum(weight * beta for weight, beta in pairs) / total
+            betas = [beta for _, beta in pairs]
+            return weighted, min(betas), max(betas)
+    return None, None, None
+
+
+def _beta_coherence_note(clips: list[ReportClipIn]) -> str | None:
+    """A portfolio's beta is a weighted average of its holdings' betas, so it
+    cannot sit outside their range. One report put the book at 2.14 over a panel
+    whose highest single holding was 2.47 and whose weighted average was 1.55."""
+    portfolio = _portfolio_beta_estimates(clips).get("static")
+    weighted, low, high = _holding_weighted_beta(clips)
+    if portfolio is None or weighted is None or low is None or high is None:
+        return None
+    outside = portfolio < low or portfolio > high
+    far = abs(portfolio - weighted) > max(0.25, abs(weighted) * 0.25)
+    if not (outside or far):
+        return None
+    return (
+        f"The book's single-factor beta of {portfolio:.2f} does not reconcile with its holdings, whose "
+        f"weighted average beta is {weighted:.2f} across a {low:.2f} to {high:.2f} range. The two are "
+        "estimated on different windows and should not be read as one measurement."
+    )
+
+
 def _risk_free_rate(clips: list[ReportClipIn]) -> float | None:
     for clip in clips:
         match = re.search(r"(\d+(?:\.\d+)?)\s*%\s*risk[- ]free", clip.dataSummary or "", re.I)
@@ -5506,6 +5715,9 @@ def _apply_report_linters(text: str, clips: list[ReportClipIn], slot_ctx) -> str
     for step in (
         _fix_comparative_reversals,
         _fix_upside_vocabulary_reversals,
+        _fix_upside_sign_vocabulary,
+        _drop_impossible_upside_claims,
+        _fix_explanatory_power_claims,
         _fix_dcf_direction,
         _suppress_extreme_dcf_claims,
         _fix_portfolio_performance_claims,
@@ -5597,7 +5809,10 @@ _PORTFOLIO_ACTION_RE = re.compile(
     r"\b(?:add(?:ing)?|buy(?:ing)?|increase|increasing|trim(?:ming)?|reduc(?:e|ing)|sell(?:ing)?)\s+(?:the\s+)?"
     r"(?:position|exposure|allocation|weight|shares?|[A-Z]{1,5})\b|"
     r"\b(?:reduction|increase|trim|addition|reallocation)\s+(?:in|of|to)\s+(?:the\s+)?(?:position|exposure|allocation|weight)\b|"
-    r"\b(?:trim|reduction|reallocation)\s+(?:is|appears|looks)\s+(?:justified|warranted|supported)\b"
+    r"\b(?:trim|reduction|reallocation|rebalanc\w+)\s+(?:is|appears|looks)\s+(?:justified|warranted|supported)\b|"
+    r"\bno\s+(?:immediate\s+|actionable\s+)?(?:rebalanc\w+|trades?|actions?|changes?|adjustments?)\s+"
+    r"(?:is|are)\s+(?:warranted|justified|needed|required|indicated)\b|"
+    r"\bno\s+actionable\s+changes?\b"
     r")",
     re.I,
 )
@@ -6124,6 +6339,7 @@ def generate_report(req: ReportGenRequest):
         if s.get("heading"):
             s["heading"] = _apply_report_linters(s["heading"], req.clips, slot_ctx)
     _filter_unverified_key_figures(sections, req.clips, slot_ctx)
+    _repair_key_figures(sections, req.clips)
 
     headline = _apply_report_linters(_report_title(result, outline, req), req.clips, slot_ctx)
     if key_result.get("value"):
@@ -6151,9 +6367,9 @@ def generate_report(req: ReportGenRequest):
 
     # Two beta panels estimated on different windows disagreed by name and the
     # report quoted both as "beta vs SPY". Say so where the limits are stated.
-    beta_conflict = _beta_source_conflict_note(req.clips)
-    if beta_conflict and beta_conflict not in conclusion:
-        conclusion = f"{conclusion} {beta_conflict}".strip()
+    for beta_note in (_beta_source_conflict_note(req.clips), _beta_coherence_note(req.clips)):
+        if beta_note and beta_note not in conclusion:
+            conclusion = f"{conclusion} {beta_note}".strip()
 
     # A claim that evidence is missing has to survive contact with the figures
     # actually placed on the page.

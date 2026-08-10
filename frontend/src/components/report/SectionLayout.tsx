@@ -220,7 +220,10 @@ function KeyFiguresRail({
     <aside className="rc-keep" style={{
       border: `1px solid ${palette.border}`,
       background: palette.cellBg,
-      alignSelf: 'stretch',
+      // Was 'stretch', which sized the panel to the figure beside it and left
+      // a tall empty box under three key figures. The rail is as tall as what
+      // it contains.
+      alignSelf: 'start',
     }}>
       {figures.map((figure, index) => (
         <div key={`${figure.label}-${index}`} style={{
@@ -467,9 +470,26 @@ export function promoteTableToChart(table: TablePayload): ChartPayload | undefin
     ? `${table.title}${table.title.toLowerCase().includes(metric.column.toLowerCase()) ? '' : ` · ${humanLabel(metric.column)}`}`
     : humanLabel(metric.column)
 
+  // Two metrics over the same rows is a relationship, and a relationship reads
+  // as a position, not as two bar lengths the eye has to pair up by row order.
+  // A risk measure against a size measure is the case worth drawing: it shows
+  // which positions carry beta the book is not paid for.
+  const relationship = !isComposition ? tableRelationship(table, catIndex, numericColumns) : undefined
+  if (relationship) return { ...relationship, title }
+
+  // One metric spread over a whole book is a distribution. Ranking sixteen bars
+  // answers "which is biggest"; a histogram answers "what does the book look
+  // like", which is the question a portfolio section is actually asking.
+  const distribution = !isComposition && data.length >= 10
+    ? tableDistribution(data, metric.column, title)
+    : undefined
+  if (distribution) return distribution
+
   return {
     kind: 'chart',
-    chartType: isComposition ? 'pie' : 'bar',
+    // Few categories read better as labelled points than as wide bars, which
+    // carry area proportional to nothing at that count.
+    chartType: isComposition ? 'pie' : data.length <= 3 ? 'dot' : 'bar',
     barOrientation: !isComposition && (data.length > 4 || data.some(row => row.category.length > 9))
       ? 'horizontal'
       : 'vertical',
@@ -477,6 +497,73 @@ export function promoteTableToChart(table: TablePayload): ChartPayload | undefin
     xKey: 'category',
     data,
     series: [{ key: 'value', label: humanLabel(metric.column), unit: chartUnitFromLabel(metric.column) }],
+  }
+}
+
+const RISK_METRIC = /\b(beta|volatility|variance|idiosyncratic|drawdown|risk|correlation|sharpe)\b/i
+const SIZE_METRIC = /\b(weight|allocation|share|value|position|exposure|size|market cap)\b/i
+
+/** A scatter of risk against size when the table carries both over enough rows. */
+function tableRelationship(
+  table: TablePayload,
+  catIndex: number,
+  numericColumns: { column: string; index: number }[],
+): ChartPayload | undefined {
+  if (table.rows.length < 6) return undefined
+  const size = numericColumns.find(metric => SIZE_METRIC.test(metric.column))
+  const risk = numericColumns.find(metric => RISK_METRIC.test(metric.column) && metric.index !== size?.index)
+  if (!size || !risk) return undefined
+  const data = table.rows.flatMap(row => {
+    const label = String(row[catIndex] ?? '').trim()
+    const x = tableNumber(row[size.index])
+    const y = tableNumber(row[risk.index])
+    if (!label || x == null || y == null || /^total$/i.test(label)) return []
+    return [{ [size.column]: x, value: y, label }]
+  })
+  if (data.length < 6) return undefined
+  return {
+    kind: 'chart',
+    chartType: 'scatter',
+    title: '',
+    xKey: size.column,
+    xUnit: chartUnitFromLabel(size.column),
+    data,
+    series: [{ key: 'value', label: humanLabel(risk.column), unit: chartUnitFromLabel(risk.column) }],
+  }
+}
+
+/** Bucket one metric across the book so its shape, not its ranking, is visible. */
+function tableDistribution(
+  data: { category: string; value: number }[],
+  column: string,
+  title: string,
+): ChartPayload | undefined {
+  const values = data.map(row => row.value)
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  if (!(max > min)) return undefined
+  const bucketCount = Math.min(6, Math.max(4, Math.round(Math.sqrt(data.length))))
+  const width = (max - min) / bucketCount
+  const unit = chartUnitFromLabel(column)
+  const buckets = Array.from({ length: bucketCount }, (_, index) => {
+    const low = min + width * index
+    return {
+      bucket: `${low.toFixed(low >= 100 ? 0 : 1)}–${(low + width).toFixed(low >= 100 ? 0 : 1)}`,
+      value: 0,
+    }
+  })
+  for (const value of values) {
+    const index = Math.min(bucketCount - 1, Math.floor((value - min) / width))
+    buckets[index].value += 1
+  }
+  return {
+    kind: 'chart',
+    chartType: 'histogram',
+    title: `${title} · Distribution`,
+    xKey: 'bucket',
+    data: buckets,
+    series: [{ key: 'value', label: `Holdings per ${humanLabel(column)} band`, unit: 'number' }],
+    details: [{ key: 'value', label: 'Holdings', unit: unit === 'number' ? 'number' : 'number' }],
   }
 }
 
@@ -689,9 +776,16 @@ function assignPortfolioVisuals(
     chartTypeCounts.set(selected.chartType, (chartTypeCounts.get(selected.chartType) ?? 0) + 1)
     assigned.set(assignmentKey, {
       visual: selected.clip,
-      showKeyFigures: selected.clip.payload.kind !== 'table',
+      showKeyFigures: selected.clip.payload.kind !== 'table' && !isOwnKeyFigureChart(selected.clip),
     })
   }
+}
+
+/** A chart the pipeline built out of a section's own key figures. Plotting it
+ * beside a rail of the same three numbers prints each one twice. */
+function isOwnKeyFigureChart(clip: ReportClip): boolean {
+  return clip.id.startsWith('key-figure-chart:')
+    || (clip.payload.kind === 'chart' && / · Key Figures$/i.test(clip.payload.title || ''))
 }
 
 function researchTarget(clip: ReportClip): string {
@@ -1266,7 +1360,7 @@ export default function SectionLayout({
         display: 'grid',
         gridTemplateColumns: 'minmax(0, 0.68fr) minmax(132px, 0.32fr)',
         gap: 10,
-        alignItems: 'stretch',
+        alignItems: 'start',
       }}>
         <FigureFrame title={numberedFigTitle} source={figureSource} notes={figureNoteList} palette={palette}>
           <Visual clip={visual} compact clipPal={clipPal} mono={palette.mono} muted={palette.muted} />

@@ -12,7 +12,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from routers.ai import (  # noqa: E402
     ReportClipIn,
+    _beta_coherence_note,
     _beta_source_conflict_note,
+    _drop_impossible_upside_claims,
+    _fix_explanatory_power_claims,
+    _fix_upside_sign_vocabulary,
+    _repair_key_figures,
     _disambiguate_portfolio_beta,
     _fix_availability_contradictions,
     _fix_dcf_direction,
@@ -233,3 +238,86 @@ class TestHeadlineAgreement:
     def test_a_finding_headline_is_untouched(self):
         headline = "Beta-driven Outperformance, Over-valued Top Holdings"
         assert _reframe_action_headline(headline, [RISK_METRICS], None) == headline
+
+
+UPSIDE_SECTION = [{
+    "keyFigures": [
+        {"label": "AMZN upside to intrinsic", "value": "-91.9%"},
+        {"label": "JOBY upside to intrinsic", "value": "-158.7%"},
+        {"label": "Technology sector weight", "value": "71%"},
+    ],
+}]
+
+HOLDING_BETAS = _clip(
+    "holding-betas",
+    "Holding-level beta and portfolio risk contribution",
+    "Columns: Ticker | Weight % | Market beta\n"
+    "NVDA | 13.9 | 1.49\nORCL | 9.8 | 1.67\nTOST | 9.1 | 1.38\n"
+    "MSFT | 7.4 | 1.08\nJOBY | 6.9 | 2.47\nAMZN | 6.5 | 1.31",
+)
+
+FACTOR_CONTRIBUTION = _clip(
+    "contribution", "Factor exposure",
+    "Market factor contribution: 51.8%; Market factor beta: 1.683",
+    data_type="kpi",
+)
+
+
+class TestValuationSigns:
+    def test_a_negative_upside_is_not_undervaluation(self):
+        text = "JOBY is deeply undervalued (-158.7% upside) and MSFT shows a modest discount (-59.8% upside)."
+        fixed = _fix_upside_sign_vocabulary(text)
+        assert "undervalued" not in fixed
+        assert "overvalued" in fixed
+        assert "discount" not in fixed
+
+    def test_a_real_discount_keeps_its_word(self):
+        text = "XYZ is undervalued (+42.0% upside)."
+        assert _fix_upside_sign_vocabulary(text) == text
+
+    def test_an_upside_past_minus_one_hundred_is_struck(self):
+        text = (
+            "JOBY shows -158.7% upside to intrinsic value. Concentration remains the dominant risk."
+        )
+        fixed = _drop_impossible_upside_claims(text, [])
+        assert "-158.7%" not in fixed
+        assert "not attainable" in fixed
+        assert "Concentration remains the dominant risk." in fixed
+
+
+class TestKeyFigureRepair:
+    def test_the_rail_gets_the_same_correction_as_the_paragraph(self):
+        sections = [{"keyFigures": list(UPSIDE_SECTION[0]["keyFigures"])}]
+        _repair_key_figures(sections, [SECTORS])
+        values = {figure["label"]: figure["value"] for figure in sections[0]["keyFigures"]}
+        assert values["Technology sector weight"] == "55.79%"
+
+    def test_an_impossible_upside_figure_is_dropped(self):
+        sections = [{"keyFigures": list(UPSIDE_SECTION[0]["keyFigures"])}]
+        _repair_key_figures(sections, [SECTORS])
+        labels = [figure["label"] for figure in sections[0]["keyFigures"]]
+        assert "JOBY upside to intrinsic" not in labels
+        assert "AMZN upside to intrinsic" in labels
+
+
+class TestBetaCoherence:
+    def test_a_book_beta_outside_its_holdings_range_is_disclosed(self):
+        note = _beta_coherence_note([RISK_METRICS, HOLDING_BETAS])
+        assert note and "does not reconcile" in note
+        assert "1.55" in note and "2.47" in note
+
+    def test_a_coherent_book_beta_is_silent(self):
+        coherent = _clip(
+            "coherent-risk", "Risk metrics",
+            "Portfolio single-factor beta vs SPY: 1.55", data_type="kpi",
+        )
+        assert _beta_coherence_note([coherent, HOLDING_BETAS]) is None
+
+
+class TestExplanatoryPower:
+    def test_two_meanings_of_explains_are_separated(self):
+        text = "Beta explains ~98% of the YTD gain."
+        fixed = _fix_explanatory_power_claims(text, [FACTOR_CONTRIBUTION])
+        assert "explains ~98%" not in fixed
+        assert "98% of the beta-implied return" in fixed
+        assert "51.8% of return to the market factor" in fixed

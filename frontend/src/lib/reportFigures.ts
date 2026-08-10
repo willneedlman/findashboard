@@ -218,3 +218,18 @@ export function niceAxisMax(values: number[]): number | undefined {
   }
   return Number((10 * magnitude).toFixed(6))
 }
+
+/**
+ * A bar axis that always contains zero. A chart of three negative upsides drew
+ * its axis from -175% to -35%, so every bar started at the right edge and its
+ * length measured the distance from -175 rather than from nothing.
+ */
+export function niceBarDomain(values: number[]): [number, number] | undefined {
+  const finite = values.filter(value => Number.isFinite(value))
+  if (!finite.length) return undefined
+  const max = Math.max(...finite, 0)
+  const min = Math.min(...finite, 0)
+  const top = max > 0 ? (niceAxisMax([max]) ?? max) : 0
+  const bottom = min < 0 ? -(niceAxisMax([-min]) ?? -min) : 0
+  return [bottom, top]
+}

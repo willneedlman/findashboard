@@ -9,7 +9,7 @@ import type { ChartUnit, ClipPayload, ChartPayload, TablePayload, KpiPayload, Te
 import type { ClipPalette } from '../../lib/reportTheme'
 import { isTickerSymbol } from '../../lib/tickerLogos'
 import { formatHorizontalCategoryLabel, horizontalCategoryAxisWidth } from './chartLabels'
-import { formatReportCell, tidyNumbersInText, niceAxisMax } from '../../lib/reportFigures'
+import { formatReportCell, tidyNumbersInText, niceAxisMax, niceBarDomain } from '../../lib/reportFigures'
 
 // One renderer for every clip payload, shared by capture preview, workspace,
 // and print. Print mode accepts a theme-derived palette so the PDF matches the
@@ -107,14 +107,28 @@ function TableClip({ p, pal, maxRows, print }: { p: TablePayload; pal: Palette; 
         width: '100%', borderCollapse: 'collapse', fontFamily: MONO, fontSize: print ? 10.5 : 10,
         tableLayout: print ? 'fixed' : 'auto',
       }}>
-        {narrativeIndex >= 0 && (
+        {print && (
+          // `table-layout: fixed` splits width evenly, so a six-column panel
+          // gave "13.9" the same track as a wrapped header and left a void
+          // either side of every number. The identity column carries the long
+          // strings and takes the space; the measures share what is left.
           <colgroup>
-            {p.columns.map((_, index) => (
-              <col
-                key={index}
-                style={{ width: index === narrativeIndex ? '50%' : `${50 / Math.max(1, p.columns.length - 1)}%` }}
-              />
-            ))}
+            {p.columns.map((_, index) => {
+              const lead = narrativeIndex >= 0 ? narrativeIndex : 0
+              const leadWidth = narrativeIndex >= 0
+                ? 50
+                : Math.min(38, Math.max(20, 100 - 13 * (p.columns.length - 1)))
+              return (
+                <col
+                  key={index}
+                  style={{
+                    width: index === lead
+                      ? `${leadWidth}%`
+                      : `${(100 - leadWidth) / Math.max(1, p.columns.length - 1)}%`,
+                  }}
+                />
+              )
+            })}
           </colgroup>
         )}
         <thead>
@@ -147,10 +161,14 @@ function TableClip({ p, pal, maxRows, print }: { p: TablePayload; pal: Palette; 
                   background: heatBackground(cell, c),
                 }}>
                   {print && c === tickerColumn && typeof cell === 'string' && isTickerSymbol(cell) ? (
-                    <span title={cell} aria-label={cell} style={{ display: 'inline-flex', alignItems: 'center', minWidth: 0 }}>
+                    // The mark replaced the name outright, so a peer table's
+                    // identity column rendered as six unlabelled logos and the
+                    // reader could not tell which row was which. The ticker is
+                    // the data; the mark is decoration beside it.
+                    <span title={cell} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
                       <TickerLogo
                         ticker={cell}
-                        size={20}
+                        size={15}
                         crossOrigin="anonymous"
                         fit="contain"
                         cornerRadius={3}
@@ -159,6 +177,7 @@ function TableClip({ p, pal, maxRows, print }: { p: TablePayload; pal: Palette; 
                         normalizeVisualWeight
                         showFallbackText={false}
                       />
+                      <span>{cell}</span>
                     </span>
                   ) : isTextColumn(c)
                     ? (cell == null ? '—' : tidyNumbersInText(String(cell)))
@@ -640,13 +659,12 @@ function ChartClip({
   const valueLabelFontSize = 9
   const valueLabel = (key: string) => (v: unknown) => fmtTick(Number(v), seriesKind(key))
 
-  const leftMinVal = left.length ? Math.min(...left.map(s => s.min)) : 0
   const leftValues = left.flatMap(series => seriesValues(p, series.key))
   const bars = p.chartType === 'bar' || p.chartType === 'histogram'
   // 'auto' put an 8.00 ceiling over a 4.20 maximum, so half the plot was empty
   // and every bar read as half its real height. Round up just past the data.
-  const leftDomain: [any, any] = bars && leftMinVal >= 0
-    ? [0, niceAxisMax(leftValues) ?? 'auto']
+  const leftDomain: [any, any] = bars
+    ? (niceBarDomain(leftValues) ?? ['auto', 'auto'])
     : ['auto', 'auto']
 
   // Colour and reference lines have to carry meaning or they are decoration. A
@@ -1027,7 +1045,7 @@ function ChartClip({
               tickLine={false}
               axisLine={{ stroke: pal.border }}
               tickFormatter={axisTickFormatter(horizontalKind, horizontalValues)}
-              domain={leftMinVal >= 0 ? [0, niceAxisMax(horizontalValues) ?? 'auto'] : ['auto', 'auto']}
+              domain={niceBarDomain(horizontalValues) ?? ['auto', 'auto']}
             />
             {isDivergingHorizontal && (
               <ReferenceLine x={0} stroke={pal.muted} strokeWidth={1} />

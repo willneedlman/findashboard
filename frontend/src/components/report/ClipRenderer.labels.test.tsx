@@ -60,7 +60,9 @@ describe('horizontal chart SVG labels', () => {
     expect(reportChartHeight(denseChart, true)).toBe(262)
   })
 
-  it('prints ticker cells as clean logo marks without duplicate ticker text', () => {
+  it('names the ticker in the ticker column, with the mark beside it', () => {
+    // The mark alone rendered a peer table's identity column as six unlabelled
+    // logos, so a reader could not tell which row was which.
     const markup = renderToStaticMarkup(
       <ClipRenderer
         payload={{
@@ -74,9 +76,8 @@ describe('horizontal chart SVG labels', () => {
       />,
     )
 
-    expect(markup).toContain('aria-label="NVDA"')
+    expect(markup).toContain('>NVDA<')
     expect(markup).toContain('aria-label="NVDA logo"')
-    expect(markup).not.toContain('>NVDA<')
   })
 
   it('does not paint fallback letters underneath a loading logo', () => {
