@@ -11,10 +11,10 @@ import SectionLayout, {
 } from '../components/report/SectionLayout'
 import {
   useReportCreator, timeframeLabel, clipTitle,
-  type ReportClip, type ClipPayload,
+  type ReportClip, type ClipPayload, type KeyFigure,
 } from '../lib/reportCreator'
 import { exportReportPdf, reportPdfBaseName } from '../lib/exportReportPdf'
-import { selectReportAppendixData } from '../lib/reportPresentation'
+import { normalizeFigureKey, formatReportCell } from '../lib/reportFigures'
 import { useTheme } from '../contexts/ThemeContext'
 import { buildReportPalette, toClipPalette, type ReportPalette } from '../lib/reportTheme'
 import { reportTickerSymbols } from '../lib/tickerLogos'
@@ -74,7 +74,7 @@ function heroFontSize(value: string, base: number, min: number): number {
   return min
 }
 
-function AppendixBlock({ clip, palette, compact = false }: { clip: ReportClip; palette: ReportPalette; compact?: boolean }) {
+function ClipBlock({ clip, palette, compact = false }: { clip: ReportClip; palette: ReportPalette; compact?: boolean }) {
   const p = clip.payload
   const title = p.title || clipTitle(clip)
   const clipPal = toClipPalette(palette)
@@ -222,11 +222,6 @@ export default function ReportPrint() {
     return numbers
   }, [bodyVisuals, gen])
 
-  const appendixData = useMemo(
-    () => gen ? selectReportAppendixData(gen.appendixClipIds, allClips) : [],
-    [allClips, gen],
-  )
-
   const reportDate = useMemo(() => {
     if (gen?.generatedAt) {
       const d = new Date(gen.generatedAt)
@@ -333,6 +328,25 @@ export default function ReportPrint() {
     }
     return result.slice(0, 4)
   }, [allocationClip, gen?.sections, portfolioRiskClip])
+
+  // One report printed the same -25.8% drawdown as a KPI three times under three
+  // wordings. A measured figure gets stated once: the cover strip has first
+  // claim, then the first section that wants it.
+  const sectionKeyFigures = useMemo(() => {
+    const byKey = new Map<string, KeyFigure[]>()
+    if (!gen) return byKey
+    const seen = new Set(keyData.map(item => normalizeFigureKey(item.label, item.value)))
+    for (const [index, section] of gen.sections.entries()) {
+      const kept = (section.keyFigures ?? []).filter(figure => {
+        const key = normalizeFigureKey(figure.label, figure.value)
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      byKey.set(reportSectionAssignmentKey(gen.sections, index), kept)
+    }
+    return byKey
+  }, [gen, keyData])
   return (
     <div style={{ minHeight: '100vh', background: 'var(--theme-bg, #101c2e)', padding: '20px 16px 60px' }}>
       <div style={{ maxWidth: 720, margin: '0 auto 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
@@ -537,7 +551,7 @@ export default function ReportPrint() {
                             background: palette.cellBg,
                             margin: '-6px -10px', padding: '7px 10px',
                           }}>
-                            <div style={{ ...eyebrow, lineHeight: 1.25 }}>{k.label}</div>
+                            <div style={{ ...eyebrow, lineHeight: 1.25, minHeight: 20 }}>{k.label}</div>
                             <div style={{
                               fontFamily: palette.mono, fontWeight: 700,
                               color: palette.ink,
@@ -546,7 +560,7 @@ export default function ReportPrint() {
                               whiteSpace: 'normal',
                               overflowWrap: 'anywhere',
                               wordBreak: 'break-word',
-                            } as React.CSSProperties}>{k.value}</div>
+                            } as React.CSSProperties}>{formatReportCell(k.value, k.label)}</div>
                             {k.sub && (
                               <div style={{ fontFamily: palette.sans, fontSize: 9, color: palette.muted, marginTop: 2, lineHeight: 1.25 }}>
                                 {k.sub}
@@ -604,7 +618,7 @@ export default function ReportPrint() {
                         <SectionLayout
                           analysis={s.analysis}
                           clip={clip}
-                          keyFigures={s.keyFigures}
+                          keyFigures={sectionKeyFigures.get(sectionKey) ?? s.keyFigures}
                           index={i}
                           layout={s.layout}
                           layoutPreset={renderScope?.layoutPreset}
@@ -634,18 +648,6 @@ export default function ReportPrint() {
                   <p style={prose}>{gen.conclusion || '—'}</p>
                 </section>
 
-                {appendixData.length > 0 && (
-                  <section style={{ marginTop: 20 }}>
-                    <h2 className="rc-keep rc-keep-tight" style={bandHead}>Data Appendix</h2>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 2 }}>
-                      {appendixData.map(c => (
-                        <div key={c.id} className={c.payload.kind === 'table' ? 'rc-appendix-table' : 'rc-keep rc-atomic'}>
-                          <AppendixBlock clip={c} palette={palette} />
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                )}
               </>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -672,7 +674,7 @@ export default function ReportPrint() {
                         palette={palette}
                       />
                     ) : (
-                      <AppendixBlock clip={c} palette={palette} />
+                      <ClipBlock clip={c} palette={palette} />
                     )}
                   </section>
                 ))}
@@ -682,7 +684,7 @@ export default function ReportPrint() {
               </div>
             )}
 
-            <footer style={{
+            <footer className="rc-report-footer" style={{
               marginTop: 20, borderTop: `1px solid ${palette.border}`, paddingTop: 10,
               fontFamily: palette.sans, fontSize: 8.5, color: palette.muted, lineHeight: 1.45,
             }}>

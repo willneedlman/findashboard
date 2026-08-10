@@ -11,6 +11,7 @@ import type {
   ChartUnit,
 } from '../../lib/reportCreator'
 import { toTitleCase } from '../../lib/reportCreator'
+import { figureNotes, retitleToPlottedRange, formatReportCell } from '../../lib/reportFigures'
 import type { ReportPalette, ClipPalette } from '../../lib/reportTheme'
 import { toClipPalette } from '../../lib/reportTheme'
 
@@ -192,11 +193,14 @@ function KeyFiguresStrip({
             <div style={{
               fontFamily: palette.sans, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em',
               textTransform: 'uppercase', color: palette.muted, lineHeight: 1.2,
+              // Reserve both lines whether the label wraps or not, so one long
+              // label cannot drop its value off the row's baseline.
+              minHeight: 19,
             }}>{toTitleCase(f.label)}</div>
             <div style={{
               fontFamily: palette.mono, fontSize: 12.5, fontWeight: 700, color: palette.ink, marginTop: 1,
               whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', lineHeight: '20px', minHeight: 20, paddingBottom: 6,
-            }}>{f.value}</div>
+            }}>{formatReportCell(f.value, f.label)}</div>
           </>
         )
       }}
@@ -242,7 +246,7 @@ function KeyFiguresRail({
             lineHeight: 1.2,
             color: palette.ink,
           }}>
-            {figure.value}
+            {formatReportCell(figure.value, figure.label)}
           </div>
         </div>
       ))}
@@ -253,12 +257,14 @@ function KeyFiguresRail({
 function FigureFrame({
   title,
   source,
+  notes,
   children,
   palette,
   style,
 }: {
   title?: string
   source?: string
+  notes?: string[]
   children: React.ReactNode
   palette: ReportPalette
   style?: React.CSSProperties
@@ -288,7 +294,7 @@ function FigureFrame({
       <div style={{ padding: '6px 8px 8px', background: palette.cellBg }}>
         {children}
       </div>
-      {source && (
+      {(source || notes?.length) && (
         <div style={{
           padding: '0 8px 6px',
           fontFamily: palette.sans,
@@ -296,12 +302,16 @@ function FigureFrame({
           lineHeight: 1.35,
           color: palette.muted,
         }}>
-          Source: {source}
+          {source && <div>Source: {source}</div>}
+          {notes?.map(note => <div key={note}>{note}</div>)}
         </div>
       )}
     </figure>
   )
 }
+
+/** Ceiling for a body figure, high enough to hold a whole book of holdings. */
+const MAX_FIGURE_TABLE_ROWS = 40
 
 function slimTable(p: Extract<ClipPayload, { kind: 'table' }>, maxRows: number): ClipPayload {
   return { ...p, rows: p.rows.slice(0, maxRows) }
@@ -575,6 +585,27 @@ export function reportVisualFamily(clip: ReportClip): ReportVisualFamily {
   return 'other'
 }
 
+/** Sections whose claim is about the book, not about any one name in it. */
+const PORTFOLIO_LEVEL_FAMILIES = new Set<ReportVisualFamily>([
+  'allocation', 'performance', 'drawdown', 'risk', 'correlation', 'factor', 'scenario', 'benchmark',
+])
+
+/**
+ * A visual that is one holding's own series rather than the book's. One of
+ * these filled the "Return and Drawdown" section of a portfolio review with a
+ * 3.5% position's price chart, while the portfolio's own curve appeared nowhere
+ * in the document.
+ */
+function isSingleIssuerVisual(clip: ReportClip): boolean {
+  if (clip.evidenceDomain === 'issuer') return true
+  if (clip.payload.kind === 'text') return false
+  const title = (clip.payload.title || '').trim()
+  if (/\b(portfolio|book|active return|allocation|benchmark|factor|peer|correlation matrix|holding-level)\b/i.test(title)) {
+    return false
+  }
+  return /^[A-Z][A-Z0-9.\-]{1,5}\b/.test(title)
+}
+
 function portfolioFamilyRelevance(family: ReportVisualFamily, hint: string): number {
   const normalized = hint.toLowerCase()
   const terms: Record<ReportVisualFamily, RegExp> = {
@@ -642,7 +673,12 @@ function assignPortfolioVisuals(
       return relevance > 4 ? [{ clip, family, chartType, score: relevance + coverageScore + diversityScore + typePenalty }] : []
     }).sort((a, b) => b.score - a.score)
 
-    const selected = candidates[0]
+    // A book-level claim gets book-level evidence whenever any exists. A single
+    // name's own chart only stands in when the section has nothing else at all.
+    const bookLevel = candidates.filter(candidate => (
+      !PORTFOLIO_LEVEL_FAMILIES.has(candidate.family) || !isSingleIssuerVisual(candidate.clip)
+    ))
+    const selected = (bookLevel.length ? bookLevel : candidates)[0]
     if (!selected) {
       assigned.set(assignmentKey, { visual: undefined, showKeyFigures: true })
       continue
@@ -981,14 +1017,17 @@ function Visual({
 }) {
   const p = clip.payload
   if (p.kind === 'table') {
-    const cap = maxTableRows ?? 6
+    // The data appendix used to reprint every table in full, so a body figure
+    // could show six rows and defer the rest. There is no appendix now, so a
+    // truncated figure is data the reader never sees anywhere. Show it all.
+    const cap = maxTableRows ?? MAX_FIGURE_TABLE_ROWS
     const slim = slimTable(p, cap)
     return (
       <>
         <ClipRenderer payload={slim} mode="print" maxTableRows={cap} compact={compact} inline={inline} palette={clipPal} />
         {p.rows.length > cap && (
           <div style={{ fontFamily: mono, fontSize: 8, color: muted, marginTop: 3 }}>
-            Showing {cap} of {p.rows.length} rows.
+            Showing the first {cap} of {p.rows.length} rows, ranked as sourced.
           </div>
         )}
       </>
@@ -1052,7 +1091,14 @@ export default function SectionLayout({
     fontFamily: palette.sans, fontSize: 11.5, lineHeight: 1.45, color: palette.ink, margin: 0, whiteSpace: 'pre-wrap',
   }
   const textNode = textBody ? <div className="rc-section-prose" style={prose}>{textBody}</div> : null
-  const figTitle = visual ? (visual.payload.title || visual.sourceTab) : undefined
+  // A caption that promises 2026-01-01 to 2026-08-09 over a series that starts
+  // in March is a false claim about coverage, so the window is restated from
+  // the points the figure actually plots.
+  const figTitle = visual
+    ? (visual.payload.kind === 'chart'
+        ? retitleToPlottedRange(visual.payload.title || visual.sourceTab, visual.payload)
+        : (visual.payload.title || visual.sourceTab))
+    : undefined
   const numberedFigTitle = figTitle
     ? `${figureNumber ? `Figure ${figureNumber} · ` : ''}${figTitle}`
     : undefined
@@ -1061,6 +1107,7 @@ export default function SectionLayout({
         ? `${clip.sourceTab} · AlphaTape analysis`
         : visual.sourceTab)
     : undefined
+  const figureNoteList = visual ? figureNotes(visual, projectClips) : []
 
   const stack: React.CSSProperties = {
     marginTop: 0,
@@ -1120,11 +1167,10 @@ export default function SectionLayout({
       || resolvedLayout === 'wrap-left'
       || resolvedLayout === 'evidence-band'
     const visualNode = (
-      <FigureFrame title={numberedFigTitle} source={figureSource} palette={palette}>
+      <FigureFrame title={numberedFigTitle} source={figureSource} notes={figureNoteList} palette={palette}>
         <Visual
           clip={visual}
           compact
-          maxTableRows={visual.payload.kind === 'table' ? 5 : undefined}
           clipPal={clipPal}
           mono={palette.mono}
           muted={palette.muted}
@@ -1148,10 +1194,9 @@ export default function SectionLayout({
     return (
       <div style={stack}>
         {textNode}
-        <FigureFrame title={numberedFigTitle} source={figureSource} palette={palette}>
+        <FigureFrame title={numberedFigTitle} source={figureSource} notes={figureNoteList} palette={palette}>
           <Visual
             clip={visual}
-            maxTableRows={visual.payload.kind === 'table' ? 6 : undefined}
             clipPal={clipPal}
             mono={palette.mono}
             muted={palette.muted}
@@ -1170,6 +1215,7 @@ export default function SectionLayout({
           <FigureFrame
             title={numberedFigTitle}
             source={figureSource}
+            notes={figureNoteList}
             palette={palette}
             style={{
               float: floatSide,
@@ -1191,7 +1237,7 @@ export default function SectionLayout({
     const main = (
       <div style={stack}>
         {textNode}
-        <FigureFrame title={numberedFigTitle} source={figureSource} palette={palette}>
+        <FigureFrame title={numberedFigTitle} source={figureSource} notes={figureNoteList} palette={palette}>
           <Visual clip={visual} compact clipPal={clipPal} mono={palette.mono} muted={palette.muted} />
         </FigureFrame>
       </div>
@@ -1222,7 +1268,7 @@ export default function SectionLayout({
         gap: 10,
         alignItems: 'stretch',
       }}>
-        <FigureFrame title={numberedFigTitle} source={figureSource} palette={palette}>
+        <FigureFrame title={numberedFigTitle} source={figureSource} notes={figureNoteList} palette={palette}>
           <Visual clip={visual} compact clipPal={clipPal} mono={palette.mono} muted={palette.muted} />
         </FigureFrame>
         <KeyFiguresRail figures={figures} palette={palette} />
@@ -1239,7 +1285,7 @@ export default function SectionLayout({
 
   const visualFirst = resolvedLayout === 'visual-left'
   const visualNode = (
-    <FigureFrame title={numberedFigTitle} source={figureSource} palette={palette}>
+    <FigureFrame title={numberedFigTitle} source={figureSource} notes={figureNoteList} palette={palette}>
       <Visual clip={visual} compact={isChart} clipPal={clipPal} mono={palette.mono} muted={palette.muted} />
     </FigureFrame>
   )

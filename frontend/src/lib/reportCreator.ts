@@ -203,7 +203,6 @@ export interface GeneratedReport {
   executiveSummary: string
   sections: GeneratedSection[]   // curated, in argument order
   conclusion: string
-  appendixClipIds: string[]      // down-ranked clips, shown as supporting data
   generatedAt: string            // ISO; compare with project.updatedAt for staleness
   model?: string
   pipeline?: {

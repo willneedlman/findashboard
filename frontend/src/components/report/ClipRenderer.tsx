@@ -9,6 +9,7 @@ import type { ChartUnit, ClipPayload, ChartPayload, TablePayload, KpiPayload, Te
 import type { ClipPalette } from '../../lib/reportTheme'
 import { isTickerSymbol } from '../../lib/tickerLogos'
 import { formatHorizontalCategoryLabel, horizontalCategoryAxisWidth } from './chartLabels'
+import { formatReportCell, tidyNumbersInText, niceAxisMax } from '../../lib/reportFigures'
 
 // One renderer for every clip payload, shared by capture preview, workspace,
 // and print. Print mode accepts a theme-derived palette so the PDF matches the
@@ -81,8 +82,11 @@ function buildColorMap(pal: Palette, keys: string[]): Map<string, string> {
 function TableClip({ p, pal, maxRows, print }: { p: TablePayload; pal: Palette; maxRows?: number; print: boolean }) {
   const rows = maxRows != null && maxRows > 0 ? p.rows.slice(0, maxRows) : p.rows
   const truncated = rows.length < p.rows.length
+  // Right-aligned prose sets a ragged left edge on every wrapped line, which is
+  // why a three-line "basis" note read as the most important thing in its row.
+  // Prose columns are prose, whatever they are called.
   const isTextColumn = (index: number) =>
-    index === 0 || /\b(name|headline|event|source|instrument|sector|feature|driver|status|category|region)\b/i.test(p.columns[index] ?? '')
+    index === 0 || /\b(name|headline|event|source|instrument|sector|feature|driver|status|category|region|basis|definition|note|notes|method|methodology|item|classification|assumption|rationale)\b/i.test(p.columns[index] ?? '')
   const narrativeIndex = print && p.columns.length <= 5
     ? p.columns.findIndex(column => /\b(headline|event|name|instrument|driver)\b/i.test(column))
     : -1
@@ -156,7 +160,9 @@ function TableClip({ p, pal, maxRows, print }: { p: TablePayload; pal: Palette; 
                         showFallbackText={false}
                       />
                     </span>
-                  ) : (cell == null ? '—' : String(cell))}
+                  ) : isTextColumn(c)
+                    ? (cell == null ? '—' : tidyNumbersInText(String(cell)))
+                    : formatReportCell(cell, p.columns[c] ?? '', p.columns)}
                 </td>
               ))}
             </tr>
@@ -211,6 +217,10 @@ function KpiClip({ p, pal }: { p: KpiPayload; pal: Palette }) {
                 fontFamily: SANS, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em',
                 lineHeight: 1.25, textTransform: 'uppercase', color: pal.muted,
                 whiteSpace: 'normal', wordBreak: 'break-word',
+                // Two lines' worth whether the label wraps or not, so a cell
+                // whose label runs long cannot drop its value below the
+                // baseline of the three cells beside it.
+                minHeight: 20,
               }}>{k.label}</div>
               <div style={{
                 fontFamily: MONO, fontSize: longValue ? 10.5 : 15, fontWeight: 700, lineHeight: 1.35, minHeight: 22, color: pal.ink, marginTop: 3,
@@ -286,6 +296,17 @@ function compactNumber(v: number): string {
 export function categoricalAxisIsCrowded(labels: string[]): boolean {
   if (labels.some(label => label.length > 7)) return true
   return labels.length > 6
+}
+
+/**
+ * Whether a bar chart draws on its side. Declared orientation wins; a crowded
+ * vertical chart is flipped so its categories stay upright rather than angled.
+ * Shared with the height calculation so a flipped chart is sized as one.
+ */
+export function reportBarsAreHorizontal(payload: ClipPayload): boolean {
+  if (payload.kind !== 'chart' || payload.chartType !== 'bar') return false
+  if (payload.barOrientation === 'horizontal') return true
+  return categoricalAxisIsCrowded(payload.data.map(row => String(row[payload.xKey] ?? '')))
 }
 
 function fmtTick(v: number, kind: TickKind = 'auto'): string {
@@ -573,13 +594,15 @@ function ChartClip({
   const xInterval = xCount <= 6 ? 0 : Math.max(1, Math.ceil(xCount / 5) - 1)
 
   // Categorical labels (segment/metric/driver names) are often long ("Professional
-  // Visualization", "Operating Margin"). Angle them instead of clipping to "Profe…"
-  // so every category stays readable, and give the axis the height to fit.
-  const categoricalX = (p.chartType === 'bar' || p.chartType === 'histogram'
-    || p.chartType === 'dot' || p.chartType === 'range')
-    // A horizontal bar chart puts its categories on the Y axis, so nothing here
-    // applies to it.
-    && p.barOrientation !== 'horizontal'
+  // Visualization", "Operating Margin") or simply numerous. An angled label is
+  // written into the PDF as one rotated glyph run, so copy, search and screen
+  // readers get "DA / CL / DK" back instead of "NVDA ORCL SNDK". A bar chart can
+  // carry the same categories upright on the Y axis, so a crowded one is turned
+  // on its side rather than angled.
+  const categoricalChart = p.chartType === 'bar' || p.chartType === 'histogram'
+    || p.chartType === 'dot' || p.chartType === 'range'
+  const horizontalBars = reportBarsAreHorizontal(p)
+  const categoricalX = categoricalChart && !horizontalBars
   const longLabels = categoricalX
     && categoricalAxisIsCrowded(data.map(d => String(d[p.xKey] ?? '')))
   const xAngle = longLabels ? -28 : 0
@@ -618,9 +641,53 @@ function ChartClip({
   const valueLabel = (key: string) => (v: unknown) => fmtTick(Number(v), seriesKind(key))
 
   const leftMinVal = left.length ? Math.min(...left.map(s => s.min)) : 0
-  const leftDomain: [any, any] = (p.chartType === 'bar' || p.chartType === 'histogram') && leftMinVal >= 0
-    ? [0, 'auto']
+  const leftValues = left.flatMap(series => seriesValues(p, series.key))
+  const bars = p.chartType === 'bar' || p.chartType === 'histogram'
+  // 'auto' put an 8.00 ceiling over a 4.20 maximum, so half the plot was empty
+  // and every bar read as half its real height. Round up just past the data.
+  const leftDomain: [any, any] = bars && leftMinVal >= 0
+    ? [0, niceAxisMax(leftValues) ?? 'auto']
     : ['auto', 'auto']
+
+  // Colour and reference lines have to carry meaning or they are decoration. A
+  // beta chart splits at the market, a signed percent chart splits at zero, and
+  // a lone price line takes the sign of its own move — a series that fell 14.7%
+  // drawn in the same green as a rising one argues against its own caption.
+  const leftUnit = left[0]?.unit
+  const signedAxis = (leftUnit === 'percent' || leftUnit === 'percentage-point' || leftUnit === 'basis-point')
+    && leftValues.some(value => value < 0)
+  const referenceValue = leftUnit === 'beta' ? 1 : signedAxis ? 0 : undefined
+  const referenceLabel = leftUnit === 'beta' ? 'Market = 1.00' : undefined
+  const barSemanticFill: ((value: number) => string) | undefined = p.series.length !== 1
+    ? undefined
+    : leftUnit === 'beta'
+      ? (value => (value >= 1 ? pal.accent : pal.series[1] ?? pal.accent))
+      : signedAxis
+        ? (value => (value >= 0 ? pal.pos : pal.neg))
+        : undefined
+  const trendStroke = (p.chartType === 'line' || p.chartType === 'area') && p.series.length === 1
+    ? (() => {
+      const values = seriesValues(p, p.series[0].key)
+      if (values.length < 2) return undefined
+      return values[values.length - 1] >= values[0] ? pal.pos : pal.neg
+    })()
+    : undefined
+  const referenceLine = referenceValue != null ? (
+    <ReferenceLine
+      yAxisId="left"
+      y={referenceValue}
+      stroke={pal.muted}
+      strokeDasharray="4 3"
+      strokeWidth={1}
+      label={referenceLabel ? {
+        value: referenceLabel,
+        position: 'insideTopRight',
+        fill: pal.muted,
+        fontFamily: MONO,
+        fontSize: print ? 7 : 8,
+      } : undefined}
+    />
+  ) : null
 
   const commonX = (
     <XAxis
@@ -633,15 +700,6 @@ function ChartClip({
       minTickGap={longLabels ? 0 : (print ? 12 : 20)}
       tickFormatter={longLabels ? undefined : formatXTick}
       height={xAxisHeight}
-      label={{
-        value: xLabel,
-        position: 'insideBottom',
-        offset: print ? -1 : -2,
-        fill: pal.muted,
-        fontFamily: SANS,
-        fontSize: print ? 8 : 8,
-        fontWeight: 700,
-      }}
     />
   )
 
@@ -653,17 +711,8 @@ function ChartClip({
       tickLine={false}
       axisLine={false}
       width={print ? 52 : 48}
-      tickFormatter={axisTickFormatter(leftKind, left.flatMap(series => seriesValues(p, series.key)))}
+      tickFormatter={axisTickFormatter(leftKind, leftValues)}
       domain={leftDomain}
-      label={{
-        value: leftMeasure,
-        angle: -90,
-        position: 'insideLeft',
-        fill: pal.muted,
-        fontFamily: SANS,
-        fontSize: print ? 8 : 8,
-        fontWeight: 700,
-      }}
     />
   )
   const yRight = dual ? (
@@ -676,15 +725,6 @@ function ChartClip({
       width={print ? 46 : 44}
       tickFormatter={axisTickFormatter(rightKind, right.flatMap(series => seriesValues(p, series.key)))}
       domain={['auto', 'auto']}
-      label={{
-        value: rightMeasure,
-        angle: 90,
-        position: 'insideRight',
-        fill: pal.muted,
-        fontFamily: SANS,
-        fontSize: print ? 8 : 8,
-        fontWeight: 700,
-      }}
     />
   ) : null
 
@@ -763,7 +803,6 @@ function ChartClip({
     : pieRaw
   const pieColor = (i: number) => pal.series[i % pal.series.length]
 
-  const horizontalBars = p.chartType === 'bar' && p.barOrientation === 'horizontal'
   const horizontalKind = p.series[0] ? seriesKind(p.series[0].key) : leftKind
   const horizontalValues = p.series[0] ? seriesValues(p, p.series[0].key) : []
   const isDivergingHorizontal = horizontalBars
@@ -773,6 +812,8 @@ function ChartClip({
     && /\b(momentum|return|change|upside|downside|relative|variance|contribution)\b/i.test(
       `${p.title ?? ''} ${p.series[0]?.label ?? ''}`,
     )
+  const horizontalCellFill = barSemanticFill
+    ?? (isDivergingHorizontal ? (value: number) => (value >= 0 ? pal.pos : pal.neg) : undefined)
   const horizontalValueLabel = (props: LabelProps) => {
     const view = props.viewBox as { x?: number; y?: number; width?: number; height?: number } | undefined
     const value = Number(props.value)
@@ -986,19 +1027,25 @@ function ChartClip({
               tickLine={false}
               axisLine={{ stroke: pal.border }}
               tickFormatter={axisTickFormatter(horizontalKind, horizontalValues)}
-              domain={leftMinVal >= 0 ? [0, 'auto'] : ['auto', 'auto']}
-              label={{
-                value: leftMeasure,
-                position: 'insideBottom',
-                offset: -2,
-                fill: pal.muted,
-                fontFamily: SANS,
-                fontSize: print ? 7 : 8,
-                fontWeight: 700,
-              }}
+              domain={leftMinVal >= 0 ? [0, niceAxisMax(horizontalValues) ?? 'auto'] : ['auto', 'auto']}
             />
             {isDivergingHorizontal && (
               <ReferenceLine x={0} stroke={pal.muted} strokeWidth={1} />
+            )}
+            {referenceValue != null && !isDivergingHorizontal && (
+              <ReferenceLine
+                x={referenceValue}
+                stroke={pal.muted}
+                strokeDasharray="4 3"
+                strokeWidth={1}
+                label={referenceLabel ? {
+                  value: referenceLabel,
+                  position: 'insideTopRight',
+                  fill: pal.muted,
+                  fontFamily: MONO,
+                  fontSize: print ? 7 : 8,
+                } : undefined}
+              />
             )}
             <YAxis
               type="category"
@@ -1019,10 +1066,10 @@ function ChartClip({
                 isAnimationActive={false}
                 maxBarSize={print ? 18 : 24}
               >
-                {isDivergingHorizontal && data.map((row, index) => (
+                {horizontalCellFill && data.map((row, index) => (
                   <Cell
                     key={`${s.key}-${index}`}
-                    fill={Number(row[s.key]) >= 0 ? pal.pos : pal.neg}
+                    fill={horizontalCellFill(Number(row[s.key]))}
                   />
                 ))}
                 {showValueLabels && (
@@ -1051,6 +1098,7 @@ function ChartClip({
             {yLeft}
             {yRight}
             {tip}
+            {referenceLine}
             {p.series.map((s, i) => (
               <Bar
                 key={s.key}
@@ -1061,6 +1109,9 @@ function ChartClip({
                 isAnimationActive={false}
                 maxBarSize={print ? 18 : 28}
               >
+                {barSemanticFill && data.map((row, index) => (
+                  <Cell key={`${s.key}-${index}`} fill={barSemanticFill(Number(row[s.key]))} />
+                ))}
                 {showValueLabels && (
                   <LabelList dataKey={s.key} position="top" formatter={valueLabel(s.key)}
                     fill={pal.ink} fontSize={valueLabelFontSize} fontFamily={MONO} fontWeight={700} />
@@ -1076,8 +1127,9 @@ function ChartClip({
             {yLeft}
             {yRight}
             {tip}
+            {referenceLine}
             {p.series.map((s, i) => {
-              const c = fillFor(s, i)
+              const c = trendStroke ?? fillFor(s, i)
               return (
                 <Area
                   key={s.key}
@@ -1102,6 +1154,7 @@ function ChartClip({
             {yLeft}
             {yRight}
             {tip}
+            {referenceLine}
             {p.series.map((s, i) => (
               <Line
                 key={s.key}
@@ -1109,7 +1162,7 @@ function ChartClip({
                 type="monotone"
                 dataKey={s.key}
                 name={s.label}
-                stroke={p.chartType === 'dot' ? 'none' : fillFor(s, i)}
+                stroke={p.chartType === 'dot' ? 'none' : (trendStroke ?? fillFor(s, i))}
                 dot={p.chartType === 'dot' ? { r: print ? 3.5 : 4.5, fill: fillFor(s, i), strokeWidth: 0 } : false}
                 strokeWidth={print ? 2.3 : 1.9}
                 strokeDasharray={p.chartType !== 'dot' && i === 1 ? '6 3' : undefined}
@@ -1148,7 +1201,7 @@ function ChartClip({
       )}
       {dual && p.chartType !== 'pie' && p.chartType !== 'scatter' && (
         <div style={{ fontFamily: MONO, fontSize: 7.5, color: pal.muted, marginTop: 2, lineHeight: 1.3 }}>
-          Left axis: {left.map(s => s.label).join(', ')}. Right axis: {right.map(s => s.label).join(', ')}.
+          Left axis: {leftMeasure} · {left.map(s => s.label).join(', ')}. Right axis: {rightMeasure} · {right.map(s => s.label).join(', ')}.
         </div>
       )}
     </div>
@@ -1168,11 +1221,7 @@ export function reportChartHeight(
   const baseChartH = print
     ? (inline ? 118 : compact ? 176 : 220)
     : (inline ? 126 : compact ? 170 : 230)
-  if (
-    payload.kind !== 'chart'
-    || payload.chartType !== 'bar'
-    || payload.barOrientation !== 'horizontal'
-  ) {
+  if (payload.kind !== 'chart' || !reportBarsAreHorizontal(payload)) {
     return baseChartH
   }
   return Math.max(

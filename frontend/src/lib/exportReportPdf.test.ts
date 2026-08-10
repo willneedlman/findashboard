@@ -14,7 +14,10 @@ describe('semantic report pagination', () => {
   it('uses native pages, repeated table headers, and protected rows', () => {
     const css = semanticPrintCss('#101c2e')
 
-    expect(css).toContain('@page { size: A4 portrait; margin: 10mm; }')
+    // A zero page margin is what removes the browser's own running head and
+    // foot, which printed a timestamp and the raw print URL on every page.
+    expect(css).toContain('@page { size: A4 portrait; margin: 0; }')
+    expect(css).toContain('padding: 10mm 9mm !important;')
     expect(css).toContain('thead { display: table-header-group; }')
     expect(css).toContain('tr { break-inside: avoid-page;')
     expect(css).toContain('.rc-section { break-inside: auto;')

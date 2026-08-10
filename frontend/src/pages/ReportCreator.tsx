@@ -31,7 +31,6 @@ import {
   type ReportResearchSourceId, type ReportScreenerSelection,
 } from '../lib/reportResearch'
 import type { ActivePortfolioContext } from '../lib/pmImport'
-import { selectReportAppendixData } from '../lib/reportPresentation'
 import { reportTickerSymbols } from '../lib/tickerLogos'
 import { ReportRevise, BlockRevise } from '../components/report/ReviseControls'
 
@@ -120,10 +119,6 @@ function GenerationProgress({ progress }: { progress: number }) {
 function GeneratedEditor({ project }: { project: ReportProject }) {
   const gen = project.generated!
   const clipById = useMemo(() => new Map(project.clips.map(c => [c.id, c])), [project.clips])
-  const appendixClips = useMemo(
-    () => selectReportAppendixData(gen.appendixClipIds, project.clips),
-    [gen.appendixClipIds, project.clips],
-  )
   const reportTickers = useMemo(
     () => {
       const multiSubject = /\b(compare|comparison|versus|vs\.?|screen|ranking|rank|portfolio|holdings|book)\b/i
@@ -247,18 +242,6 @@ function GeneratedEditor({ project }: { project: ReportProject }) {
           onBlur={e => updateGenerated(project.id, { conclusion: e.target.value })} style={genField} />
         <BlockRevise project={project} field="conclusion" />
       </div>
-      {appendixClips.length > 0 && (
-        <div>
-          <div style={subLabel}>Appendix · supporting data (not central to the thesis)</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {appendixClips.map(clip => (
-              <span key={clip.id} style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, border: `1px solid ${T.border}`, padding: '3px 7px' }}>
-                {clipTitle(clip)}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -1102,11 +1085,6 @@ export default function ReportCreator() {
         })),
       }
       const r = await axios.post('/api/ai/report', payload)
-      const activeClipById = new Map(clipsForGeneration.map(clip => [clip.id, clip]))
-      const appendixClipIds = Array.isArray(r.data.appendixClipIds)
-        ? [...new Set<string>(r.data.appendixClipIds)]
-          .filter(id => activeClipById.get(id)?.payload.kind !== 'chart')
-        : []
       setGenerated(active.id, {
         headline: r.data.headline ?? '',
         stance: r.data.stance ?? undefined,
@@ -1114,7 +1092,6 @@ export default function ReportCreator() {
         executiveSummary: r.data.executiveSummary ?? '',
         sections: Array.isArray(r.data.sections) ? r.data.sections : [],
         conclusion: r.data.conclusion ?? '',
-        appendixClipIds,
         model: r.data.model,
       })
       setGenerationProgress(100)

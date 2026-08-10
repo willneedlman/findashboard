@@ -2420,12 +2420,12 @@ Build ONE argument, whichever mode you are in.
 - Sentiment: only if the clip has real scores/figures (ignore empty stubs that say no structured panels).
 - Company profile / fundamentals: valuation multiples, growth, margin — structural context.
 - Credit / stress / markets board: risk-on vs risk-off backdrop tilts equity beta names.
-Ignore pure appendix stubs that contain no figures. If clips conflict (e.g. bullish GEX vs demanding reverse-DCF growth, or subject A wins on growth but subject B wins on valuation), name the conflict, weight the horizon, and still reach a verdict with appropriate conviction.
+Ignore stubs that contain no figures. If clips conflict (e.g. bullish GEX vs demanding reverse-DCF growth, or subject A wins on growth but subject B wins on valuation), name the conflict, weight the horizon, and still reach a verdict with appropriate conviction.
 
 ════════════════════════════════════════
 VISUALS
 ════════════════════════════════════════
-You do not build charts or choose renderer layouts. Use a chart clip's id as clipId when its native visual materially supports the section. Prefer 2–4 distinct decision-grade visuals when enough relevant chart clips exist. Omit unused visuals and never place chart clips in appendixClipIds.
+You do not build charts or choose renderer layouts. Use a chart clip's id as clipId when its native visual materially supports the section. Prefer 2–4 distinct decision-grade visuals when enough relevant chart clips exist. Omit unused visuals entirely.
 
 ════════════════════════════════════════
 DESIGN INTENT
@@ -2469,7 +2469,7 @@ HARD RULES & NARRATIVE VOCABULARY (both modes)
 - Valuation methods: Relative multiples, analyst consensus, and DCF are separate methods. Never say a P/E discount delivers or implies DCF upside. If consensus and DCF upside differ, show both, explain that they use different methods, and state which one informs the conclusion. In portfolio reviews, valuation is one compact supporting panel, not the central argument.
 - Valuation integrity: If DCF value and market price differ by more than 5x, or DCF and consensus point sharply in opposite directions, treat the DCF as unreconciled. Check units, diluted share count, corporate actions, and price alignment. Do not use that output to justify an allocation action.
 - Catalyst labels: Use "upcoming catalyst" only when the supplied evidence contains the actual future event and date. A methodology clip is not a catalyst calendar. Remove catalyst language from a heading when no dated event is available.
-- Portfolio summary structure: For a portfolio review, write the executive summary as exactly three short sentences: measured result, strongest supported diagnosis, and decision implication. Keep it under 80 words. Follow the selected portfolio template contract exactly. Short, medium, and long have different required section sets. Move definitions and calculation details to the appendix.
+- Portfolio summary structure: For a portfolio review, write the executive summary as exactly three short sentences: measured result, strongest supported diagnosis, and decision implication. Keep it under 80 words. Follow the selected portfolio template contract exactly. Short, medium, and long have different required section sets.
 - Measurement versus outlook: State the historical measurement window separately from the forecast horizon. Recent beta, volatility, and a near-term event do not establish a multi-year outlook unless a forward model explicitly connects them.
 - Derivative coverage: When the book contains options, distinguish contract inventory and underlying-market research from whole-account exposure. Equity-and-cash return, beta, volatility, factor, drawdown, and allocation statistics are sleeve metrics until verified option marks and Greeks support nonlinear position-level aggregation. Never present underlying shares as though the option contracts were stock holdings.
 - Statistical claims: Call a coefficient significant only when the coefficient evidence gives its p-value and it is below the stated threshold. Regression is association, never proof of causation.
@@ -2482,11 +2482,11 @@ HARD RULES & NARRATIVE VOCABULARY (both modes)
 - stance object required (see schema).
 - Tone and keyResult must agree. Do not claim a strong lean with a hedged, noncommittal keyResult.
 - Writing: no em dashes, no semicolons, no emoji, no bullet lists inside prose. Flowing paragraphs. Spartan. No restating Purpose/Goal as labels.
-- Curate sections: only clips that advance the thesis. Supporting non-chart evidence may go to appendixClipIds. Omit irrelevant or redundant chart clips entirely.
+- Curate sections: only clips that advance the thesis. There is no appendix. Evidence either earns a place in a section or is omitted, so never defer a clip to the end of the report.
 - Every body section needs keyFigures (2–4 real figures from that clip). Keep keyFigures sparse.
 - Large boards: two to five key figures, not every row.
 - Report length is driven by valuationContext.reportLength (see LENGTH above), not by clip count. Merge clips that serve the same point into one section (e.g. two DCF verdicts for a comparison, or a KPI panel plus the chart behind it) rather than writing a section per clip.
-- Every section's analysis must interpret, compare, or draw a conclusion — never transcribe a clip's numbers back as prose with no takeaway (e.g. do not write "NVDA's price is $206.84, P/E is 31.6x, EPS is $6.54" and stop there; those figures already appear in the keyFigures/table below the prose). If a clip has nothing to add beyond its own numbers, cut the section. A supporting non-chart clip may move to appendixClipIds; an unused chart must be omitted.
+- Every section's analysis must interpret, compare, or draw a conclusion — never transcribe a clip's numbers back as prose with no takeaway (e.g. do not write "NVDA's price is $206.84, P/E is 31.6x, EPS is $6.54" and stop there; those figures already appear in the keyFigures/table below the prose). If a clip has nothing to add beyond its own numbers, cut the section and drop the clip.
 
 Respond ONLY with valid JSON (no markdown, no code fences):
 {
@@ -2513,8 +2513,7 @@ Respond ONLY with valid JSON (no markdown, no code fences):
       "keyFigures": [ { "label": "metric", "value": "figure with units" } ]
     }
   ],
-  "conclusion": "restate the finding and confidence, the main risk, and either a supported implication or the evidence limitation",
-  "appendixClipIds": ["<supporting non-chart clip ids only>"]
+  "conclusion": "restate the finding and confidence, the main risk, and either a supported implication or the evidence limitation"
 }
 Every clipId must be one of the provided clip ids."""
 
@@ -3440,7 +3439,7 @@ def _report_prompt_clips(
     """Select a compact, diverse evidence set for the LLM writer.
 
     Large AlphaTape runs can collect hundreds of supporting clips. The full set
-    remains available for charts, appendix selection, and export; the writer
+    remains available for charts and export; the writer
     receives a decision-grade subset so outline and drafting stay within the
     edge proxy's response window.
     """
@@ -3514,7 +3513,7 @@ def _report_prompt_clips(
         data = clip.dataSummary.strip()
         clip_cap = 5_000 if re.search(r"\bcurrent allocation\b", clip.title or "", re.I) else data_cap
         if len(data) > clip_cap:
-            data = f"{data[:clip_cap].rstrip()} … [supporting detail retained in appendix]"
+            data = f"{data[:clip_cap].rstrip()} … [truncated]"
         return {
             "id": clip.id,
             "sourceTool": clip.sourceTab,
@@ -4352,10 +4351,6 @@ def _material_portfolio_positions(clips: list[ReportClipIn]) -> list[tuple[str, 
     return []
 
 
-def _has_option_positions(clips: list[ReportClipIn]) -> bool:
-    return any(re.search(r"\bcurrent option positions\b", clip.title, re.I) for clip in clips)
-
-
 def _section_evidence_profile(section: dict, clip: ReportClipIn | None) -> dict:
     chart = section.get("chart") if isinstance(section.get("chart"), dict) else None
     chart_type = str((chart or {}).get("chartType", "")).lower()
@@ -4555,7 +4550,7 @@ def _evidence_utilisation(data_bank_meta: dict, cited_clip_ids: set[str]) -> dic
     """Which pulls the finished report actually leaned on.
 
     A tool counts as used when at least one of its clips ends up attached to a
-    section or to the appendix. Everything else was fetched and ignored, which is
+    section. Everything else was fetched and ignored, which is
     the single most useful signal for tuning retrieval: a tool that is repeatedly
     pulled and never cited is being selected on name rather than on fit.
 
@@ -4601,20 +4596,6 @@ def _record_evidence_utilisation(template_id: str, utilisation: dict) -> None:
     except Exception:  # noqa: BLE001 — telemetry is never load-bearing
         pass
 
-
-def _select_report_appendix_clip_ids(raw_ids, clips: list[ReportClipIn], used: set[str]) -> list[str]:
-    clip_type = {clip.id: clip.dataType.strip().lower() for clip in clips}
-    appendix: list[str] = []
-    for raw_id in raw_ids or []:
-        clip_id = str(raw_id)
-        if (
-            clip_id in clip_type
-            and clip_type[clip_id] != "chart"
-            and clip_id not in used
-            and clip_id not in appendix
-        ):
-            appendix.append(clip_id)
-    return appendix
 
 # ── Sequential pipeline: Step 1 (outline) and Step 4 (verify) ────────────────
 # The report is built in distinct, ordered LLM passes rather than one rushed
@@ -4837,24 +4818,46 @@ def _dcf_price_pairs(clips: list[ReportClipIn]) -> list[tuple[str, float, float]
     return pairs
 
 
+_DCF_DISCOUNT_RE = re.compile(
+    r"(?:trad(?:es?|ing)\s+at\s+)?(?:an?\s+)?(\d+(?:\.\d+)?)\s*%\s+discount\s+to\s+"
+    r"(?:its\s+)?(?:dcf[- ]derived\s+)?intrinsic(?:\s+value)?",
+    re.I,
+)
+
+
 def _fix_dcf_direction(text: str, clips: list[ReportClipIn]) -> str:
+    """"Trades at a 92% discount to intrinsic" says a stock is cheap. The
+    evidence said the reverse: a $22.65 intrinsic under a $274.48 price. Two
+    bugs got that sentence onto a cover page. The pattern required the word
+    "value" and the sentence omitted it, and the check ran against whichever DCF
+    happened to be first rather than the one the sentence names."""
     if not text:
         return text
     pairs = _dcf_price_pairs(clips)
     if not pairs:
         return text
-    ticker, intrinsic, market = pairs[0]
-    downside = max(0.0, (1 - intrinsic / market) * 100)
-    if intrinsic >= market:
-        return text
-    text = re.sub(
-        r"(?:trades?\s+at\s+)?(?:an?\s+)?\d+(?:\.\d+)?%\s+discount\s+to\s+(?:its\s+)?(?:dcf[- ]derived\s+)?intrinsic\s+value",
-        f"has {downside:.1f}% downside to DCF-derived intrinsic value",
-        text,
-        flags=re.I,
-    )
-    text = re.sub(r"\bmagnitude of (?:the|this) discount\b", "magnitude of the DCF downside", text, flags=re.I)
-    return text
+    by_ticker = {ticker.upper(): (intrinsic, market) for ticker, intrinsic, market in pairs}
+
+    repaired: list[str] = []
+    for sentence in re.split(r"(?<=[.!?])\s+", text):
+        if not _DCF_DISCOUNT_RE.search(sentence):
+            repaired.append(sentence)
+            continue
+        named = [ticker for ticker in by_ticker if re.search(rf"\b{re.escape(ticker)}\b", sentence)]
+        intrinsic, market = by_ticker.get(
+            named[0] if named else pairs[0][0].upper(),
+            (pairs[0][1], pairs[0][2]),
+        )
+        if intrinsic >= market:
+            repaired.append(sentence)
+            continue
+        downside = max(0.0, (1 - intrinsic / market) * 100)
+        repaired.append(_DCF_DISCOUNT_RE.sub(
+            f"has {downside:.1f}% downside to DCF-derived intrinsic value",
+            sentence,
+        ))
+    text = " ".join(repaired)
+    return re.sub(r"\bmagnitude of (?:the|this) discount\b", "magnitude of the DCF downside", text, flags=re.I)
 
 
 def _extreme_dcf_warning(clips: list[ReportClipIn]) -> str | None:
@@ -4985,6 +4988,20 @@ def _build_report_slot_ctx(clips: list[ReportClipIn], subject: str | None, name:
     roe_vals = [num for t, kv in all_kpis.items() if t != (subject or "").upper() and (num := _first_number(kv.get("ROE") or "")) is not None]
     if roe_vals:
         slot_fields["peers.roe_median"] = round(float(_median(roe_vals)), 1)
+
+    # Figures this pipeline derives are as provenanced as the ones lifted from a
+    # clip, and the numeric-provenance filter has to know them or it deletes the
+    # very sentences the repair linters just wrote.
+    alpha = _portfolio_alpha(clips)
+    if alpha is not None:
+        slot_fields["portfolio.alpha"] = round(alpha, 1)
+    technology, tech_related, _ = _tech_related_weight(clips)
+    if technology is not None:
+        slot_fields["portfolio.technology_weight"] = technology
+    if tech_related is not None:
+        slot_fields["portfolio.tech_related_weight"] = round(tech_related, 2)
+    for estimator, value in _portfolio_beta_estimates(clips).items():
+        slot_fields[f"portfolio.beta_{estimator}"] = value
     return SlotContext(fields=slot_fields)
 
 
@@ -5077,40 +5094,437 @@ def _filter_unverified_key_figures(sections: list[dict], clips: list[ReportClipI
         ]
 
 
+def _table_from_clips(clips: list[ReportClipIn], title_pattern: str):
+    """(clip title, columns, rows) for the first clip whose title matches."""
+    for clip in clips:
+        if not re.search(title_pattern, clip.title, re.I):
+            continue
+        parsed = _parse_table_summary(clip.dataSummary)
+        if parsed:
+            return clip.title, parsed[0], parsed[1]
+    return None, None, None
+
+
+def _column_index(columns: list[str], pattern: str) -> int | None:
+    for index, column in enumerate(columns):
+        if re.search(pattern, column, re.I):
+            return index
+    return None
+
+
+def _holding_beta_maps(clips: list[ReportClipIn]) -> list[tuple[str, dict[str, float]]]:
+    """Every per-holding beta estimate in the evidence, tagged with the panel it
+    came from. Two panels in one book estimated beta on different windows and
+    disagreed on every single name, and the report presented both as "beta vs
+    SPY" one page apart."""
+    maps: list[tuple[str, dict[str, float]]] = []
+    for clip in clips:
+        parsed = _parse_table_summary(clip.dataSummary)
+        if not parsed:
+            continue
+        columns, rows = parsed
+        ticker_index = _column_index(columns, r"^\s*(?:ticker|symbol|holding|company)\s*$")
+        beta_index = _column_index(columns, r"\bbeta\b")
+        if ticker_index is None or beta_index is None:
+            continue
+        values: dict[str, float] = {}
+        for row in rows:
+            if max(ticker_index, beta_index) >= len(row):
+                continue
+            ticker = row[ticker_index].strip().upper()
+            beta = _first_number(row[beta_index])
+            if re.fullmatch(r"[A-Z][A-Z0-9.\-]{0,5}", ticker) and beta is not None:
+                values[ticker] = beta
+        if len(values) >= 2:
+            maps.append((clip.title, values))
+    return maps
+
+
+def _beta_maps_disagree(maps: list[tuple[str, dict[str, float]]]) -> bool:
+    for i in range(len(maps)):
+        for j in range(i + 1, len(maps)):
+            shared = set(maps[i][1]) & set(maps[j][1])
+            for ticker in shared:
+                a, b = maps[i][1][ticker], maps[j][1][ticker]
+                if abs(a - b) > max(0.05, abs(b) * 0.10):
+                    return True
+    return False
+
+
+_BETA_RANGE_RE = re.compile(
+    r"\bbeta\b[^.!?]{0,80}?\bfrom\s+(\d+(?:\.\d+)?)\s*(?:\(([A-Z][A-Z0-9.\-]{0,5})\))?\s*to\s+(\d+(?:\.\d+)?)",
+    re.I,
+)
+
+
+def _fix_spliced_beta_range(text: str, clips: list[ReportClipIn]) -> str:
+    """A stated range has to come from one estimate. One report wrote "beta
+    ranges from 0.70 (TOST) to 6.25 (NBIS)" by taking the floor off one panel
+    and the ceiling off another; neither panel contained that range."""
+    maps = _holding_beta_maps(clips)
+    if not text or not maps:
+        return text
+
+    def covered(values: dict[str, float], number: float) -> bool:
+        return any(abs(number - beta) <= max(0.02, abs(beta) * 0.01) for beta in values.values())
+
+    repaired: list[str] = []
+    for sentence in re.split(r"(?<=[.!?])\s+", text):
+        match = _BETA_RANGE_RE.search(sentence)
+        if not match:
+            repaired.append(sentence)
+            continue
+        low, high = float(match.group(1)), float(match.group(3))
+        if any(covered(values, low) and covered(values, high) for _, values in maps):
+            repaired.append(sentence)
+            continue
+        source, values = max(maps, key=lambda item: len(item[1]))
+        low_ticker = min(values, key=lambda ticker: values[ticker])
+        high_ticker = max(values, key=lambda ticker: values[ticker])
+        repaired.append(
+            f"On the {source.strip().rstrip('.')} panel, holding-level beta runs from "
+            f"{values[low_ticker]:.2f} ({low_ticker}) to {values[high_ticker]:.2f} ({high_ticker})."
+        )
+    return " ".join(repaired).strip()
+
+
+def _beta_source_conflict_note(clips: list[ReportClipIn]) -> str | None:
+    maps = _holding_beta_maps(clips)
+    if len(maps) < 2 or not _beta_maps_disagree(maps):
+        return None
+    names = " and ".join(source.strip().rstrip(".") for source, _ in maps[:2])
+    return (
+        f"Holding-level beta is estimated twice in this evidence ({names}) on different windows, "
+        "and the two panels disagree by name. Compare betas only within one panel."
+    )
+
+
+def _portfolio_beta_estimates(clips: list[ReportClipIn]) -> dict[str, float]:
+    """The book's own beta, by estimator. A single-factor covariance beta and a
+    multi-factor regression beta are both real and are not the same number."""
+    out: dict[str, float] = {}
+    for clip in clips:
+        for label, value in _parse_kpi_summary(clip.dataSummary).items():
+            if re.search(r"(?:single-factor|static|portfolio)\s+beta", label, re.I):
+                number = _first_number(value)
+                if number is not None:
+                    out.setdefault("static", number)
+        if re.search(r"factor model coefficients|macro factor", clip.title, re.I):
+            parsed = _parse_table_summary(clip.dataSummary)
+            if not parsed:
+                continue
+            columns, rows = parsed
+            beta_index = _column_index(columns, r"^\s*beta\s*$")
+            if beta_index is None:
+                continue
+            for row in rows:
+                if row and re.fullmatch(r"\s*market\s*", row[0], re.I) and beta_index < len(row):
+                    number = _first_number(row[beta_index])
+                    if number is not None:
+                        out.setdefault("regression", number)
+    return out
+
+
+def _disambiguate_portfolio_beta(text: str, clips: list[ReportClipIn]) -> str:
+    """One report put a 2.15 beta on the cover, cited a 2.565 beta in the factor
+    paragraph, and computed its market-shock loss from the first while naming
+    the second in the sentence directly above it. Both are real; each is named."""
+    estimates = _portfolio_beta_estimates(clips)
+    static, regression = estimates.get("static"), estimates.get("regression")
+    if not text or static is None or regression is None:
+        return text
+    if abs(static - regression) <= max(0.05, abs(static) * 0.03):
+        return text
+
+    def estimator_for(number: float) -> str | None:
+        if abs(number - static) <= 0.02:
+            return "single-factor beta"
+        if abs(number - regression) <= 0.02:
+            return "macro-factor regression beta"
+        return None
+
+    def already_named(source: str, start: int) -> bool:
+        return bool(re.search(r"(?:single-factor|regression|macro-factor)\s*$", source[max(0, start - 28):start], re.I))
+
+    def prefix(match: re.Match) -> str:
+        estimator = estimator_for(float(match.group(1)))
+        if not estimator or already_named(text, match.start()):
+            return match.group(0)
+        return f"{match.group(1)} {estimator}"
+
+    text = re.sub(r"\b(\d+\.\d+)\s+beta\b(?!\s+of)", prefix, text, flags=re.I)
+
+    def suffix(match: re.Match) -> str:
+        estimator = estimator_for(float(match.group(2)))
+        if not estimator or already_named(text, match.start()):
+            return match.group(0)
+        return f"{estimator} {match.group(1) or ''}{match.group(2)}"
+
+    return re.sub(r"\bbeta\s+(of\s+)?(\d+\.\d+)", suffix, text, flags=re.I)
+
+
+def _sector_weights(clips: list[ReportClipIn]) -> dict[str, float]:
+    _, columns, rows = _table_from_clips(clips, r"sector allocation")
+    if not columns or not rows:
+        return {}
+    weight_index = _column_index(columns, r"weight|%")
+    if weight_index is None:
+        return {}
+    weights: dict[str, float] = {}
+    for row in rows:
+        if weight_index >= len(row) or not row[0].strip():
+            continue
+        value = _first_number(row[weight_index])
+        if value is not None:
+            weights[row[0].strip()] = value
+    return weights
+
+
+_TECH_RELATED_SECTOR = re.compile(r"^\s*(technology|communication services)\s*$", re.I)
+
+
+def _tech_related_weight(clips: list[ReportClipIn]) -> tuple[float | None, float | None, str]:
+    weights = _sector_weights(clips)
+    if not weights:
+        return None, None, ""
+    technology = next(
+        (value for name, value in weights.items() if re.fullmatch(r"\s*technology\s*", name, re.I)),
+        None,
+    )
+    if technology is None:
+        return None, None, ""
+    related = {name.strip(): value for name, value in weights.items() if _TECH_RELATED_SECTOR.match(name)}
+    components = ", ".join(f"{name} {value:.2f}%" for name, value in sorted(related.items(), key=lambda item: -item[1]))
+    return technology, sum(related.values()), components
+
+
+def _fix_sector_share_claims(text: str, clips: list[ReportClipIn]) -> str:
+    """A report claimed "71% of assets in tech-related categories" over a table
+    whose technology line read 55.79 and whose rows sum to no such figure. 71
+    was the market factor's variance share from the next page. Any aggregate
+    sector share is recomputed from the allocation table or it does not run."""
+    technology, related_total, components = _tech_related_weight(clips)
+    if not text or technology is None or related_total is None:
+        return text
+    repaired: list[str] = []
+    for sentence in re.split(r"(?<=[.!?])\s+", text):
+        stated = [float(value) for value in re.findall(r"(\d+(?:\.\d+)?)\s*%", sentence)]
+        qualifies = (
+            stated
+            and re.search(r"\btech(?:nology)?\b", sentence, re.I)
+            and re.search(r"\b(sector|classif|categor|allocation|assets|exposure|weight)\b", sentence, re.I)
+        )
+        if not qualifies:
+            repaired.append(sentence)
+            continue
+        matched = any(
+            abs(value - technology) <= 0.6 or abs(value - related_total) <= 0.6
+            for value in stated
+        )
+        inflated = [value for value in stated if value > technology + 0.6]
+        if matched or not inflated:
+            repaired.append(sentence)
+            continue
+        repaired.append(
+            f"Directly classified technology is {technology:.2f}% of portfolio weight, and technology "
+            f"plus communication services is {related_total:.2f}% ({components}). Fund holdings are not "
+            "looked through, so total economic technology exposure is not determined."
+        )
+    return " ".join(repaired).strip()
+
+
+def _risk_free_rate(clips: list[ReportClipIn]) -> float | None:
+    for clip in clips:
+        match = re.search(r"(\d+(?:\.\d+)?)\s*%\s*risk[- ]free", clip.dataSummary or "", re.I)
+        if match:
+            try:
+                return float(match.group(1))
+            except ValueError:
+                continue
+    return None
+
+
+def _benchmark_return(clips: list[ReportClipIn]) -> float | None:
+    for clip in clips:
+        for label, value in _parse_kpi_summary(clip.dataSummary).items():
+            # "Active return vs SPY" names SPY and names a return and is neither
+            # of those things. A relative figure is not the benchmark's own.
+            if (
+                re.search(r"\b(?:benchmark|spy)\b", label, re.I)
+                and re.search(r"\breturn\b", label, re.I)
+                and not re.search(r"\b(?:active|excess|relative|tracking|vs|versus)\b", label, re.I)
+            ):
+                number = _first_number(value)
+                if number is not None:
+                    return number
+    return None
+
+
+def _portfolio_alpha(clips: list[ReportClipIn]) -> float | None:
+    """Jensen's alpha in points, from figures the evidence already contains.
+
+    alpha = active + (1 - beta)(benchmark - riskFree). Returns None unless every
+    input is present, so nothing here is ever an estimate of an estimate.
+    """
+    active = _portfolio_active_return(clips)
+    beta = _portfolio_beta_estimates(clips).get("static")
+    benchmark = _benchmark_return(clips)
+    risk_free = _risk_free_rate(clips)
+    if None in (active, beta, benchmark, risk_free):
+        return None
+    return active + (1 - beta) * (benchmark - risk_free)
+
+
+_SKILL_CLAIM_RE = re.compile(
+    r"\b(?:pure(?:ly)?\s+market\s+exposure|entirely\s+market\s+exposure|"
+    r"not\s+(?:from\s+)?(?:stock|security)[- ]selection(?:\s+skill)?|"
+    r"no\s+(?:stock|security)[- ]selection\s+skill|rather\s+than\s+(?:stock|security)[- ]selection)",
+    re.I,
+)
+
+
+def _fix_risk_adjusted_claims(text: str, clips: list[ReportClipIn]) -> str:
+    """"The excess is pure market exposure" is an attribution conclusion, and a
+    Sharpe comparison cannot carry it. Where the evidence yields an alpha, state
+    the alpha; where it does not, the claim goes rather than stand unmeasured."""
+    if not text or not _SKILL_CLAIM_RE.search(text):
+        return text
+    alpha = _portfolio_alpha(clips)
+    beta = _portfolio_beta_estimates(clips).get("static")
+    if alpha is not None and beta is not None:
+        replacement = (
+            f"Against a beta of {beta:.2f}, the book's excess over the beta-implied return is "
+            f"{alpha:+.1f} points, so the return is close to what its market exposure alone would "
+            "have produced."
+        )
+    else:
+        replacement = (
+            "Risk-adjusted return is lower than the benchmark's. No alpha or attribution figure was "
+            "supplied, so the split between market exposure, allocation and security selection is "
+            "not determined."
+        )
+    repaired = [
+        replacement if _SKILL_CLAIM_RE.search(sentence) else sentence
+        for sentence in re.split(r"(?<=[.!?])\s+", text)
+    ]
+    # Only the first rewritten sentence keeps the replacement; a second would repeat it.
+    seen = False
+    deduped: list[str] = []
+    for sentence in repaired:
+        if sentence == replacement:
+            if seen:
+                continue
+            seen = True
+        deduped.append(sentence)
+    return " ".join(deduped).strip()
+
+
+_EVIDENCE_TOPICS: list[tuple[str, str, str]] = [
+    (
+        r"\b(?:analyst\s+)?consensus\b",
+        r"\bconsensus\b",
+        "Analyst consensus is shown for the peer set and is not available for every holding.",
+    ),
+    (
+        r"\bpeer[- ](?:multiple|comparison|relative)|relative[- ]multiple",
+        r"\bpeer\b",
+        "Peer-relative multiples cover the peer set shown and not every holding.",
+    ),
+]
+
+_ABSENCE_RE = re.compile(
+    r"\b(?:no|not|lack(?:s|ing)?|absent|unavailable|missing|were not supplied|are not available)\b",
+    re.I,
+)
+
+
+def _fix_availability_contradictions(text: str, sections: list[dict], clips: list[ReportClipIn]) -> str:
+    """A report stated "No analyst consensus figures are available" directly
+    above a figure captioned "Consensus upside across the peer set". A claim
+    that evidence is missing is corrected when that evidence is on the page."""
+    if not text:
+        return text
+    placed = " ".join(
+        str(section.get("chart", {}).get("title", ""))
+        for section in sections
+        if isinstance(section.get("chart"), dict)
+    )
+    placed = f"{placed} " + " ".join(clip.title for clip in clips)
+    repaired: list[str] = []
+    for sentence in re.split(r"(?<=[.!?])\s+", text):
+        rewritten = sentence
+        for claim_pattern, evidence_pattern, correction in _EVIDENCE_TOPICS:
+            if (
+                _ABSENCE_RE.search(sentence)
+                and re.search(claim_pattern, sentence, re.I)
+                and re.search(evidence_pattern, placed, re.I)
+            ):
+                rewritten = correction
+                break
+        repaired.append(rewritten)
+    return " ".join(repaired).strip()
+
+
+def _suppress_extreme_dcf_claims(text: str, clips: list[ReportClipIn]) -> str:
+    """An intrinsic value an order of magnitude away from the traded price is a
+    model failure, not a valuation finding. One report led with "AMZN intrinsic
+    $22.65 vs price $274.48" as evidence of over-pricing."""
+    warning = _extreme_dcf_warning(clips)
+    if not text or not warning:
+        return text
+    kept = [
+        sentence
+        for sentence in re.split(r"(?<=[.!?])\s+", text)
+        if not (
+            re.search(r"\b(?:intrinsic|dcf|fair value)\b", sentence, re.I)
+            and re.search(r"\d", sentence)
+        )
+    ]
+    if len(kept) == len(re.split(r"(?<=[.!?])\s+", text)):
+        return text
+    return " ".join([*kept, warning]).strip()
+
+
+def _strip_em_dashes(text: str) -> str:
+    """House voice carries no em dashes. A pair around an aside becomes
+    parentheses, a lone one becomes a comma. En dashes are left alone because
+    they carry ranges ("$280–$310")."""
+    if not text or "—" not in text:
+        return text
+    text = re.sub(r"\s*—\s*([^—]{1,140}?)\s*—\s*", r" (\1) ", text)
+    text = re.sub(r"\s*—\s*", ", ", text)
+    return re.sub(r"[ \t]{2,}", " ", text).strip()
+
+
 def _apply_report_linters(text: str, clips: list[ReportClipIn], slot_ctx) -> str:
     """The full deterministic prose pass: comparative-direction fixes, upside
     vocabulary fixes, slot resolution, then numeric provenance enforcement.
     Applied to every AI-written block in both the initial draft and later revision."""
     from routers.slot_engine import resolve_slots
-    resolved = resolve_slots(
-        _remove_unsupported_sector_momentum(
-            _remove_unsupported_catalyst_claims(
-                _repair_portfolio_diversification_claims(
-                    _separate_drawdown_and_stress(
-                        _separate_systematic_and_residual_risk(
-                            _repair_valuation_method_causality(
-                                _clarify_direct_sector_weights(
-                                    _fix_portfolio_performance_claims(
-                                        _fix_dcf_direction(
-                                            _fix_upside_vocabulary_reversals(_fix_comparative_reversals(text, clips)),
-                                            clips,
-                                        ),
-                                        clips,
-                                    ),
-                                    clips,
-                                )
-                            ),
-                        ),
-                    ),
-                    clips,
-                ),
-                clips,
-            ),
-            clips,
-        ),
-        slot_ctx,
-    )
-    return _remove_unverified_numeric_sentences(resolved, clips, slot_ctx)
+    # Ordered, not nested: the chain is long enough that the reading order and
+    # the application order have to be the same thing.
+    for step in (
+        _fix_comparative_reversals,
+        _fix_upside_vocabulary_reversals,
+        _fix_dcf_direction,
+        _suppress_extreme_dcf_claims,
+        _fix_portfolio_performance_claims,
+        _fix_risk_adjusted_claims,
+        _clarify_direct_sector_weights,
+        _fix_sector_share_claims,
+        _repair_valuation_method_causality,
+        _separate_systematic_and_residual_risk,
+        _separate_drawdown_and_stress,
+        _fix_spliced_beta_range,
+        _disambiguate_portfolio_beta,
+        _repair_portfolio_diversification_claims,
+        _remove_unsupported_catalyst_claims,
+        _remove_unsupported_sector_momentum,
+        _strip_em_dashes,
+    ):
+        takes_clips = step.__code__.co_argcount > 1
+        text = step(text, clips) if takes_clips else step(text)
+    return _remove_unverified_numeric_sentences(resolve_slots(text, slot_ctx), clips, slot_ctx)
 
 
 def _portfolio_active_return(clips: list[ReportClipIn]) -> float | None:
@@ -5204,6 +5618,31 @@ def _remove_unsupported_portfolio_actions(text: str) -> str:
     return " ".join(kept).strip()
 
 
+_ACTION_HEADLINE_RE = re.compile(
+    r"(?:^|,\s*|\band\s+)(trim|buy|sell|add|reduce|cut|rebalance|rotate|hedge|exit|"
+    r"increase|decrease|overweight|underweight|reallocate)\b",
+    re.I,
+)
+
+
+def _reframe_action_headline(headline: str, clips: list[ReportClipIn], key_result: dict | None) -> str:
+    """A note whose own conclusion reads "the report does not support an
+    implementable trade" cannot be titled "Trim High-beta Tech, Rebalance for
+    Risk-adjusted Efficiency". The title is restated as the measured finding it
+    can actually support."""
+    if not headline or not _ACTION_HEADLINE_RE.search(headline):
+        return headline
+    active = _portfolio_active_return(clips)
+    beta = _portfolio_beta_estimates(clips).get("static")
+    if active is not None and beta is not None:
+        direction = "Ahead Of" if active >= 0 else "Behind"
+        return _title_case(f"{direction} SPY by {abs(active):.1f} Points on a {beta:.2f} Beta")
+    value = str((key_result or {}).get("value", "")).strip()
+    if value and not _ACTION_HEADLINE_RE.search(value):
+        return _title_case(value)
+    return _title_case("Portfolio Risk Review: Measured Findings Only")
+
+
 def _has_portfolio_trade_impact_evidence(clips: list[ReportClipIn]) -> bool:
     evidence = "\n".join(f"{clip.sourceTab}\n{clip.title}\n{clip.dataSummary}" for clip in clips)
     has_proposal = bool(re.search(
@@ -5283,8 +5722,14 @@ def _separate_drawdown_and_stress(text: str) -> str:
     return " ".join(repaired)
 
 
+def _has_option_positions(clips: list[ReportClipIn]) -> bool:
+    return any(re.search(r"\bcurrent option positions\b", clip.title, re.I) for clip in clips)
+
+
 def _repair_portfolio_diversification_claims(text: str, clips: list[ReportClipIn]) -> str:
-    if len(_material_portfolio_positions(clips)) != 1:
+    # "One security holds the entire allocation" is false the moment the book
+    # also carries options, whose underlyings are not in the equity weights.
+    if len(_material_portfolio_positions(clips)) != 1 or _has_option_positions(clips):
         return text
     repaired: list[str] = []
     for sentence in re.split(r"(?<=[.!?])\s+", text):
@@ -5539,7 +5984,7 @@ def generate_report(req: ReportGenRequest):
             " This is a multi-subject report: valuationContext.subjects lists every named "
             "ticker with its own live spot and DCF (if present). Weigh ALL of them against "
             "each other using their own clips — do not silently pick one as the report's real "
-            "subject and relegate the other's central clips to appendixClipIds."
+            "subject and omit the other's central clips."
         )
 
     # Price-by-subject for percent-of-spot swing framing (single + multi subject).
@@ -5620,47 +6065,9 @@ def generate_report(req: ReportGenRequest):
         raise HTTPException(502, "AI returned an unexpected report shape")
 
     sections = _build_sections(result.get("sections"), valid_ids, contract)
-    material_positions = _material_portfolio_positions(req.clips) if book_level else []
     # STEP 3 — Intentional chart mapping: the site builds and assigns every chart.
     _inject_mechanical_charts(sections, req.clips)
     _annotate_sensitivity_swing(sections, price_by_subject)
-    used = {s["clipId"] for s in sections}
-    appendix = _select_report_appendix_clip_ids(
-        result.get("appendixClipIds"),
-        req.clips,
-        used,
-    )
-    if book_level:
-        appendix_terms = [
-            r"current allocation", r"sector allocation", r"performance methodology",
-            r"holding-level beta", r"factor model coefficients", r"scenario losses",
-            r"upcoming portfolio earnings schedule",
-        ]
-        if len(material_positions) >= 2:
-            appendix_terms.append(r"correlation matrix")
-        if len(material_positions) == 1:
-            appendix_terms.extend([r"model assumptions", r"value drivers", r"dcf verdict"])
-        if _has_option_positions(req.clips):
-            appendix_terms.extend([
-                r"current option positions", r"option analytics coverage",
-                r"derivative coverage limitation", r"options snapshot", r"skew pulse",
-            ])
-        allowed_appendix = re.compile("|".join(appendix_terms), re.I)
-        clips_by_id = {clip.id: clip for clip in req.clips}
-        appendix = [
-            clip_id for clip_id in appendix
-            if clip_id in clips_by_id and allowed_appendix.search(clips_by_id[clip_id].title)
-        ]
-        audit_pattern = allowed_appendix
-        for clip in req.clips:
-            if (
-                clip.id not in used
-                and clip.id not in appendix
-                and clip.dataType.strip().lower() != "chart"
-                and audit_pattern.search(clip.title)
-            ):
-                appendix.append(clip.id)
-
     stance = _stance_from_result(result, market)
     # If model omitted stance lean, use signal digest as soft prior.
     if not book_level and stance and stance.get("lean") == "neutral" and signal_digest.get("suggestedLean") in ("bullish", "bearish"):
@@ -5731,23 +6138,31 @@ def generate_report(req: ReportGenRequest):
             section["analysis"] = _remove_unsupported_portfolio_actions(str(section.get("analysis", "")))
             if not section["analysis"]:
                 section["analysis"] = "This evidence measures portfolio behavior but does not establish the effect of a specific trade."
-        action_section = next((
-            section for section in reversed(sections)
-            if re.search(r"\baction|evidence gaps?\b", str(section.get("templateSection", "")), re.I)
-        ), sections[-1] if sections else None)
-        if action_section is not None and limitation not in str(action_section.get("analysis", "")):
-            action_section["analysis"] = f"{action_section.get('analysis', '')} {limitation}".strip()
+        # The limitation belongs in the Conclusion and Evidence Limits box, and
+        # only there. Stating it in a body section as well printed the same
+        # sentence twice on one page.
         conclusion = _remove_unsupported_portfolio_actions(conclusion)
         conclusion = f"{conclusion} {limitation}".strip() if conclusion else limitation
         if key_result.get("context") and limitation not in str(key_result["context"]):
             key_result["context"] = f"{key_result['context']} Alternative allocation impact was not tested."
-        dcf_warning = _extreme_dcf_warning(req.clips)
-        if dcf_warning:
-            for section in sections:
-                if re.search(r"\b(downside|upside|outlook|scenario)\b", str(section.get("templateSection", "")), re.I):
-                    sentences = re.split(r"(?<=[.!?])\s+", str(section.get("analysis", "")))
-                    retained = [sentence for sentence in sentences if not re.search(r"\b(dcf|intrinsic|analyst consensus|peer multiple|valuation)\b", sentence, re.I)]
-                    section["analysis"] = " ".join([*retained, dcf_warning]).strip()
+        # A note that cannot support a trade cannot be titled as an instruction
+        # to make one.
+        headline = _reframe_action_headline(headline, req.clips, key_result)
+
+    # Two beta panels estimated on different windows disagreed by name and the
+    # report quoted both as "beta vs SPY". Say so where the limits are stated.
+    beta_conflict = _beta_source_conflict_note(req.clips)
+    if beta_conflict and beta_conflict not in conclusion:
+        conclusion = f"{conclusion} {beta_conflict}".strip()
+
+    # A claim that evidence is missing has to survive contact with the figures
+    # actually placed on the page.
+    executive_summary = _fix_availability_contradictions(executive_summary, sections, req.clips)
+    conclusion = _fix_availability_contradictions(conclusion, sections, req.clips)
+    for section in sections:
+        section["analysis"] = _fix_availability_contradictions(
+            str(section.get("analysis", "")), sections, req.clips,
+        )
 
     if book_level:
         headline = guard_evidence_domain_text(headline, req.clips, headline=True)
@@ -5764,7 +6179,7 @@ def generate_report(req: ReportGenRequest):
     # Close the selection loop: which pulls the finished report actually cited.
     utilisation = _evidence_utilisation(
         data_bank_meta,
-        {str(section.get("clipId")) for section in sections if section.get("clipId")} | set(appendix),
+        {str(section.get("clipId")) for section in sections if section.get("clipId")},
     )
     _record_evidence_utilisation(contract["id"], utilisation)
     template_errors = validate_template_sections(sections, contract)
@@ -5779,7 +6194,6 @@ def generate_report(req: ReportGenRequest):
         "executiveSummary": executive_summary,
         "sections": sections,
         "conclusion": conclusion,
-        "appendixClipIds": appendix,
         "model": MODEL_SMART,
         "valuationContext": valuation_context,
         "pipeline": {

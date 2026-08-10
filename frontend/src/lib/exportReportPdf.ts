@@ -16,7 +16,12 @@ export function reportPdfBaseName(projectName: string): string {
 
 export function semanticPrintCss(backgroundColor = '#ffffff'): string {
   return `
-    @page { size: A4 portrait; margin: 10mm; }
+    /* Zero page margin, then pad the document itself. A non-zero @page margin
+       is where the browser prints its own running head and foot, which is how
+       every page of an exported note carried "8/10/26, 5:04 PM" above it and a
+       raw print URL with two UUIDs below it. With no margin box there is
+       nowhere for the browser to draw them. */
+    @page { size: A4 portrait; margin: 0; }
     html, body {
       margin: 0 !important;
       padding: 0 !important;
@@ -31,9 +36,15 @@ export function semanticPrintCss(backgroundColor = '#ffffff'): string {
       max-width: none !important;
       min-height: 0 !important;
       margin: 0 !important;
+      padding: 10mm 9mm !important;
+      box-sizing: border-box !important;
       box-shadow: none !important;
       overflow: visible !important;
     }
+    /* A trailing margin on the last block is enough to spill an otherwise
+       finished page into a second, near-empty one. */
+    .rc-page > *:last-child { margin-bottom: 0 !important; }
+    p { orphans: 2; widows: 2; }
     .rc-report-sections { display: block !important; }
     .rc-report-section-half { width: auto !important; margin-bottom: 12px !important; }
     .rc-section { break-inside: auto; page-break-inside: auto; }
@@ -53,7 +64,7 @@ export function semanticPrintCss(backgroundColor = '#ffffff'): string {
       break-inside: avoid-page;
       page-break-inside: avoid;
     }
-    .rc-appendix-table { break-inside: auto; page-break-inside: auto; }
+    .rc-report-footer { break-before: avoid-page; page-break-before: avoid; }
     table { width: 100% !important; break-inside: auto; page-break-inside: auto; }
     thead { display: table-header-group; }
     tfoot { display: table-footer-group; }

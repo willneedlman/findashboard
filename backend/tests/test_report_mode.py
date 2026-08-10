@@ -24,7 +24,7 @@ from routers.ai import (  # noqa: E402
     _must_include_section, _normalize_key_result, _parse_kpi_summary, _parse_table_summary,
     _ranked_subjects, _report_mode, _report_system_prompt, _subject_ticker, _valuation_gap_chart,
     _annotate_sensitivity_swing, _revise_block_before, _sensitivity_swing_summary, _ALLOWED_REVISE_FIELDS,
-    _select_report_appendix_clip_ids, _remove_unverified_numeric_sentences,
+    _remove_unverified_numeric_sentences,
     _filter_unverified_key_figures, _build_report_slot_ctx,
 )
 
@@ -187,18 +187,10 @@ def test_report_title_uses_only_the_writer_headline():
     assert ai._report_title({}, {"thesis": "MSFT offers the stronger risk adjusted profile over this horizon."}, req) == ""
 
 
-def test_report_appendix_omits_unused_and_explicit_chart_clips():
-    clips = [
-        ReportClipIn(id="used-chart", sourceTab="Chart", dataType="chart"),
-        ReportClipIn(id="unused-chart", sourceTab="Chart", dataType="chart"),
-        ReportClipIn(id="supporting-table", sourceTab="Peers", dataType="table"),
-        ReportClipIn(id="unselected-kpi", sourceTab="Company", dataType="kpi"),
-    ]
-    assert _select_report_appendix_clip_ids(
-        ["unused-chart", "supporting-table", "supporting-table"],
-        clips,
-        {"used-chart"},
-    ) == ["supporting-table"]
+def test_generated_report_carries_no_appendix():
+    """The data appendix is gone: evidence earns a section or is dropped."""
+    assert not hasattr(ai, "_select_report_appendix_clip_ids")
+    assert "appendixClipIds" not in ai._REPORT_SYSTEM
 
 
 def test_two_dcf_subjects_route_to_open_mode():
