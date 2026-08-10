@@ -44,7 +44,13 @@ def get_client():
         raise HTTPException(503, "GROQ_API_KEY not configured")
     if _client is None:
         from groq import Groq
-        _client = Groq(api_key=_GROQ_KEY)
+        # max_retries=0: the vendor SDK retries before we ever see the error and
+        # honours the provider's retry-after, which parked one report request for
+        # 59 seconds of total silence — long enough for the proxy to drop the
+        # connection and for the browser to give up on a call the server then
+        # finished successfully. with_backoff owns retry policy (8s cap), and
+        # groq_chat owns failover.
+        _client = Groq(api_key=_GROQ_KEY, max_retries=0)
     return _client
 
 
@@ -54,7 +60,8 @@ def get_cerebras():
         raise HTTPException(503, "CEREBRAS_API_KEY not configured")
     if _cerebras_client is None:
         from cerebras.cloud.sdk import Cerebras
-        _cerebras_client = Cerebras(api_key=_CEREBRAS_KEY)
+        # See get_client(): our backoff and failover own retries, not the SDK's.
+        _cerebras_client = Cerebras(api_key=_CEREBRAS_KEY, max_retries=0)
     return _cerebras_client
 
 
@@ -101,8 +108,19 @@ def _status_str(exc: Exception) -> str:
     return str(getattr(exc, "status_code", None) or type(exc).__name__)
 
 
-def with_backoff(fn, *, retries: int = 3, base: float = 0.5, cap: float = 8.0):
-    """Run fn(), retrying transient failures with jittered exponential backoff."""
+# A request that goes silent for long enough is indistinguishable from a broken
+# one: the proxy drops the connection and the browser reports a failure for work
+# the server goes on to complete. Bound the whole provider chain well inside that.
+_LLM_DEADLINE_SECONDS = float(os.getenv("LLM_DEADLINE_SECONDS", "45"))
+
+
+def with_backoff(fn, *, retries: int = 3, base: float = 0.5, cap: float = 8.0,
+                 deadline: float | None = None):
+    """Run fn(), retrying transient failures with jittered exponential backoff.
+
+    `deadline` is a time.monotonic() stamp past which a retry is not worth
+    waiting for; the error is raised instead so fail-over happens promptly.
+    """
     attempt = 0
     while True:
         try:
@@ -111,6 +129,10 @@ def with_backoff(fn, *, retries: int = 3, base: float = 0.5, cap: float = 8.0):
             if attempt >= retries or not _is_retryable(exc):
                 raise
             delay = min(cap, base * (2 ** attempt)) + random.uniform(0, base)
+            if deadline is not None and time.monotonic() + delay > deadline:
+                logger.warning("LLM retry budget exhausted (%s); giving this provider up",
+                               _status_str(exc))
+                raise
             logger.warning("Groq call failed (%s); retry %d/%d in %.2fs",
                            type(exc).__name__, attempt + 1, retries, delay)
             time.sleep(delay)
@@ -155,9 +177,13 @@ def groq_chat(messages: list[dict], *, model: str = MODEL_SMART,
 
     import metrics
     last_exc: Exception | None = None
+    deadline = time.monotonic() + _LLM_DEADLINE_SECONDS
     for i, (name, call) in enumerate(providers):
         try:
-            resp = with_backoff(lambda c=call: c(model, messages, max_tokens, temperature))
+            resp = with_backoff(
+                lambda c=call: c(model, messages, max_tokens, temperature),
+                deadline=deadline,
+            )
             metrics.record_ai(name, ok=True)
             return resp
         except Exception as exc:  # noqa: BLE001 — re-raised below if chain exhausted

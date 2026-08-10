@@ -131,3 +131,59 @@ describe('categorical axis crowding', () => {
     expect(categoricalAxisIsCrowded(['Communication Services', 'Cash'])).toBe(true)
   })
 })
+
+describe('expanded chart repertoire', () => {
+  // The promotion path can now emit scatter, histogram and dot payloads that
+  // never reached this renderer before. A throw here is a blank report.
+  const render = (payload: Parameters<typeof ClipRenderer>[0]['payload']) =>
+    renderToStaticMarkup(<ClipRenderer payload={payload} mode="print" palette={palette} />)
+
+  it('renders a risk-against-size scatter without throwing', () => {
+    expect(() => render({
+      kind: 'chart',
+      chartType: 'scatter',
+      title: 'Holding beta against weight',
+      xKey: 'Weight %',
+      xUnit: 'percent',
+      data: [
+        { 'Weight %': 13.9, value: 1.49, label: 'NVDA' },
+        { 'Weight %': 9.8, value: 1.67, label: 'ORCL' },
+        { 'Weight %': 7.4, value: 1.08, label: 'MSFT' },
+      ],
+      series: [{ key: 'value', label: 'Market beta', unit: 'beta' }],
+    })).not.toThrow()
+  })
+
+  it('renders a distribution histogram without throwing', () => {
+    expect(() => render({
+      kind: 'chart',
+      chartType: 'histogram',
+      title: 'Market beta · Distribution',
+      xKey: 'bucket',
+      data: [
+        { bucket: '0.7–1.4', value: 6 },
+        { bucket: '1.4–2.1', value: 7 },
+        { bucket: '2.1–2.8', value: 3 },
+      ],
+      series: [{ key: 'value', label: 'Holdings per Market Beta band', unit: 'number' }],
+    })).not.toThrow()
+  })
+
+  it('keeps an all-negative bar axis anchored at zero', () => {
+    // A -175%..-35% axis made every bar start at the right edge, so its length
+    // measured distance from -175 rather than from nothing.
+    const markup = render({
+      kind: 'chart',
+      chartType: 'bar',
+      barOrientation: 'horizontal',
+      title: 'Upside to intrinsic',
+      xKey: 'metric',
+      data: [
+        { metric: 'AMZN', value: -91.9 },
+        { metric: 'MSFT', value: -59.8 },
+      ],
+      series: [{ key: 'value', label: 'Upside', unit: 'percent' }],
+    })
+    expect(markup).toContain('0%')
+  })
+})
