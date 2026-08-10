@@ -3721,3 +3721,550 @@ Error: connect ECONNREFUSED 127.0.0.1:8000
 9:38:58 PM [vite] (client) hmr update /src/index.css, /src/pages/PortfolioLive.tsx
 9:39:12 PM [vite] (client) hmr update /src/index.css, /src/pages/PortfolioLive.tsx
 9:39:44 PM [vite] (client) hmr update /src/pages/OptionsScanner.tsx, /src/index.css
+11:01:29 PM [vite] (client) hmr update /src/contexts/ThemeContext.tsx, /src/index.css
+11:01:29 PM [vite] (client) hmr invalidate /src/contexts/ThemeContext.tsx Could not Fast Refresh ("DEFAULT_THEME" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+11:01:29 PM [vite] (client) hmr update /src/App.tsx, /src/components/Layout.tsx, /src/contexts/PortfolioContext.tsx, /src/components/AccountSync.tsx, /src/components/MorningBrief.tsx, /src/pages/Home.tsx, /src/components/dashboard/WidgetFrame.tsx, /src/components/dashboard/widgets/PortfolioSummary.tsx, /src/components/dashboard/widgets/RiskMetricsWidget.tsx, /src/components/dashboard/widgets/FactorDecompositionWidget.tsx, /src/components/dashboard/widgets/PnLAttributionWidget.tsx and 20 more
+11:01:29 PM [vite] (client) hmr invalidate /src/contexts/PortfolioContext.tsx Could not Fast Refresh ("usePortfolio" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+11:01:29 PM [vite] (client) hmr update /src/App.tsx, /src/pages/Home.tsx, /src/pages/PortfolioManager.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx, /src/pages/EarningsScanner.tsx
+11:01:34 PM [vite] (client) hmr update /src/contexts/ThemeContext.tsx, /src/index.css
+11:01:34 PM [vite] (client) hmr invalidate /src/contexts/ThemeContext.tsx Could not Fast Refresh ("DEFAULT_THEME" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+11:01:34 PM [vite] (client) hmr update /src/App.tsx, /src/components/Layout.tsx, /src/contexts/PortfolioContext.tsx, /src/components/AccountSync.tsx, /src/components/MorningBrief.tsx, /src/pages/Home.tsx, /src/components/dashboard/WidgetFrame.tsx, /src/components/dashboard/widgets/PortfolioSummary.tsx, /src/components/dashboard/widgets/RiskMetricsWidget.tsx, /src/components/dashboard/widgets/FactorDecompositionWidget.tsx, /src/components/dashboard/widgets/PnLAttributionWidget.tsx and 20 more
+11:01:34 PM [vite] (client) hmr invalidate /src/contexts/PortfolioContext.tsx Could not Fast Refresh ("usePortfolio" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+11:01:34 PM [vite] (client) hmr update /src/App.tsx, /src/pages/Home.tsx, /src/pages/PortfolioManager.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx, /src/pages/EarningsScanner.tsx
+11:01:38 PM [vite] (client) hmr update /src/contexts/ThemeContext.tsx, /src/index.css
+11:01:38 PM [vite] (client) hmr invalidate /src/contexts/ThemeContext.tsx Could not Fast Refresh ("DEFAULT_THEME" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+11:01:38 PM [vite] (client) hmr update /src/App.tsx, /src/components/Layout.tsx, /src/contexts/PortfolioContext.tsx, /src/components/AccountSync.tsx, /src/components/MorningBrief.tsx, /src/pages/Home.tsx, /src/components/dashboard/WidgetFrame.tsx, /src/components/dashboard/widgets/PortfolioSummary.tsx, /src/components/dashboard/widgets/RiskMetricsWidget.tsx, /src/components/dashboard/widgets/FactorDecompositionWidget.tsx, /src/components/dashboard/widgets/PnLAttributionWidget.tsx and 20 more
+11:01:38 PM [vite] (client) hmr invalidate /src/contexts/PortfolioContext.tsx Could not Fast Refresh ("usePortfolio" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+11:01:38 PM [vite] (client) hmr update /src/App.tsx, /src/pages/Home.tsx, /src/pages/PortfolioManager.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx, /src/pages/EarningsScanner.tsx
+11:01:42 PM [vite] (client) hmr update /src/contexts/ThemeContext.tsx, /src/index.css
+11:01:42 PM [vite] (client) hmr invalidate /src/contexts/ThemeContext.tsx Could not Fast Refresh ("DEFAULT_THEME" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+11:01:42 PM [vite] (client) hmr update /src/App.tsx, /src/components/Layout.tsx, /src/contexts/PortfolioContext.tsx, /src/components/AccountSync.tsx, /src/components/MorningBrief.tsx, /src/pages/Home.tsx, /src/components/dashboard/WidgetFrame.tsx, /src/components/dashboard/widgets/PortfolioSummary.tsx, /src/components/dashboard/widgets/RiskMetricsWidget.tsx, /src/components/dashboard/widgets/FactorDecompositionWidget.tsx, /src/components/dashboard/widgets/PnLAttributionWidget.tsx and 20 more
+11:01:42 PM [vite] (client) hmr invalidate /src/contexts/PortfolioContext.tsx Could not Fast Refresh ("usePortfolio" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+11:01:42 PM [vite] (client) hmr update /src/App.tsx, /src/pages/Home.tsx, /src/pages/PortfolioManager.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx, /src/pages/EarningsScanner.tsx
+11:01:48 PM [vite] (client) hmr update /src/pages/Settings.tsx, /src/index.css
+11:01:58 PM [vite] (client) hmr update /src/index.css
+11:02:02 PM [vite] (client) hmr update /src/index.css
+11:02:07 PM [vite] (client) hmr update /src/index.css
+11:02:13 PM [vite] (client) hmr update /src/index.css
+11:02:20 PM [vite] (client) hmr update /src/index.css
+11:02:28 PM [vite] (client) hmr update /src/index.css
+11:02:40 PM [vite] (client) hmr update /src/index.css
+11:02:49 PM [vite] (client) hmr update /src/index.css
+11:02:58 PM [vite] (client) hmr update /src/index.css
+11:03:08 PM [vite] (client) hmr update /src/index.css
+11:03:17 PM [vite] (client) hmr update /src/index.css
+11:03:27 PM [vite] (client) hmr update /src/index.css
+11:03:41 PM [vite] (client) hmr update /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/App.tsx, /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/UniversePicker.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/AssetChartModal.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/PMImportPicker.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/MorningBrief.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/ChartTooltip.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/CustomStrategyModal.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/StrategySelector.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/ColumnFilterMenu.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/MarketClockMini.tsx
+11:04:00 PM [vite] (client) hmr update /src/components/Layout.tsx, /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/TickerTagInput.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/SidebarLayout.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/Footer.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/PortfolioIO.tsx
+11:04:00 PM [vite] (client) hmr update /src/components/ErrorBoundary.tsx, /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/AlertToastQueue.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/WidgetFrame.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/NewsFeed.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/MiniChart.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/OptionsSnapshot.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/MacroStrip.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/AnalystRatingsWidget.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/ValuationWidget.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/PriceCard.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/CorrelationMatrix.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/PaperTradeWidget.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/DashboardAiChat.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/WidgetPalette.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/InsiderWidget.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/report/ClipRenderer.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/YieldCurveWidget.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/TradingViewChart.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/PaperTradeWidget.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/PortfolioSummary.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/DeltaPriceTarget.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/ScreenerWidget.tsx
+11:04:00 PM [vite] (client) hmr update /src/pages/Settings.tsx, /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/pages/CustomDashboard.tsx, /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/portfolio/CustomSelect.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/pages/DividendDiscount.tsx, /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/pages/VolatilityScanner.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/pages/MonteCarlo.tsx, /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/pages/valuationShared.tsx
+11:04:00 PM [vite] (client) hmr update /src/pages/StrategyBuilder.tsx, /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/pages/Home.tsx, /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/pages/FedRates.tsx, /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/pages/Multiples.tsx, /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/pages/DCFValuation.tsx, /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/pages/AlgoStrategyBuilder.tsx, /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/pages/BondAnalytics.tsx, /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/pages/OptionsMarketMaker.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/pages/PortfolioAllocator.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx
+11:04:00 PM [vite] (client) hmr update /src/pages/ReverseDCF.tsx, /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/pages/portfolio-backtester/components.tsx
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/components/AlertToastQueue.tsx, /src/components/ReportCaptureButton.tsx, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx, /src/components/report/ReportWizardForm.tsx, /src/components/report/ReviseControls.tsx, /src/components/dashboard/widgets/PriceCard.tsx, /src/components/dashboard/widgets/EarningsCalendar.tsx, /src/components/dashboard/widgets/OptionsPricerWidget.tsx, /src/components/dashboard/widgets/TradingViewChart.tsx and 46 more
+11:04:00 PM [vite] (client) hmr update /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/marketing/marketing.css
+11:04:00 PM [vite] (client) hmr update /src/pages/SupplyChain.tsx, /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/index.css, /src/pages/FixedIncomeMarketMaker.tsx
+11:04:00 PM [vite] (client) hmr update /src/pages/HubLanding.tsx, /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/index.css
+11:04:00 PM [vite] (client) hmr update /src/index.css
+11:04:01 PM [vite] (client) hmr invalidate /src/components/ChartTooltip.tsx Could not Fast Refresh ("BAR_CURSOR" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+11:04:01 PM [vite] (client) hmr update /src/components/dashboard/widgets/OptionsSnapshot.tsx, /src/components/dashboard/widgets/CreditSpreadsWidget.tsx, /src/components/dashboard/widgets/YieldCurveWidget.tsx, /src/components/dashboard/widgets/DealerGEXWidget.tsx, /src/components/dashboard/widgets/VolSkewWidget.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/regressionShared.tsx, /src/pages/MonteCarlo.tsx, /src/pages/FixedIncomeMarketMaker.tsx, /src/pages/OptionsMarketMaker.tsx, /src/pages/FedRates.tsx and 4 more
+11:04:02 PM [vite] (client) hmr invalidate /src/pages/valuationShared.tsx Could not Fast Refresh ("EYEBROW" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+11:04:02 PM [vite] (client) hmr update /src/pages/SOTP.tsx, /src/pages/OptionsPricer.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/AlgoStrategyBuilder.tsx, /src/pages/MonteCarlo.tsx, /src/pages/DCFValuation.tsx, /src/pages/Multiples.tsx, /src/pages/ReverseDCF.tsx, /src/pages/DividendDiscount.tsx, /src/pages/MasterValuation.tsx, /src/pages/BondAnalytics.tsx, /src/pages/ImpliedProbability.tsx, /src/pages/StrategyBuilder.tsx, /src/pages/DealerGEX.tsx, /src/pages/OptionsScanner.tsx
+11:04:02 PM [vite] (client) hmr invalidate /src/pages/cockpitKit.tsx Could not Fast Refresh ("chg" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+11:04:02 PM [vite] (client) hmr update /src/pages/PortfolioAnalysis.tsx, /src/pages/PortfolioLive.tsx, /src/pages/DealerGEX.tsx, /src/components/StrategyCodePanel.tsx, /src/pages/OptionsScanner.tsx, /src/components/TickerBasket.tsx
+11:04:02 PM [vite] (client) hmr invalidate /src/components/TickerBasket.tsx Could not Fast Refresh ("parseTickerFile" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+11:04:02 PM [vite] (client) hmr update /src/pages/OptionsScanner.tsx
+11:04:09 PM [vite] (client) hmr update /src/index.css, /src/components/StrategySelector.tsx
+11:04:20 PM [vite] (client) hmr update /src/index.css
+11:05:44 PM [vite] (client) hmr update /src/index.css, /src/pages/valuationShared.tsx
+11:05:44 PM [vite] (client) hmr invalidate /src/pages/valuationShared.tsx Could not Fast Refresh ("EYEBROW" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+11:05:44 PM [vite] (client) hmr update /src/pages/SOTP.tsx, /src/pages/OptionsPricer.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/AlgoStrategyBuilder.tsx, /src/pages/MonteCarlo.tsx, /src/pages/DCFValuation.tsx, /src/pages/Multiples.tsx, /src/pages/ReverseDCF.tsx, /src/pages/DividendDiscount.tsx, /src/pages/MasterValuation.tsx, /src/pages/BondAnalytics.tsx, /src/pages/ImpliedProbability.tsx, /src/pages/StrategyBuilder.tsx, /src/pages/DealerGEX.tsx, /src/pages/OptionsScanner.tsx
+11:06:19 PM [vite] (client) hmr update /src/index.css, /src/pages/valuationShared.tsx
+11:06:20 PM [vite] (client) hmr invalidate /src/pages/valuationShared.tsx Could not Fast Refresh (new export)
+11:06:20 PM [vite] (client) hmr update /src/pages/SOTP.tsx, /src/pages/OptionsPricer.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/AlgoStrategyBuilder.tsx, /src/pages/MonteCarlo.tsx, /src/pages/DCFValuation.tsx, /src/pages/Multiples.tsx, /src/pages/ReverseDCF.tsx, /src/pages/DividendDiscount.tsx, /src/pages/MasterValuation.tsx, /src/pages/BondAnalytics.tsx, /src/pages/ImpliedProbability.tsx, /src/pages/StrategyBuilder.tsx, /src/pages/DealerGEX.tsx, /src/pages/OptionsScanner.tsx
+11:06:27 PM [vite] (client) hmr update /src/index.css, /src/pages/valuationShared.tsx
+11:06:27 PM [vite] (client) hmr invalidate /src/pages/valuationShared.tsx Could not Fast Refresh ("EYEBROW" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+11:06:27 PM [vite] (client) hmr update /src/pages/SOTP.tsx, /src/pages/OptionsPricer.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/AlgoStrategyBuilder.tsx, /src/pages/MonteCarlo.tsx, /src/pages/DCFValuation.tsx, /src/pages/Multiples.tsx, /src/pages/ReverseDCF.tsx, /src/pages/DividendDiscount.tsx, /src/pages/MasterValuation.tsx, /src/pages/BondAnalytics.tsx, /src/pages/ImpliedProbability.tsx, /src/pages/StrategyBuilder.tsx, /src/pages/DealerGEX.tsx, /src/pages/OptionsScanner.tsx
+11:06:43 PM [vite] (client) hmr update /src/index.css
+11:06:43 PM [vite] (client) hmr update /src/index.css
+11:06:43 PM [vite] (client) hmr update /src/index.css
+11:06:43 PM [vite] (client) hmr update /src/pages/OptionsPricer.tsx, /src/index.css
+11:06:57 PM [vite] (client) hmr update /src/index.css
+11:06:57 PM [vite] (client) hmr update /src/pages/OptionsPricer.tsx, /src/index.css
+11:07:51 PM [vite] (client) hmr update /src/index.css, /src/pages/regressionShared.tsx
+11:08:40 PM [vite] (client) hmr update /src/index.css, /src/components/AlertToastQueue.tsx, /src/components/ReportCaptureButton.tsx, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx, /src/components/report/ReportWizardForm.tsx, /src/components/report/ReviseControls.tsx, /src/components/dashboard/widgets/PriceCard.tsx, /src/components/dashboard/widgets/EarningsCalendar.tsx, /src/components/dashboard/widgets/OptionsPricerWidget.tsx, /src/components/dashboard/widgets/TradingViewChart.tsx and 46 more
+11:08:40 PM [vite] (client) hmr invalidate /src/pages/cockpitKit.tsx Could not Fast Refresh ("chg" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+11:08:40 PM [vite] (client) hmr update /src/pages/PortfolioAnalysis.tsx, /src/pages/PortfolioLive.tsx, /src/pages/DealerGEX.tsx, /src/components/StrategyCodePanel.tsx, /src/pages/OptionsScanner.tsx, /src/components/TickerBasket.tsx
+11:08:40 PM [vite] (client) hmr invalidate /src/components/TickerBasket.tsx Could not Fast Refresh ("parseTickerFile" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+11:08:40 PM [vite] (client) hmr update /src/pages/OptionsScanner.tsx
+11:08:53 PM [vite] (client) hmr update /src/index.css
+11:08:53 PM [vite] (client) hmr update /src/index.css
+11:08:53 PM [vite] (client) hmr update /src/index.css
+11:08:53 PM [vite] (client) hmr update /src/index.css
+11:08:53 PM [vite] (client) hmr update /src/index.css
+11:08:53 PM [vite] (client) hmr update /src/index.css, /src/components/CustomStrategyModal.tsx
+11:08:53 PM [vite] (client) hmr update /src/index.css
+11:08:53 PM [vite] (client) hmr update /src/index.css, /src/pages/portfolio-backtester/components.tsx
+11:08:53 PM [vite] (client) hmr update /src/index.css
+11:09:04 PM [vite] (client) hmr update /src/index.css
+11:09:04 PM [vite] (client) hmr update /src/index.css
+11:09:04 PM [vite] (client) hmr update /src/index.css
+11:09:04 PM [vite] (client) hmr update /src/index.css, /src/components/CustomStrategyModal.tsx
+11:09:04 PM [vite] (client) hmr update /src/index.css
+11:09:04 PM [vite] (client) hmr update /src/index.css, /src/pages/portfolio-backtester/components.tsx
+11:09:04 PM [vite] (client) hmr update /src/index.css
+11:09:45 PM [vite] (client) hmr update /src/index.css, /src/pages/regressionShared.tsx
+11:10:28 PM [vite] (client) hmr update /src/index.css
+11:10:28 PM [vite] (client) hmr update /src/index.css
+11:10:28 PM [vite] (client) hmr update /src/index.css
+11:10:28 PM [vite] (client) hmr update /src/index.css
+11:10:48 PM [vite] (client) hmr update /src/index.css
+11:10:48 PM [vite] (client) hmr update /src/index.css
+11:10:48 PM [vite] (client) hmr update /src/index.css
+11:10:48 PM [vite] (client) hmr update /src/index.css
+11:11:22 PM [vite] (client) hmr update /src/index.css, /src/components/EmptyState.tsx
+11:11:32 PM [vite] (client) hmr update /src/index.css, /src/components/EmptyState.tsx
+11:11:45 PM [vite] (client) hmr update /src/index.css, /src/components/EmptyState.tsx
+11:11:53 PM [vite] (client) hmr update /src/index.css, /src/components/ErrorState.tsx
+11:12:10 PM [vite] (client) hmr update /src/index.css, /src/pages/PortfolioAnalysis.tsx
+11:12:10 PM [vite] (client) hmr update /src/index.css
+11:12:10 PM [vite] (client) hmr update /src/index.css
+11:12:10 PM [vite] (client) hmr update /src/index.css
+11:12:10 PM [vite] (client) hmr update /src/index.css
+11:12:10 PM [vite] (client) hmr update /src/pages/SupplyChain.tsx, /src/index.css
+11:12:10 PM [vite] (client) hmr update /src/pages/GlobalMarkets.tsx, /src/index.css
+11:12:10 PM [vite] (client) hmr update /src/index.css
+11:12:33 PM [vite] (client) hmr update /src/index.css
+11:12:33 PM [vite] (client) hmr update /src/index.css, /src/pages/PortfolioAnalysis.tsx
+11:12:33 PM [vite] (client) hmr update /src/index.css
+11:12:33 PM [vite] (client) hmr update /src/pages/DividendDiscount.tsx, /src/index.css
+11:12:33 PM [vite] (client) hmr update /src/index.css
+11:12:33 PM [vite] (client) hmr update /src/pages/SupplyChain.tsx, /src/index.css
+11:12:33 PM [vite] (client) hmr update /src/pages/OptionsScanner.tsx, /src/index.css
+11:12:33 PM [vite] (client) hmr update /src/pages/DealerGEX.tsx, /src/index.css
+11:12:33 PM [vite] (client) hmr update /src/pages/RelativeValuation.tsx, /src/index.css
+11:12:33 PM [vite] (client) hmr update /src/pages/Multiples.tsx, /src/index.css
+11:12:33 PM [vite] (client) hmr update /src/index.css
+11:12:33 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+11:12:33 PM [vite] (client) hmr update /src/index.css
+11:12:33 PM [vite] (client) hmr update /src/index.css
+11:12:33 PM [vite] (client) hmr update /src/index.css
+11:12:33 PM [vite] (client) hmr update /src/index.css
+11:12:33 PM [vite] (client) hmr update /src/pages/ReverseDCF.tsx, /src/index.css
+11:12:33 PM [vite] (client) hmr update /src/pages/ImpliedProbability.tsx, /src/index.css
+11:12:33 PM [vite] (client) hmr update /src/pages/SOTP.tsx, /src/index.css
+11:12:33 PM [vite] (client) hmr update /src/pages/StockScreener.tsx, /src/index.css
+11:13:34 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/Watchlist.tsx
+11:13:34 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/TradingViewChart.tsx
+11:13:34 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/PriceCard.tsx
+11:13:34 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/SectorRotationWidget.tsx
+11:13:34 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/InsiderWidget.tsx
+11:13:34 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/TimeAndSalesWidget.tsx
+11:14:19 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/PaperTradeWidget.tsx
+11:14:19 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/PMPortfoliosWidget.tsx
+11:14:19 PM [vite] (client) hmr update /src/index.css
+11:14:19 PM [vite] (client) hmr update /src/index.css
+11:14:19 PM [vite] (client) hmr update /src/index.css
+11:14:19 PM [vite] (client) hmr update /src/index.css
+11:14:19 PM [vite] (client) hmr update /src/index.css, /src/components/admin/DataAuditTab.tsx
+11:14:19 PM [vite] (client) hmr update /src/index.css, /src/components/AssetChartModal.tsx
+11:14:19 PM [vite] (client) hmr update /src/pages/SupplyChain.tsx, /src/index.css
+11:14:39 PM [vite] (client) hmr update /src/pages/SupplyChain.tsx, /src/index.css
+11:15:03 PM [vite] (client) hmr update /src/pages/Home.tsx, /src/index.css
+11:15:03 PM [vite] (client) hmr update /src/index.css
+11:15:03 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+11:15:08 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+11:15:48 PM [vite] (client) hmr update /src/App.tsx, /src/index.css
+11:15:48 PM [vite] (client) hmr update /src/components/ErrorBoundary.tsx, /src/index.css
+11:15:48 PM [vite] (client) hmr update /src/index.css
+11:15:48 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/OptionsPricerWidget.tsx
+11:15:48 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/RiskMetricsWidget.tsx
+11:15:48 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/PaperTradeWidget.tsx
+11:15:48 PM [vite] (client) hmr update /src/index.css, /src/pages/PortfolioAllocator.tsx
+11:15:48 PM [vite] (client) hmr update /src/pages/RelativeValuation.tsx, /src/index.css
+11:15:48 PM [vite] (client) hmr update /src/pages/AdminTester.tsx, /src/index.css
+11:15:55 PM [vite] (client) hmr update /src/index.css, /src/components/EmptyState.tsx
+11:16:13 PM [vite] (client) hmr update /src/index.css, /src/components/SidebarLayout.tsx
+11:16:19 PM [vite] (client) hmr update /src/index.css, /src/components/SidebarLayout.tsx
+11:16:45 PM [vite] (client) hmr update /src/index.css, /src/components/PageHeader.tsx
+11:16:45 PM [vite] (client) hmr update /src/index.css, /src/components/PageWrapper.tsx
+11:17:15 PM [vite] (client) hmr update /src/pages/CustomDashboard.tsx, /src/index.css
+11:18:16 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/ScreenerWidget.tsx
+11:18:16 PM [vite] (client) hmr update /src/index.css
+11:18:16 PM [vite] (client) hmr update /src/index.css
+11:18:16 PM [vite] (client) hmr update /src/pages/ImpliedProbability.tsx, /src/index.css
+11:18:16 PM [vite] (client) hmr update /src/index.css
+11:18:16 PM [vite] (client) hmr update /src/index.css
+11:18:16 PM [vite] (client) hmr update /src/pages/CustomDashboard.tsx, /src/index.css
+11:18:16 PM [vite] (client) hmr update /src/pages/FedRates.tsx, /src/index.css
+11:18:16 PM [vite] (client) hmr update /src/index.css, /src/components/StrategySelector.tsx
+11:18:16 PM [vite] (client) hmr update /src/index.css, /src/components/CustomStrategyModal.tsx
+11:18:16 PM [vite] (client) hmr update /src/index.css, /src/components/ScreenshotPortfolioImport.tsx
+11:18:16 PM [vite] (client) hmr update /src/index.css, /src/components/StrategyCodePanel.tsx
+11:18:16 PM [vite] (client) hmr update /src/index.css
+11:18:16 PM [vite] (client) hmr update /src/index.css
+11:18:28 PM [vite] (client) hmr update /src/index.css, /src/components/StrategySelector.tsx
+11:18:28 PM [vite] (client) hmr update /src/index.css, /src/components/CustomStrategyModal.tsx
+11:18:28 PM [vite] (client) hmr update /src/index.css
+11:18:36 PM [vite] (client) hmr update /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/index.css, /src/components/MorningBrief.tsx
+11:22:07 PM [vite] (client) hmr update /src/index.css, /src/components/StrategySelector.tsx
+11:22:07 PM [vite] (client) hmr update /src/marketing/Marketing.tsx, /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/pages/AdminTester.tsx, /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/pages/AlgoStrategyBuilder.tsx, /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/pages/BondAnalytics.tsx, /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/pages/DCFValuation.tsx, /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/pages/DividendDiscount.tsx, /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/index.css, /src/pages/EarningsScanner.tsx
+11:22:07 PM [vite] (client) hmr update /src/pages/GlobalMarkets.tsx, /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/pages/MonteCarlo.tsx, /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/pages/PortfolioManager.tsx, /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/pages/SOTP.tsx, /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/pages/StockScreener.tsx, /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/pages/SupplyChain.tsx, /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/index.css
+11:22:07 PM [vite] (client) hmr update /src/index.css, /src/pages/portfolio-backtester/components.tsx
+11:22:07 PM [vite] (client) hmr update /src/index.css, /src/components/CustomStrategyModal.tsx
+11:22:07 PM [vite] (client) hmr update /src/index.css
+11:22:39 PM [vite] (client) hmr update /src/index.css, /src/pages/PortfolioAnalysis.tsx
+11:22:39 PM [vite] (client) hmr update /src/index.css
+11:22:39 PM [vite] (client) hmr update /src/index.css, /src/components/StrategySelector.tsx
+11:22:39 PM [vite] (client) hmr update /src/index.css
+11:22:39 PM [vite] (client) hmr update /src/pages/MasterValuation.tsx, /src/index.css
+11:22:55 PM [vite] (client) hmr update /src/index.css
+11:22:55 PM [vite] (client) hmr update /src/index.css
+11:23:25 PM [vite] (client) hmr update /src/index.css
+11:24:24 PM [vite] (client) hmr update /src/index.css, /src/components/MarketClockMini.tsx
+11:24:24 PM [vite] (client) hmr update /src/index.css, /src/components/PortfolioIO.tsx
+11:24:24 PM [vite] (client) hmr update /src/index.css, /src/components/TickerLaunch.tsx
+11:24:24 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/WidgetFrame.tsx
+11:24:24 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/DeltaPriceTarget.tsx
+11:24:24 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/OptionsPricerWidget.tsx
+11:24:24 PM [vite] (client) hmr update /src/pages/CustomDashboard.tsx, /src/index.css
+11:24:24 PM [vite] (client) hmr update /src/pages/PortfolioManager.tsx, /src/index.css
+11:24:24 PM [vite] (client) hmr update /src/pages/Settings.tsx, /src/index.css
+11:24:24 PM [vite] (client) hmr update /src/pages/StrategyBuilder.tsx, /src/index.css
+11:24:24 PM [vite] (client) hmr update /src/pages/SupplyChain.tsx, /src/index.css
+11:24:24 PM [vite] (client) hmr update /src/index.css
+11:24:24 PM [vite] (client) hmr update /src/index.css
+11:24:24 PM [vite] (client) hmr update /src/index.css
+11:24:24 PM [vite] (client) hmr update /src/index.css, /src/pages/portfolio-backtester/components.tsx
+11:24:36 PM [vite] (client) hmr update /src/components/Layout.tsx, /src/index.css
+11:24:36 PM [vite] (client) hmr update /src/index.css
+11:24:36 PM [vite] (client) hmr update /src/index.css
+11:24:45 PM [vite] (client) hmr update /src/pages/FedRates.tsx, /src/index.css
+11:24:53 PM [vite] (client) hmr update /src/pages/FedRates.tsx, /src/index.css
+11:25:18 PM [vite] (client) hmr update /src/pages/GlobalMarkets.tsx, /src/index.css
+11:25:18 PM [vite] (client) hmr update /src/index.css
+11:25:18 PM [vite] (client) hmr update /src/pages/MasterValuation.tsx, /src/index.css
+11:25:18 PM [vite] (client) hmr update /src/index.css, /src/pages/PortfolioLive.tsx
+11:25:28 PM [vite] (client) hmr update /src/components/Layout.tsx, /src/index.css
+11:25:28 PM [vite] (client) hmr update /src/pages/StrategyBuilder.tsx, /src/index.css
+11:25:36 PM [vite] (client) hmr update /src/index.css
+11:25:46 PM [vite] (client) hmr update /src/index.css
+11:26:10 PM [vite] (client) hmr update /src/components/Layout.tsx, /src/index.css
+11:26:10 PM [vite] (client) hmr invalidate /src/components/Layout.tsx Could not Fast Refresh (new export)
+11:26:10 PM [vite] (client) hmr update /src/App.tsx
+11:26:59 PM [vite] (client) hmr update /src/index.css, /src/components/ErrorState.tsx
+11:33:44 PM [vite] (client) hmr update /src/index.css, /src/components/Footer.tsx
+11:33:44 PM [vite] (client) hmr update /src/index.css, /src/components/macroEvents/ReleaseTape.tsx
+11:33:44 PM [vite] (client) hmr update /src/index.css, /src/components/AlertToastQueue.tsx
+11:33:44 PM [vite] (client) hmr update /src/index.css, /src/components/dashboard/widgets/UnusualFlowWidget.tsx
+11:33:44 PM [vite] (client) hmr update /src/pages/DealerGEX.tsx, /src/index.css
+11:33:44 PM [vite] (client) hmr update /src/index.css
+1:40:42 AM [vite] (client) hmr update /src/index.css, /src/components/AssetChartModal.tsx
+1:46:26 AM [vite] (client) hmr update /src/index.css, /src/components/AssetFacts.tsx
+2:07:16 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+2:07:16 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+2:08:42 AM [vite] (client) hmr update /src/index.css, /src/components/AssetFacts.tsx
+2:20:49 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+2:20:49 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+2:21:03 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+2:21:03 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+2:23:13 AM [vite] (client) hmr update /src/index.css, /src/components/AssetFacts.tsx
+2:27:52 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+2:27:52 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+2:28:50 AM [vite] (client) hmr update /src/index.css, /src/components/AssetFacts.tsx
+2:32:29 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+2:32:29 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+2:35:43 AM [vite] (client) hmr update /src/index.css, /src/components/AssetFacts.tsx
+2:40:12 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+2:40:12 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+2:41:42 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+2:41:42 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+5:21:15 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+5:21:15 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+11:21:52 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+11:21:52 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+11:21:52 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+11:21:52 AM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+12:45:37 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+12:45:37 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+12:46:20 PM [vite] (client) hmr update /src/index.css, /src/components/AssetFacts.tsx
+12:47:44 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+12:47:44 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+12:49:48 PM [vite] (client) hmr update /src/index.css, /src/components/EmptyState.tsx
+1:04:36 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+1:04:36 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+1:52:47 PM [vite] (client) hmr update /src/App.tsx, /src/index.css
+1:52:47 PM [vite] (client) hmr update /src/App.tsx, /src/components/CommandPalette.tsx, /src/components/Layout.tsx, /src/components/ReportCaptureToolbar.tsx, /src/marketing/Marketing.tsx, /src/pages/Home.tsx, /src/pages/HubLanding.tsx, /src/index.css
+1:55:30 PM [vite] (client) hmr update /src/App.tsx, /src/index.css
+1:55:30 PM [vite] (client) hmr update /src/App.tsx, /src/components/CommandPalette.tsx, /src/components/Layout.tsx, /src/components/ReportCaptureToolbar.tsx, /src/marketing/Marketing.tsx, /src/pages/Home.tsx, /src/pages/HubLanding.tsx, /src/index.css
+1:55:30 PM [vite] (client) [console.error] [vite] ReferenceError: CalendarRange is not defined
+    at http://localhost:5173/src/lib/hubs.ts?t=1786215330509:245:11
+1:55:30 PM [vite] (client) [console.error] [vite] Failed to reload /src/App.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above)
+1:55:30 PM [vite] (client) [console.error] [vite] ReferenceError: CalendarRange is not defined
+    at http://localhost:5173/src/lib/hubs.ts?t=1786215330509:245:11
+1:55:30 PM [vite] (client) [console.error] [vite] Failed to reload /src/components/CommandPalette.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above)
+1:55:30 PM [vite] (client) [console.error] [vite] ReferenceError: CalendarRange is not defined
+    at http://localhost:5173/src/lib/hubs.ts?t=1786215330509:245:11
+1:55:30 PM [vite] (client) [console.error] [vite] Failed to reload /src/components/ReportCaptureToolbar.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above)
+1:55:30 PM [vite] (client) [console.error] [vite] ReferenceError: CalendarRange is not defined
+    at http://localhost:5173/src/lib/hubs.ts?t=1786215330509:245:11
+1:55:30 PM [vite] (client) [console.error] [vite] Failed to reload /src/App.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above)
+1:55:30 PM [vite] (client) [console.error] [vite] ReferenceError: CalendarRange is not defined
+    at http://localhost:5173/src/lib/hubs.ts?t=1786215330509:245:11
+1:55:30 PM [vite] (client) [console.error] [vite] Failed to reload /src/components/Layout.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above)
+1:55:30 PM [vite] (client) [console.error] [vite] ReferenceError: CalendarRange is not defined
+    at http://localhost:5173/src/lib/hubs.ts?t=1786215330509:245:11
+1:55:30 PM [vite] (client) [console.error] [vite] Failed to reload /src/App.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above)
+1:55:30 PM [vite] (client) [console.error] [vite] ReferenceError: CalendarRange is not defined
+    at http://localhost:5173/src/lib/hubs.ts?t=1786215330509:245:11
+1:55:30 PM [vite] (client) [console.error] [vite] Failed to reload /src/pages/Home.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above)
+1:55:30 PM [vite] (client) [console.error] [vite] ReferenceError: CalendarRange is not defined
+    at http://localhost:5173/src/lib/hubs.ts?t=1786215330509:245:11
+1:55:30 PM [vite] (client) [console.error] [vite] Failed to reload /src/components/CommandPalette.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above)
+1:55:30 PM [vite] (client) [console.error] [vite] ReferenceError: CalendarRange is not defined
+    at http://localhost:5173/src/lib/hubs.ts?t=1786215330509:245:11
+1:55:30 PM [vite] (client) [console.error] [vite] Failed to reload /src/components/ReportCaptureToolbar.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above)
+1:55:30 PM [vite] (client) [console.error] [vite] ReferenceError: CalendarRange is not defined
+    at http://localhost:5173/src/lib/hubs.ts?t=1786215330509:245:11
+1:55:30 PM [vite] (client) [console.error] [vite] Failed to reload /src/App.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above)
+1:55:30 PM [vite] (client) [console.error] [vite] ReferenceError: CalendarRange is not defined
+    at http://localhost:5173/src/lib/hubs.ts?t=1786215330509:245:11
+1:55:30 PM [vite] (client) [console.error] [vite] Failed to reload /src/components/Layout.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above)
+1:56:00 PM [vite] (client) hmr update /src/App.tsx, /src/components/CommandPalette.tsx, /src/components/Layout.tsx, /src/components/ReportCaptureToolbar.tsx, /src/marketing/Marketing.tsx, /src/pages/Home.tsx, /src/pages/HubLanding.tsx, /src/index.css
+1:59:22 PM [vite] (client) hmr update /src/index.css
+2:02:43 PM [vite] (client) hmr update /src/pages/SupplyChain.tsx, /src/index.css
+2:02:51 PM [vite] (client) hmr update /src/pages/SupplyChain.tsx, /src/index.css
+2:04:58 PM [vite] (client) hmr update /src/pages/SupplyChain.tsx, /src/index.css
+2:07:07 PM [vite] (client) hmr update /src/index.css, /src/pages/PortfolioAllocator.tsx
+2:07:35 PM [vite] (client) hmr update /src/index.css, /src/pages/PortfolioAllocator.tsx
+2:11:31 PM [vite] (client) hmr update /src/index.css
+2:11:53 PM [vite] (client) hmr update /src/index.css
+2:12:03 PM [vite] (client) hmr update /src/index.css
+2:12:28 PM [vite] (client) hmr update /src/index.css
+2:13:11 PM [vite] (client) hmr update /src/index.css
+2:17:18 PM [vite] (client) hmr update /src/index.css
+2:36:24 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+2:36:24 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+2:50:08 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+2:50:08 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+2:52:18 PM [vite] (client) hmr update /src/index.css
+2:52:33 PM [vite] (client) hmr update /src/pages/Seasonality.tsx, /src/index.css
+2:56:23 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+2:56:23 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+2:57:24 PM [vite] (client) hmr update /src/index.css, /src/components/RotationGraph.tsx
+2:57:48 PM [vite] (client) hmr update /src/index.css, /src/components/RotationGraph.tsx
+3:00:39 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+3:00:39 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+3:10:15 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+3:10:15 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:13:27 PM [vite] (client) hmr update /src/contexts/ThemeContext.tsx, /src/index.css
+4:13:27 PM [vite] (client) hmr update /src/index.css
+4:13:30 PM [vite] (client) hmr invalidate /src/contexts/ThemeContext.tsx Could not Fast Refresh ("DEFAULT_THEME" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:13:30 PM [vite] (client) hmr update /src/App.tsx, /src/components/Layout.tsx, /src/contexts/PortfolioContext.tsx, /src/components/AccountSync.tsx, /src/components/MorningBrief.tsx, /src/pages/Home.tsx, /src/components/dashboard/WidgetFrame.tsx, /src/components/dashboard/widgets/PortfolioSummary.tsx, /src/components/dashboard/widgets/RiskMetricsWidget.tsx, /src/components/dashboard/widgets/FactorDecompositionWidget.tsx, /src/components/dashboard/widgets/PnLAttributionWidget.tsx and 21 more
+4:13:30 PM [vite] (client) hmr invalidate /src/contexts/PortfolioContext.tsx Could not Fast Refresh ("usePortfolio" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:13:30 PM [vite] (client) hmr update /src/App.tsx, /src/pages/Home.tsx, /src/pages/PortfolioManager.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx, /src/pages/EarningsScanner.tsx
+4:18:23 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+4:18:23 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:18:57 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+4:18:57 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:19:37 PM [vite] (client) hmr update /src/contexts/ThemeContext.tsx, /src/index.css
+4:19:37 PM [vite] (client) hmr invalidate /src/contexts/ThemeContext.tsx Could not Fast Refresh ("DEFAULT_THEME" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:19:37 PM [vite] (client) hmr update /src/App.tsx, /src/components/Layout.tsx, /src/contexts/PortfolioContext.tsx, /src/components/AccountSync.tsx, /src/components/MorningBrief.tsx, /src/pages/Home.tsx, /src/components/dashboard/WidgetFrame.tsx, /src/components/dashboard/widgets/PortfolioSummary.tsx, /src/components/dashboard/widgets/RiskMetricsWidget.tsx, /src/components/dashboard/widgets/FactorDecompositionWidget.tsx, /src/components/dashboard/widgets/PnLAttributionWidget.tsx and 21 more
+4:19:37 PM [vite] (client) hmr invalidate /src/contexts/PortfolioContext.tsx Could not Fast Refresh ("usePortfolio" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:19:37 PM [vite] (client) hmr update /src/App.tsx, /src/pages/Home.tsx, /src/pages/PortfolioManager.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx, /src/pages/EarningsScanner.tsx
+4:20:22 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+4:20:22 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:28:17 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+4:28:17 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:29:11 PM [vite] (client) hmr update /src/contexts/ThemeContext.tsx, /src/index.css
+4:29:11 PM [vite] (client) hmr invalidate /src/contexts/ThemeContext.tsx Could not Fast Refresh ("DEFAULT_THEME" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:29:11 PM [vite] (client) hmr update /src/App.tsx, /src/components/Layout.tsx, /src/contexts/PortfolioContext.tsx, /src/components/AccountSync.tsx, /src/components/MorningBrief.tsx, /src/pages/Home.tsx, /src/components/dashboard/WidgetFrame.tsx, /src/components/dashboard/widgets/PortfolioSummary.tsx, /src/components/dashboard/widgets/RiskMetricsWidget.tsx, /src/components/dashboard/widgets/FactorDecompositionWidget.tsx, /src/components/dashboard/widgets/PnLAttributionWidget.tsx and 21 more
+4:29:12 PM [vite] (client) hmr invalidate /src/contexts/PortfolioContext.tsx Could not Fast Refresh ("usePortfolio" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:29:12 PM [vite] (client) hmr update /src/App.tsx, /src/pages/Home.tsx, /src/pages/PortfolioManager.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx, /src/pages/EarningsScanner.tsx
+4:29:13 PM [vite] (client) hmr update /src/contexts/ThemeContext.tsx, /src/index.css
+4:29:13 PM [vite] (client) hmr invalidate /src/contexts/ThemeContext.tsx Could not Fast Refresh ("DEFAULT_THEME" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:29:13 PM [vite] (client) hmr update /src/App.tsx, /src/components/Layout.tsx, /src/contexts/PortfolioContext.tsx, /src/components/AccountSync.tsx, /src/components/MorningBrief.tsx, /src/pages/Home.tsx, /src/components/dashboard/WidgetFrame.tsx, /src/components/dashboard/widgets/PortfolioSummary.tsx, /src/components/dashboard/widgets/RiskMetricsWidget.tsx, /src/components/dashboard/widgets/FactorDecompositionWidget.tsx, /src/components/dashboard/widgets/PnLAttributionWidget.tsx and 21 more
+4:29:13 PM [vite] (client) hmr invalidate /src/contexts/PortfolioContext.tsx Could not Fast Refresh ("usePortfolio" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:29:13 PM [vite] (client) hmr update /src/App.tsx, /src/pages/Home.tsx, /src/pages/PortfolioManager.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx, /src/pages/EarningsScanner.tsx
+4:29:18 PM [vite] (client) hmr update /src/contexts/ThemeContext.tsx, /src/index.css
+4:29:18 PM [vite] (client) hmr invalidate /src/contexts/ThemeContext.tsx Could not Fast Refresh ("DEFAULT_THEME" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:29:18 PM [vite] (client) hmr update /src/App.tsx, /src/components/Layout.tsx, /src/contexts/PortfolioContext.tsx, /src/components/AccountSync.tsx, /src/components/MorningBrief.tsx, /src/pages/Home.tsx, /src/components/dashboard/WidgetFrame.tsx, /src/components/dashboard/widgets/PortfolioSummary.tsx, /src/components/dashboard/widgets/RiskMetricsWidget.tsx, /src/components/dashboard/widgets/FactorDecompositionWidget.tsx, /src/components/dashboard/widgets/PnLAttributionWidget.tsx and 21 more
+4:29:18 PM [vite] (client) hmr invalidate /src/contexts/PortfolioContext.tsx Could not Fast Refresh ("usePortfolio" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:29:18 PM [vite] (client) hmr update /src/App.tsx, /src/pages/Home.tsx, /src/pages/PortfolioManager.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx, /src/pages/EarningsScanner.tsx
+4:29:20 PM [vite] (client) hmr update /src/contexts/ThemeContext.tsx, /src/index.css
+4:29:20 PM [vite] (client) hmr invalidate /src/contexts/ThemeContext.tsx Could not Fast Refresh ("DEFAULT_THEME" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:29:20 PM [vite] (client) hmr update /src/App.tsx, /src/components/Layout.tsx, /src/contexts/PortfolioContext.tsx, /src/components/AccountSync.tsx, /src/components/MorningBrief.tsx, /src/pages/Home.tsx, /src/components/dashboard/WidgetFrame.tsx, /src/components/dashboard/widgets/PortfolioSummary.tsx, /src/components/dashboard/widgets/RiskMetricsWidget.tsx, /src/components/dashboard/widgets/FactorDecompositionWidget.tsx, /src/components/dashboard/widgets/PnLAttributionWidget.tsx and 21 more
+4:29:20 PM [vite] (client) hmr invalidate /src/contexts/PortfolioContext.tsx Could not Fast Refresh ("usePortfolio" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:29:20 PM [vite] (client) hmr update /src/App.tsx, /src/pages/Home.tsx, /src/pages/PortfolioManager.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx, /src/pages/EarningsScanner.tsx
+4:29:22 PM [vite] (client) hmr update /src/contexts/ThemeContext.tsx, /src/index.css
+4:29:22 PM [vite] (client) hmr invalidate /src/contexts/ThemeContext.tsx Could not Fast Refresh ("DEFAULT_THEME" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:29:22 PM [vite] (client) hmr update /src/App.tsx, /src/components/Layout.tsx, /src/contexts/PortfolioContext.tsx, /src/components/AccountSync.tsx, /src/components/MorningBrief.tsx, /src/pages/Home.tsx, /src/components/dashboard/WidgetFrame.tsx, /src/components/dashboard/widgets/PortfolioSummary.tsx, /src/components/dashboard/widgets/RiskMetricsWidget.tsx, /src/components/dashboard/widgets/FactorDecompositionWidget.tsx, /src/components/dashboard/widgets/PnLAttributionWidget.tsx and 21 more
+4:29:22 PM [vite] (client) hmr update /src/contexts/ThemeContext.tsx, /src/index.css
+4:29:22 PM [vite] (client) hmr invalidate /src/contexts/PortfolioContext.tsx Could not Fast Refresh ("usePortfolio" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:29:22 PM [vite] (client) hmr update /src/App.tsx, /src/pages/Home.tsx, /src/pages/PortfolioManager.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx, /src/pages/EarningsScanner.tsx
+4:29:25 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+4:29:25 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:29:33 PM [vite] (client) hmr update /src/contexts/ThemeContext.tsx, /src/index.css
+4:29:34 PM [vite] (client) hmr invalidate /src/contexts/ThemeContext.tsx Could not Fast Refresh ("DEFAULT_THEME" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:29:34 PM [vite] (client) hmr update /src/App.tsx, /src/components/Layout.tsx, /src/contexts/PortfolioContext.tsx, /src/components/AccountSync.tsx, /src/components/MorningBrief.tsx, /src/pages/Home.tsx, /src/components/dashboard/WidgetFrame.tsx, /src/components/dashboard/widgets/PortfolioSummary.tsx, /src/components/dashboard/widgets/RiskMetricsWidget.tsx, /src/components/dashboard/widgets/FactorDecompositionWidget.tsx, /src/components/dashboard/widgets/PnLAttributionWidget.tsx and 21 more
+4:29:34 PM [vite] (client) hmr invalidate /src/contexts/PortfolioContext.tsx Could not Fast Refresh ("usePortfolio" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:29:34 PM [vite] (client) hmr update /src/App.tsx, /src/pages/Home.tsx, /src/pages/PortfolioManager.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx, /src/pages/EarningsScanner.tsx
+4:29:34 PM [vite] (client) hmr update /src/contexts/ThemeContext.tsx, /src/index.css
+4:29:34 PM [vite] (client) hmr invalidate /src/contexts/ThemeContext.tsx Could not Fast Refresh ("DEFAULT_THEME" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:29:34 PM [vite] (client) hmr update /src/App.tsx, /src/components/Layout.tsx, /src/contexts/PortfolioContext.tsx, /src/components/AccountSync.tsx, /src/components/MorningBrief.tsx, /src/pages/Home.tsx, /src/components/dashboard/WidgetFrame.tsx, /src/components/dashboard/widgets/PortfolioSummary.tsx, /src/components/dashboard/widgets/RiskMetricsWidget.tsx, /src/components/dashboard/widgets/FactorDecompositionWidget.tsx, /src/components/dashboard/widgets/PnLAttributionWidget.tsx and 21 more
+4:29:34 PM [vite] (client) hmr invalidate /src/contexts/PortfolioContext.tsx Could not Fast Refresh ("usePortfolio" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:29:34 PM [vite] (client) hmr update /src/App.tsx, /src/pages/Home.tsx, /src/pages/PortfolioManager.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx, /src/pages/EarningsScanner.tsx
+4:29:36 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+4:29:36 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:29:43 PM [vite] (client) hmr update /src/contexts/ThemeContext.tsx, /src/index.css
+4:29:43 PM [vite] (client) hmr invalidate /src/contexts/ThemeContext.tsx Could not Fast Refresh ("DEFAULT_THEME" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:29:43 PM [vite] (client) hmr update /src/App.tsx, /src/components/Layout.tsx, /src/contexts/PortfolioContext.tsx, /src/components/AccountSync.tsx, /src/components/MorningBrief.tsx, /src/pages/Home.tsx, /src/components/dashboard/WidgetFrame.tsx, /src/components/dashboard/widgets/PortfolioSummary.tsx, /src/components/dashboard/widgets/RiskMetricsWidget.tsx, /src/components/dashboard/widgets/FactorDecompositionWidget.tsx, /src/components/dashboard/widgets/PnLAttributionWidget.tsx and 21 more
+4:29:43 PM [vite] (client) hmr invalidate /src/contexts/PortfolioContext.tsx Could not Fast Refresh ("usePortfolio" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:29:43 PM [vite] (client) hmr update /src/App.tsx, /src/pages/Home.tsx, /src/pages/PortfolioManager.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx, /src/pages/EarningsScanner.tsx
+4:31:22 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+4:31:22 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:31:28 PM [vite] (client) hmr update /src/contexts/ThemeContext.tsx, /src/index.css
+4:31:28 PM [vite] (client) hmr invalidate /src/contexts/ThemeContext.tsx Could not Fast Refresh ("DEFAULT_THEME" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:31:28 PM [vite] (client) hmr update /src/App.tsx, /src/components/Layout.tsx, /src/contexts/PortfolioContext.tsx, /src/components/AccountSync.tsx, /src/components/MorningBrief.tsx, /src/pages/Home.tsx, /src/components/dashboard/WidgetFrame.tsx, /src/components/dashboard/widgets/PortfolioSummary.tsx, /src/components/dashboard/widgets/RiskMetricsWidget.tsx, /src/components/dashboard/widgets/FactorDecompositionWidget.tsx, /src/components/dashboard/widgets/PnLAttributionWidget.tsx and 21 more
+4:31:28 PM [vite] (client) hmr invalidate /src/contexts/PortfolioContext.tsx Could not Fast Refresh ("usePortfolio" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:31:28 PM [vite] (client) hmr update /src/App.tsx, /src/pages/Home.tsx, /src/pages/PortfolioManager.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx, /src/pages/EarningsScanner.tsx
+4:31:30 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+4:31:30 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:31:38 PM [vite] (client) hmr update /src/index.css
+4:31:38 PM [vite] (client) hmr update /src/index.css, /src/pages/VolatilityScanner.tsx
+4:31:38 PM [vite] (client) hmr update /src/pages/Home.tsx, /src/index.css
+4:31:38 PM [vite] (client) hmr update /src/index.css, /src/pages/PortfolioLive.tsx
+4:31:38 PM [vite] (client) hmr update /src/pages/MasterValuation.tsx, /src/index.css
+4:35:13 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+4:35:13 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:42:50 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+4:42:50 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:43:01 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+4:43:01 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:43:27 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+4:43:27 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:46:46 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+4:46:46 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:47:42 PM [vite] (client) hmr update /src/contexts/ThemeContext.tsx, /src/index.css
+4:47:42 PM [vite] (client) hmr invalidate /src/contexts/ThemeContext.tsx Could not Fast Refresh ("DEFAULT_THEME" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:47:42 PM [vite] (client) hmr update /src/App.tsx, /src/components/Layout.tsx, /src/contexts/PortfolioContext.tsx, /src/components/AccountSync.tsx, /src/components/MorningBrief.tsx, /src/pages/Home.tsx, /src/components/dashboard/WidgetFrame.tsx, /src/components/dashboard/widgets/PortfolioSummary.tsx, /src/components/dashboard/widgets/RiskMetricsWidget.tsx, /src/components/dashboard/widgets/FactorDecompositionWidget.tsx, /src/components/dashboard/widgets/PnLAttributionWidget.tsx and 21 more
+4:47:42 PM [vite] (client) hmr invalidate /src/contexts/PortfolioContext.tsx Could not Fast Refresh ("usePortfolio" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:47:42 PM [vite] (client) hmr update /src/App.tsx, /src/pages/Home.tsx, /src/pages/PortfolioManager.tsx, /src/pages/portfolio-backtester/components.tsx, /src/pages/MonteCarlo.tsx, /src/pages/EarningsScanner.tsx
+4:48:24 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+4:48:24 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:48:38 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+4:48:38 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:53:02 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+4:53:02 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:53:45 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+4:53:45 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+4:55:07 PM [vite] (client) hmr update /src/index.css
+4:55:18 PM [vite] (client) hmr update /src/index.css, /src/pages/cockpitKit.tsx
+4:55:18 PM [vite] (client) hmr invalidate /src/pages/cockpitKit.tsx Could not Fast Refresh ("chg" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+4:55:18 PM [vite] (client) hmr update /src/pages/PortfolioAnalysis.tsx, /src/pages/PortfolioLive.tsx, /src/pages/DealerGEX.tsx, /src/components/StrategyCodePanel.tsx, /src/pages/OptionsScanner.tsx, /src/components/TickerBasket.tsx, /src/pages/MarketBreadth.tsx, /src/pages/Seasonality.tsx, /src/components/RotationGraph.tsx
+4:55:26 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+4:55:26 PM [vite] (client) [console.warn] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+5:11:26 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+5:11:39 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+5:11:57 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+5:12:15 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+5:14:17 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+5:14:56 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+5:15:09 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+5:15:34 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+5:16:06 PM [vite] (client) hmr update /src/index.css, /src/pages/ReportCreator.tsx, /src/components/report/ReportSetupWizard.tsx
+5:19:32 PM [vite] (client) hmr update /src/pages/SupplyChain.tsx, /src/index.css
+5:20:41 PM [vite] (client) hmr update /src/index.css
+5:20:55 PM [vite] (client) hmr update /src/index.css
+5:22:30 PM [vite] (client) hmr update /src/pages/ReportCreator.tsx, /src/index.css
