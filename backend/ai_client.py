@@ -25,11 +25,15 @@ VISION_MODEL = "claude-sonnet-5"
 MODEL_SMART = "llama-3.3-70b-versatile"
 MODEL_FAST  = "llama-3.1-8b-instant"
 
-# Cerebras fallback models (this account's available set; both run fast on its
-# hardware). SMART maps to the 120B reasoner, FAST to the lighter GLM.
+# Cerebras fallback models. gpt-oss-120b is the only model Cerebras lists as
+# production; everything else there is preview and can be withdrawn. FAST used
+# to map to zai-glm-4.7, which Cerebras scheduled for deprecation on
+# 2026-08-17 — a fallback that would have failed silently the moment Groq
+# rate-limited a structured-JSON call. Both tiers now land on the production
+# model; losing a little speed on the fallback path is the right trade.
 _CEREBRAS_MODELS = {
     MODEL_SMART: "gpt-oss-120b",
-    MODEL_FAST:  "zai-glm-4.7",
+    MODEL_FAST:  "gpt-oss-120b",
 }
 
 _client = None
@@ -162,6 +166,28 @@ def _cerebras_call(model, messages, max_tokens, temperature):
     return get_cerebras().chat.completions.create(**kwargs)
 
 
+def _exhausted(exc: Exception, provider: str) -> Exception:
+    """Turn a terminal provider failure into something the UI can say out loud.
+
+    Every provider being rate-limited is an expected state on a free tier, not a
+    bug in the request — but it reached the browser as a bare "Internal server
+    error", which is indistinguishable from a crash and sends you reading
+    tracebacks for a quota problem.
+    """
+    status = getattr(exc, "status_code", None)
+    if status == 429:
+        return HTTPException(503, (
+            f"Every AI provider is rate-limited right now ({provider} returned 429). "
+            "This is a free-tier quota, not a problem with your report. Wait a minute and retry."
+        ))
+    if status == 413:
+        return HTTPException(503, (
+            f"The request is larger than {provider} accepts in one call. "
+            "Reduce the report length or the number of clips and retry."
+        ))
+    return exc
+
+
 def groq_chat(messages: list[dict], *, model: str = MODEL_SMART,
               max_tokens: int = 512, temperature: float | None = None):
     """Low-level completion with retry and cross-provider fail-over. Returns the
@@ -190,7 +216,7 @@ def groq_chat(messages: list[dict], *, model: str = MODEL_SMART,
             last_exc = exc
             metrics.record_ai(name, ok=False, error=_status_str(exc))
             if i == len(providers) - 1 or not _should_failover(exc):
-                raise
+                raise _exhausted(exc, name)
             logger.warning("LLM provider %s failed (%s); failing over to %s",
                            name, _status_str(exc), providers[i + 1][0])
     raise last_exc  # unreachable; the loop always returns or raises
