@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from 'react'
 import { Link, Outlet } from 'react-router-dom'
+import Breadcrumbs from './Breadcrumbs'
 import { motion, useReducedMotion, useScroll, useTransform, useSpring, useMotionValue, useInView, animate, type Variants } from 'framer-motion'
 import { Calculator, GitBranch, BarChart3, BookOpen, Bell, Activity, Clock, ArrowLeftRight, Landmark, Terminal, Workflow, Ship, Plane, Fuel, Container, Waypoints, Gauge, Boxes } from 'lucide-react'
 import AlphaMark from '../components/AlphaMark'
@@ -201,9 +202,14 @@ const LaunchCTAs = ({ secondary }: { secondary?: { to: string; label: string } }
 )
 
 /* Page hero shared by the hub pages. */
-function PageHero({ eyebrow, h1, lede, back }: { eyebrow: string; h1: string; lede: string; back?: string }) {
+function PageHero({ eyebrow, h1, lede, back, crumb }: {
+  eyebrow: string; h1: string; lede: string; back?: string
+  /** Short name for this page in the breadcrumb trail. */
+  crumb?: string
+}) {
   return (
     <header className="phero"><div className="wrap">
+      {crumb && <Breadcrumbs trail={[{ label: 'Alphatape', to: '/' }, { label: crumb }]} />}
       <div className="eyebrow">{eyebrow}</div>
       <h1>{h1}</h1>
       <p className="lede">{lede}</p>
@@ -905,7 +911,7 @@ export function Landing() {
 export function ResearchPage() {
   return (
     <Shell active="research">
-      <PageHero eyebrow="Research · 12 tools" h1="Find and vet the name."
+      <PageHero crumb="Research" eyebrow="Research · 12 tools" h1="Find and vet the name."
         lede="Screen the universe, read the company, and track the news flow. Twelve tools cover discovery, single-name work, and the statistics behind the idea." />
 
       <section className="blk"><div className="wrap">
@@ -1005,7 +1011,7 @@ export function ResearchPage() {
 export function OptionsPage() {
   return (
     <Shell active="options">
-      <PageHero eyebrow="Options · 8 tools" h1="Options flow, gamma, and volatility."
+      <PageHero crumb="Options" eyebrow="Options · 8 tools" h1="Options flow, gamma, and volatility."
         lede="Eight tools on the options chain: large-trade activity, dealer hedging pressure, volatility levels, and the cost of premium." />
 
       <section className="blk"><div className="wrap">
@@ -1127,7 +1133,7 @@ const FreightTrend = () => (
 export function LogisticsPage() {
   return (
     <Shell active="logistics">
-      <PageHero eyebrow="Geo-Logistics · 4 tools" h1="The physical economy, in near real time."
+      <PageHero crumb="Geo-Logistics" eyebrow="Geo-Logistics · 4 tools" h1="The physical economy, in near real time."
         lede="Two live maps of physical trade, the equity exposure behind them, and the bilateral trade flows underneath, built entirely on free first-party data. Cargo ships and chokepoints, tankers and LNG, the names each stressed chokepoint moves, and who trades what with whom." />
 
       <section className="blk"><div className="wrap">
@@ -1211,7 +1217,7 @@ export function LogisticsPage() {
 export function MacroPage() {
   return (
     <Shell active="macro">
-      <PageHero eyebrow="Macro · 11 tools" h1="Rates, credit, and world markets."
+      <PageHero crumb="Macro" eyebrow="Macro · 11 tools" h1="Rates, credit, and world markets."
         lede="The implied FOMC path, the yield curve, credit spreads, FX crosses, and the world's market sessions. Rates, credit, FX, and growth in one place." />
 
       <section className="blk"><div className="wrap">
@@ -1284,7 +1290,7 @@ export function MacroPage() {
 export function ChartingPage() {
   return (
     <Shell active="charting">
-      <PageHero eyebrow="Charting · 3 tools" h1="Plot any series on one timeline."
+      <PageHero crumb="Charting" eyebrow="Charting · 3 tools" h1="Plot any series on one timeline."
         lede="Three charting surfaces: a candlestick studio that overlays any data series in the app, multi-asset comparison, and side-by-side portfolio comparison." />
 
       <section className="blk"><div className="wrap">
@@ -1339,7 +1345,7 @@ export function ChartingPage() {
 export function TradingPage() {
   return (
     <Shell active="trading">
-      <PageHero eyebrow="Trading · 11 tools" h1="Build, test, execute, and track."
+      <PageHero crumb="Trading" eyebrow="Trading · 11 tools" h1="Build, test, execute, and track."
         lede="Compose a strategy, test it against history, run it on a simulated desk, and track every trade and holding. Eleven tools cover the loop from rules to reviewed result." />
 
       <section className="blk"><div className="wrap">
@@ -1414,7 +1420,7 @@ export function TradingPage() {
 export function ValuationPage() {
   return (
     <Shell active="valuation">
-      <PageHero eyebrow="Valuation · 6 tools" h1="Value a company five ways."
+      <PageHero crumb="Valuation" eyebrow="Valuation · 6 tools" h1="Value a company five ways."
         lede="DCF, reverse DCF, dividend discount, sum of the parts, and multiples, plus a NAV tracker. Every model leads with its answer and shows the assumptions behind it." />
 
       <section className="blk" style={{ paddingTop: 40, paddingBottom: 40 }}><div className="wrap">

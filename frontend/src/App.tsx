@@ -50,6 +50,7 @@ const MktCharting    = lazyWithReload(() => import('./marketing/Marketing').then
 const MktMacro       = lazyWithReload(() => import('./marketing/Marketing').then(m => ({ default: m.MacroPage })))
 const MktTrading     = lazyWithReload(() => import('./marketing/Marketing').then(m => ({ default: m.TradingPage })))
 const MktShell       = lazyWithReload(() => import('./marketing/Marketing').then(m => ({ default: m.MarketingShell })))
+const NotFound       = lazyWithReload(() => import('./pages/NotFound'))
 
 // Lazy-load all pages — crash in one route can't bring down the whole app
 const Home               = lazyWithReload(() => import('./pages/Home'))
@@ -360,7 +361,12 @@ export default function App() {
               <Route path="/air-cargo"          element={<Navigate to="/logistics-map" replace />} />
               <Route path="/freight-macro"      element={<Navigate to="/logistics-map" replace />} />
               <Route path="/etf-xray"           element={<Navigate to="/etf-analyzer" replace />} />
-              <Route path="*"                   element={<Navigate to="/app" replace />} />
+            </Route>
+
+            {/* Anything unrouted: a real 404 in marketing chrome, not a silent
+                redirect into the terminal. */}
+            <Route element={<MktShell />}>
+              <Route path="*"                 element={<NotFound />} />
             </Route>
           </Routes>
         </Suspense>
