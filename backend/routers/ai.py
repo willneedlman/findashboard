@@ -2304,6 +2304,75 @@ def _length_guidance(length_key: str, section_count: int, depth: str | None) -> 
     )
 
 
+# The primary provider prices a request against a per-minute token ceiling and
+# rejects anything that cannot fit inside it outright, with a 413 rather than a
+# queue. Input and requested output are counted together, so asking for a longer
+# report shrinks the budget available to the evidence — which is why the longest
+# reports were the ones that never worked, and why a medium one failed only
+# sometimes. Everything here exists to make that failure impossible rather than
+# unlikely.
+_REPORT_TPM_CEILING = int(os.getenv("REPORT_TPM_CEILING", "12000"))
+# The estimate below is approximate, and a request that overshoots is refused
+# outright, so the headroom is deliberately generous.
+_REPORT_TPM_SAFETY = 0.88
+# Below this the writer cannot produce a whole report, so evidence is shed
+# instead of squeezing the response any further.
+_REPORT_MIN_OUTPUT_TOKENS = 1_800
+
+
+def _estimate_tokens(text: str) -> int:
+    """Rough token count for budgeting. Deliberately pessimistic: JSON payloads
+    tokenize worse than prose, and over-estimating costs a little evidence while
+    under-estimating costs the whole request."""
+    return int(len(text or "") / 3.4) + 1
+
+
+def _fit_report_request(
+    sys_prompt: str,
+    payload: dict,
+    max_tokens: int,
+) -> tuple[dict, int, dict]:
+    """Shrink a report request until input plus requested output clears the
+    provider ceiling. Returns the payload, the output budget, and a report of
+    what was given up so the caller can log or disclose it.
+
+    Output is traded away first: a slightly shorter report beats no report. Only
+    once the response is at its floor does evidence get shed, lowest-scoring
+    first, because `_report_prompt_clips` has already ordered it by decision
+    value.
+    """
+    budget = int(_REPORT_TPM_CEILING * _REPORT_TPM_SAFETY)
+    fixed = _estimate_tokens(sys_prompt)
+    shed: list[str] = []
+
+    def input_tokens(current: dict) -> int:
+        return fixed + _estimate_tokens(json.dumps(current, ensure_ascii=False))
+
+    if input_tokens(payload) + max_tokens <= budget:
+        return payload, max_tokens, {"fitted": False, "droppedClips": [], "outputTokens": max_tokens}
+
+    max_tokens = max(_REPORT_MIN_OUTPUT_TOKENS, budget - input_tokens(payload))
+
+    evidence = list((payload.get("dataBank") or {}).get("evidence") or [])
+    while evidence and input_tokens(payload) + max_tokens > budget:
+        dropped = evidence.pop()
+        shed.append(str(dropped.get("title") or dropped.get("id") or "clip"))
+        payload = {
+            **payload,
+            "dataBank": {**payload["dataBank"], "evidence": evidence},
+        }
+        max_tokens = max(_REPORT_MIN_OUTPUT_TOKENS, budget - input_tokens(payload))
+
+    if shed:
+        logger.warning("report request trimmed to fit the token ceiling: dropped %d clip(s): %s",
+                       len(shed), ", ".join(shed[:6]))
+    return payload, max_tokens, {
+        "fitted": True,
+        "droppedClips": shed,
+        "outputTokens": max_tokens,
+    }
+
+
 def _report_token_budget(length_key: str, section_count: int, depth: str | None) -> int:
     """Response ceiling for the writer.
 
@@ -2447,46 +2516,7 @@ HORIZON
 ════════════════════════════════════════
 HARD RULES & NARRATIVE VOCABULARY (both modes)
 ════════════════════════════════════════
-- Use ONLY figures present in clips or valuationContext. Never invent prices, GEX, IV, or dates.
-- Field-to-Label Controlled Vocabulary:
-  - `upside = (intrinsic - price) / price`: verbalize strictly as "X% upside to intrinsic" (if intrinsic > price) or "X% downside to intrinsic" (if intrinsic < price). NEVER call a negative upside a "premium above intrinsic".
-  - `premium_to_intrinsic = (price - intrinsic) / intrinsic`: verbalize strictly as "X% premium to intrinsic".
-  - Single polarity per field per paragraph: a given metric may not map to opposing polarity words in the same paragraph.
-- Metric Nouns: Single-period growth (e.g. REV GROWTH 85.2%) must be called "growth rate" or "revenue growth", NEVER "revenue CAGR". Reserve "CAGR" strictly for multi-year compound growth rates with explicit n_periods.
-- DCF arithmetic and units: Use the deterministic Projection Math clip for CAGR and cumulative growth. Never relabel cumulative growth as CAGR. Treat DCF Revenue, EBIT, FCF, enterprise value, and bridge inputs in the units printed by their clip. Never abbreviate an input expressed in USD millions as though it were raw dollars.
-- DCF completeness: An intrinsic-value conclusion must name the valuation date or quote limitation, explicit forecast horizon, WACC, terminal growth, and at least the principal operating assumptions. Describe one-way sensitivity as one-variable-at-a-time, not as a probability distribution or a robust downside case.
-- Horizon discipline: An open-ended outlook does not supply a target date. Never pair it with a precise price target or expected return unless another clip supplies an explicit target date or annualized return.
-- Correlation and beta: Prose beside a rolling chart must name the exact pair or factor in that chart and use the chart's first/latest/range values. Do not substitute a different matrix pair. Low correlation is diversification evidence, not proof that concentration risk is absent. Beta is market sensitivity, not volatility.
-- Portfolio actions: Never recommend trimming, adding, hedging, or changing a weight unless the clips show the complete current allocation, a specific proposed allocation or trade list, holding-level risk contributions, and quantified before-and-after beta, volatility, and scenario losses. Beta above 1 cannot explain underperformance by itself. Use return attribution before assigning active return to beta, sectors, selection, cash, fees, or timing.
-- Portfolio evidence order: The first portfolio section must show portfolio return, SPY return, active return, portfolio and SPY volatility, and both maximum drawdowns before any causal explanation. If active-return attribution is absent, say the cause remains unresolved. Factor regression and risk contribution are not substitutes for allocation and security-selection attribution.
-- Benchmark comparison: Call SPY an analytical US equity reference unless the evidence explicitly validates it as the policy benchmark. Any claim of similar risk must print both portfolio and benchmark volatility using matching dates and methods. Compare Sharpe and drawdown only when both sides are supplied.
-- Factor naming: A rolling beta chart is "Rolling Market Beta", not a factor decomposition. Use "factor decomposition" only when the evidence supplies multiple factor coefficients, fit statistics, and systematic versus idiosyncratic risk.
-- Factor contribution naming: A signed beta-times-covariance contribution may be negative and sums to model R-squared. Call it "signed factor contribution", never a literal share of variance. Raw beta magnitude is not importance; use t-statistics and contribution when discussing materiality.
-- Sector look-through: A direct issuer sector table does not measure economic sector exposure inside ETFs or funds. If a fund look-through limitation is supplied, label sector weights "directly classified" and never present them as total portfolio exposure.
-- Portfolio concentration language: Without fund holdings and a reference allocation, never call the portfolio overweight technology. When the evidence supports only one holding's weight, beta, variance share, and idiosyncratic share, frame the conclusion as single-security risk concentration.
-- Systematic versus idiosyncratic risk: Market beta measures systematic sensitivity. Residual or idiosyncratic variance must come from the residual calculation. Never infer idiosyncratic contribution from high beta.
-- Mixed valuation: A discount on one multiple is not an overall valuation discount when other supplied multiples show premiums. State results by metric and call the picture mixed when measures disagree.
-- Valuation methods: Relative multiples, analyst consensus, and DCF are separate methods. Never say a P/E discount delivers or implies DCF upside. If consensus and DCF upside differ, show both, explain that they use different methods, and state which one informs the conclusion. In portfolio reviews, valuation is one compact supporting panel, not the central argument.
-- Valuation integrity: If DCF value and market price differ by more than 5x, or DCF and consensus point sharply in opposite directions, treat the DCF as unreconciled. Check units, diluted share count, corporate actions, and price alignment. Do not use that output to justify an allocation action.
-- Catalyst labels: Use "upcoming catalyst" only when the supplied evidence contains the actual future event and date. A methodology clip is not a catalyst calendar. Remove catalyst language from a heading when no dated event is available.
-- Portfolio summary structure: For a portfolio review, write the executive summary as exactly three short sentences: measured result, strongest supported diagnosis, and decision implication. Keep it under 80 words. Follow the selected portfolio template contract exactly. Short, medium, and long have different required section sets.
-- Measurement versus outlook: State the historical measurement window separately from the forecast horizon. Recent beta, volatility, and a near-term event do not establish a multi-year outlook unless a forward model explicitly connects them.
-- Derivative coverage: When the book contains options, distinguish contract inventory and underlying-market research from whole-account exposure. Equity-and-cash return, beta, volatility, factor, drawdown, and allocation statistics are sleeve metrics until verified option marks and Greeks support nonlinear position-level aggregation. Never present underlying shares as though the option contracts were stock holdings.
-- Statistical claims: Call a coefficient significant only when the coefficient evidence gives its p-value and it is below the stated threshold. Regression is association, never proof of causation.
-- Sector framing: Sector momentum does not make an individual high-beta growth stock "defensive". Use defensive only when the supplied company or risk evidence supports that classification.
-- Macro events: A calendar is event-risk evidence, not a directional inflation forecast. Do not call an event upcoming if its date precedes the report date, and do not infer an inflation direction without an actual or consensus CPI/PCE value.
-- Interpret, Don't Recite: Do not simply repeat raw numbers visible in adjacent KPI cards. Prose must explain the mechanism, competitive context, caveats, or disconfirming evidence.
-- Comparative Claims: Verify comparative adjectives ("higher", "lower", "dwarfs", "lags") against operands. Never state a lower metric is higher or vice versa.
-- Swings and moves as PERCENT, never raw dollars alone: any price swing, sensitivity range, target band, or move MUST be expressed as a percent of the subject's current price (valuationContext.marketPrice, or per-subject marketPrice in valuationContext.subjects), not as a bare dollar amount. valuationContext.sensitivitySwing gives the precomputed swingPct per subject — cite it. A $40 swing on a $200 stock is a 20% swing; a $400 swing on a $1,500 stock is a 27% swing. Dollar magnitudes are not comparable across differently-priced names, so never rank or contrast two names' swings in dollars. State the dollar band if useful, but always alongside the percent.
-- Risks: cover the key risks to the thesis in plain prose when the data supports it. Do NOT write a falsification trigger, a "falsification floor/ceiling", or any "IF metric crosses threshold BY date THEN thesis invalidated" statement, and never invent threshold levels, trigger dates, or cutoff figures to build one. Describe what would weaken the thesis qualitatively, using only figures already in the clips.
-- stance object required (see schema).
-- Tone and keyResult must agree. Do not claim a strong lean with a hedged, noncommittal keyResult.
-- Writing: no em dashes, no semicolons, no emoji, no bullet lists inside prose. Flowing paragraphs. Spartan. No restating Purpose/Goal as labels.
-- Curate sections: only clips that advance the thesis. There is no appendix. Evidence either earns a place in a section or is omitted, so never defer a clip to the end of the report.
-- Every body section needs keyFigures (2–4 real figures from that clip). Keep keyFigures sparse.
-- Large boards: two to five key figures, not every row.
-- Report length is driven by valuationContext.reportLength (see LENGTH above), not by clip count. Merge clips that serve the same point into one section (e.g. two DCF verdicts for a comparison, or a KPI panel plus the chart behind it) rather than writing a section per clip.
-- Every section's analysis must interpret, compare, or draw a conclusion — never transcribe a clip's numbers back as prose with no takeaway (e.g. do not write "NVDA's price is $206.84, P/E is 31.6x, EPS is $6.54" and stop there; those figures already appear in the keyFigures/table below the prose). If a clip has nothing to add beyond its own numbers, cut the section and drop the clip.
+{{HARD_RULES}}
 
 Respond ONLY with valid JSON (no markdown, no code fences):
 {
@@ -2528,6 +2558,79 @@ _NAMED_SUBJECT_TYPES = frozenset({"comparison", "thesis"})
 # single subject equity, which is the disagreement that rated a four-holding book
 # review as a Hold on one holding.
 _PORTFOLIO_INTENT_RE = re.compile(r"\b(portfolio|holdings|book|positions|allocation|my account)\b", re.I)
+
+
+# ── Writer rules, assembled per report ────────────────────────────────────────
+# Two things shrank this block. Rules that a deterministic linter now enforces
+# were removed outright: the linter is authoritative, it repairs the output
+# whatever the prompt said, and a free-tier writer given thirty simultaneous
+# prohibitions follows none of them well. The rest are attached to the evidence
+# they govern, so a portfolio review no longer carries DCF unit rules and a
+# single-stock note no longer carries derivative-coverage rules.
+#
+# What stays is what a linter cannot produce: structure, argument order, and the
+# difference between interpreting a number and reciting it.
+
+_RULES_ALWAYS = [
+    "Use ONLY figures present in clips or valuationContext. Never invent prices, dates, or levels.",
+    "Interpret, do not recite: prose must explain mechanism, context, or a caveat, never restate the numbers already visible in the panel beside it.",
+    "Every section's analysis must reach a conclusion. If a clip adds nothing beyond its own numbers, cut the section and drop the clip.",
+    "Express any swing, sensitivity range, target band, or move as a percent of the subject's current price, never as a bare dollar amount. valuationContext.sensitivitySwing carries the precomputed swingPct. State the dollar band alongside the percent if useful, never instead of it.",
+    "Report length follows valuationContext.reportLength, not clip count. Merge clips that serve one point into one section.",
+    "Curate: there is no appendix. Evidence earns a section or is omitted.",
+    "Every body section needs 2 to 4 real keyFigures from its own clip. Keep them sparse; a large board gets two to five, not every row.",
+    "stance object required (see schema). Tone and keyResult must agree: no strong lean under a hedged keyResult.",
+    "Writing: spartan, flowing paragraphs, no bullet lists inside prose, no emoji, no semicolons. Do not restate Purpose or Goal as labels.",
+    "Cover the key risks in plain prose. Never write a falsification trigger or invent a threshold, cutoff, or trigger date to build one.",
+]
+
+# (predicate key, rule) — attached to evidence rather than shipped every time.
+_RULES_CONDITIONAL: list[tuple[str, str]] = [
+    ("portfolio", "Portfolio evidence order: the first portfolio section states portfolio return, benchmark return, active return, both volatilities, and both maximum drawdowns before any causal explanation. Without attribution evidence, say the cause is unresolved."),
+    ("portfolio", "Benchmark comparison: call SPY an analytical US equity reference unless the evidence validates it as the policy benchmark. Any similar-risk claim must print both volatilities on matching dates and methods."),
+    ("portfolio", "Write the executive summary as three short sentences under 80 words: measured result, strongest supported diagnosis, decision implication."),
+    ("portfolio", "State the historical measurement window separately from the forecast horizon."),
+    ("dcf", "An intrinsic-value conclusion must name the valuation date or quote its limitation, the forecast horizon, WACC, terminal growth, and the principal operating assumptions. Describe one-way sensitivity as one variable at a time, never as a distribution."),
+    ("dcf", "Treat DCF revenue, EBIT, FCF, and bridge inputs in the units their clip prints. Never abbreviate a figure expressed in USD millions as raw dollars, and never relabel cumulative growth as CAGR."),
+    ("multiples", "A discount on one multiple is not an overall discount when others show premiums. State results by metric and call the picture mixed when measures disagree."),
+    ("factor", "A rolling beta chart is rolling market beta, not a factor decomposition. A signed beta-times-covariance contribution can be negative and sums to R-squared: call it signed factor contribution, never a share of variance. Raw beta magnitude is not importance."),
+    ("correlation", "Prose beside a rolling chart must name that chart's exact pair or factor and use its own first, latest, and range values. Low correlation is diversification evidence, not proof concentration risk is absent. Beta is market sensitivity, not volatility."),
+    ("regression", "Call a coefficient significant only when its p-value is supplied and below the stated threshold. Regression is association, never causation."),
+    ("options", "When the book holds options, distinguish contract inventory from whole-account exposure. Return, beta, volatility, factor, drawdown, and allocation figures are sleeve metrics until verified marks and Greeks support position-level aggregation. Never present underlying shares as though the contracts were stock."),
+    ("macro", "A calendar is event-risk evidence, not a directional forecast. Do not infer an inflation direction without an actual or consensus reading."),
+    ("lookforward", "An open-ended outlook supplies no target date. Never pair it with a precise price target or expected return unless a clip gives an explicit target date or annualized return."),
+]
+
+
+def _report_evidence_flags(clips: list["ReportClipIn"], book_level: bool, timeframe: str = "") -> set[str]:
+    """Which rule families this report's evidence actually justifies carrying."""
+    hay = "\n".join(f"{clip.sourceTab} {clip.title}" for clip in clips).lower()
+    flags: set[str] = set()
+    if book_level or "portfolio" in hay or "allocation" in hay:
+        flags.add("portfolio")
+    if re.search(r"\bdcf\b|intrinsic|value drivers|model assumptions", hay):
+        flags.add("dcf")
+    if re.search(r"peer|multiple|p/e|ev/ebitda|comparable", hay):
+        flags.add("multiples")
+    if re.search(r"factor|coefficient|regression|decomposition", hay):
+        flags.add("factor")
+    if re.search(r"factor|coefficient|regression", hay):
+        flags.add("regression")
+    if re.search(r"correlation|rolling beta|covariance", hay):
+        flags.add("correlation")
+    if re.search(r"option|greek|gamma|skew|implied vol", hay):
+        flags.add("options")
+    if re.search(r"macro|cpi|pce|fed|rate|yield curve|event", hay):
+        flags.add("macro")
+    if re.search(r"next|forward|outlook", (timeframe or "").lower()):
+        flags.add("lookforward")
+    return flags
+
+
+def _hard_rules_block(flags: set[str]) -> str:
+    lines = list(_RULES_ALWAYS)
+    lines.extend(rule for key, rule in _RULES_CONDITIONAL if key in flags)
+    return "\n".join(f"- {line}" for line in lines)
 
 
 def _book_level_report(req, subjects_ranked: list[str]) -> bool:
@@ -2598,7 +2701,8 @@ _BOOK_LEVEL_VERDICT_GUIDANCE = (
 
 def _report_system_prompt(mode: str, length_key: str, must_include: str,
                           report_type: str = "", book_level: bool = False,
-                          contract: dict | None = None, depth: str | None = None) -> str:
+                          contract: dict | None = None, depth: str | None = None,
+                          rule_flags: set[str] | None = None) -> str:
     mode_key = "range" if mode == "range" else "open"
     mode_guidance = _REPORT_RANGE_GUIDANCE if mode_key == "range" else _REPORT_OPEN_GUIDANCE
     # Independent of report type: a project stored before the setup flow existed
@@ -2637,6 +2741,12 @@ def _report_system_prompt(mode: str, length_key: str, must_include: str,
         .replace("{{KEY_RESULT_LABEL_SCHEMA}}", schema["label"])
         .replace("{{KEY_RESULT_VALUE_SCHEMA}}", schema["value"])
         .replace("{{KEY_RESULT_CONTEXT_SCHEMA}}", schema["context"])
+        .replace("{{HARD_RULES}}", _hard_rules_block(
+            rule_flags if rule_flags is not None else {
+                "portfolio", "dcf", "multiples", "factor", "regression",
+                "correlation", "options", "macro", "lookforward",
+            },
+        ))
     )
 
 def _clean_figs(raw) -> list:
@@ -6259,6 +6369,7 @@ def generate_report(req: ReportGenRequest):
         book_level,
         contract,
         req.depth,
+        _report_evidence_flags(req.clips, book_level, req.timeframe),
     )
     messages = [
         {"role": "system", "content": sys_prompt},
@@ -6267,6 +6378,9 @@ def generate_report(req: ReportGenRequest):
     # Was keyed by preset, which has no entry for a custom size. Scale by the
     # section count and the depth dial so the ceiling tracks the real request.
     max_tokens = _report_token_budget(length_key, section_count, req.depth)
+    payload, max_tokens, fit = _fit_report_request(sys_prompt, payload, max_tokens)
+    if fit["fitted"]:
+        messages[1] = {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}
     resp = groq_chat(messages, model=MODEL_SMART, max_tokens=max_tokens, temperature=0.3)
     raw = (resp.choices[0].message.content or "").strip()
     result = parse_json(raw)

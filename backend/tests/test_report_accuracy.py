@@ -5,12 +5,20 @@ free model that cannot be trusted to compare two numbers, so none of these
 repairs are asked of it: each one is computed from the clips and applied after
 generation. Network-free (no LLM calls).
 """
+import json
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+import routers.ai as ai  # noqa: E402
 from routers.ai import (  # noqa: E402
+    _REPORT_MIN_OUTPUT_TOKENS,
+    _REPORT_TPM_CEILING,
+    _estimate_tokens,
+    _fit_report_request,
+    _hard_rules_block,
+    _report_evidence_flags,
     ReportClipIn,
     _beta_coherence_note,
     _beta_source_conflict_note,
@@ -321,3 +329,81 @@ class TestExplanatoryPower:
         assert "explains ~98%" not in fixed
         assert "98% of the beta-implied return" in fixed
         assert "51.8% of return to the market factor" in fixed
+
+
+class TestRequestFitsProviderCeiling:
+    """The primary provider rejects an oversized request outright rather than
+    queueing it, and counts requested output against the same ceiling — so the
+    longest reports were the ones that could never succeed."""
+
+    def _payload(self, clip_count=12, data_chars=800):
+        evidence = [
+            {"id": f"c{i}", "sourceTool": "Portfolio Manager", "type": "table",
+             "title": f"Panel {i}", "evidenceDomain": "portfolio",
+             "userInstruction": "", "data": "x" * data_chars}
+            for i in range(clip_count)
+        ]
+        return {"projectName": "P", "goal": "g", "purpose": "p",
+                "dataBank": {"evidence": evidence, "valuationContext": {}}}
+
+    def test_a_request_that_already_fits_is_untouched(self):
+        payload, out, fit = _fit_report_request("sys" * 100, self._payload(4, 200), 2200)
+        assert fit["fitted"] is False
+        assert out == 2200
+        assert len(payload["dataBank"]["evidence"]) == 4
+
+    def test_output_is_traded_before_evidence(self):
+        """A slightly shorter report beats no report, so the response budget
+        gives way first and the evidence stays whole."""
+        system = "s" * 14_000          # ~4.1k tokens
+        payload, out, fit = _fit_report_request(system, self._payload(12, 800), 6500)
+        assert fit["fitted"] is True
+        assert out < 6500
+        assert fit["droppedClips"] == []
+        assert len(payload["dataBank"]["evidence"]) == 12
+
+    def test_evidence_sheds_only_once_output_is_at_its_floor(self):
+        system = "s" * 14_000
+        payload, out, fit = _fit_report_request(system, self._payload(60, 2_000), 6500)
+        assert out >= _REPORT_MIN_OUTPUT_TOKENS
+        assert fit["droppedClips"], "an oversized evidence set must shed"
+        assert len(payload["dataBank"]["evidence"]) < 60
+
+    def test_every_shape_clears_the_ceiling(self):
+        system = "s" * 14_000
+        for clips, chars, want in [(4, 200, 2200), (12, 800, 4000), (60, 2000, 6500)]:
+            payload, out, _ = _fit_report_request(system, self._payload(clips, chars), want)
+            total = _estimate_tokens(system) + _estimate_tokens(
+                json.dumps(payload, ensure_ascii=False)
+            ) + out
+            assert total <= _REPORT_TPM_CEILING, f"{clips} clips overflowed at {total}"
+
+
+class TestRulesAreCarriedOnlyWhenEarned:
+    def test_a_portfolio_review_drops_option_and_multiple_rules(self):
+        clips = [SECTORS, RISK_METRICS, FACTOR_MODEL]
+        flags = _report_evidence_flags(clips, True, "Year to date")
+        assert "portfolio" in flags and "factor" in flags
+        assert "options" not in flags
+        block = _hard_rules_block(flags)
+        assert "Greeks" not in block
+        assert "Portfolio evidence order" in block
+
+    def test_rules_the_linters_now_enforce_are_gone_from_the_prompt(self):
+        """Each of these is repaired deterministically after generation, so
+        spending prompt budget on it bought nothing."""
+        for dead in ("premium above intrinsic", "revenue CAGR", "Catalyst labels",
+                     "Sector look-through", "em dashes"):
+            assert dead not in ai._REPORT_SYSTEM, f"{dead!r} still in the system prompt"
+
+    def test_the_system_prompt_stays_under_its_budget(self):
+        from reporting.pipeline import template_contract
+        contract = template_contract("", "long")
+        prompt = ai._report_system_prompt(
+            "open", "long", "", "", True, contract, "standard",
+            {"portfolio", "dcf", "multiples", "factor", "regression",
+             "correlation", "options", "macro", "lookforward"},
+        )
+        # Even carrying every rule family, the fixed scaffolding must leave room
+        # for evidence and a whole report inside the provider ceiling.
+        assert _estimate_tokens(prompt) < 5_000
