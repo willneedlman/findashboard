@@ -37,14 +37,22 @@ _STRESS_MAP = {
         "label": "St. Louis Financial Stress",
         "unit": "index",
         "frequency": "weekly",
-        "interpretation": "Above zero indicates above-average financial stress.",
+        "interpretation": (
+            "Composite of 18 weekly market-priced series (rates, yield spreads, the VIX) "
+            "combined by principal components. Standard deviations from its own historical "
+            "average, not percent: above zero is more stressed than usual."
+        ),
     },
     "nfci": {
         "series": "NFCI",
         "label": "Chicago Fed Financial Conditions",
         "unit": "index",
         "frequency": "weekly",
-        "interpretation": "Above zero indicates tighter-than-average financial conditions.",
+        "interpretation": (
+            "Composite of roughly 105 risk, credit and leverage indicators across money, "
+            "debt, equity and banking markets, many of them quantities rather than prices. "
+            "Standard deviations from its own average: above zero is tighter than normal."
+        ),
     },
     "ci_tightening": {
         "series": "DRTSCILM",

@@ -90,9 +90,9 @@ function indicatorState(indicator: StressIndicator) {
 // backend/fred_credit.py _STRESS_MAP; falls back to the FRED interpretation.
 const STRESS_HELP: Record<string, string> = {
   stl_fsi:
-    'St. Louis Fed Financial Stress Index. Zero is the historical average. Above zero = markets are more stressed than usual (funding, volatility, credit spreads). Below zero = calmer than average. Weekly; not a %.',
+    'St. Louis Fed Financial Stress Index (STLFSI4). A composite of 18 weekly series — seven interest rates, six yield spreads, and five others including the VIX — combined by principal components, so it tracks what those 18 have in common. Built almost entirely from market prices, which is why it reacts the same week markets do. Units are standard deviations from its own historical average, not percent: zero is normal, above zero is more stressed than usual, below zero is calmer.',
   nfci:
-    'Chicago Fed National Financial Conditions Index. Zero is average conditions. Above zero = tighter financial conditions (harder/costlier credit and market funding). Below zero = looser. Weekly; not a %.',
+    'Chicago Fed National Financial Conditions Index. A composite of roughly 105 indicators of risk, credit and leverage across money markets, debt and equity markets, and both the traditional and shadow banking systems. Many inputs are quantities — loan volumes, leverage ratios — rather than prices, so it moves slowly and describes the regime rather than the week. Units are standard deviations from its own average, not percent: above zero is tighter than normal, below zero is looser.',
   ci_tightening:
     'Fed Senior Loan Officer Opinion Survey (SLOOS). Net % of banks that tightened standards on large- and middle-market commercial & industrial (C&I) loans this quarter vs eased. Positive = net tightening (banks more selective on business credit); negative = net easing. Not a delinquency or rejection rate.',
   card_tightening:
@@ -253,7 +253,7 @@ export function CreditDelinquenciesContent() {
 
       {(marketIndicators.length > 0 || lendingIndicators.length > 0) && <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16 }}>
         {marketIndicators.length > 0 && <section style={PANEL}>
-          <PanelHead title="Market Financial Stress" meta="weekly · zero = historical average" help="Composite Federal Reserve stress indexes. Zero is the historical average; positive values mean more stress and negative values mean less. Values are indexes, not percentages." />
+          <PanelHead title="Market Financial Stress" meta="weekly · zero = historical average" help="Two Federal Reserve composites of how stressed the financial system is. Both are standardised: units are standard deviations from each index's own historical average, not percentages. Zero is normal, above zero is stressed or tight, below zero is calm or loose. They are plotted together because they disagree usefully. St. Louis reads 18 market prices weekly, so it spikes whenever markets do. Chicago averages about 105 mostly slow-moving credit and leverage measures, so it describes the regime. When the jagged line spikes and the smooth one does not, markets repriced but actual credit conditions never tightened — a scare rather than a credit event. Hover either legend entry for what goes into it." />
           <div style={{ padding: '15px 12px 8px' }}><ResponsiveContainer width="100%" height={245}>
             <LineChart data={marketRows} margin={{ left: 2, right: 12, top: 8, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--theme-hover, rgba(255,255,255,0.04))" />
@@ -263,7 +263,7 @@ export function CreditDelinquenciesContent() {
               {marketIndicators.map((indicator, index) => <Line key={indicator.key} type="monotone" dataKey={indicator.key} stroke={COLORS[index]} strokeWidth={1.7} dot={false} isAnimationActive={false} />)}
             </LineChart>
           </ResponsiveContainer></div>
-          <div style={legendStyle}>{marketIndicators.map((indicator, index) => <Legend key={indicator.key} color={COLORS[index]} label={indicator.label} />)}</div>
+          <div style={legendStyle}>{marketIndicators.map((indicator, index) => <Legend key={indicator.key} color={COLORS[index]} label={indicator.label} help={stressHelp(indicator)} />)}</div>
         </section>}
 
         {lendingIndicators.length > 0 && <section style={PANEL}>
@@ -277,7 +277,7 @@ export function CreditDelinquenciesContent() {
               {lendingIndicators.map((indicator, index) => <Line key={indicator.key} type="monotone" dataKey={indicator.key} stroke={COLORS[index + 2]} strokeWidth={1.7} dot={false} isAnimationActive={false} />)}
             </LineChart>
           </ResponsiveContainer></div>
-          <div style={legendStyle}>{lendingIndicators.map((indicator, index) => <Legend key={indicator.key} color={COLORS[index + 2]} label={indicator.label} />)}</div>
+          <div style={legendStyle}>{lendingIndicators.map((indicator, index) => <Legend key={indicator.key} color={COLORS[index + 2]} label={indicator.label} help={stressHelp(indicator)} />)}</div>
         </section>}
       </div>}
 
@@ -350,8 +350,11 @@ function FdicPanel({ data }: { data: FdicResponse }) {
   </section>
 }
 
-function Legend({ color, label }: { color: string; label: string }) {
-  return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 14, height: 2, background: color }} /><span>{label}</span></span>
+function Legend({ color, label, help }: { color: string; label: string; help?: string }) {
+  return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+    <span style={{ width: 14, height: 2, background: color }} /><span>{label}</span>
+    {help && <HelpTip text={help} width={330} position="top" anchor="left" />}
+  </span>
 }
 
 const legendStyle: React.CSSProperties = { minHeight: 34, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap', borderTop: `1px solid ${T.border}`, color: T.muted, fontFamily: T.mono, fontSize: 8.5 }
