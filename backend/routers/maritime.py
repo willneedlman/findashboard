@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 
 import requests
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -1107,6 +1107,164 @@ def chokepoint_history(
         disk_set(key, out, ttl=3600)                 # cache the baseline BEFORE the live tail
     out["nowcast_meta"] = _attach_history_nowcast(out["series"])
     return out
+
+
+def _board_specs(meta: dict) -> list:
+    """Station definitions for one chokepoint.
+
+    Deliberately four independent gauges rather than one blended traffic index.
+    Tanker and cargo counts move for unrelated reasons — a crude disruption and a
+    container reroute look identical once summed — so they are never pooled, and
+    the regional read is allowed to report that they disagree.
+    """
+    from observatory import Kind, StationSpec
+
+    return [
+        StationSpec(
+            "total", "Gate transits", Kind.FLOW, "/day",
+            caption=f"Ships crossing {meta['name']} per day, counted from transponder reports.",
+            source="AIS via IMF PortWatch", stale_after_days=5,
+        ),
+        StationSpec(
+            "tanker", "Tanker transits", Kind.FLOW, "/day",
+            caption="Crude and product tankers only. Read against the crude route, not total traffic.",
+            source="AIS via IMF PortWatch", stale_after_days=5,
+        ),
+        StationSpec(
+            "cargo", "Cargo transits", Kind.FLOW, "/day",
+            caption="Dry bulk and container ships only.",
+            source="AIS via IMF PortWatch", stale_after_days=5,
+        ),
+        StationSpec(
+            "cap", "Transiting capacity", Kind.FLOW, "kt/day",
+            caption="Deadweight tonnage crossing per day. Rises when ships get bigger, not only when more of them cross.",
+            source="AIS via IMF PortWatch", stale_after_days=5,
+        ),
+    ]
+
+
+@router.get("/chokepoint-board")
+def chokepoint_board(
+    id: str = Query("hormuz", description="chokepoint id (see /chokepoints)"),
+    days: int = Query(90, ge=14, le=730),
+):
+    """One chokepoint as an observation board: each traffic measure read on its
+    own by the Pattern Grammar, with coverage gaps and freshness preserved.
+
+    Separate from /chokepoint-history, which stays the raw series feed. This
+    endpoint returns states and gaps; it never returns a value the feed did not
+    observe.
+    """
+    from observatory import build_board
+
+    meta = next((c for c in CHOKEPOINTS if c["id"] == id), None)
+    if not meta:
+        raise HTTPException(404, f"Unknown chokepoint '{id}'")
+
+    mapping = _portwatch_ids()
+    m = mapping.get(id)
+    if not m:
+        raise HTTPException(503, f"No PortWatch series resolves for '{id}'")
+
+    cache_key = f"pw_board_{id}_{days}"
+    points = disk_get(cache_key)
+    if points is None:
+        try:
+            points = _pw_history(m["portid"], days)
+        except Exception as e:
+            _log.warning("PortWatch board fetch failed for %s: %s", id, e)
+            raise HTTPException(502, "PortWatch did not return a usable series")
+        if points:
+            disk_set(cache_key, points, ttl=3600)
+
+    # capacity arrives in deadweight tonnes; kilotonnes keeps the gauge readable
+    # without changing what was measured.
+    scaled = [{**p, "cap": (p["cap"] / 1000.0) if p.get("cap") is not None else None} for p in points]
+
+    specs = _board_specs(meta)
+    board = build_board(
+        meta["name"], specs,
+        {spec.key: scaled for spec in specs},
+        value_key_by_key={spec.key: spec.key for spec in specs},
+    )
+
+    # Ask the satellites why the feed went quiet. A gap nobody could have observed
+    # is a limit of orbit mechanics; a gap with clear passes throughout means the
+    # pipeline dropped days, and only one of those is worth chasing.
+    from observatory import copernicus
+    coverage = copernicus.coverage_by_day(meta["lat"], meta["lon"], days=min(days, 90))
+    for station in board["stations"]:
+        station["gaps"] = copernicus.attribute_gaps(station["gaps"], coverage)
+    board["coverage"] = copernicus.coverage_summary(coverage, days=min(days, 90))
+
+    board["chokepoint"] = {k: meta[k] for k in ("id", "name", "lat", "lon", "oil_mbd", "note")}
+    board["source"] = "IMF PortWatch"
+    board["days"] = days
+    return board
+
+
+@router.get("/flaring-sites")
+def flaring_sites():
+    """Sites with a standing flaring gauge, plus whether the feed is wired up."""
+    from observatory import firms
+
+    return {
+        "available": firms.available(),
+        "reason": None if firms.available() else (
+            "FIRMS_MAP_KEY is not set. Get a free key at "
+            "https://firms.modaps.eosdis.nasa.gov/api/map_key/"
+        ),
+        "sites": [
+            {"id": key, "label": meta["label"], "unit": meta["unit"], "bbox": list(meta["bbox"])}
+            for key, meta in firms.SITES.items()
+        ],
+    }
+
+
+@router.get("/flaring-board")
+def flaring_board(
+    site: str = Query("permian", description="site id (permian, bakken, eagleford, ghawar)"),
+    days: int = Query(60, ge=14, le=180),
+):
+    """Gas flaring as an observation board, from VIIRS thermal anomalies.
+
+    Returns an unavailable board rather than an empty one when FIRMS_MAP_KEY is
+    missing, so the UI can say why there is nothing to show instead of implying
+    flaring stopped.
+    """
+    from observatory import Kind, StationSpec, build_board, firms
+
+    meta = firms.SITES.get(site)
+    if not meta:
+        raise HTTPException(404, f"Unknown flaring site '{site}'")
+
+    series = firms.radiant_power_series(meta["bbox"], days=days)
+    if not series["available"]:
+        raise HTTPException(503, series["reason"])
+
+    spec = StationSpec(
+        "frp", meta["label"], Kind.FLOW, meta["unit"],
+        caption=meta["caption"], source=series["source"], stale_after_days=4,
+    )
+    board = build_board(meta["label"], [spec], {"frp": series["points"]})
+
+    # Attributed by FIRMS itself, never by Copernicus: Sentinel flies different
+    # orbits at different times from SNPP and NOAA-20, so a clear radar pass says
+    # nothing about whether VIIRS could see through cloud that day.
+    for station in board["stations"]:
+        station["gaps"] = firms.attribute_gaps(station["gaps"], series)
+    board["viewing"] = {
+        "medianDetections": series.get("medianDetections"),
+        "partialViewDays": len(series.get("partialViews") or []),
+        "partialViewThreshold": series.get("partialViewThreshold"),
+        "filtering": series.get("partialViewFiltering"),
+        "note": "Days whose detection count fell far below this field's baseline are "
+                "held out as obscured views rather than averaged in as low readings.",
+    }
+    board["site"] = {"id": site, "label": meta["label"], "bbox": list(meta["bbox"])}
+    board["source"] = series["source"]
+    board["days"] = days
+    return board
 
 
 def _attach_history_nowcast(series: list) -> dict:

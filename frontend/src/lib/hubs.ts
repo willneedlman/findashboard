@@ -6,7 +6,7 @@ import {
   LineChart, BarChart2, Waves, Zap, Shuffle, Percent,
   GitBranch, Landmark, Dices, Gauge, BookOpen, Bell, Workflow, Clock, ArrowLeftRight, Home,
   CandlestickChart, Megaphone, Rocket,
-  Container, Fuel, MapPinned, Waypoints,
+  Container, Flame, Fuel, MapPinned, Waypoints,
   ClipboardList,
   type LucideIcon,
 } from 'lucide-react'
@@ -153,6 +153,7 @@ export const HUBS: Hub[] = [
       { title: 'Supply Chain Map', chip: 'Supply Chain Map', desc: 'Map a company\'s sourcing and end-market overlap across peer firms', route: '/supply-chain-peers', icon: Waypoints },
       { title: 'Energy Flows',     chip: 'Energy Flows', desc: 'Live AIS tankers, energy pipelines, export terminals, and chokepoints',                       route: '/flows-map',     icon: Fuel },
       { title: 'Chokepoint Exposure', chip: 'Exposure',  desc: 'Live chokepoint stress mapped to the tankers, oil, refiners, and shippers it moves',         route: '/chokepoint-exposure', icon: Waypoints },
+      { title: 'Flaring Watch',    chip: 'Flaring',     desc: 'Gas flaring radiant power over the major basins, read from VIIRS thermal anomalies',       route: '/flaring',       icon: Flame },
     ],
   },
 ]

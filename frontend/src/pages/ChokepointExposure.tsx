@@ -5,6 +5,7 @@ import PageWrapper from '../components/PageWrapper'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 import TickerLink from '../components/TickerLink'
+import StationBoardPanel from '../components/StationBoardPanel'
 import { fetchChokepointExposure } from '../hooks/useApi'
 import { T } from '../lib/theme'
 import { WORLD_DOT_PATH } from '../lib/worldDotMap'
@@ -492,6 +493,16 @@ function Board({ data }: { data: Resp }) {
 
         {sel && <DrillDock c={sel} navigate={navigate} />}
       </div>
+
+      {sel && (
+        <Panel
+          label="Station Board"
+          meta="each transit measure read on its own · descriptive, not a forecast"
+          style={{ padding: '30px 12px 14px' }}
+        >
+          <StationBoardPanel chokepointId={sel.id} />
+        </Panel>
+      )}
 
       {/* Filters */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>

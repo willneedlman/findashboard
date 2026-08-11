@@ -120,6 +120,7 @@ const HubLanding         = lazyWithReload(() => import('./pages/HubLanding'))
 const GlobalMarkets      = lazyWithReload(() => import('./pages/GlobalMarkets'))
 const LogisticsMap       = lazyWithReload(() => import('./pages/LogisticsMap'))
 const ChokepointExposure = lazyWithReload(() => import('./pages/ChokepointExposure'))
+const Flaring = lazyWithReload(() => import('./pages/Flaring'))
 const TradeFlows = lazyWithReload(() => import('./pages/TradeFlows'))
 const TraderPositioning = lazyWithReload(() => import('./pages/TraderPositioning'))
 const ReportCreator      = lazyWithReload(() => import('./pages/ReportCreator'))
@@ -355,6 +356,7 @@ export default function App() {
               <Route path="/etf-analyzer"       element={<EtfXray />} />
               <Route path="/logistics-map"      element={<LogisticsMap />} />
               <Route path="/chokepoint-exposure" element={<ChokepointExposure />} />
+              <Route path="/flaring" element={<Flaring />} />
               <Route path="/trade-flows"        element={<TradeFlows />} />
               <Route path="/trader-positioning" element={<TraderPositioning />} />
               <Route path="/maritime-freight"   element={<Navigate to="/logistics-map" replace />} />

@@ -30,6 +30,7 @@ from routers import (
     portfolio_optimizer, macro_events,
     logistics, factset, comtrade, bcc, official,
     portfolio_import, social, movers, data_audit, admin_files,
+    observatory_boards,
 )
 
 # Pin the MIME types the PWA depends on. A service worker served as anything but
@@ -233,6 +234,7 @@ app.include_router(ipo.router,               prefix="/api/ipo",               ta
 app.include_router(leaderboard.router,       prefix="/api/leaderboard",       tags=["leaderboard"])
 app.include_router(data_audit.router,        prefix="/api/data-audit",        tags=["data-audit"])
 app.include_router(maritime.router,          prefix="/api/maritime",          tags=["maritime"])
+app.include_router(observatory_boards.router, prefix="/api/observatory",       tags=["observatory"])
 app.include_router(portfolio_import.router,  prefix="/api/portfolio-import",  tags=["portfolio-import"])
 app.include_router(logistics.router,         prefix="/api/logistics",         tags=["logistics"])
 app.include_router(comtrade.router,          prefix="/api/comtrade",          tags=["comtrade"])

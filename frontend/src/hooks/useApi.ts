@@ -14,6 +14,24 @@ export const fetchBetaSuite = (ticker: string, start?: string, end?: string, mod
 export const fetchChokepointExposure = () =>
   api.get('/maritime/exposure').then(r => r.data)
 
+// One chokepoint as independent station gauges read by the Pattern Grammar.
+export const fetchChokepointBoard = (id: string, days = 120) =>
+  api.get('/maritime/chokepoint-board', { params: { id, days } }).then(r => r.data)
+
+// Gas flaring radiant power (VIIRS) as an observation board.
+export const fetchFlaringBoard = (site: string, days = 60) =>
+  api.get('/maritime/flaring-board', { params: { site, days } }).then(r => r.data)
+
+export const fetchFlaringSites = () =>
+  api.get('/maritime/flaring-sites').then(r => r.data)
+
+// EIA fundamentals as an observation board, and the feed-availability inventory.
+export const fetchEnergyBoard = (board: string, length = 120) =>
+  api.get('/observatory/energy-board', { params: { board, length } }).then(r => r.data)
+
+export const fetchObservatorySources = () =>
+  api.get('/observatory/sources').then(r => r.data)
+
 // UN Comtrade bilateral trade flows.
 export const fetchTradeFlows = (params: object) =>
   api.get('/comtrade/flows', { params }).then(r => r.data)
