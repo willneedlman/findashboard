@@ -1233,8 +1233,13 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, nowc
                 contentStyle={{ ...TOOLTIP_STYLE }}
                 labelStyle={{ color: 'var(--theme-text)' }}
                 formatter={(v: number, name: string) => [fmtVal(v, metric), series.find(s => s.id === name)?.name ?? name]} />
-              {ids.map(id => <Line key={id} type="monotone" dataKey={id} stroke={colorOf(id)} strokeWidth={1.8} dot={false} connectNulls
+              {ids.map(id => <Line key={id} type="monotone" dataKey={id} stroke={colorOf(id)} strokeWidth={1.8} dot={false}
                 strokeDasharray={['', '7 3', '2 3', '9 3 2 3'][ids.indexOf(id) % 4] || ''} />)}
+              {/* The estimate tail keeps connectNulls on purpose. It is drawn dashed and
+                  at reduced opacity precisely to say "not a confirmed reading", and the
+                  backend already withholds it entirely when the AIS feed is dark, so it
+                  can never bridge a window nothing was observed in. The confirmed series
+                  above breaks at gaps like every other time axis in the app. */}
               {ids.map(id => <Line key={`${id}__est`} type="monotone" dataKey={`${id}__est`} stroke={colorOf(id)} strokeOpacity={0.7} strokeWidth={1.6} dot={false} connectNulls strokeDasharray="1 4" />)}
             </LineChart>
           </ResponsiveContainer>

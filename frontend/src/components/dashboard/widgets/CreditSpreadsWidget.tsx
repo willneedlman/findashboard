@@ -200,7 +200,6 @@ export default function CreditSpreadsWidget({ config }: { config: WidgetConfig }
                       stroke={SERIES_META[key]?.color ?? T.muted}
                       strokeWidth={1.5}
                       dot={false}
-                      connectNulls
                     />
                   ))}
                   {hasVix && (
@@ -211,7 +210,6 @@ export default function CreditSpreadsWidget({ config }: { config: WidgetConfig }
                       stroke={SERIES_META.vix.color}
                       strokeWidth={1.5}
                       dot={false}
-                      connectNulls
                     />
                   )}
                 </LineChart>

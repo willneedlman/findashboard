@@ -1,7 +1,7 @@
 """Parse a screenshot of a brokerage/portfolio holdings table into structured
 rows the frontend can review and merge into Portfolio Manager. Vision-only —
-see ai_client.vision_complete (Claude; Groq/Cerebras have no vision model in
-our tier).
+see ai_client.vision_complete, which tries Groq's free vision model first and
+falls back to Claude.
 """
 import base64
 import re

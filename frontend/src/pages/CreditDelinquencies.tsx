@@ -260,7 +260,7 @@ export function CreditDelinquenciesContent() {
               <XAxis dataKey="asof" tick={axisTick} tickLine={false} axisLine={false} tickFormatter={value => String(value).slice(0, 7)} interval="preserveStartEnd" minTickGap={45} />
               <YAxis tick={axisTick} tickLine={false} axisLine={false} width={38} />
               <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: GOLD }} formatter={(value: number, name: string) => [Number(value).toFixed(3), marketIndicators.find(item => item.key === name)?.label ?? name]} />
-              {marketIndicators.map((indicator, index) => <Line key={indicator.key} type="monotone" dataKey={indicator.key} stroke={COLORS[index]} strokeWidth={1.7} dot={false} connectNulls isAnimationActive={false} />)}
+              {marketIndicators.map((indicator, index) => <Line key={indicator.key} type="monotone" dataKey={indicator.key} stroke={COLORS[index]} strokeWidth={1.7} dot={false} isAnimationActive={false} />)}
             </LineChart>
           </ResponsiveContainer></div>
           <div style={legendStyle}>{marketIndicators.map((indicator, index) => <Legend key={indicator.key} color={COLORS[index]} label={indicator.label} />)}</div>
@@ -274,7 +274,7 @@ export function CreditDelinquenciesContent() {
               <XAxis dataKey="asof" tick={axisTick} tickLine={false} axisLine={false} tickFormatter={value => String(value).slice(0, 7)} interval="preserveStartEnd" minTickGap={45} />
               <YAxis tick={axisTick} tickLine={false} axisLine={false} tickFormatter={value => `${value}%`} width={40} />
               <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: GOLD }} formatter={(value: number, name: string) => [`${Number(value).toFixed(1)}%`, lendingIndicators.find(item => item.key === name)?.label ?? name]} />
-              {lendingIndicators.map((indicator, index) => <Line key={indicator.key} type="monotone" dataKey={indicator.key} stroke={COLORS[index + 2]} strokeWidth={1.7} dot={false} connectNulls isAnimationActive={false} />)}
+              {lendingIndicators.map((indicator, index) => <Line key={indicator.key} type="monotone" dataKey={indicator.key} stroke={COLORS[index + 2]} strokeWidth={1.7} dot={false} isAnimationActive={false} />)}
             </LineChart>
           </ResponsiveContainer></div>
           <div style={legendStyle}>{lendingIndicators.map((indicator, index) => <Legend key={indicator.key} color={COLORS[index + 2]} label={indicator.label} />)}</div>
@@ -294,7 +294,7 @@ export function CreditDelinquenciesContent() {
             <XAxis dataKey="asof" tick={axisTick} tickLine={false} axisLine={false} tickFormatter={value => String(value).slice(0, 7)} interval="preserveStartEnd" minTickGap={45} />
             <YAxis tick={axisTick} tickLine={false} axisLine={false} tickFormatter={value => `${value}%`} width={38} />
             <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: GOLD }} formatter={(value: number, name: string) => [fmtPct(Number(value)), classes.find(item => item.asset_class === name)?.label ?? name]} />
-            {classes.map((item, index) => <Line key={item.asset_class} type="monotone" dataKey={item.asset_class} stroke={COLORS[index]} strokeWidth={1.7} dot={false} connectNulls isAnimationActive={false} />)}
+            {classes.map((item, index) => <Line key={item.asset_class} type="monotone" dataKey={item.asset_class} stroke={COLORS[index]} strokeWidth={1.7} dot={false} isAnimationActive={false} />)}
           </LineChart>
         </ResponsiveContainer></div>
         <div style={legendStyle}>{classes.map((item, index) => <Legend key={item.asset_class} color={COLORS[index]} label={item.label} />)}</div>

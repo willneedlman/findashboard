@@ -15,10 +15,19 @@ _GROQ_KEY = os.getenv("GROQ_API_KEY", "")
 _CEREBRAS_KEY = os.getenv("CEREBRAS_API_KEY", "")
 _ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
-# Vision model — none of the text providers above (Groq/Cerebras) have a
-# vision-capable model in our tier, so image tasks (screenshot parsing) go to
-# Claude instead, which reads dense tabular screenshots far more reliably.
-VISION_MODEL = "claude-sonnet-5"
+# Vision. Groq now serves a vision-capable model on the free tier, so image work
+# tries it first and falls back to Claude, which is paid. Qwen was measured on the
+# production portfolio-import prompt at 4/4 exact, including a degraded 630px JPEG
+# — it decodes OCC option symbols, keeps a missing cost basis null, and reads a
+# negative quantity as a short. What it has not been measured against is the messy
+# real thing: broker screenshots with logos, antialiasing and ragged columns. So
+# this is a chain, not a replacement, and Claude still catches what Qwen fumbles.
+#
+# The binding limit is throughput, not accuracy: one 900px screenshot costs ~2.4k
+# prompt tokens against an 8k TPM bucket, so roughly three parses a minute.
+VISION_MODEL_GROQ = "qwen/qwen3.6-27b"
+VISION_MODEL_CLAUDE = "claude-sonnet-5"
+VISION_MODEL = VISION_MODEL_CLAUDE  # retained for callers that name it explicitly
 
 # Model tiers. SMART = deep reasoning (100K TPD free); FAST = structured JSON (500K TPD).
 # The constants are the Groq model ids; each fallback provider maps them to its own.
@@ -35,6 +44,22 @@ _CEREBRAS_MODELS = {
     MODEL_SMART: "gpt-oss-120b",
     MODEL_FAST:  "gpt-oss-120b",
 }
+
+# Groq meters tokens per model, not per organisation: burning a model's budget
+# leaves the others untouched (measured — llama fell 11963→9845 while qwen and
+# gpt-oss held at 7988 and 7927). So work split across these three draws on three
+# separate per-minute buckets instead of queueing behind one.
+MODEL_OSS = "openai/gpt-oss-120b"
+MODEL_QWEN = "qwen/qwen3.6-27b"
+MODEL_TPM = {MODEL_SMART: 12_000, MODEL_OSS: 8_000, MODEL_QWEN: 8_000, MODEL_FAST: 6_000}
+# Ordered by bucket size, so the widest model takes the first and usually largest
+# unit of work when a fan-out has fewer items than models.
+MODEL_POOL = (MODEL_SMART, MODEL_OSS, MODEL_QWEN)
+
+# These spend completion tokens thinking before answering, so a caller's budget
+# has to cover the scratchpad as well as the answer or the content comes back
+# empty. strip_reasoning() removes the trace afterwards.
+_GROQ_REASONING = frozenset({MODEL_OSS, MODEL_QWEN, "openai/gpt-oss-20b"})
 
 _client = None
 _cerebras_client = None
@@ -147,6 +172,14 @@ def _groq_call(model, messages, max_tokens, temperature):
     kwargs: dict = {"model": model, "max_tokens": max_tokens, "messages": messages}
     if temperature is not None:
         kwargs["temperature"] = temperature
+    if model in _GROQ_REASONING:
+        # Headroom for the scratchpad on top of the caller's answer budget. Without
+        # it a reasoning model spends the whole allowance thinking and returns
+        # content=None, which reads downstream as a provider failure rather than a
+        # budget one.
+        kwargs["max_tokens"] = max_tokens + 1024
+        if model.startswith("openai/gpt-oss"):
+            kwargs["reasoning_effort"] = "low"
     return get_client().chat.completions.create(**kwargs)
 
 
@@ -239,33 +272,105 @@ def groq_complete(prompt: str, max_tokens: int = 512, *,
     return (resp.choices[0].message.content or "").strip()
 
 
-def vision_complete(image_b64: str, media_type: str, prompt: str, *,
-                     max_tokens: int = 1024, system: str | None = None,
-                     model: str = VISION_MODEL) -> str:
-    """Single-turn image+text completion via Claude. `image_b64` is raw base64
-    (no data-URL prefix); `media_type` is e.g. "image/png" or "image/jpeg".
-    Returns stripped text — pass through parse_json() for structured output.
-    """
-    def call():
-        kwargs: dict = {
-            "model": model,
-            "max_tokens": max_tokens,
-            "messages": [{
-                "role": "user",
-                "content": [
-                    {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": image_b64}},
-                    {"type": "text", "text": prompt},
-                ],
-            }],
-        }
-        if system:
-            kwargs["system"] = system
-        return get_anthropic().messages.create(**kwargs)
-    resp = with_backoff(call)
+def _groq_vision_call(image_b64: str, media_type: str, prompt: str,
+                      max_tokens: int, system: str | None) -> str:
+    content = [
+        {"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{image_b64}"}},
+        {"type": "text", "text": prompt},
+    ]
+    messages: list[dict] = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": content})
+    resp = get_client().chat.completions.create(
+        model=VISION_MODEL_GROQ, max_tokens=max_tokens, temperature=0, messages=messages,
+    )
+    return strip_reasoning(resp.choices[0].message.content or "")
+
+
+def _claude_vision_call(image_b64: str, media_type: str, prompt: str,
+                        max_tokens: int, system: str | None) -> str:
+    kwargs: dict = {
+        "model": VISION_MODEL_CLAUDE,
+        "max_tokens": max_tokens,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": image_b64}},
+                {"type": "text", "text": prompt},
+            ],
+        }],
+    }
+    if system:
+        kwargs["system"] = system
+    resp = get_anthropic().messages.create(**kwargs)
     return "".join(block.text for block in resp.content if block.type == "text").strip()
 
 
+def vision_complete(image_b64: str, media_type: str, prompt: str, *,
+                     max_tokens: int = 1024, system: str | None = None,
+                     model: str | None = None) -> str:
+    """Single-turn image+text completion. `image_b64` is raw base64 (no data-URL
+    prefix); `media_type` is e.g. "image/png" or "image/jpeg". Returns stripped
+    text — pass through parse_json() for structured output.
+
+    Groq first (free), Claude second (paid). Fail-over covers rate limits, server
+    errors and an empty answer: a vision model that returns nothing has failed
+    just as surely as one that raised, and on the free tier the 8k TPM ceiling
+    makes an empty or refused response the common case rather than an exotic one.
+    """
+    if model:                                          # explicit caller override
+        return _claude_vision_call(image_b64, media_type, prompt, max_tokens, system)
+
+    providers = []
+    if _GROQ_KEY:
+        providers.append(("groq-vision", _groq_vision_call))
+    if _ANTHROPIC_KEY:
+        providers.append(("claude-vision", _claude_vision_call))
+    if not providers:
+        raise HTTPException(503, "No vision provider configured (set GROQ_API_KEY or ANTHROPIC_API_KEY)")
+
+    import metrics
+    last_exc: Exception | None = None
+    for i, (name, call) in enumerate(providers):
+        try:
+            text = with_backoff(
+                lambda c=call: c(image_b64, media_type, prompt, max_tokens, system),
+                retries=1,
+            )
+            if not text:
+                raise RuntimeError("vision model returned no text")
+            metrics.record_ai(name, ok=True)
+            return text
+        except Exception as exc:                       # noqa: BLE001 — re-raised if chain exhausted
+            last_exc = exc
+            metrics.record_ai(name, ok=False, error=_status_str(exc))
+            if i == len(providers) - 1:
+                raise _exhausted(exc, name)
+            logger.warning("vision provider %s failed (%s); failing over to %s",
+                           name, _status_str(exc), providers[i + 1][0])
+    raise last_exc  # unreachable
+
+
+_THINK_BLOCK = re.compile(r"<(think|thinking|reasoning)>.*?</\1>", re.DOTALL | re.IGNORECASE)
+
+
+def strip_reasoning(raw: str) -> str:
+    """Remove a reasoning model's visible scratchpad before parsing.
+
+    Qwen emits a <think> block ahead of its answer on every call, and gpt-oss on
+    the Cerebras fail-over path does the same. Until now that survived only by
+    luck: json.loads fails on the prefix, and the salvage regex below happens to
+    find the real object *provided the scratchpad contains no braces*. Reasoning
+    traces routinely contain draft JSON, in which case the salvage matches from
+    the first brace of a discarded draft and parses the model's rough work as its
+    answer. Cheaper to delete the block outright.
+    """
+    return _THINK_BLOCK.sub("", raw or "").strip()
+
+
 def parse_json(raw: str):
+    raw = strip_reasoning(raw)
     raw = re.sub(r"^```(?:json)?\s*", "", raw.strip())
     raw = re.sub(r"\s*```$", "", raw)
 

@@ -388,16 +388,16 @@ export function CompareContent() {
                     {baseline != null && <ReferenceLine yAxisId="left" y={baseline} stroke={T.muted} strokeDasharray="3 3" />}
                     <Tooltip content={<CompareTooltip norm={norm} overlaySet={overlaySet} ratioUnits={ratioUnits} />} />
                     {assets.filter(t => !hidden.has(t) && data.tickers.includes(t)).map(t => (
-                      <Line key={t} yAxisId="left" type="monotone" dataKey={t} stroke={colorOf(t, assetDef(t))} strokeWidth={1.8} dot={false} isAnimationActive={false} connectNulls />
+                      <Line key={t} yAxisId="left" type="monotone" dataKey={t} stroke={colorOf(t, assetDef(t))} strokeWidth={1.8} dot={false} isAnimationActive={false} />
                     ))}
                     {techLines.map(k => (
-                      <Line key={k} yAxisId="left" type="monotone" dataKey={k} stroke={colorOf(focus, assetDef(focus))} strokeWidth={1} strokeDasharray="4 3" strokeOpacity={0.65} dot={false} isAnimationActive={false} connectNulls />
+                      <Line key={k} yAxisId="left" type="monotone" dataKey={k} stroke={colorOf(focus, assetDef(focus))} strokeWidth={1} strokeDasharray="4 3" strokeOpacity={0.65} dot={false} isAnimationActive={false} />
                     ))}
                     {ratios.map(r => (
-                      <Line key={ratioKey(r)} yAxisId="right" type="monotone" dataKey={ratioKey(r)} stroke={colorOf(ratioKey(r), ratioDef(r))} strokeWidth={1.5} strokeDasharray="1 3" dot={false} isAnimationActive={false} connectNulls />
+                      <Line key={ratioKey(r)} yAxisId="right" type="monotone" dataKey={ratioKey(r)} stroke={colorOf(ratioKey(r), ratioDef(r))} strokeWidth={1.5} strokeDasharray="1 3" dot={false} isAnimationActive={false} />
                     ))}
                     {overlays.filter(o => data.overlays.includes(o)).map(o => (
-                      <Line key={o} yAxisId="right" type="monotone" dataKey={o} stroke={colorOf(o, ovDef(o))} strokeWidth={1.5} strokeDasharray="6 3" dot={false} isAnimationActive={false} connectNulls />
+                      <Line key={o} yAxisId="right" type="monotone" dataKey={o} stroke={colorOf(o, ovDef(o))} strokeWidth={1.5} strokeDasharray="6 3" dot={false} isAnimationActive={false} />
                     ))}
                   </LineChart>
                 </ResponsiveContainer>

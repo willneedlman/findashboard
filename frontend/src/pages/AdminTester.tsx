@@ -223,7 +223,7 @@ interface UserStats {
   users: { id: string; username: string; display_name: string; email: string | null; created_at: string; last_login_at: string | null; login_count: number }[]
 }
 
-type Tab = 'traffic' | 'files' | 'health' | 'users' | 'cache' | 'endpoints' | 'lob' | 'widgets' | 'regression' | 'stress' | 'algo' | 'reports' | 'market' | 'audit'
+type Tab = 'traffic' | 'files' | 'health' | 'users' | 'cache' | 'endpoints' | 'lob' | 'widgets' | 'regression' | 'stress' | 'algo' | 'reports' | 'market' | 'audit' | 'datasets'
 
 interface LOBSnapshot {
   msg: number
@@ -530,7 +530,7 @@ export default function AdminTester() {
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${RED_BORDER}`, marginBottom: 20, overflowX: 'auto' }}>
-          {(['traffic', 'files', 'health', 'users', 'cache', 'endpoints', 'lob', 'widgets', 'regression', 'stress', 'algo', 'reports', 'market', 'audit'] as Tab[]).map(t => (
+          {(['traffic', 'files', 'health', 'users', 'cache', 'endpoints', 'lob', 'widgets', 'regression', 'stress', 'algo', 'reports', 'market', 'audit', 'datasets'] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               background: 'none', border: 'none', borderBottom: tab === t ? `2px solid ${RED}` : '2px solid transparent',
               color: tab === t ? RED : 'var(--theme-text-dim)', fontFamily: 'var(--theme-mono)', fontSize: 10,
@@ -1178,7 +1178,88 @@ export default function AdminTester() {
         )}
 
         {tab === 'audit' && <DataAuditTab secret={secret} />}
+        {tab === 'datasets' && <DatasetFreshnessTab />}
       </div>
     </PageWrapper>
+  )
+}
+
+
+// ── Dataset freshness ────────────────────────────────────────────────────────
+// The offline SQLite datasets are baked into the image and refresh only when
+// somebody runs their ingest. Port performance sat thirty days out of date and
+// nothing anywhere said so, which is the whole reason this tab exists.
+
+interface DatasetRow {
+  id: string; label: string; vendor: string; powers: string; file: string
+  present: boolean; built: string | null; sourceAsOf: string | null
+  sizeMb: number | null; hasMetadataTable: boolean
+  builtAgeDays: number | null; stale: boolean | null
+  rebuild: string; note?: string
+}
+
+function DatasetFreshnessTab() {
+  const [data, setData] = useState<{
+    datasets: DatasetRow[]; staleAfterDays: number; staleCount: number
+    missingMetadataConvention: string[]; note: string
+  } | null>(null)
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    axios.get('/api/observatory/datasets')
+      .then(r => setData(r.data))
+      .catch(e => setErr(e?.response?.data?.detail || 'Could not read dataset inventory'))
+  }, [])
+
+  if (err) return <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-negative, #ef4444)' }}>{err}</div>
+  if (!data) return <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-secondary, #8099b0)' }}>Reading dataset inventory…</div>
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-secondary, #8099b0)' }}>
+        <span style={{ color: data.staleCount ? 'var(--theme-warn, #e8c04a)' : 'var(--theme-positive, #22c55e)', fontWeight: 700, letterSpacing: '0.08em' }}>
+          {data.staleCount} OF {data.datasets.length} STALE
+        </span>
+        <span>threshold {data.staleAfterDays}d since last build</span>
+        {data.missingMetadataConvention.length > 0 && (
+          <span title={'These ingests write no metadata table, so their build date is only a file timestamp and the vendor as-of date is unknown. Fixed on their next rebuild.'} style={{ cursor: 'help', color: 'var(--theme-warn, #e8c04a)' }}>
+            {data.missingMetadataConvention.length} without a freshness marker
+          </span>
+        )}
+      </div>
+
+      <p style={{ margin: 0, maxWidth: 780, fontFamily: 'var(--theme-sans)', fontSize: 11.5, lineHeight: 1.6, color: 'var(--theme-secondary, #8099b0)' }}>{data.note}</p>
+
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse', fontFamily: 'var(--theme-mono)', fontSize: 10.5 }}>
+          <thead>
+            <tr style={{ color: 'var(--theme-secondary, #8099b0)', textAlign: 'left' }}>
+              {['Dataset', 'Built', 'Age', 'Source as of', 'Size', 'Powers'].map(h => (
+                <th key={h} style={{ padding: '6px 10px', borderBottom: `1px solid ${'var(--theme-border, rgba(255,255,255,0.08))'}`, fontWeight: 600, letterSpacing: '0.06em' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.datasets.map(d => (
+              <tr key={d.id} title={[d.note, `Rebuild: cd backend && ${d.rebuild}`].filter(Boolean).join('  ·  ')}
+                style={{ cursor: 'help', opacity: d.present ? 1 : 0.5 }}>
+                <td style={{ padding: '6px 10px', borderBottom: `1px solid ${'var(--theme-border-faint, rgba(255,255,255,0.05))'}`, color: 'var(--theme-text, #d7e3fc)' }}>
+                  {d.label}
+                  <span style={{ color: 'var(--theme-secondary, #8099b0)' }}> · {d.vendor}</span>
+                  {!d.hasMetadataTable && d.present && <span style={{ color: 'var(--theme-warn, #e8c04a)' }}> ⚠</span>}
+                </td>
+                <td style={{ padding: '6px 10px', borderBottom: `1px solid ${'var(--theme-border-faint, rgba(255,255,255,0.05))'}`, color: 'var(--theme-secondary, #8099b0)' }}>{d.built ?? '—'}</td>
+                <td style={{ padding: '6px 10px', borderBottom: `1px solid ${'var(--theme-border-faint, rgba(255,255,255,0.05))'}`, color: d.stale ? 'var(--theme-warn, #e8c04a)' : 'var(--theme-positive, #22c55e)', fontWeight: d.stale ? 700 : 400 }}>
+                  {d.builtAgeDays == null ? '—' : `${d.builtAgeDays}d`}
+                </td>
+                <td style={{ padding: '6px 10px', borderBottom: `1px solid ${'var(--theme-border-faint, rgba(255,255,255,0.05))'}`, color: 'var(--theme-secondary, #8099b0)' }}>{d.sourceAsOf ?? 'unknown'}</td>
+                <td style={{ padding: '6px 10px', borderBottom: `1px solid ${'var(--theme-border-faint, rgba(255,255,255,0.05))'}`, color: 'var(--theme-secondary, #8099b0)' }}>{d.sizeMb == null ? '—' : `${d.sizeMb} MB`}</td>
+                <td style={{ padding: '6px 10px', borderBottom: `1px solid ${'var(--theme-border-faint, rgba(255,255,255,0.05))'}`, color: 'var(--theme-secondary, #8099b0)' }}>{d.powers}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   )
 }

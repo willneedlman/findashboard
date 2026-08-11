@@ -1184,7 +1184,6 @@ function ChartClip({
                 dot={p.chartType === 'dot' ? { r: print ? 3.5 : 4.5, fill: fillFor(s, i), strokeWidth: 0 } : false}
                 strokeWidth={print ? 2.3 : 1.9}
                 strokeDasharray={p.chartType !== 'dot' && i === 1 ? '6 3' : undefined}
-                connectNulls
                 isAnimationActive={false}
               >
                 {p.chartType === 'dot' && showValueLabels && (

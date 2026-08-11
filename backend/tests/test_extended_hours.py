@@ -103,6 +103,11 @@ def test_portfolio_quotes_batch_all_symbols_in_one_download(monkeypatch):
     frame = pd.DataFrame([[100.0, 200.0], [110.0, 190.0]], index=idx, columns=columns)
     monkeypatch.setattr(market_router, "get_download", lambda *args, **kwargs: frame)
     monkeypatch.setattr(market_router, "is_market_open", lambda: True)
+    # With the market open, get_quotes overlays Alpaca's real-time last trade on
+    # the batch close. Unstubbed that reaches the live API, so this test was
+    # asserting fixture values against whatever MSFT happened to be trading at.
+    # Returning no live marks exercises the batch-download path this test is about.
+    monkeypatch.setattr(market_router.alpaca, "get_latest_prices", lambda *args, **kwargs: {})
     market_router.get_quotes.cache_clear()
 
     result = market_router.get_quotes("MSFT,NVDA")

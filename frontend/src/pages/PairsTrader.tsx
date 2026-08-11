@@ -260,7 +260,7 @@ function Cockpit({ d }: { d: Resp }) {
               <ReferenceLine y={-z.entry} stroke={T.gold} strokeDasharray="6 5" />
               <ReferenceLine y={z.exit} stroke={mix(T.text, 9)} strokeDasharray="2 5" />
               <ReferenceLine y={-z.exit} stroke={mix(T.text, 9)} strokeDasharray="2 5" />
-              <Line type="monotone" dataKey="z" stroke={T.blue} strokeWidth={1.5} dot={false} isAnimationActive={false} connectNulls />
+              <Line type="monotone" dataKey="z" stroke={T.blue} strokeWidth={1.5} dot={false} isAnimationActive={false} />
               <Scatter dataKey="mLong" shape={triUp} isAnimationActive={false} />
               <Scatter dataKey="mShort" shape={triDown} isAnimationActive={false} />
               <Scatter dataKey="mExit" shape={sq} isAnimationActive={false} />

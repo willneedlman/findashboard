@@ -214,6 +214,7 @@ def _ingest_daily(conn: sqlite3.Connection, csv_path: str, wanted_permnos: set[s
 
     conn.execute("CREATE INDEX IF NOT EXISTS idx_crsp_daily_permno_date ON crsp_daily(permno, date)")
     conn.commit()
+    _record_freshness(conn)
     log.info("CRSP daily ingestion complete: kept %d rows.", kept)
 
 
@@ -237,3 +238,17 @@ def main(membership_csv: str | None = None, delisting_csv: str | None = None,
 
 if __name__ == "__main__":
     main()
+
+
+def _record_freshness(conn) -> None:
+    """Stamp the build date so observatory.datasets can report this dataset's age.
+
+    Best-effort: a freshness marker is never worth failing a completed rebuild for.
+    """
+    try:
+        import os, sys
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from observatory.datasets import write_metadata
+        write_metadata(conn)
+    except Exception as e:  # noqa: BLE001
+        log.warning("could not record dataset freshness: %s", e)

@@ -3,6 +3,8 @@ import { T } from '../lib/theme'
 import RegionalRead from './RegionalRead'
 import StationGauge, { StationLegend } from './StationGauge'
 import FreshnessChip from './FreshnessChip'
+import ReportCaptureButton from './ReportCaptureButton'
+import { boardClip } from '../lib/reportCaptureRegistry'
 import type { Board as ObservationBoard } from '../lib/observatory'
 
 // Renders any observation board. Every state, gap and freshness verdict is
@@ -66,12 +68,19 @@ export default function ObservationBoardPanel({
         }}>
           {data.subject} — stations
         </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <ReportCaptureButton
+          compact
+          title="Send these stations to a report, carrying their observation dates so the writer states them in the right tense."
+          getClip={() => boardClip(data.subject, data)}
+        />
         <FreshnessChip
           lastObs={data.feedAsOf}
           staleDays={data.stations[0]?.staleDays ?? null}
           stale={staleCount === data.stations.length && data.stations.length > 0}
           quality={data.stations.every(s => s.quality === 'dark') ? 'dark' : 'ok'}
         />
+        </div>
       </div>
 
       <RegionalRead board={data} compact={compact} />

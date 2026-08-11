@@ -73,6 +73,61 @@ export function tableClip(
   return { sourceTab, dataType: 'table', payload: { kind: 'table', title, columns, rows } }
 }
 
+/** A Pattern Grammar board as a table clip that carries its own freshness.
+ *
+ * This is the point of the whole freshness chain: a board can be showing a
+ * reading nobody has refreshed in six weeks, and a clip without provenance
+ * enters the report as a bare figure the writer then states in the present
+ * tense. Attaching the observation date lets it be written as history.
+ */
+export function boardClip(sourceTab: string, board: {
+  subject: string
+  feedAsOf?: string | null
+  stations: {
+    label: string; value: number | null; unit: string; state: string
+    stale: boolean; staleDays: number | null; lastObs: string | null
+    source?: string; gaps: unknown[]
+  }[]
+  read?: { body?: string }
+  viewing?: { partialViewDays?: number } | null
+}): ClipDraft {
+  const rows = board.stations.map(s => [
+    s.label,
+    s.value == null ? '—' : `${s.value} ${s.unit}`.trim(),
+    s.state,
+    s.lastObs ?? 'unknown',
+    s.stale ? `stale ${s.staleDays ?? '?'}d` : 'current',
+  ])
+  const oldest = board.stations.reduce<number | null>(
+    (worst, s) => (s.staleDays != null && (worst == null || s.staleDays > worst) ? s.staleDays : worst), null)
+  const heldOut = board.viewing?.partialViewDays ?? 0
+  const gapCount = board.stations.reduce((n, s) => n + (s.gaps?.length ?? 0), 0)
+  const coverage = [
+    gapCount ? `${gapCount} coverage gap(s), nothing interpolated` : '',
+    heldOut ? `${heldOut} obscured day(s) held out of the level series` : '',
+  ].filter(Boolean).join('; ')
+
+  return {
+    sourceTab,
+    dataType: 'table',
+    payload: {
+      kind: 'table',
+      title: `${board.subject} — stations`,
+      columns: ['Station', 'Reading', 'State', 'Observed', 'Freshness'],
+      rows,
+    },
+    freshness: {
+      lastObs: board.feedAsOf ?? null,
+      staleDays: oldest,
+      // The board is only as current as its least fresh station: a report that
+      // reads the freshest one as the whole picture is the error being prevented.
+      stale: board.stations.some(s => s.stale),
+      source: board.stations[0]?.source ?? '',
+      coverageNote: coverage,
+    },
+  }
+}
+
 export function textClip(sourceTab: string, title: string, body: string): ClipDraft {
   return { sourceTab, dataType: 'text', payload: { kind: 'text', title, body } }
 }

@@ -16,6 +16,14 @@ from observatory import Kind, StationSpec, WindowMode, build_board, eia  # noqa:
 router = APIRouter()
 
 
+@router.get("/datasets")
+def datasets():
+    """Freshness of every offline SQLite dataset baked into the image."""
+    from observatory import datasets as ds
+
+    return ds.inventory()
+
+
 @router.get("/sources")
 def sources():
     """Which board feeds are wired, and what to do about the ones that are not."""

@@ -75,6 +75,19 @@ export interface TextPayload {
 }
 export type ClipPayload = TablePayload | KpiPayload | ChartPayload | TextPayload
 
+/** When the evidence behind a clip was last actually observed.
+ *
+ * A clip is a snapshot of a panel, and a panel can be showing a figure nobody
+ * has refreshed in weeks. Carrying this lets the writer put the number in the
+ * past tense instead of stating it as the present. */
+export interface ClipFreshness {
+  lastObs?: string | null
+  staleDays?: number | null
+  stale?: boolean
+  source?: string
+  coverageNote?: string
+}
+
 export interface ReportClip {
   id: string
   sourceTab: string
@@ -88,6 +101,7 @@ export interface ReportClip {
   researchKey?: string
   sourceRoute?: string
   evidenceDomain?: EvidenceDomain
+  freshness?: ClipFreshness
 }
 
 /** @deprecated Use lookbackPreset — kept for stored-project migration. */
@@ -264,6 +278,7 @@ export interface ClipDraft {
   researchKey?: string
   sourceRoute?: string
   evidenceDomain?: EvidenceDomain
+  freshness?: ClipFreshness
 }
 
 const uid = () =>

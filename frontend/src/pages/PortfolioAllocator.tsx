@@ -887,8 +887,8 @@ export function PortfolioAllocatorContent() {
                       <YAxis yAxisId="price" orientation="left" domain={priceDom} allowDataOverflow tick={{ fontFamily: MONO, fontSize: 9, fill: BLUE }} tickLine={false} axisLine={{ stroke: BORDER }} width={52} tickFormatter={(v: number) => `$${v.toFixed(0)}`} />
                       <YAxis yAxisId="pct" orientation="right" domain={pctDom} allowDataOverflow tick={{ fontFamily: MONO, fontSize: 9, fill: GOLD }} tickLine={false} axisLine={{ stroke: BORDER }} width={44} tickFormatter={(v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(0)}%`} />
                       <Tooltip cursor={CROSSHAIR_CURSOR} content={<PriceTip period={period} />} />
-                      <Line yAxisId="price" type="monotone" dataKey="price" name="Price" stroke={BLUE} strokeWidth={1.6} dot={false} isAnimationActive={false} connectNulls />
-                      <Line yAxisId="pct" type="monotone" dataKey="pct" name="% Change" stroke={GOLD} strokeWidth={1.8} dot={false} isAnimationActive={false} connectNulls />
+                      <Line yAxisId="price" type="monotone" dataKey="price" name="Price" stroke={BLUE} strokeWidth={1.6} dot={false} isAnimationActive={false} />
+                      <Line yAxisId="pct" type="monotone" dataKey="pct" name="% Change" stroke={GOLD} strokeWidth={1.8} dot={false} isAnimationActive={false} />
                     </LineChart>
                   </ResponsiveContainer>
                 )}

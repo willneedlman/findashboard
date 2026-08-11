@@ -310,6 +310,7 @@ def main() -> int:
         _index(conn)
         _ingest_customer_segments(conn)
         conn.commit()
+        _record_freshness(conn)
     finally:
         conn.close()
 
@@ -319,3 +320,17 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+def _record_freshness(conn) -> None:
+    """Stamp the build date so observatory.datasets can report this dataset's age.
+
+    Best-effort: a freshness marker is never worth failing a completed rebuild for.
+    """
+    try:
+        import os, sys
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from observatory.datasets import write_metadata
+        write_metadata(conn)
+    except Exception as e:  # noqa: BLE001
+        log.warning("could not record dataset freshness: %s", e)

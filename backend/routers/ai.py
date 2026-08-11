@@ -9,6 +9,7 @@ import logging
 import re
 import sys, os
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from statistics import median as _median
 from typing import Literal
@@ -2195,6 +2196,21 @@ def plan_report_research(req: ReportResearchPlanRequest):
         "planNotes": notes,
     }
 
+class ClipFreshnessIn(BaseModel):
+    """When the evidence behind a clip was last actually observed.
+
+    A clip is a snapshot of a panel, and a panel can be showing a number nobody
+    has refreshed in six weeks. Without this the writer sees a bare figure and
+    states it as the present, which is the falsification the report rules forbid
+    — the number is real, the implied tense is not.
+    """
+    lastObs: str | None = None        # newest underlying observation, ISO date
+    staleDays: int | None = None      # age of that observation when captured
+    stale: bool | None = None         # past the source's own freshness window
+    source: str = ""
+    coverageNote: str = ""            # e.g. gaps held out, obscured views
+
+
 class ReportClipIn(BaseModel):
     id: str
     sourceTab: str = ""
@@ -2203,6 +2219,7 @@ class ReportClipIn(BaseModel):
     userDescription: str = ""
     dataSummary: str = ""
     evidenceDomain: Literal["portfolio", "issuer", "macro", "benchmark"] = "issuer"
+    freshness: ClipFreshnessIn | None = None
 
 class ReportGenRequest(BaseModel):
     projectName: str = ""
@@ -2331,6 +2348,7 @@ def _fit_report_request(
     sys_prompt: str,
     payload: dict,
     max_tokens: int,
+    ceiling: int | None = None,
 ) -> tuple[dict, int, dict]:
     """Shrink a report request until input plus requested output clears the
     provider ceiling. Returns the payload, the output budget, and a report of
@@ -2341,7 +2359,7 @@ def _fit_report_request(
     first, because `_report_prompt_clips` has already ordered it by decision
     value.
     """
-    budget = int(_REPORT_TPM_CEILING * _REPORT_TPM_SAFETY)
+    budget = int((ceiling or _REPORT_TPM_CEILING) * _REPORT_TPM_SAFETY)
     fixed = _estimate_tokens(sys_prompt)
     shed: list[str] = []
 
@@ -2371,6 +2389,204 @@ def _fit_report_request(
         "droppedClips": shed,
         "outputTokens": max_tokens,
     }
+
+
+_SECTION_ONLY_OVERRIDE = """
+════════════════════════════════════════
+THIS CALL WRITES ONE SECTION — OVERRIDES THE SCHEMA ABOVE
+════════════════════════════════════════
+The JSON schema above describes the finished report. That report is being assembled from
+several calls like this one, running at the same time. Ignore its top-level keys.
+
+Return ONLY this object, with no surrounding text:
+{
+  "templateSection": "%(key)s",
+  "clipId": "<one of the provided clip ids>",
+  "heading": "%(label)s",
+  "design": "visual | narrative | balanced | compact",
+  "analysis": "paragraphs linking figures to the verdict — interpret, do not transcribe. No chart field; the site adds charts.",
+  "keyFigures": [ { "label": "metric", "value": "figure with units" } ]
+}
+
+You are writing this section and nothing else. It must argue: %(argues)s
+
+These sections are being written in parallel by other calls: %(siblings)s
+Do not write them, do not restate their content, and do not open with a summary of the
+whole report. Write only the analysis this section owns, as if the others already exist.
+"""
+
+
+# Reasoning models put the answer after a scratchpad, so a section that would fit
+# a plain model's budget can be truncated on one of these. The floor keeps a
+# section from being squeezed into a sentence when the fan-out has many sections.
+_SECTION_MIN_TOKENS = 700
+_SECTION_MAX_TOKENS = 1_800
+
+
+def _generate_one_section(
+    base_sys_prompt: str,
+    payload: dict,
+    section: dict,
+    siblings: list[str],
+    model: str,
+    max_tokens: int,
+    valid_ids: set[str],
+) -> dict | None:
+    """Write a single template section on a named model."""
+    from ai_client import MODEL_TPM
+
+    sys_prompt = base_sys_prompt + (_SECTION_ONLY_OVERRIDE % {
+        "key": section.get("templateSection", ""),
+        "label": section.get("heading", ""),
+        "argues": section.get("argues", "") or "the evidence this section owns",
+        "siblings": ", ".join(siblings) or "(none)",
+    })
+    fitted, tokens, _ = _fit_report_request(
+        sys_prompt, payload, max_tokens, ceiling=MODEL_TPM.get(model, _REPORT_TPM_CEILING),
+    )
+    messages = [
+        {"role": "system", "content": sys_prompt},
+        {"role": "user", "content": json.dumps(fitted, ensure_ascii=False)},
+    ]
+    resp = groq_chat(messages, model=model, max_tokens=tokens, temperature=0.3)
+    out = parse_json((resp.choices[0].message.content or "").strip())
+    if not isinstance(out, dict) or not str(out.get("analysis", "")).strip():
+        return None
+    # _build_sections drops any section whose clipId is not a real clip, silently.
+    # On the single-call path one model chose every id at once; here each section
+    # is chosen independently by a different model, so one bad id would delete a
+    # whole section from the finished report with nothing to signal it. Treat it
+    # as a failed section instead, which retries on the next model and ultimately
+    # falls the whole fan-out back to the single call.
+    if str(out.get("clipId", "")) not in valid_ids:
+        logger.warning("fanned section %r returned clipId %r, which is not a supplied clip",
+                       section.get("templateSection"), out.get("clipId"))
+        return None
+    out.setdefault("templateSection", section.get("templateSection", ""))
+    out.setdefault("heading", section.get("heading", ""))
+    return out
+
+
+def _generate_sections_fanned(
+    base_sys_prompt: str,
+    payload: dict,
+    outline: dict,
+    length_key: str,
+    depth: str | None,
+    valid_ids: set[str],
+) -> list[dict] | None:
+    """Write every section at once, one per model bucket.
+
+    The single-call writer prices input and requested output against one model's
+    per-minute ceiling, so a long report shrinks its own evidence to fit — the
+    reports with the most to say lose the most. Groq meters per model, so the
+    same work spread over three models draws three separate budgets and no single
+    call approaches a ceiling.
+
+    The outline is what makes this safe: it already fixes the thesis, the section
+    order and what each section argues, so the parallel writers share a spine
+    rather than each inventing one. Returns None if anything fails, and the
+    caller falls back to the single call.
+    """
+    from ai_client import MODEL_POOL
+
+    sections = [s for s in (outline.get("sections") or []) if isinstance(s, dict)]
+    if len(sections) < 2:
+        return None
+
+    total = _report_token_budget(length_key, len(sections), depth)
+    per_section = max(_SECTION_MIN_TOKENS, min(_SECTION_MAX_TOKENS, total // len(sections)))
+    headings = [str(s.get("heading") or s.get("templateSection") or "") for s in sections]
+
+    def write(index_and_section):
+        index, section = index_and_section
+        siblings = [h for j, h in enumerate(headings) if j != index and h]
+        # Start on this section's assigned bucket, then walk the rest. Independent
+        # buckets are the whole point: one model being rate-limited should reroute
+        # a section, not sink the fan-out — especially since the fallback path is a
+        # single call on MODEL_SMART, which is the bucket most likely to be the
+        # exhausted one.
+        order = [MODEL_POOL[(index + offset) % len(MODEL_POOL)]
+                 for offset in range(len(MODEL_POOL))]
+        for attempt, model in enumerate(order):
+            try:
+                written = _generate_one_section(
+                    base_sys_prompt, payload, section, siblings, model, per_section, valid_ids)
+                if written:
+                    return written
+                logger.warning("fanned section %r returned nothing on %s",
+                               section.get("templateSection"), model)
+            except Exception as e:  # noqa: BLE001 — try the next bucket
+                logger.warning("fanned section %r on %s failed (%d/%d): %s",
+                               section.get("templateSection"), model,
+                               attempt + 1, len(order), e)
+        return None
+
+    with ThreadPoolExecutor(max_workers=len(MODEL_POOL)) as pool:
+        written = list(pool.map(write, enumerate(sections)))
+
+    if any(w is None for w in written):
+        logger.warning("section fan-out incomplete (%d/%d); falling back to one call",
+                       sum(w is not None for w in written), len(written))
+        return None
+    return written
+
+
+_REPORT_FRAME_SYSTEM = """You are closing out a report whose sections are already written.
+Read them and return ONLY this JSON object, with no surrounding text:
+{
+  "headline": "<= 90 characters, states the finding",
+  "stance": { "lean": "bullish|bearish|neutral", "conviction": "low|moderate|high",
+              "baseCase": "<short tag or ticker>", "thesis": "one sentence" },
+  "keyResult": { "label": "<label>", "value": "<value>", "context": "<one sentence>" },
+  "executiveSummary": "one tight paragraph stating the verdict and how the evidence jointly justifies it",
+  "conclusion": "restate the finding and confidence, the main risk, and either a supported implication or the evidence limitation"
+}
+Derive everything from the written sections and the supplied context. Do not introduce a
+figure that does not appear in them, and do not contradict them: if the sections disagree,
+say so and lower the conviction rather than inventing a reconciliation."""
+
+
+def _generate_report_frame(
+    payload: dict, written: list[dict], mode_guidance: str,
+) -> dict | None:
+    """Headline, stance, key result and summary, derived from what was written.
+
+    Deliberately runs after the sections rather than before. A frame written from
+    the outline describes the report that was planned; this one describes the
+    report that exists.
+    """
+    digest = [
+        {"heading": s.get("heading", ""), "analysis": str(s.get("analysis", ""))[:1200]}
+        for s in written
+    ]
+    context = {
+        "projectName": payload.get("projectName"),
+        "goal": payload.get("goal"),
+        "purpose": payload.get("purpose"),
+        "timeframe": payload.get("timeframe"),
+        "sections": digest,
+    }
+    messages = [
+        {"role": "system", "content": f"{_REPORT_FRAME_SYSTEM}\n\n{mode_guidance}"},
+        {"role": "user", "content": json.dumps(context, ensure_ascii=False)},
+    ]
+    # MODEL_SMART first because the frame is the judgement call, but it walks the
+    # pool rather than giving up: the sections are already written, and losing all
+    # of them to a busy bucket on the last step would be the most wasteful failure
+    # in the pipeline.
+    from ai_client import MODEL_POOL
+
+    for model in MODEL_POOL:
+        try:
+            resp = groq_chat(messages, model=model, max_tokens=1_200, temperature=0.3)
+            out = parse_json((resp.choices[0].message.content or "").strip())
+            if isinstance(out, dict) and str(out.get("headline", "")).strip():
+                return out
+            logger.warning("report frame on %s returned an unusable shape", model)
+        except Exception as e:  # noqa: BLE001 — try the next bucket
+            logger.warning("report frame on %s failed: %s", model, e)
+    return None
 
 
 def _report_token_budget(length_key: str, section_count: int, depth: str | None) -> int:
@@ -2585,7 +2801,18 @@ _RULES_ALWAYS = [
 ]
 
 # (predicate key, rule) — attached to evidence rather than shipped every time.
+_STALE_EVIDENCE_RULE = (
+    "Some clips carry observedAsOf and isStale. Where isStale is true the figure is real but "
+    "not current: write it in the past tense and name the as-of date the first time it appears "
+    "(\"as of 3 July, inbound dwell stood at 100.7 hours\"). Never present a stale figure as "
+    "today's level, never compute a change between a stale figure and a live one without saying "
+    "the dates differ, and where a conclusion rests on one, say it is only as good as its last "
+    "observation. Where a clip carries coverageNote, respect it: data held out as unobserved "
+    "must not be described as a decline."
+)
+
 _RULES_CONDITIONAL: list[tuple[str, str]] = [
+    ("stale_evidence", _STALE_EVIDENCE_RULE),
     ("portfolio", "Portfolio evidence order: the first portfolio section states portfolio return, benchmark return, active return, both volatilities, and both maximum drawdowns before any causal explanation. Without attribution evidence, say the cause is unresolved."),
     ("portfolio", "Benchmark comparison: call SPY an analytical US equity reference unless the evidence validates it as the policy benchmark. Any similar-risk claim must print both volatilities on matching dates and methods."),
     ("portfolio", "Write the executive summary as three short sentences under 80 words: measured result, strongest supported diagnosis, decision implication."),
@@ -2624,6 +2851,11 @@ def _report_evidence_flags(clips: list["ReportClipIn"], book_level: bool, timefr
         flags.add("macro")
     if re.search(r"next|forward|outlook", (timeframe or "").lower()):
         flags.add("lookforward")
+    # A clip whose evidence is weeks old is still usable, but only in the past
+    # tense. The rule is attached to the evidence rather than carried always, so
+    # a report built entirely from live clips is not lectured about staleness.
+    if any(c.freshness and c.freshness.stale for c in clips):
+        flags.add("stale_evidence")
     return flags
 
 
@@ -3624,7 +3856,7 @@ def _report_prompt_clips(
         clip_cap = 5_000 if re.search(r"\bcurrent allocation\b", clip.title or "", re.I) else data_cap
         if len(data) > clip_cap:
             data = f"{data[:clip_cap].rstrip()} … [truncated]"
-        return {
+        out = {
             "id": clip.id,
             "sourceTool": clip.sourceTab,
             "type": clip.dataType,
@@ -3633,6 +3865,16 @@ def _report_prompt_clips(
             "userInstruction": clip.userDescription,
             "data": data,
         }
+        # Only attach freshness when the clip actually reports it. An absent field
+        # means "unknown", which the writer must not read as "current".
+        f = clip.freshness
+        if f and (f.lastObs or f.staleDays is not None):
+            out["observedAsOf"] = f.lastObs
+            out["observationAgeDays"] = f.staleDays
+            out["isStale"] = bool(f.stale)
+            if f.coverageNote:
+                out["coverageNote"] = f.coverageNote
+        return out
 
     return [compact(clip) for clip in selected]
 
@@ -6378,12 +6620,33 @@ def generate_report(req: ReportGenRequest):
     # Was keyed by preset, which has no entry for a custom size. Scale by the
     # section count and the depth dial so the ceiling tracks the real request.
     max_tokens = _report_token_budget(length_key, section_count, req.depth)
-    payload, max_tokens, fit = _fit_report_request(sys_prompt, payload, max_tokens)
-    if fit["fitted"]:
-        messages[1] = {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}
-    resp = groq_chat(messages, model=MODEL_SMART, max_tokens=max_tokens, temperature=0.3)
-    raw = (resp.choices[0].message.content or "").strip()
-    result = parse_json(raw)
+
+    # Preferred path: write the sections in parallel, one per model bucket, then
+    # close the report from what was actually written. Needs the outline, which is
+    # the shared spine that keeps parallel writers coherent — without it the
+    # single-call writer below still plans and writes in one shot.
+    result = None
+    fit = {"fitted": False, "droppedClips": [], "outputTokens": max_tokens}
+    if outline:
+        written = _generate_sections_fanned(
+            sys_prompt, payload, outline, length_key, req.depth, valid_ids)
+        if written:
+            frame = _generate_report_frame(
+                payload, written,
+                _REPORT_RANGE_GUIDANCE if mode == "range" else _REPORT_OPEN_GUIDANCE,
+            )
+            if frame:
+                result = {**frame, "sections": written}
+                fit["writer"] = "fanned"
+
+    if result is None:
+        payload, max_tokens, fit = _fit_report_request(sys_prompt, payload, max_tokens)
+        if fit["fitted"]:
+            messages[1] = {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}
+        resp = groq_chat(messages, model=MODEL_SMART, max_tokens=max_tokens, temperature=0.3)
+        raw = (resp.choices[0].message.content or "").strip()
+        result = parse_json(raw)
+        fit["writer"] = "single"
     if (
         not isinstance(result, dict)
         or not str(result.get("headline", "")).strip()

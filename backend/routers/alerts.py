@@ -219,6 +219,14 @@ _MACRO_PRINT_CONDITIONS = {"macro_print_above", "macro_print_below"}
 # year, measured from its own peak. Stateless by design — a running peak stored
 # on the row would silently reset whenever the alert was edited.
 _PORTFOLIO_CONDITIONS = {"portfolio_drawdown_above"}
+# Observation-board alerts: fire when a Pattern Grammar station changes state.
+# Better suited to these feeds than a threshold, because the grammar already
+# applies a deadband, excludes stations past their freshness window, and can say
+# why it moved — so the alert carries an explanation instead of a bare crossing.
+# `ticker` holds "<board>:<id>" (e.g. "chokepoint:hormuz"); payload.station may
+# narrow it to one station, otherwise any station changing state fires it.
+_BOARD_CONDITIONS = {"board_state_change"}
+_BOARD_KINDS = {"chokepoint", "flaring", "port"}
 _MACRO_MARQUEE = frozenset({
     "FOMC Decision", "FOMC Minutes", "Fed Chair Press Conference", "Fed Beige Book",
     "CPI (Headline)", "Core CPI (ex Food/Energy)", "Jobs Report (NFP)", "Unemployment Rate",
@@ -280,6 +288,65 @@ def _indicator_triggered_sync(ticker: str, cond: str, threshold: float) -> tuple
     except Exception as e:
         _log.warning("indicator eval %s %s: %s", ticker, cond, e)
         return False, None
+
+
+def _board_state_sync(alert_id, board_ref: str, payload: dict | None) -> tuple[bool, str]:
+    """Fire when a board station's state differs from the last state we saw.
+
+    The previous state is held per alert rather than per board, so two alerts on
+    the same board cannot consume each other's transition. First evaluation only
+    records the baseline: without that a freshly created alert would fire once on
+    whatever the board happened to be doing, which is a state, not a change.
+    """
+    try:
+        from disk_cache import disk_get, disk_set
+    except ImportError:                               # pragma: no cover
+        return False, ""
+    try:
+        kind, _, board_id = (board_ref or "").strip().lower().partition(":")
+        if not board_id:
+            return False, ""
+        if kind == "flaring":
+            from routers.maritime import flaring_board
+            board = flaring_board(site=board_id, days=60)
+        elif kind == "chokepoint":
+            from routers.maritime import chokepoint_board
+            board = chokepoint_board(id=board_id, days=90)
+        elif kind == "port":
+            from routers.maritime import port_board
+            board = port_board(port_id=board_id, days=180)
+        else:
+            return False, ""
+
+        wanted = ((payload or {}).get("station") or "").strip()
+        stations = [s for s in board["stations"] if not wanted or s["key"] == wanted]
+        # A station past its freshness window is excluded: its state is frozen at
+        # whatever it last showed, so a transition into or out of "stale" is a
+        # statement about the feed, not about the corridor.
+        current = {s["key"]: s["state"] for s in stations if not s["stale"]}
+        if not current:
+            return False, ""
+
+        key = f"board_alert_state_{alert_id}"
+        previous = disk_get(key) or {}
+        disk_set(key, current, ttl=90 * 86400)
+        if not previous:
+            return False, ""
+
+        changes = [
+            f"{s['label']} {previous[s['key']]} → {current[s['key']]}"
+            for s in stations
+            if s["key"] in current and s["key"] in previous
+            and previous[s["key"]] != current[s["key"]]
+        ]
+        if not changes:
+            return False, ""
+        read = (board.get("read") or {}).get("body") or ""
+        label = f"{board['subject']}: {'; '.join(changes)}"
+        return True, f"{label}. {read}"[:400]
+    except Exception as e:
+        _log.warning("board alert eval %s: %s", board_ref, e)
+        return False, ""
 
 
 def _slow_triggered_sync(ticker: str, cond: str, threshold: float,
@@ -601,6 +668,15 @@ async def _run_evaluation_loop():
                             continue
                         price, pct, value = dd or 0.0, dd or 0.0, label
                         cooldown = now + _SLOW_COOLDOWN
+                    elif cond in _BOARD_CONDITIONS:
+                        if not slow_due:
+                            continue
+                        triggered, label = await loop.run_in_executor(
+                            _EXECUTOR, _board_state_sync, alert["id"], tkr, alert.get("payload"))
+                        if not triggered:
+                            continue
+                        price, pct, value = 0.0, 0.0, label
+                        cooldown = now + _SLOW_COOLDOWN
                     elif cond in _SLOW_CONDITIONS:
                         if not slow_due:
                             continue
@@ -681,7 +757,7 @@ class AlertCreate(BaseModel):
     payload:   dict | None = None
 
 
-_VALID_CONDITIONS = (_QUOTE_CONDITIONS | _INDICATOR_CONDITIONS | _SLOW_CONDITIONS
+_VALID_CONDITIONS = (_QUOTE_CONDITIONS | _INDICATOR_CONDITIONS | _SLOW_CONDITIONS | _BOARD_CONDITIONS
                      | _STRATEGY_CONDITIONS | _MACRO_CONDITIONS
                      | _MACRO_PRINT_CONDITIONS | _PORTFOLIO_CONDITIONS)
 _MACRO_MODES = {"marquee", "monetary", "high"}
@@ -742,6 +818,18 @@ async def create_alert(req: AlertCreate):
         ticker = label or "Portfolio"    # ticker column = display name
         payload_json = json.dumps({"label": label, "holdings": holdings,
                                    "total_value": float(p.get("total_value") or 100_000)})
+    elif req.condition in _BOARD_CONDITIONS:
+        # The ticker column holds a board reference, not a symbol. It must not go
+        # through the uppercase default below: board and station ids are lowercase
+        # and would stop resolving.
+        ref = (req.ticker or "").strip().lower()
+        kind, _, board_id = ref.partition(":")
+        if kind not in _BOARD_KINDS or not board_id:
+            raise HTTPException(
+                400, f"board alert needs a reference like '<kind>:<id>', kind one of {sorted(_BOARD_KINDS)}")
+        ticker = f"{kind}:{board_id}"
+        station = str((req.payload or {}).get("station") or "").strip()
+        payload_json = json.dumps({"station": station}) if station else None
     elif req.condition in _SENTIMENT_CONDITIONS:
         ticker = _MARKET_TICKER          # market-wide: no per-ticker input
     else:

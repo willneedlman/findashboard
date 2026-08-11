@@ -1082,6 +1082,9 @@ export default function ReportCreator() {
           userDescription: c.userDescription ?? '',
           dataSummary: summarizeClipForAI(c),
           evidenceDomain: c.evidenceDomain ?? 'issuer',
+          // Omitted entirely when the capturing panel does not report it, so the
+          // writer reads absence as "unknown" rather than as "current".
+          ...(c.freshness ? { freshness: c.freshness } : {}),
         })),
       }
       const r = await axios.post('/api/ai/report', payload)

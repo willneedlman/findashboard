@@ -47,6 +47,16 @@ def _stub(monkeypatch, intraday: pd.DataFrame, daily: pd.DataFrame, bars_tf: str
         return intraday if interval == tf else daily
     monkeypatch.setattr(portfolio_router, "get_download", fake_download)
 
+    # Ranges wider than a day are clipped to a window measured back from *today*
+    # (_live_range_start), so a fixture pinned to a fixed date silently loses
+    # points as real time moves past it — this file's dates would otherwise be a
+    # slow fuse. Anchor "today" to the newest bar the fixture actually provides.
+    if not intraday.empty:
+        newest = pd.Timestamp(intraday.index.max())
+        if newest.tzinfo is None:
+            newest = newest.tz_localize("UTC")
+        monkeypatch.setattr(portfolio_router, "_pd_today", lambda: newest)
+
 
 def _daily(day: dt.date, symbols_to_prices: dict) -> pd.DataFrame:
     n = len(next(iter(symbols_to_prices.values())))

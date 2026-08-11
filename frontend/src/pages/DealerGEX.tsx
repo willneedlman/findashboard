@@ -747,7 +747,7 @@ export function DealerGEXContent() {
                       <Bar yAxisId="g" dataKey="net" name="Net GEX" fill={T.chartNeutral} />
                       <Line yAxisId="p" dataKey="spot" name="Spot" stroke={T.text} dot={false} strokeWidth={1.5} />
                       <Line yAxisId="p" dataKey="flip" name="Flip" stroke={T.warn} dot={false} strokeWidth={1.5}
-                        strokeDasharray="4 3" connectNulls />
+                        strokeDasharray="4 3" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>

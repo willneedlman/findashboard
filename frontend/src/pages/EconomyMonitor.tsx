@@ -237,9 +237,9 @@ export function EconomyMonitorContent() {
             <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} formatter={(v: number, n: string) => [v != null ? `${v.toFixed(1)}%` : '—', n]} />
             <Legend wrapperStyle={{ fontFamily: T.mono, fontSize: 10 }} />
             <ReferenceLine y={FED_TARGET} stroke={T.muted} strokeDasharray="5 4" />
-            <Line type="monotone" dataKey="cpi"  name="CPI"      stroke={T.gold} strokeWidth={2} dot={false} connectNulls />
-            <Line type="monotone" dataKey="core" name="Core CPI" stroke={T.blue} strokeWidth={2} dot={false} connectNulls />
-            <Line type="monotone" dataKey="pce"  name="PCE"      stroke={T.pos}  strokeWidth={2} dot={false} connectNulls />
+            <Line type="monotone" dataKey="cpi"  name="CPI"      stroke={T.gold} strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="core" name="Core CPI" stroke={T.blue} strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="pce"  name="PCE"      stroke={T.pos}  strokeWidth={2} dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </Panel>
