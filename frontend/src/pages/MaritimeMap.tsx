@@ -1,5 +1,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import ObservationBoardPanel from '../components/ObservationBoardPanel'
+import StationBoardPanel from '../components/StationBoardPanel'
+import { fetchFlaringBoard, fetchPortBoard } from '../hooks/useApi'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { MapContainer, Polyline, CircleMarker, Marker, Tooltip, useMap, useMapEvents } from 'react-leaflet'
@@ -37,6 +40,7 @@ function buildColors() {
     wpi: t('--theme-secondary', '#6f8bb0'),
     helcom: t('--theme-accent-violet', '#a07cc4'),
     refinery: t('--theme-primary', '#b88a3a'),
+    flare: t('--theme-warn', '#e8894a'),
     positive: t('--theme-positive', '#22C55E'),
     negative: t('--theme-negative', '#EF4444'),
   }
@@ -108,28 +112,30 @@ interface ChokeStat {
   cap7: number | null; anomaly: 'high' | 'low' | null; status: 'normal' | 'watch' | 'congested'; as_of: string
   nowcast?: Nowcast | null
 }
+interface FlareSite { id: string; label: string; unit: string; bbox: number[] }
 interface ReplayFrame { t: number; v: [string, number, number, number, string][] }
 
-type LayerKey = 'tanker' | 'lng' | 'cargo' | 'lanes' | 'pGem' | 'pEia' | 'pOsm' | 'pEmod' | 'terminals' | 'lngTerm' | 'fields' | 'refineries' | 'power' | 'coal' | 'wpi' | 'chokepoints' | 'helcom'
+type LayerKey = 'tanker' | 'lng' | 'cargo' | 'lanes' | 'pGem' | 'pEia' | 'pOsm' | 'pEmod' | 'terminals' | 'lngTerm' | 'fields' | 'refineries' | 'power' | 'coal' | 'wpi' | 'chokepoints' | 'helcom' | 'flares'
 type Preset = 'all' | 'oil' | 'lng' | 'coal' | 'choke'
-type FineKey = 'pipes' | 'terminals' | 'fieldsRef' | 'wpi' | 'helcom'
+type FineKey = 'pipes' | 'terminals' | 'fieldsRef' | 'flares' | 'wpi' | 'helcom'
 
-interface Entity { kind: 'choke' | 'vessel' | 'terminal' | 'port' | 'field'; id: string; name: string; lat: number; lon: number; metric?: string }
+interface Entity { kind: 'choke' | 'vessel' | 'terminal' | 'port' | 'field' | 'flare'; id: string; name: string; lat: number; lon: number; metric?: string }
 
 const OFF: Record<LayerKey, boolean> = {
   tanker: false, lng: false, cargo: false, lanes: false, pGem: false, pEia: false, pOsm: false, pEmod: false,
   terminals: false, lngTerm: false, fields: false, refineries: false, power: false, coal: false,
-  wpi: false, chokepoints: false, helcom: false,
+  wpi: false, chokepoints: false, helcom: false, flares: false,
 }
 const PRESETS: Record<Preset, Record<LayerKey, boolean>> = {
-  all: { ...OFF, tanker: true, lng: true, cargo: true, lanes: true, pGem: true, terminals: true, lngTerm: true, fields: true, chokepoints: true },
-  oil: { ...OFF, tanker: true, lanes: true, pGem: true, terminals: true, fields: true, refineries: true, chokepoints: true },
-  lng: { ...OFF, lng: true, lanes: true, pGem: true, lngTerm: true, chokepoints: true },
+  all: { ...OFF, tanker: true, lng: true, cargo: true, lanes: true, pGem: true, terminals: true, lngTerm: true, fields: true, chokepoints: true, flares: true },
+  oil: { ...OFF, tanker: true, lanes: true, pGem: true, terminals: true, fields: true, refineries: true, chokepoints: true, flares: true },
+  lng: { ...OFF, lng: true, lanes: true, pGem: true, lngTerm: true, chokepoints: true, flares: true },
   coal: { ...OFF, cargo: true, lanes: true, coal: true, chokepoints: true },
   choke: { ...OFF, tanker: true, lng: true, cargo: true, chokepoints: true },
 }
 const FINE_TO_LAYERS: Record<FineKey, LayerKey[]> = {
-  pipes: ['pGem'], terminals: ['terminals'], fieldsRef: ['fields', 'refineries'], wpi: ['wpi'], helcom: ['helcom'],
+  pipes: ['pGem'], terminals: ['terminals'], fieldsRef: ['fields', 'refineries'], flares: ['flares'],
+  wpi: ['wpi'], helcom: ['helcom'],
 }
 const HEAVY: Set<LayerKey> = new Set(['fields', 'refineries', 'power', 'coal', 'wpi', 'lngTerm'])
 const STRIP_IDS = ['hormuz', 'malacca', 'taiwan', 'suez', 'bab', 'panama']
@@ -371,6 +377,11 @@ export function MaritimeMapContent() {
     queryFn: () => axios.get(`/api/maritime/chokepoint-history?ids=${histIds.join(',')}&days=${histDays}`).then(r => r.data),
     enabled: histOpen && histIds.length > 0, staleTime: 30 * 1000, refetchInterval: 60 * 1000,
   })
+  const flaresQ = useQuery<{ available: boolean; reason: string | null; sites: FlareSite[] }>({
+    queryKey: ['mar-flares'], queryFn: () => axios.get('/api/maritime/flaring-sites').then(r => r.data),
+    staleTime: Infinity,
+  })
+
   const portPerfQ = useQuery<{ ports: DeweyPort[]; available: boolean; refresh?: string; frequency?: string }>({
     queryKey: ['port-performance', view?.bbox],
     queryFn: () => axios.get(`/api/maritime/port-performance${view?.bbox ? `?bbox=${view.bbox}` : ''}`).then(r => r.data),
@@ -667,6 +678,21 @@ export function MaritimeMapContent() {
             </CircleMarker>
           })}
 
+          {/* Flaring basins — plotted at the centroid of the polygon the thermal
+              readings are summed over, so the marker matches what is measured. */}
+          {vis.flares && flaresQ.data?.available && flaresQ.data.sites.map(site => {
+            const [west, south, east, north] = site.bbox
+            const lat = (south + north) / 2, lon = (west + east) / 2
+            const short = site.label.replace(/ — .*$/, '')
+            return (
+              <CircleMarker key={`flare-${site.id}`} center={[lat, lon]} radius={6}
+                pathOptions={{ color: C.flare, fillColor: C.flare, fillOpacity: 0.22, weight: 1.5 }}
+                eventHandlers={{ click: () => setInspected({ kind: 'flare', id: site.id, name: short, lat, lon }) }}>
+                <Tooltip><b>{short}</b><br />gas flaring · VIIRS radiant power</Tooltip>
+              </CircleMarker>
+            )
+          })}
+
           {/* Chokepoints — pulsing gold rings, click to inspect */}
           {vis.chokepoints && choke.data?.chokepoints.map(c => (
             <Fragment key={`cp-${c.id}`}>
@@ -726,7 +752,8 @@ export function MaritimeMapContent() {
             </div>
             {([
               ['pipes', 'Pipelines', 'GEM'], ['terminals', 'Export terminals', ''],
-              ['fieldsRef', 'Fields and refineries', 'Z+'], ['wpi', 'World ports', 'Z+'], ['helcom', 'Baltic overlay', 'HELCOM'],
+              ['fieldsRef', 'Fields and refineries', 'Z+'], ['flares', 'Gas flaring', 'VIIRS'],
+              ['wpi', 'World ports', 'Z+'], ['helcom', 'Baltic overlay', 'HELCOM'],
             ] as [FineKey, string, string][]).map(([fk, label, src]) => {
               const on = fineState(fk)
               return (
@@ -847,6 +874,19 @@ export function MaritimeMapContent() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 12 }}>
+                {inspected.kind === 'flare' && (
+                  <ObservationBoardPanel
+                    compact
+                    queryKey={['flaring-board', inspected.id, 60]}
+                    fetcher={() => fetchFlaringBoard(inspected.id, 60)}
+                    emptyLabel="Flaring board unavailable. The thermal feed did not return a usable series."
+                    footnote={
+                      'Radiant power summed over the field polygon. Burned gas, not production: ' +
+                      'a rise can mean more drilling or less capacity to capture it. Days too ' +
+                      'obscured to measure are held out rather than averaged in as low readings.'
+                    }
+                  />
+                )}
                 {inspected.kind === 'choke' && (
                   <>
                     <StatRow k="Oil transit" v={inspectedStat ? `${inspectedStat.oil_mbd.toFixed(1)} Mb/d` : '…'} />
@@ -866,6 +906,7 @@ export function MaritimeMapContent() {
                       </div>
                     )}
                     {inspectedStat?.nowcast && <NowcastBlock nc={inspectedStat.nowcast} C={C} />}
+                    <StationBoardPanel chokepointId={inspected.id} />
                   </>
                 )}
                 {inspected.kind === 'vessel' && (
@@ -881,6 +922,18 @@ export function MaritimeMapContent() {
                 )}
                 {(inspected.kind === 'terminal' || inspected.kind === 'port' || inspected.kind === 'field') && (
                   <StatRow k={inspected.kind === 'field' ? 'Field' : 'Throughput'} v={inspected.metric || '—'} />
+                )}
+                {inspected.kind === 'port' && (
+                  <ObservationBoardPanel
+                    compact
+                    queryKey={['port-board', inspected.id, 180]}
+                    fetcher={() => fetchPortBoard(inspected.id, 180)}
+                    emptyLabel="No port board. Dewey has no usable series for this port in the window."
+                    footnote={
+                      'Import and export are read separately, and throughput is never merged with ' +
+                      'call count: more boxes on fewer ships is a different fact from a busier port.'
+                    }
+                  />
                 )}
               </div>
 

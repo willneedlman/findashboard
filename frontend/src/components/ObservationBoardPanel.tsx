@@ -17,10 +17,13 @@ export interface ObservationBoardPanelProps {
   enabled?: boolean
   footnote?: string
   emptyLabel?: string
+  // Embedded inside another panel's spare space rather than owning a panel:
+  // tighter gauges, and the standing explanation drops to a tooltip.
+  compact?: boolean
 }
 
 export default function ObservationBoardPanel({
-  queryKey, fetcher, enabled = true, footnote, emptyLabel,
+  queryKey, fetcher, enabled = true, footnote, emptyLabel, compact = false,
 }: ObservationBoardPanelProps) {
   const { data, isLoading, error } = useQuery<ObservationBoard>({
     queryKey,
@@ -71,7 +74,7 @@ export default function ObservationBoardPanel({
         />
       </div>
 
-      <RegionalRead board={data} />
+      <RegionalRead board={data} compact={compact} />
 
       {data.coverage && (
         <div
@@ -107,18 +110,18 @@ export default function ObservationBoardPanel({
         </div>
       )}
 
-      <StationLegend />
+      <StationLegend title={compact ? footnote : undefined} />
 
       <div style={{
         display: 'grid', gap: 10,
-        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+        gridTemplateColumns: `repeat(auto-fit, minmax(${compact ? 190 : 240}px, 1fr))`,
       }}>
         {data.stations.map(station => (
-          <StationGauge key={station.key} station={station} showCaption />
+          <StationGauge key={station.key} station={station} height={compact ? 58 : 84} />
         ))}
       </div>
 
-      <p style={{
+      {compact ? null : <p style={{
         margin: 0, fontFamily: T.label, fontSize: 10.5, lineHeight: 1.6, color: T.muted,
       }}>
         {footnote || (
@@ -128,7 +131,7 @@ export default function ObservationBoardPanel({
             nothing is drawn across them.
           </>
         )}
-      </p>
+      </p>}
     </div>
   )
 }

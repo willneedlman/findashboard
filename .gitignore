@@ -58,3 +58,7 @@ smoke-test.png
 backend/data/cache/
 *.csv
 data/*.csv
+
+# Accrued at runtime by observatory.air_cargo_history; never backfilled, so a
+# committed copy would be one machine's history masquerading as the server's.
+data/air_cargo_history.json

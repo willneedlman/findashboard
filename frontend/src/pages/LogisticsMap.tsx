@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
+import ObservationBoardPanel from '../components/ObservationBoardPanel'
+import { fetchAirCargoBoard, fetchFreightBoard } from '../hooks/useApi'
 import axios from 'axios'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { MapContainer, CircleMarker, Marker, Polyline, Tooltip, useMap, useMapEvents } from 'react-leaflet'
@@ -93,7 +95,7 @@ interface MF { lsci?: { economies?: Econ[]; _stale?: boolean }; wci?: { composit
 interface FM { inventory_sales?: { latest?: { ratio: number }; series?: { ratio: number }[]; _stale?: boolean }; freight_indices?: { indices?: Record<string, { latest?: { value: number }; series?: { value: number }[] }>; _stale?: boolean } }
 interface Vessel { mmsi: string; lat?: number; lon?: number; category?: string; name?: string; destination?: string; sog?: number; heading?: number; cog?: number }
 interface Flight { icao24: string; callsign: string; operator: string; lat: number; lon: number; alt_m?: number; vel_ms?: number; heading?: number; origin_country?: string }
-type Insp = { kind: 'ship'; v: Vessel } | { kind: 'flight'; f: Flight }
+type Insp = { kind: 'ship'; v: Vessel } | { kind: 'flight'; f: Flight } | { kind: 'freight' } | { kind: 'hub'; icao: string; city: string }
 interface SupplierFeature { type: 'Feature'; geometry: { type: 'Point'; coordinates: [number, number] }; properties: { company_name: string | null; company_industry: string | null; product_names: string | null } }
 interface SupplierFC { type: string; features?: SupplierFeature[]; count: number; available: boolean }
 interface Facets { industries?: string[]; products?: string[]; available: boolean }
@@ -244,7 +246,8 @@ export default function LogisticsMap() {
             <CircleMarker key={`c-${id}`} center={[g.lat, g.lon]} radius={radius(t, maxChoke)} pathOptions={{ color: CHOKE, fillColor: CHOKE, fillOpacity: 0.4, weight: 1 }}><Tooltip>{g.name}{t ? ` · ${Math.round(t)} transits/d` : ''}</Tooltip></CircleMarker>
           )})}
           {layers.air && hubs.map(h => { const a = AIRPORTS[h.icao]; return a && (
-            <CircleMarker key={`a-${h.icao}`} center={a} radius={radius(h.movements, maxAir)} pathOptions={{ color: AIR, fillColor: AIR, fillOpacity: 0.4, weight: 1 }}><Tooltip>{h.city} ({h.icao}) · {h.movements} freighter moves/24h</Tooltip></CircleMarker>
+            <CircleMarker key={`a-${h.icao}`} center={a} radius={radius(h.movements, maxAir)} pathOptions={{ color: AIR, fillColor: AIR, fillOpacity: 0.4, weight: 1 }}
+              eventHandlers={{ click: () => setInsp({ kind: 'hub', icao: h.icao, city: h.city }) }}><Tooltip>{h.city} ({h.icao}) · {h.movements} freighter moves/24h</Tooltip></CircleMarker>
           )})}
         </MapContainer>
 
@@ -255,8 +258,8 @@ export default function LogisticsMap() {
         </div>
 
         {/* Left column: VIEW + LEGEND (bottom) */}
-        <div style={{ position: 'absolute', top: 56, left: 12, bottom: 12, zIndex: 520, width: 210, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
-          <div style={{ pointerEvents: 'auto', background: panel, border: `1px solid ${L.border}`, padding: '12px 12px 8px' }}>
+        <div className="lm-left-rail" style={{ position: 'absolute', top: 56, left: 12, bottom: 12, zIndex: 520, width: 210, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none', overflowY: 'auto', overflowX: 'hidden' }}>
+          <div style={{ flex: 'none', pointerEvents: 'auto', background: panel, border: `1px solid ${L.border}`, padding: '12px 12px 8px' }}>
             <div style={{ ...eyebrow, color: 'var(--theme-text-dim, #56708a)', marginBottom: 6 }}>View</div>
             {VIEW.map(([k, lbl, c, n]) => { const on = layers[k]; return (
               <div key={k} onClick={() => setLayers(s => ({ ...s, [k]: !s[k] }))}
@@ -266,7 +269,7 @@ export default function LogisticsMap() {
               </div>
             )})}
           </div>
-          <div style={{ pointerEvents: 'auto', background: panel, border: `1px solid ${L.border}`, padding: '12px 12px 11px' }}>
+          <div style={{ flex: 'none', pointerEvents: 'auto', background: panel, border: `1px solid ${L.border}`, padding: '12px 12px 11px' }}>
             <div style={{ ...eyebrow, color: 'var(--theme-text-dim, #56708a)', marginBottom: 8 }}>Filters</div>
             <label style={selLbl}>Suppliers · product class</label>
             <select value={supIndustry} onChange={e => setSupIndustry(e.target.value)} style={{ ...selStyle, width: '100%', marginBottom: 6 }}>
@@ -276,7 +279,7 @@ export default function LogisticsMap() {
             <input value={supProduct} onChange={e => setSupProduct(e.target.value)} placeholder="product keyword…" style={{ ...selStyle, width: '100%' }} />
             {supQ.data && !supQ.data.available && <div style={{ fontFamily: L.sans, fontSize: 11, color: L.faint, marginTop: 7, lineHeight: 1.5 }}>Supplier data not yet ingested. Run the Veridion ETL with a valid DEWEY_API_KEY.</div>}
           </div>
-          <div style={{ marginTop: 'auto', pointerEvents: 'auto', background: panel, border: `1px solid ${L.border}`, padding: '13px 16px' }}>
+          <div style={{ flex: 'none', marginTop: 'auto', pointerEvents: 'auto', background: panel, border: `1px solid ${L.border}`, padding: '13px 16px' }}>
             <div style={{ fontFamily: L.mono, fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', color: L.text, marginBottom: 9 }}>LEGEND</div>
             {([['Supplier node', SUPPLIER, 'dot'], ['Customer link', CUSTLINK, 'line'], ['Cargo ship', VESSEL, 'ship'], ['Cargo flight', FLIGHT, 'jet'], ['Air cargo hub', AIR, 'dot'], ['Chokepoint', CHOKE, 'dot'], ['Connectivity port', PORT, 'dot']] as [string, string, 'ship' | 'jet' | 'dot' | 'line'][]).map(([lbl, c, t]) => (
               <div key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 9, lineHeight: '22px' }}>
@@ -289,7 +292,10 @@ export default function LogisticsMap() {
                 <span style={{ fontFamily: L.sans, fontSize: 11.5, color: L.sec }}>{lbl}</span>
               </div>
             ))}
-            <div style={{ fontFamily: L.sans, fontSize: 11, color: L.faint, marginTop: 8, lineHeight: 1.5 }}>Marker size ∝ value in layer. Click a ship or flight to inspect. Customer links: real disclosed relationships (FAS 131), sparse. Only pairs where both companies are geocoded.</div>
+            <div
+              title={'Marker size is proportional to that layer\'s value. Click a ship, flight or hub to inspect it. Customer links are real disclosed relationships (FAS 131) and are sparse: only pairs where both companies are geocoded appear.'}
+              style={{ fontFamily: L.sans, fontSize: 10.5, color: L.faint, marginTop: 8, paddingTop: 7, borderTop: `1px solid ${L.border}`, lineHeight: 1.45, cursor: 'help' }}
+            >Marker size ∝ layer value · click to inspect</div>
           </div>
         </div>
 
@@ -298,10 +304,38 @@ export default function LogisticsMap() {
           {insp && (
             <div style={{ marginBottom: 12, paddingBottom: 10, borderBottom: `1px solid ${L.border}` }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ ...eyebrow }}>{insp.kind === 'ship' ? 'Cargo ship' : 'Cargo flight'}</span>
+                <span style={{ ...eyebrow }}>{insp.kind === 'ship' ? 'Cargo ship' : insp.kind === 'flight' ? 'Cargo flight' : insp.kind === 'hub' ? 'Cargo hub' : 'US domestic freight'}</span>
                 <button onClick={() => setInsp(null)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: L.mono, fontSize: 12, color: L.faint }}>x</button>
               </div>
-              {insp.kind === 'ship' ? (<>
+              {insp.kind === 'hub' ? (
+                <div style={{ marginTop: 8 }}>
+                  <ObservationBoardPanel
+                    compact
+                    queryKey={['air-cargo-board', insp.icao]}
+                    fetcher={() => fetchAirCargoBoard(insp.icao)}
+                    emptyLabel="No accrued history for this hub yet."
+                    footnote={
+                      'Community ADS-B undercounts, so this is a floor on real traffic rather ' +
+                      'than a census. Days far below the hub baseline are held out as receiver ' +
+                      'gaps rather than counted as quiet days.'
+                    }
+                  />
+                </div>
+              ) : insp.kind === 'freight' ? (
+                <div style={{ marginTop: 8 }}>
+                  <ObservationBoardPanel
+                    compact
+                    queryKey={['freight-board']}
+                    fetcher={fetchFreightBoard}
+                    emptyLabel="Freight board unavailable. No usable series returned."
+                    footnote={
+                      'Shipments and expenditures are kept apart: spend rising on flat loads is ' +
+                      'price, not volume. Every series here is monthly and revised, so the window ' +
+                      'counts observations rather than days.'
+                    }
+                  />
+                </div>
+              ) : insp.kind === 'ship' ? (<>
                 <div style={{ fontFamily: L.sans, fontSize: 14, fontWeight: 700, color: L.text, margin: '6px 0 8px' }}>{insp.v.name || `MMSI ${insp.v.mmsi}`}</div>
                 {irow('Type', 'Cargo / dry bulk')}
                 {irow('Destination', insp.v.destination || '—')}
@@ -340,7 +374,9 @@ export default function LogisticsMap() {
         {/* Docked freight-macro tape — energy-map bottom-strip style */}
         <div style={{ height: 44, flex: 'none', display: 'grid', gridTemplateColumns: `repeat(${TAPE.length}, 1fr)`, background: 'var(--theme-surface, #0d1826)', borderTop: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)' }}>
           {TAPE.map((t, i) => (
-            <div key={t.k} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '0 14px', borderLeft: i ? '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))' : 'none', minWidth: 0, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }} title="Monthly · seasonally adjusted · Census, FRED, Drewry">
+            <div key={t.k} onClick={() => setInsp({ kind: 'freight' })}
+              style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '0 14px', cursor: 'pointer', borderLeft: i ? '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))' : 'none', minWidth: 0, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}
+              title="Monthly · seasonally adjusted · Census, FRED, Drewry. Click to read each series on its own, with freshness and revisions.">
               <span style={{ fontFamily: L.mono, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', color: L.faint, flex: 'none' }}>{t.label}</span>
               <span style={{ fontFamily: L.mono, fontSize: 13, fontWeight: 700, color: L.text, flex: 'none' }}>{t.val != null ? t.val.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}</span>
               <span style={{ fontFamily: L.mono, fontSize: 8, color: L.sec, flex: 'none' }}>{t.unit}</span>

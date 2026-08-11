@@ -311,7 +311,7 @@ function Board({ data }: { data: Resp }) {
 
       {/* Map + drill dock */}
       <div style={{ display: 'flex', gap: 10 }}>
-        <Panel label="Transit Stress Map" meta="click a strait to drill it · drag to pan · scroll to zoom · double click to reset" style={{ flex: 1, minWidth: 0, padding: '32px 10px 8px' }}>
+        <Panel label="Transit Stress Map" meta="click a strait to drill it · drag to pan · scroll to zoom · double click to reset" style={{ flex: 1, minWidth: 0, padding: '32px 10px 8px', display: 'flex', flexDirection: 'column' }}>
           <div style={{ position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', right: 10, top: 10, display: 'flex', flexDirection: 'column', gap: 6, zIndex: 10 }}>
           <button
@@ -489,20 +489,19 @@ function Board({ data }: { data: Resp }) {
             <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: MONO, fontSize: 9, color: T.gold }}><span style={{ width: 11, height: 11, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: T.gold, color: T.bg, fontSize: 8, fontWeight: 900 }}>!</span>outdated baseline</span>
             <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 9, color: T.textDim }}>Mb/d = seaborne oil transit · deltas vs prior week</span>
           </div>
+          {/* The map is intrinsically short while the drill dock runs the full
+              height of its ticker list, which left the panel with a large dead
+              band. The selected strait's stations fill it, so the space carries
+              the detail for whatever the map has selected instead of nothing. */}
+          {sel && (
+            <div style={{ flex: 1, minHeight: 0, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.borderFaint}` }}>
+              <StationBoardPanel chokepointId={sel.id} />
+            </div>
+          )}
         </Panel>
 
         {sel && <DrillDock c={sel} navigate={navigate} />}
       </div>
-
-      {sel && (
-        <Panel
-          label="Station Board"
-          meta="each transit measure read on its own · descriptive, not a forecast"
-          style={{ padding: '30px 12px 14px' }}
-        >
-          <StationBoardPanel chokepointId={sel.id} />
-        </Panel>
-      )}
 
       {/* Filters */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>

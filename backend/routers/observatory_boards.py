@@ -62,6 +62,136 @@ def sources():
     }
 
 
+_FREIGHT_STATIONS = (
+    ("cass_shipments", "Cass shipments", Kind.FLOW, "index",
+     "Freight shipment volume across the Cass payment network. Counts loads, not dollars."),
+    ("cass_expenditures", "Cass expenditures", Kind.FLOW, "index",
+     "Freight spend across the same network. Read against shipments: spend rising on flat "
+     "loads is price, not volume."),
+    ("truck_tonnage", "Truck tonnage", Kind.FLOW, "index",
+     "ATA truckload tonnage hauled."),
+    ("inventory_sales", "Inventories to sales", Kind.STOCK, "ratio",
+     "Total business inventories divided by sales. Rising means goods are piling up "
+     "faster than they clear."),
+)
+
+
+@router.get("/air-cargo-hubs")
+def air_cargo_hubs():
+    """Hubs with accrued history, and how many days each has."""
+    from observatory import air_cargo_history
+
+    hubs = air_cargo_history.hubs_known()
+    return {
+        "hubs": hubs,
+        "note": "History accrues from the day sampling started; nothing is backfilled. "
+                "A hub needs roughly three weeks before its baseline is worth trusting.",
+    }
+
+
+@router.get("/air-cargo-board")
+def air_cargo_board(
+    icao: str = Query(..., description="hub ICAO code (see /air-cargo-hubs)"),
+):
+    """One cargo hub's freighter movements, read against its own baseline.
+
+    OpenSky is community ADS-B with uneven receiver coverage, so a hub can look
+    idle because nobody heard it. Days far below the hub's own median are held
+    out as unheard rather than averaged in, the same rule the flaring board uses
+    for cloud.
+    """
+    from observatory import air_cargo_history
+
+    series = air_cargo_history.hub_series(icao)
+    if not series["points"]:
+        raise HTTPException(503, (
+            f"No accrued history for {series['icao']} yet. Movements are sampled "
+            "forward from when the sampler started and are never backfilled."
+        ))
+
+    spec = StationSpec(
+        "movements", f"{series['city']} freighter movements", Kind.FLOW, "/day",
+        caption="Freighter arrivals and departures over a settled 24h window. "
+                "Community ADS-B undercounts, so this is a floor on real traffic, not a census.",
+        source="OpenSky (community ADS-B)", stale_after_days=3,
+    )
+    board = build_board(f"{series['city']} ({series['icao']})", [spec],
+                        {"movements": series["points"]})
+    board["viewing"] = {
+        "medianDetections": series["medianMoves"],
+        "partialViewDays": len(series["partialViews"]),
+        "partialViewThreshold": series.get("partialViewThreshold"),
+        "filtering": series["partialViewFiltering"],
+        "note": "Days whose movement count fell far below this hub's baseline are held out "
+                "as receiver gaps rather than counted as quiet days.",
+    }
+    board["sampledDays"] = series["sampledDays"]
+    board["source"] = "OpenSky (community ADS-B)"
+    return board
+
+
+@router.get("/freight-board")
+def freight_board():
+    """US domestic freight as independent gauges.
+
+    Every series here is monthly and revised, so the window counts observations
+    rather than days; judged against a daily yardstick they would all read steady
+    forever. Shipments and expenditures are kept apart on purpose — merged into a
+    'freight activity index' they can no longer tell volume from price.
+    """
+    from logistics import free_ingest
+
+    tracks: dict[str, list] = {}
+    failures: list[str] = []
+
+    try:
+        indices = (free_ingest.freight_indices() or {}).get("indices") or {}
+    except Exception as e:                            # noqa: BLE001 — partial board still useful
+        indices, failures = {}, [f"FRED freight indices: {e}"]
+    for key in ("cass_shipments", "cass_expenditures", "truck_tonnage"):
+        entry = indices.get(key) or {}
+        tracks[key] = [
+            {"d": point["date"], "v": point["value"]}
+            for point in (entry.get("series") or [])
+            if point.get("date") and point.get("value") is not None
+        ]
+
+    try:
+        mtis = free_ingest.inventory_sales() or {}
+        # MTIS reports a month as YYYY-MM. It is pinned to the first of the month
+        # rather than spread across it, because attributing a month's ratio to any
+        # single day would be an interpolation.
+        tracks["inventory_sales"] = [
+            {"d": f"{row['time']}-01" if len(str(row["time"])) == 7 else str(row["time"]),
+             "v": row["ratio"]}
+            for row in (mtis.get("series") or [])
+            if row.get("time") and row.get("ratio") is not None
+        ]
+    except Exception as e:                            # noqa: BLE001
+        tracks["inventory_sales"] = []
+        failures.append(f"Census MTIS: {e}")
+
+    if not any(tracks.values()):
+        raise HTTPException(502, "No usable freight series returned")
+
+    specs = [
+        StationSpec(
+            key, label, kind, unit, caption=caption,
+            source="FRED" if key != "inventory_sales" else "US Census MTIS",
+            # Cass and MTIS publish weeks after month end and revise afterwards.
+            stale_after_days=120, window=3,
+            window_mode=WindowMode.OBSERVATIONS, expected_interval_days=30,
+        )
+        for key, label, kind, unit, caption in _FREIGHT_STATIONS
+        if tracks.get(key)
+    ]
+    out = build_board("US domestic freight", specs, tracks)
+    out["source"] = "FRED (Cass, ATA) + US Census MTIS"
+    if failures:
+        out["failures"] = failures
+    return out
+
+
 @router.get("/energy-board")
 def energy_board(
     board: str = Query("us_crude", description="board id (us_crude, us_natgas)"),

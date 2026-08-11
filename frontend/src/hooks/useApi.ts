@@ -29,6 +29,18 @@ export const fetchFlaringSites = () =>
 export const fetchEnergyBoard = (board: string, length = 120) =>
   api.get('/observatory/energy-board', { params: { board, length } }).then(r => r.data)
 
+// One port as independent import/export gauges (Dewey daily performance).
+export const fetchPortBoard = (portId: string, days = 180) =>
+  api.get('/maritime/port-board', { params: { port_id: portId, days } }).then(r => r.data)
+
+// US domestic freight indices as an observation board.
+export const fetchFreightBoard = () =>
+  api.get('/observatory/freight-board').then(r => r.data)
+
+// One cargo hub's freighter movements, read against its own ADS-B baseline.
+export const fetchAirCargoBoard = (icao: string) =>
+  api.get('/observatory/air-cargo-board', { params: { icao } }).then(r => r.data)
+
 export const fetchObservatorySources = () =>
   api.get('/observatory/sources').then(r => r.data)
 

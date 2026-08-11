@@ -1122,22 +1122,43 @@ def _board_specs(meta: dict) -> list:
     return [
         StationSpec(
             "total", "Gate transits", Kind.FLOW, "/day",
-            caption=f"Ships crossing {meta['name']} per day, counted from transponder reports.",
+            caption=(
+                f"How many ships crossed {meta['name']} per day, counted from the transponder "
+                "signal each vessel broadcasts. This is a headcount: a tug and a supertanker "
+                "each count as one, which is why it is read alongside transiting capacity."
+            ),
             source="AIS via IMF PortWatch", stale_after_days=5,
         ),
         StationSpec(
             "tanker", "Tanker transits", Kind.FLOW, "/day",
-            caption="Crude and product tankers only. Read against the crude route, not total traffic.",
+            caption=(
+                "Crude and product tankers only. This is the oil-specific count, so it moves "
+                "for reasons total traffic does not: a refinery outage or a sanctions change "
+                "shows up here while container traffic carries on unchanged."
+            ),
             source="AIS via IMF PortWatch", stale_after_days=5,
         ),
         StationSpec(
             "cargo", "Cargo transits", Kind.FLOW, "/day",
-            caption="Dry bulk and container ships only.",
+            caption=(
+                "Dry bulk and container ships only, so it tracks manufactured goods and raw "
+                "materials rather than energy. Divergence from the tanker count is the useful "
+                "signal: one moving without the other points at a cause specific to that trade."
+            ),
             source="AIS via IMF PortWatch", stale_after_days=5,
         ),
         StationSpec(
             "cap", "Transiting capacity", Kind.FLOW, "kt/day",
-            caption="Deadweight tonnage crossing per day. Rises when ships get bigger, not only when more of them cross.",
+            caption=(
+                "The total carrying capacity of the ships that crossed, in thousands of "
+                "deadweight tonnes per day. Deadweight tonnage is how much a ship CAN carry "
+                "fully loaded, not how much it is actually carrying, so this measures the size "
+                "of the vessels using the strait rather than the value of the cargo. Read "
+                "against gate transits it separates two very different situations: capacity "
+                "rising while transits fall means fewer but larger ships, and capacity falling "
+                "while transits hold means the same traffic in smaller hulls. A headcount alone "
+                "cannot tell those apart."
+            ),
             source="AIS via IMF PortWatch", stale_after_days=5,
         ),
     ]
@@ -1199,6 +1220,82 @@ def chokepoint_board(
 
     board["chokepoint"] = {k: meta[k] for k in ("id", "name", "lat", "lon", "oil_mbd", "note")}
     board["source"] = "IMF PortWatch"
+    board["days"] = days
+    return board
+
+
+_PORT_STATIONS = (
+    ("import_dwell", "Import dwell", "stock", "hours",
+     "Hours an inbound vessel spends at the port. Rising means the berth is holding ships longer."),
+    ("import_teu", "Import throughput", "flow", "TEU/day",
+     "Inbound container volume moved per day."),
+    ("import_vessels", "Import calls", "flow", "/day",
+     "Inbound vessels handled per day. Read against import throughput: volume up on fewer "
+     "calls means bigger ships, not a busier port."),
+    ("export_dwell", "Export dwell", "stock", "hours",
+     "Hours an outbound vessel spends at the port."),
+    ("export_teu", "Export throughput", "flow", "TEU/day",
+     "Outbound container volume moved per day."),
+    ("export_vessels", "Export calls", "flow", "/day",
+     "Outbound vessels handled per day."),
+)
+
+
+@router.get("/port-board")
+def port_board(
+    port_id: str = Query(..., description="port id (see /port-performance)"),
+    days: int = Query(180, ge=14, le=730),
+):
+    """One port as six independent gauges.
+
+    Import and export are never merged, and throughput is never merged with call
+    count: a port moving more boxes on fewer ships is a different fact from a
+    port that got busier, and a single congestion index cannot tell you which.
+    """
+    from observatory import Kind, StationSpec, build_board, copernicus
+
+    data = port_performance.board_series(port_id, days)
+    if not data["available"]:
+        raise HTTPException(503, "Port performance data is not installed on this deployment")
+    if not data.get("port"):
+        raise HTTPException(404, f"Unknown port '{port_id}'")
+    if not any(data["tracks"].values()):
+        raise HTTPException(502, f"No usable series for '{port_id}' in the last {days} days")
+
+    # A direction this port never reports is a schema fact, not a feed that went
+    # quiet, so it is left off the board and stated in metadata rather than shown
+    # as gauges that are permanently dark.
+    specs = [
+        StationSpec(key, label, Kind(kind), unit, caption=caption,
+                    # Dewey publishes daily rows roughly five weeks in arrears. A
+                    # ten-day window brands every port stale forever and buries the
+                    # signal; this flags a feed that has actually stalled.
+                    source="Dewey Data", stale_after_days=55)
+        for key, label, kind, unit, caption in _PORT_STATIONS
+        if data["tracks"].get(key)
+    ]
+    port = data["port"]
+    board = build_board(port["name"], specs, data["tracks"])
+    board["directions"] = sorted({
+        direction for key, direction, _ in port_performance.BOARD_TRACKS
+        if data["tracks"].get(key)
+    })
+    if board["directions"] == ["import"]:
+        board["directionsNote"] = (
+            "This port reports inbound movements only. Most ports in the feed carry "
+            "both directions, so the absence here is a gap in the source rather than "
+            "a port that stopped shipping."
+        )
+
+    lat, lon = port.get("latitude"), port.get("longitude")
+    if lat is not None and lon is not None:
+        coverage = copernicus.coverage_by_day(float(lat), float(lon), days=min(days, 90))
+        for station in board["stations"]:
+            station["gaps"] = copernicus.attribute_gaps(station["gaps"], coverage)
+        board["coverage"] = copernicus.coverage_summary(coverage, days=min(days, 90))
+
+    board["port"] = port
+    board["source"] = "Dewey Data"
     board["days"] = days
     return board
 

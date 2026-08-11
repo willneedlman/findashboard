@@ -68,3 +68,60 @@ def history(port_id: str, days: int = 180) -> dict:
             (port_id, cutoff),
         ).fetchall()
     return {"port_id": port_id, "series": [dict(r) for r in rows], "available": True, "source": "Dewey Data"}
+
+
+# Each metric is kept on its own track per direction. Import dwell and export
+# dwell answer different questions at the same berth, and TEU against vessel
+# count is the pair that separates "more boxes" from "bigger ships" — a
+# distinction that disappears the moment they are averaged into a port index.
+BOARD_TRACKS: tuple[tuple[str, str, str], ...] = (
+    ("import_dwell", "import", "performance_hours"),
+    ("import_teu", "import", "teu"),
+    ("import_vessels", "import", "vessels"),
+    ("export_dwell", "export", "performance_hours"),
+    ("export_teu", "export", "teu"),
+    ("export_vessels", "export", "vessels"),
+)
+
+
+def board_series(port_id: str, days: int = 180) -> dict:
+    """Per-direction daily tracks for one port, shaped for the Pattern Grammar.
+
+    A row missing its metric is left out rather than zero-filled: Dewey reports
+    nothing for a day with no berth activity, and a zero dwell time would read as
+    a port that cleared instantly instead of one nobody measured.
+    """
+    if not available():
+        return {"port_id": port_id, "tracks": {}, "available": False, "source": "Dewey Data"}
+    days = max(7, min(days, 730))
+    cutoff = date.fromordinal(date.today().toordinal() - days).isoformat()
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT event_date, direction, performance_hours, teu, vessels "
+            "FROM daily_performance WHERE port_id = ? AND event_date >= ? "
+            "ORDER BY event_date",
+            (port_id, cutoff),
+        ).fetchall()
+        port = conn.execute(
+            "SELECT port_id, name, country, latitude, longitude, latest_date "
+            "FROM port_latest WHERE port_id = ?", (port_id,),
+        ).fetchone()
+        meta = {r["key"]: r["value"] for r in conn.execute("SELECT key, value FROM metadata")}
+
+    tracks: dict[str, list[dict]] = {key: [] for key, _, _ in BOARD_TRACKS}
+    for row in rows:
+        for key, direction, column in BOARD_TRACKS:
+            if row["direction"] != direction:
+                continue
+            value = row[column]
+            if value is None:
+                continue
+            tracks[key].append({"d": row["event_date"], "v": float(value)})
+
+    return {
+        "port_id": port_id,
+        "port": dict(port) if port else None,
+        "tracks": tracks,
+        "available": True,
+        "source": "Dewey Data",
+    }

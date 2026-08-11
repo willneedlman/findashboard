@@ -65,6 +65,10 @@ async def lifespan(app: FastAPI):
         snapshots.start_snapshot_loop()
         earnings.start_calendar_warm_loop()
         data_audit.start_audit_loop()
+        # Freighter movements arrive as a single settled 24h window, so a series
+        # only exists if something records one sample per day going forward.
+        from observatory import air_cargo_history
+        air_cargo_history.start_sampler()
     if _ENABLE_LIVE_MARITIME:
         maritime.start_ais_stream()
         maritime.start_rest_poll()

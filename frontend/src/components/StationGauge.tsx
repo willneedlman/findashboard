@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { T } from '../lib/theme'
 import FreshnessChip, { StateChip, stateColor } from './FreshnessChip'
+import HelpTip from './HelpTip'
 import {
   coverageSummary, formatDelta, formatValue, gapTitle, segmentByGaps, type Station,
 } from '../lib/observatory'
@@ -17,13 +18,12 @@ import {
 interface Props {
   station: Station
   height?: number
-  showCaption?: boolean
   onSelect?: (key: string) => void
   selected?: boolean
 }
 
 export default function StationGauge({
-  station, height = 84, showCaption = false, onSelect, selected,
+  station, height = 84, onSelect, selected,
 }: Props) {
   const [hover, setHover] = useState<{ x: number; d: string; v: number } | null>(null)
   const color = stateColor(station.state, station.stale)
@@ -65,9 +65,21 @@ export default function StationGauge({
     >
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
         <span style={{
+          display: 'inline-flex', alignItems: 'center',
           fontFamily: T.label, fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
           textTransform: 'uppercase', color: T.text,
-        }}>{station.label}</span>
+        }}>
+          {station.label}
+          {station.caption && (
+            <HelpTip
+              title={`${station.label}${station.unit ? ` · ${station.unit}` : ''}`}
+              body={station.caption}
+              source={[station.source, `Pattern grammar v${station.grammarVersion} · describes the trailing window, never forecasts`]
+                .filter(Boolean).join(' · ')}
+              width={280}
+            />
+          )}
+        </span>
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <StateChip state={station.state} stale={station.stale} staleDays={station.staleDays} />
           {station.stale && <FreshnessChip
@@ -170,20 +182,16 @@ export default function StationGauge({
         </div>
       )}
 
-      {showCaption && station.caption && (
-        <p style={{
-          margin: 0, fontFamily: T.label, fontSize: 10.5, lineHeight: 1.5, color: T.muted,
-        }}>{station.caption}</p>
-      )}
     </div>
   )
 }
 
-export function StationLegend() {
+export function StationLegend({ title }: { title?: string }) {
   return (
-    <div style={{
+    <div title={title} style={{
       display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center',
       fontFamily: T.mono, fontSize: 9, color: T.muted,
+      cursor: title ? 'help' : undefined,
     }}>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
         <span style={{ width: 5, height: 5, borderRadius: '50%', background: T.text, opacity: 0.55 }} />
