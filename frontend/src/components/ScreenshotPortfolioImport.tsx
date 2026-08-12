@@ -251,9 +251,20 @@ export default function ScreenshotPortfolioImport({ onImport }: { onImport: (pay
                         </div>
                       )}
 
-                      {cashRows.length > 0 && (
+                      {(
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                          <div style={{ fontFamily: T.label, fontSize: 8.5, fontWeight: 700, color: T.gold, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Cash</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontFamily: T.label, fontSize: 8.5, fontWeight: 700, color: T.gold, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Cash</span>
+                            <button
+                              onClick={() => setCashRows(prev => [...prev, { label: 'Cash', amount: 0, include: true }])}
+                              style={{ ...ghostBtn, padding: '3px 8px', fontSize: 8 }}
+                            >+ Add</button>
+                          </div>
+                          {cashRows.length === 0 && (
+                            <p style={{ fontFamily: T.label, fontSize: 8, color: T.muted, lineHeight: 1.5 }}>
+                              No cash balance was found in this screenshot. Add one if your broker shows it on a different screen.
+                            </p>
+                          )}
                           <div style={{ display: 'grid', gridTemplateColumns: '18px 1fr 110px', gap: 5, fontFamily: T.label, fontSize: 8, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                             <span /><span>Label</span><span>Amount</span>
                           </div>
@@ -278,7 +289,7 @@ export default function ScreenshotPortfolioImport({ onImport }: { onImport: (pay
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={resetResults} style={ghostBtn}>← Back</button>
                     <button onClick={commit} disabled={included.length + includedOpts.length === 0} style={{ ...primaryBtn, opacity: included.length + includedOpts.length === 0 ? 0.5 : 1, cursor: included.length + includedOpts.length === 0 ? 'default' : 'pointer' }}>
-                      Import {included.length + includedOpts.length} Position{included.length + includedOpts.length === 1 ? '' : 's'}
+                      Import {included.length + includedOpts.length + cashRows.filter(c => c.include).length} Item{included.length + includedOpts.length + cashRows.filter(c => c.include).length === 1 ? '' : 's'}
                     </button>
                   </div>
                 </>

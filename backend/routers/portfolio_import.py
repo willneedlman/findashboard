@@ -187,7 +187,9 @@ def parse_screenshot(req: ScreenshotImportRequest):
     # returned meant a truncated free-tier answer ended the chain with "AI
     # returned malformed JSON" while the paid fallback sat unused.
     raw_text = vision_complete(raw, media_type, _PROMPT, system=_SYSTEM,
-                               max_tokens=2048, validate=parse_json)
+                               # 20 rows plus options and cash runs ~1.5k; the headroom keeps a long
+                               # brokerage page from truncating mid-object.
+                               max_tokens=3072, validate=parse_json)
     parsed = parse_json(raw_text)
     # New shape is {"holdings": [...], "options": [...]}; tolerate a bare array
     # (older prompt shape) as holdings-only.
