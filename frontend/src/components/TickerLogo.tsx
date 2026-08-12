@@ -1,10 +1,21 @@
 import { useEffect, useState } from 'react'
 import { tickerLogoSources, tickerLogoVisualScale } from '../lib/tickerLogos'
 
+// Backs the two-letter monogram when no logo resolves. Hashing the first letter
+// gives each symbol a stable, distinguishable tile.
 function tickerColor(ticker: string): string {
   const code = ticker.charCodeAt(0)
   return `hsl(${(code * 37) % 360}, 35%, 22%)`
 }
+
+// Brand marks are overwhelmingly supplied as a coloured shape on a transparent
+// background — Parqet serves Oracle as a bare #C74634 path with no plate — and
+// they are drawn to sit on white. Composited onto the monogram tile instead, the
+// hashed hue shows through and the mark reads as muddy: Oracle red on the mustard
+// tile that "O" happens to hash to was the case that surfaced this. A logo that
+// actually loads therefore gets a neutral plate, and the hashed colour stays
+// where it belongs, behind the monogram.
+const LOGO_PLATE = '#ffffff'
 
 interface TickerLogoProps {
   ticker: string
@@ -37,10 +48,11 @@ export default function TickerLogo({
   // established tickers logo.dev misses (SPCX, CBRS).
   const sources = logoUrl ? [logoUrl, ...tickerLogoSources(ticker)] : tickerLogoSources(ticker)
   const [idx, setIdx] = useState(0)
+  const [loaded, setLoaded] = useState(false)
   // Reset to the first provider when the symbol changes (component is reused) or
   // when a preferred logoUrl arrives after mount (async enrichment).
   const key = `${ticker}|${logoUrl ?? ''}`
-  useEffect(() => setIdx(0), [key])
+  useEffect(() => { setIdx(0); setLoaded(false) }, [key])
 
   return (
     <span
@@ -49,7 +61,7 @@ export default function TickerLogo({
         width: size,
         height: size,
         borderRadius: cornerRadius,
-        background: logoBackground ?? tickerColor(ticker),
+        background: logoBackground ?? (loaded ? LOGO_PLATE : tickerColor(ticker)),
         display: 'grid',
         placeItems: 'center',
         overflow: 'hidden',
@@ -71,7 +83,8 @@ export default function TickerLogo({
         crossOrigin={crossOrigin}
         width={size}
         height={size}
-        onError={() => setIdx(i => i + 1)}
+        onError={() => { setLoaded(false); setIdx(i => i + 1) }}
+        onLoad={() => setLoaded(true)}
         style={{
           width: fit === 'contain' ? `calc(100% - ${padding * 2}px)` : '100%',
           height: fit === 'contain' ? `calc(100% - ${padding * 2}px)` : '100%',
