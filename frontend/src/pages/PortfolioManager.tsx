@@ -612,6 +612,23 @@ export function PortfolioManagerContent() {
     return { ...p, legViews, cost, value: priced ? value : null, pnl, pnlPct, netDelta: priced ? netDelta : null, priced }
   })
 
+  // Proceeds join the cash you already hold rather than littering the book with a
+  // "TSLL close" line per exit. The largest existing balance is the one treated as
+  // the account's cash — a money market sweep is where a real broker would credit
+  // it — and a book with no cash position at all gets one created.
+  const creditCash = useCallback((amount: number, fallbackLabel: string) => {
+    setCash(prev => {
+      if (!prev.length) {
+        return [{ id: uid(), label: fallbackLabel, amount, rate: 0, since: todayISO }]
+      }
+      let target = 0
+      for (let i = 1; i < prev.length; i++) {
+        if (Math.abs(prev[i].amount) > Math.abs(prev[target].amount)) target = i
+      }
+      return prev.map((c, i) => (i === target ? { ...c, amount: c.amount + amount } : c))
+    })
+  }, [setCash])
+
   const closeHoldingToCash = (row: (typeof rows)[number], index: number) => {
     // Proceeds are the live mark, not cost basis: closing realises what the
     // position is worth now. Without a quote there is no proceeds figure to
@@ -621,15 +638,9 @@ export function PortfolioManagerContent() {
     const realised = row.costIsAuto ? null : Number((row.value - row.cost).toFixed(2))
     const pnlNote = realised == null ? '' : ` Realised P&L ${realised >= 0 ? '+' : ''}${fmtMoney(realised)}.`
     if (!confirm(
-      `Close ${row.shares} ${normalizeTicker(row.ticker)} at ${fmtMoney(row.price)} and post ${fmtMoney(amount)} to cash?${pnlNote}`
+      `Close ${row.shares} ${normalizeTicker(row.ticker)} at ${fmtMoney(row.price)} and add ${fmtMoney(amount)} to ${cash.length ? 'your cash balance' : 'cash'}?${pnlNote}`
     )) return
-    setCash(prev => [...prev, {
-      id: uid(),
-      label: `${normalizeTicker(row.ticker)} close`,
-      amount,
-      rate: 0,
-      since: todayISO,
-    }])
+    creditCash(amount, 'Cash')
     setHoldings(prev => prev.filter((_, j) => j !== index))
   }
 
@@ -637,14 +648,8 @@ export function PortfolioManagerContent() {
     if (position.value == null) return
     const amount = Number(position.value.toFixed(2))
     const direction = amount >= 0 ? 'credit' : 'debit'
-    if (!confirm(`Close ${position.underlying} ${position.name} at the current marked value and post a ${direction} of ${fmtMoney(Math.abs(amount))} to cash?`)) return
-    setCash(prev => [...prev, {
-      id: uid(),
-      label: `${position.underlying} option close`,
-      amount,
-      rate: 0,
-      since: todayISO,
-    }])
+    if (!confirm(`Close ${position.underlying} ${position.name} at the current marked value and ${direction === 'credit' ? 'add' : 'deduct'} ${fmtMoney(Math.abs(amount))} ${direction === 'credit' ? 'to' : 'from'} ${cash.length ? 'your cash balance' : 'cash'}?`)) return
+    creditCash(amount, 'Cash')
     setOptions(prev => prev.filter(p => p.id !== position.id))
   }
 

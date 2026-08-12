@@ -26,6 +26,13 @@ EQUITY / ETF / fund rows go in "holdings":
 - shares: the share/unit count as a plain number, no commas or currency symbols.
 - avgCost: average cost / cost basis per share if visible, else null. Never invent
   one — if only market value or current price is shown, use null.
+  Brokerage screenshots are frequently cropped above the header row, leaving the
+  columns unlabelled. Do not guess which one is the cost basis. Asked to infer it
+  from an unlabelled Fidelity table, a model returned eleven wrong figures out of
+  fifteen, and a wrong basis silently misstates every profit and loss number in
+  the app — whereas null simply keeps the basis the position already had. Null is
+  the correct answer whenever the column is not clearly labelled, and the review
+  table lets the user fill it in.
 
 OPTION contracts go in "options" (parse each option row/line):
 - underlying: the underlying ticker (e.g. "AAPL"), NOT the full OCC symbol or company name.

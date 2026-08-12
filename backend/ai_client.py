@@ -34,7 +34,20 @@ VISION_MODEL_GROQ = "qwen/qwen3.6-27b"     # last resort, free
 # Qwen prices prompt and completion together against an 8k/minute ceiling and an
 # image is most of the prompt, so the completion has to stay small enough that the
 # sum clears it.
-_GROQ_VISION_MAX_COMPLETION = 3_500
+# Qwen prices prompt and completion together against this per-minute ceiling, and
+# an image is most of the prompt. A fixed completion cap therefore cannot work:
+# improving the instructions grew the prompt and the same 3,500 cap started
+# returning 429s. The budget is computed from what the prompt actually leaves.
+_GROQ_VISION_TPM = 8_000
+_GROQ_VISION_HEADROOM = 0.80   # leave room for other calls inside the same minute
+_GROQ_VISION_MIN_COMPLETION = 900
+
+# Vision prompts are dominated by pixels: Anthropic charges about w*h/750 image
+# tokens, so a 2318x930 screenshot is ~2,900 tokens before a word of instruction.
+# Downscaling is therefore the cheapest lever available on both cost and headroom,
+# and screenshot text stays legible well below native retina resolution. Capped on
+# the longest edge so a wide holdings table is not squashed out of readability.
+_VISION_MAX_EDGE = 1_600
 
 # Model tiers. SMART = deep reasoning (100K TPD free); FAST = structured JSON (500K TPD).
 # The constants are the Groq model ids; each fallback provider maps them to its own.
@@ -287,6 +300,41 @@ def groq_complete(prompt: str, max_tokens: int = 512, *,
     return (resp.choices[0].message.content or "").strip()
 
 
+def downscale_image(image_b64: str, media_type: str, max_edge: int = _VISION_MAX_EDGE):
+    """Shrink an oversized screenshot before it is priced as tokens.
+
+    Returns (base64, media_type), unchanged when the image already fits or when
+    anything goes wrong — a failed resize must never block a parse that would
+    otherwise have worked.
+    """
+    try:
+        import base64 as _b64
+        import io
+        from PIL import Image
+
+        raw = _b64.b64decode(image_b64)
+        img = Image.open(io.BytesIO(raw))
+        longest = max(img.size)
+        if longest <= max_edge:
+            return image_b64, media_type
+
+        scale = max_edge / longest
+        resized = img.resize((max(1, round(img.width * scale)), max(1, round(img.height * scale))),
+                             Image.LANCZOS)
+        buf = io.BytesIO()
+        # PNG keeps text edges crisp, which is the whole point of the image. JPEG
+        # would be smaller on disk but the tokens are priced on pixels, not bytes.
+        if resized.mode not in ("RGB", "L"):
+            resized = resized.convert("RGB")
+        resized.save(buf, format="PNG", optimize=True)
+        logger.info("vision image downscaled %sx%s -> %sx%s",
+                    img.width, img.height, resized.width, resized.height)
+        return _b64.b64encode(buf.getvalue()).decode(), "image/png"
+    except Exception as exc:  # noqa: BLE001 — resizing is an optimisation, not a gate
+        logger.warning("vision image downscale failed, sending original: %s", exc)
+        return image_b64, media_type
+
+
 def _claude_vision_call(image_b64: str, media_type: str, prompt: str,
                         max_tokens: int, system: str | None, model: str) -> str:
     kwargs: dict = {
@@ -306,6 +354,25 @@ def _claude_vision_call(image_b64: str, media_type: str, prompt: str,
     return "".join(block.text for block in resp.content if block.type == "text").strip()
 
 
+def _estimate_image_tokens(image_b64: str) -> int:
+    """Anthropic's w*h/750 rule is close enough for Groq budgeting too."""
+    try:
+        import base64 as _b64
+        import io
+        from PIL import Image
+        w, h = Image.open(io.BytesIO(_b64.b64decode(image_b64))).size
+        return int(w * h / 750)
+    except Exception:  # noqa: BLE001 — a rough guess beats refusing to budget
+        return 1_500
+
+
+def _groq_vision_budget(image_b64: str, system: str | None, prompt: str, max_tokens: int) -> int:
+    """Completion tokens that still leave the whole request inside the ceiling."""
+    prompt_tokens = _estimate_image_tokens(image_b64) + (len(system or "") + len(prompt)) // 4
+    room = int(_GROQ_VISION_TPM * _GROQ_VISION_HEADROOM) - prompt_tokens
+    return max(_GROQ_VISION_MIN_COMPLETION, min(max_tokens, room))
+
+
 def _groq_vision_call(image_b64: str, media_type: str, prompt: str,
                       max_tokens: int, system: str | None, model: str) -> str:
     content = [
@@ -316,13 +383,14 @@ def _groq_vision_call(image_b64: str, media_type: str, prompt: str,
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": content})
-    # The scratchpad is charged against the same budget as the answer, so it needs
-    # headroom — but prompt plus completion is priced against an 8k per-minute
-    # ceiling, and an image is a large prompt. Doubling a 3k ask blew that and came
-    # back 413. Cap the completion so the whole request still fits.
-    budget = min(int(max_tokens * 2) + 512, _GROQ_VISION_MAX_COMPLETION)
+    budget = _groq_vision_budget(image_b64, system, prompt, max_tokens)
     resp = get_client().chat.completions.create(
         model=VISION_MODEL_GROQ, max_tokens=budget,
+        # Reading a table is transcription, not reasoning, and the scratchpad is
+        # charged against the same budget as the answer — on a wide screenshot it
+        # consumed the budget and truncated the JSON mid-object. "none" is the only
+        # value Groq accepts besides "default" here.
+        reasoning_effort="none",
         temperature=0, messages=messages,
     )
     choice = resp.choices[0]
@@ -353,6 +421,8 @@ def vision_complete(image_b64: str, media_type: str, prompt: str, *,
     inside each attempt, so an answer the caller cannot use is treated as a
     failure here instead of blowing up downstream.
     """
+    image_b64, media_type = downscale_image(image_b64, media_type)
+
     providers: list[tuple[str, object, str]] = []
     if _ANTHROPIC_KEY:
         providers.append(("claude-vision", _claude_vision_call, model))
