@@ -221,7 +221,7 @@ def _earnings_context(ticker: str, fresh_hours: int) -> dict | None:
     structured beat or miss is a fact worth citing, and knowing a print lands
     tonight explains a move a headline search never will.
     """
-    ck = f"mover_radar:earn:{ticker}"
+    ck = f"mover_radar:earn:v2:{ticker}"   # v2 adds date + timing confidence
     cached = disk_get(ck)
     if cached is not None:
         return cached or None
@@ -240,16 +240,31 @@ def _earnings_context(ticker: str, fresh_hours: int) -> dict | None:
                 hours_ago = (now - stamp).total_seconds() / 3600.0
                 estimate, actual = row.get("EPS Estimate"), row.get("Reported EPS")
                 surprise = row.get("Surprise(%)")
+                # The feed's clock time is not trustworthy on its own. Across six
+                # quarters NBIS shows 06:00/07:00/08:00/09:00/12:00 and TSLA
+                # 15:00 through 20:00 — no issuer moves its release six hours a
+                # quarter, so those are rounded placeholders. Where a company does
+                # report at one consistent hour (AAPL, MSFT and NVDA are 16:00
+                # every time) the value is carrying real information. Only claim a
+                # session when the company's own history is consistent; otherwise
+                # a nominal 08:00 on the wrong date becomes a confident and wrong
+                # "before the open".
+                hours = {ts.hour for ts in past.index[:6]}
+                consistent = len(hours) <= 2
+                timing = None
+                if consistent:
+                    timing = "before the open" if stamp.hour < 12 else "after the close"
                 out["last_report"] = {
                     "at": stamp.isoformat(),
+                    "date": stamp.date().isoformat(),
                     "hoursAgo": round(hours_ago, 1),
                     "epsEstimate": None if pd.isna(estimate) else round(float(estimate), 2),
                     "epsActual": None if pd.isna(actual) else round(float(actual), 2),
                     "surprisePct": None if pd.isna(surprise) else round(float(surprise), 2),
-                    # yfinance timestamps the release itself, so the hour tells
-                    # you before-open from after-close without a separate field.
-                    "timing": "before the open" if stamp.hour < 12 else "after the close",
-                    # The whole point: is this report new enough to BE the move?
+                    "timing": timing,
+                    "timingConfident": consistent,
+                    # Kept for the window decision, which tolerates being hours out;
+                    # it is deliberately not stated to the reader as a fact.
                     "withinWindow": hours_ago <= fresh_hours,
                 }
             if not upcoming.empty:
@@ -266,12 +281,115 @@ def _earnings_context(ticker: str, fresh_hours: int) -> dict | None:
     return out
 
 
+# Headlines that mean "the company just reported", as opposed to previewing or
+# recapping. Deliberately narrow: an analyst note reacting to results weeks later
+# would otherwise register as a fresh print.
+_EARNINGS_REPORT_RE = re.compile(
+    r"\b(?:reports?|posts?|announces?)\s+(?:its\s+)?(?:fy)?q[1-4]\b"
+    r"|\bq[1-4]\s+(?:20\d\d\s+)?(?:results|earnings|revenue|report)\b"
+    r"|\bearnings\s+flash\b"
+    r"|\b(?:first|second|third|fourth)[- ]quarter\s+(?:results|earnings|revenue)\b"
+    r"|\bq[1-4]\s+(?:beat|miss)\b"
+    r"|\b(?:beats?|misses|tops)\s+(?:on\s+)?(?:q[1-4]\s+)?(?:estimates|expectations|consensus)\b",
+    re.I,
+)
+
+
+# A preview, a schedule note or an outlook piece uses the same quarter vocabulary
+# as a result, so those are excluded outright rather than scored.
+_EARNINGS_FORWARD_RE = re.compile(
+    r"\bpreview\b|\bwhat to (?:watch|expect)\b|\bahead of\b|\bto report\b"
+    r"|\bwill report\b|\bexpected to (?:report|post)\b|\bschedule[ds]?\b"
+    r"|\bdate (?:set|confirmed)\b|\bannounces? date\b|\bconference call\b",
+    re.I,
+)
+
+
+def _earnings_signal_from_evidence(events) -> dict | None:
+    """Detect a just-landed report from the news itself.
+
+    The estimate feed cannot be trusted for the current quarter. yfinance gives a
+    rounded nominal hour for a fresh release and then drops the row altogether for
+    a day or two afterwards — NBIS showed 2026-08-12 08:00 one hour and nothing
+    newer than 2026-05-13 the next. Either failure produces a confident wrong
+    statement about when a company reported.
+
+    The newswire does not have that problem: an "Earnings Flash" or "reports Q2
+    revenue" headline is direct evidence that a print landed, timestamped when it
+    actually crossed. Used in preference to the feed for the fact and the timing,
+    while the feed keeps what it is good at — historical surprises and the next
+    scheduled date.
+    """
+    hits = [
+        e for e in events
+        if _EARNINGS_REPORT_RE.search(e.headline_or_text or "")
+        and not _EARNINGS_FORWARD_RE.search(e.headline_or_text or "")
+    ]
+    if not hits:
+        return None
+    earliest = min(hits, key=lambda e: e.timestamp)
+    age_hours = (utc_now() - earliest.timestamp).total_seconds() / 3600.0
+    return {
+        "at": earliest.timestamp.isoformat(),
+        "hoursAgo": round(age_hours, 1),
+        "headline": (earliest.headline_or_text or "")[:200],
+        "source": earliest.source_name,
+        "corroborating": len(hits),
+    }
+
+
 def _earnings_headline(earnings: dict | None) -> str | None:
     """One line a brief can cite verbatim, or None when there is nothing to say."""
-    last = (earnings or {}).get("last_report") or {}
+    earnings = earnings or {}
+    signal = earnings.get("news_signal") or {}
+    last = earnings.get("last_report") or {}
+
+    # The newswire is the authority on whether a print landed and when. The
+    # estimate feed is used only for the consensus and the surprise, and only when
+    # it is actually describing the same report.
+    if signal:
+        hours = signal["hoursAgo"]
+        when = "today" if hours < 12 else ("yesterday" if hours < 36 else f"{hours / 24:.0f} days ago")
+        corroboration = ("" if signal["corroborating"] < 2
+                         else f" {signal['corroborating']} sources carried it.")
+        # The feed's figures may describe an ENTIRELY DIFFERENT quarter. yfinance
+        # drops the just-reported row for a day or two, so last_report can silently
+        # become the previous quarter — pairing its EPS with today's print reported
+        # NBIS as a +396% beat using May's numbers. Only quote the feed when its
+        # report date actually sits alongside the headline that triggered this.
+        same_report = False
+        if last.get("date"):
+            try:
+                feed_day = _dt.date.fromisoformat(last["date"])
+                signal_day = _dt.datetime.fromisoformat(signal["at"]).date()
+                same_report = abs((signal_day - feed_day).days) <= 4
+            except (TypeError, ValueError):
+                same_report = False
+
+        detail = ""
+        if not same_report:
+            detail = (" The estimate feed has not posted this quarter's figures yet, which is"
+                      " normal this soon after a release; the reported numbers are in the news"
+                      " below.")
+        elif last.get("epsActual") is not None and last.get("epsEstimate") is not None:
+            surprise = last.get("surprisePct")
+            verb = "beat" if surprise and surprise > 0 else "missed" if surprise and surprise < 0 else "matched"
+            tail = f" ({surprise:+.1f}% surprise)" if surprise is not None else ""
+            detail = f" EPS {last['epsActual']} vs {last['epsEstimate']} estimate, {verb}{tail}."
+        else:
+            pre_profit = last.get("epsEstimate") is not None and last["epsEstimate"] < 0
+            lens = (" Consensus EPS was negative, so revenue and guidance are the numbers"
+                    " that matter here rather than an EPS beat or miss." if pre_profit else "")
+            detail = (" The estimate feed has not posted the actual yet, which is normal this"
+                      f" soon after a release; the reported figures are in the news below.{lens}")
+        return f"Reported {when}, per the newswire.{corroboration}{detail}"
+
     if not last.get("withinWindow"):
         return None
-    when = f"{last['hoursAgo']:.0f}h ago {last['timing']}"
+    # No corroborating headline, so nothing here may assert a clock time: the feed
+    # rounds the hour and sometimes drops the row for the quarter entirely.
+    session = f" {last['timing']}" if last.get("timing") else ""
+    when = f"on {last['date']}{session}" if last.get("date") else "recently"
     actual, estimate, surprise = last.get("epsActual"), last.get("epsEstimate"), last.get("surprisePct")
 
     if actual is None:
@@ -328,6 +446,8 @@ def _has_material_evidence(events, price: dict, earnings: dict | None = None) ->
     # A report inside the window is the catalyst, whether or not the newswire
     # has caught up. Judging that by headline count would call the most
     # explainable move of the quarter unexplained for the first hour.
+    if (earnings or {}).get("news_signal"):
+        return True
     if (earnings or {}).get("last_report", {}).get("withinWindow"):
         return True
     # Likewise a real extended-hours gap: bars have not recorded it yet, so
@@ -620,7 +740,7 @@ def _build_llm_prompt(ticker: str, sector: str | None, price: dict, relative: di
 def analyze(ticker: str, timeframe: str = _DEFAULT_TIMEFRAME) -> dict:
     sym = ticker.strip().upper()
     tf = timeframe if timeframe in _TIMEFRAMES else _DEFAULT_TIMEFRAME
-    cache_key = f"mover_radar:v2:{sym}:{tf}"   # v2 adds the live mark + earnings block
+    cache_key = f"mover_radar:v3:{sym}:{tf}"   # v3 sources the earnings fact from the newswire
     cached = disk_get(cache_key)
     if cached is not None:
         return cached
@@ -652,6 +772,12 @@ def analyze(ticker: str, timeframe: str = _DEFAULT_TIMEFRAME) -> dict:
 
     fresh = _fresh_evidence(collected["events"], hours=fresh_hours)
     ranked = _rank_evidence(fresh)
+
+    # Detected from the same fresh evidence the reader is shown, so the catalyst
+    # line can never contradict the headlines directly beneath it.
+    signal = _earnings_signal_from_evidence(fresh)
+    if signal:
+        earnings = {**(earnings or {}), "news_signal": signal}
 
     z = price.get("z_score")
     is_small_move = z is None or abs(z) < _NOISE_Z_THRESHOLD

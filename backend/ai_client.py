@@ -15,12 +15,26 @@ _GROQ_KEY = os.getenv("GROQ_API_KEY", "")
 _CEREBRAS_KEY = os.getenv("CEREBRAS_API_KEY", "")
 _ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
-# Vision goes to Claude. A free Groq vision leg was tried in front of it and
-# removed: it scored well on clean fixtures but was slower and weaker on real
-# broker screenshots, and because it ran first every parse paid its reasoning
-# tokens before Claude ever started — a fallback that fires often enough is just
-# latency with extra steps. One call, one model, no chain.
-VISION_MODEL = "claude-sonnet-5"
+# Vision: Haiku first, Groq only when Anthropic cannot serve the call.
+#
+# Ordering is the whole design. Groq was tried in FRONT of Claude and removed,
+# because a free leg that runs first makes every parse pay its reasoning tokens
+# before the good model starts — latency with extra steps. Behind Claude it costs
+# nothing until Anthropic is unavailable, and then it is the difference between a
+# degraded parse and a dead feature. Credits running out is not hypothetical.
+#
+# Haiku rather than Sonnet because a screenshot parse is transcription, not
+# judgement, and the price difference is roughly fivefold: a typical 1400x1000
+# screenshot runs ~2.6k input and ~900 output tokens, which is about 2 cents on
+# Sonnet. Image tokens dominate that (w*h/750), so downscaling before upload is a
+# bigger lever than the model choice.
+VISION_MODEL = "claude-haiku-4-5-20251001"
+VISION_MODEL_STRONG = "claude-sonnet-5"    # for a caller that needs the harder read
+VISION_MODEL_GROQ = "qwen/qwen3.6-27b"     # last resort, free
+# Qwen prices prompt and completion together against an 8k/minute ceiling and an
+# image is most of the prompt, so the completion has to stay small enough that the
+# sum clears it.
+_GROQ_VISION_MAX_COMPLETION = 3_500
 
 # Model tiers. SMART = deep reasoning (100K TPD free); FAST = structured JSON (500K TPD).
 # The constants are the Groq model ids; each fallback provider maps them to its own.
@@ -210,6 +224,11 @@ def _exhausted(exc: Exception, provider: str) -> Exception:
             "This is a free-tier quota, not a problem with your report. Wait a minute and retry."
         ))
     if status == 413:
+        if "vision" in provider:
+            return HTTPException(503, (
+                f"The image is larger than {provider} accepts in one call. "
+                "Crop or downscale the screenshot and retry."
+            ))
         return HTTPException(503, (
             f"The request is larger than {provider} accepts in one call. "
             "Reduce the report length or the number of clips and retry."
@@ -268,39 +287,103 @@ def groq_complete(prompt: str, max_tokens: int = 512, *,
     return (resp.choices[0].message.content or "").strip()
 
 
+def _claude_vision_call(image_b64: str, media_type: str, prompt: str,
+                        max_tokens: int, system: str | None, model: str) -> str:
+    kwargs: dict = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": image_b64}},
+                {"type": "text", "text": prompt},
+            ],
+        }],
+    }
+    if system:
+        kwargs["system"] = system
+    resp = get_anthropic().messages.create(**kwargs)
+    return "".join(block.text for block in resp.content if block.type == "text").strip()
+
+
+def _groq_vision_call(image_b64: str, media_type: str, prompt: str,
+                      max_tokens: int, system: str | None, model: str) -> str:
+    content = [
+        {"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{image_b64}"}},
+        {"type": "text", "text": prompt},
+    ]
+    messages: list[dict] = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": content})
+    # The scratchpad is charged against the same budget as the answer, so it needs
+    # headroom — but prompt plus completion is priced against an 8k per-minute
+    # ceiling, and an image is a large prompt. Doubling a 3k ask blew that and came
+    # back 413. Cap the completion so the whole request still fits.
+    budget = min(int(max_tokens * 2) + 512, _GROQ_VISION_MAX_COMPLETION)
+    resp = get_client().chat.completions.create(
+        model=VISION_MODEL_GROQ, max_tokens=budget,
+        temperature=0, messages=messages,
+    )
+    choice = resp.choices[0]
+    if getattr(choice, "finish_reason", None) == "length":
+        raise RuntimeError("vision answer truncated before it finished")
+    return strip_reasoning(choice.message.content or "")
+
+
+# Out of credit is a 400 from Anthropic, not a 429, so the generic retry/failover
+# predicates do not catch it. It is also the one failure a paid-primary chain most
+# needs to survive, which is the reason this fallback exists at all.
+_CREDIT_MARKERS = ("credit balance", "insufficient", "quota", "billing", "payment")
+
+
+def _is_exhausted_account(exc: Exception) -> bool:
+    return any(marker in str(exc).lower() for marker in _CREDIT_MARKERS)
+
+
 def vision_complete(image_b64: str, media_type: str, prompt: str, *,
                      max_tokens: int = 1024, system: str | None = None,
                      model: str = VISION_MODEL, validate=None) -> str:
-    """Single-turn image+text completion via Claude. `image_b64` is raw base64
-    (no data-URL prefix); `media_type` is e.g. "image/png" or "image/jpeg".
-    Returns stripped text — pass through parse_json() for structured output.
+    """Single-turn image+text completion. `image_b64` is raw base64 (no data-URL
+    prefix); `media_type` is e.g. "image/png" or "image/jpeg". Returns stripped
+    text — pass through parse_json() for structured output.
 
-    `validate` is the caller's parser. It runs inside the retry, so an answer the
-    caller cannot use is retried rather than handed back to blow up downstream.
+    Claude serves this. Groq is tried only if Anthropic cannot: no key, no credit,
+    rate limited, or a server error. `validate` is the caller's parser and runs
+    inside each attempt, so an answer the caller cannot use is treated as a
+    failure here instead of blowing up downstream.
     """
-    def call():
-        kwargs: dict = {
-            "model": model,
-            "max_tokens": max_tokens,
-            "messages": [{
-                "role": "user",
-                "content": [
-                    {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": image_b64}},
-                    {"type": "text", "text": prompt},
-                ],
-            }],
-        }
-        if system:
-            kwargs["system"] = system
-        resp = get_anthropic().messages.create(**kwargs)
-        text = "".join(block.text for block in resp.content if block.type == "text").strip()
-        if not text:
-            raise RuntimeError("vision model returned no text")
-        if validate is not None:
-            validate(text)
-        return text
+    providers: list[tuple[str, object, str]] = []
+    if _ANTHROPIC_KEY:
+        providers.append(("claude-vision", _claude_vision_call, model))
+    if _GROQ_KEY:
+        providers.append(("groq-vision", _groq_vision_call, VISION_MODEL_GROQ))
+    if not providers:
+        raise HTTPException(503, "No vision provider configured (set ANTHROPIC_API_KEY or GROQ_API_KEY)")
 
-    return with_backoff(call, retries=1)
+    import metrics
+    last_exc: Exception | None = None
+    for i, (name, call, use_model) in enumerate(providers):
+        try:
+            text = with_backoff(
+                lambda c=call, m=use_model: c(image_b64, media_type, prompt, max_tokens, system, m),
+                retries=1,
+            )
+            if not text:
+                raise RuntimeError("vision model returned no text")
+            if validate is not None:
+                validate(text)
+            metrics.record_ai(name, ok=True)
+            return text
+        except Exception as exc:  # noqa: BLE001 — re-raised if the chain is exhausted
+            last_exc = exc
+            metrics.record_ai(name, ok=False, error=_status_str(exc))
+            if i == len(providers) - 1:
+                raise _exhausted(exc, name)
+            reason = "out of credit" if _is_exhausted_account(exc) else _status_str(exc)
+            logger.warning("vision provider %s failed (%s); falling back to %s",
+                           name, reason, providers[i + 1][0])
+    raise last_exc  # unreachable
 
 
 _THINK_BLOCK = re.compile(r"<(think|thinking|reasoning)>.*?</\1>", re.DOTALL | re.IGNORECASE)
