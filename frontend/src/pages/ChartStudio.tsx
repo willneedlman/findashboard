@@ -1657,7 +1657,7 @@ export function ChartStudioContent() {
             <div style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', marginBottom: 4 }}>Feed cadence</div>
             {[
               { label: `Candles ${tf.toUpperCase()}`, value: INTRADAY.has(tf) ? 'refresh 60s' : 'refresh 5m' },
-              ...(ind.gexProfile || ind.gflip ? [{ label: 'Dealer GEX', value: '30m cache' }] : []),
+              ...(ind.gexProfile || ind.gflip ? [{ label: 'Dealer Exposure', value: '30m cache' }] : []),
               ...(lanes.iv ? [{ label: 'IV rank', value: 'daily snapshot' }] : []),
               ...activeOverlayDefs.map(d => ({ label: d.label, value: d.cadence })),
             ].map(r => (

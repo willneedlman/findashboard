@@ -142,7 +142,12 @@ def _decode_image(image_base64: str) -> tuple[str, str]:
 def parse_screenshot(req: ScreenshotImportRequest):
     media_type, raw = _decode_image(req.image_base64)
 
-    raw_text = vision_complete(raw, media_type, _PROMPT, system=_SYSTEM, max_tokens=2048)
+    # The parser is handed to vision_complete so an unparseable answer counts as a
+    # provider failure and falls through to Claude. Parsing only after the call
+    # returned meant a truncated free-tier answer ended the chain with "AI
+    # returned malformed JSON" while the paid fallback sat unused.
+    raw_text = vision_complete(raw, media_type, _PROMPT, system=_SYSTEM,
+                               max_tokens=2048, validate=parse_json)
     parsed = parse_json(raw_text)
     # New shape is {"holdings": [...], "options": [...]}; tolerate a bare array
     # (older prompt shape) as holdings-only.

@@ -14,7 +14,7 @@ import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, chartClip, tableClip } from '../lib/reportCaptureRegistry'
 
-// Dealer GEX — aligned stack. One price axis, read top to bottom: where dealer
+// Dealer Exposure — aligned stack. One price axis, read top to bottom: where dealer
 // exposure sits by strike, what traded into it today, and how that exposure is
 // distributed across the term structure.
 //
@@ -329,11 +329,13 @@ export function DealerGEXContent() {
   }, [data, cols, field])
   const globalMax = useMemo(() => Math.max(1e-9, ...heatRows.flatMap(r => r.cells.map(Math.abs))), [heatRows])
 
+  // Clip sourceTab, not a display label: renaming it would orphan every report
+  // clip already captured under the old name.
   const TAB = 'Dealer GEX'
   useReportCapture(() => {
     if (!data || !view) return null
     const pieces: ClipDraft[] = [
-      kpiClip(TAB, `Dealer GEX · ${data.ticker} · ${sliced ? selExpiry : `${data.processed.length} expiries`}`, [
+      kpiClip(TAB, `Dealer Exposure · ${data.ticker} · ${sliced ? selExpiry : `${data.processed.length} expiries`}`, [
         { label: 'Net Gamma', value: fmtM(view.net_gex), sub: long ? 'Moves get pinned' : 'Moves get amplified' },
         { label: 'Net Delta', value: fmtM(view.net_dex) },
         { label: 'Vanna', value: fmtM(view.net_vanna) },
@@ -456,7 +458,7 @@ export function DealerGEXContent() {
       )}
       {!isFetching && !data && !error && (
         <div style={{ border: `1px solid ${T.border}` }}>
-          <EmptyState title="Dealer GEX" action="LOAD"
+          <EmptyState title="Dealer Exposure" action="LOAD"
             hint="Enter a ticker and press LOAD." />
         </div>
       )}
@@ -912,5 +914,5 @@ const TD: React.CSSProperties = {
 }
 
 export default function DealerGEX() {
-  return <PageWrapper title="Dealer GEX"><DealerGEXContent /></PageWrapper>
+  return <PageWrapper title="Dealer Exposure"><DealerGEXContent /></PageWrapper>
 }

@@ -290,7 +290,7 @@ const SOURCE_META: Record<ReportResearchSourceId, Omit<ReportResearchSource, 're
   'peer-valuation': { id: 'peer-valuation', label: 'Peer valuation', tool: 'Peer Comparison', route: '/relative-valuation', domain: 'issuer' },
   'dcf-valuation': { id: 'dcf-valuation', label: 'DCF valuation', tool: 'DCF Valuation', route: '/dcf', domain: 'issuer' },
   'volatility-skew': { id: 'volatility-skew', label: 'Volatility skew', tool: 'Volatility Skew', route: '/skew', domain: 'issuer' },
-  'dealer-gex': { id: 'dealer-gex', label: 'Dealer gamma', tool: 'Dealer GEX', route: '/gex', domain: 'issuer' },
+  'dealer-gex': { id: 'dealer-gex', label: 'Dealer gamma', tool: 'Dealer Exposure', route: '/gex', domain: 'issuer' },
   'implied-probability': { id: 'implied-probability', label: 'Implied probability', tool: 'Implied Probability', route: '/probability', domain: 'issuer' },
   'asset-profile': { id: 'asset-profile', label: 'Instrument profile', tool: 'Global Markets', route: '/global-markets', domain: 'benchmark' },
   dividends: { id: 'dividends', label: 'Dividend profile', tool: 'Portfolio Manager', route: '/portfolio-manager', domain: 'issuer' },

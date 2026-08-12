@@ -85,7 +85,7 @@ export default function TickerDrawer({ open, sym, onClose }: { open: boolean; sy
     queryFn: () => fetchSnapshotSeries('iv30', sym),
   })
   // compute=false: live GEX aggregates every chain (20-40s) — only show a value
-  // when the daily snapshot loop (or a Dealer GEX visit) has already left one.
+  // when the daily snapshot loop (or a Dealer Exposure visit) has already left one.
   const gex = useQuery({
     queryKey: ['drawer-gex', sym], enabled,
     queryFn: () => fetchSnapshotSeries('gex', sym, false),
@@ -194,7 +194,7 @@ export default function TickerDrawer({ open, sym, onClose }: { open: boolean; sy
                   <Stat label="As Of" value={gexLast.d ?? '—'} />
                 </div>
               ) : (
-                <TileNote>No snapshot yet. Open Dealer GEX for the live profile.</TileNote>
+                <TileNote>No snapshot yet. Open Dealer Exposure for the live profile.</TileNote>
               )}
             </div>
 

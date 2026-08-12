@@ -23,7 +23,7 @@ export const TICKER_TOOLS: TickerTool[] = [
   { label: 'Company Profile',     short: 'Profile',  route: '/company-profile' },
   { label: 'Options Scanner',     short: 'Options', route: '/options-scanner' },
   { label: 'Volatility Skew',     short: 'Skew',     route: '/skew' },
-  { label: 'Dealer GEX',          short: 'GEX',      route: '/gex' },
+  { label: 'Dealer Exposure',          short: 'GEX',      route: '/gex' },
   { label: 'Implied Probability', short: 'Prob',     route: '/probability' },
   { label: 'DCF Valuation',       short: 'DCF',      route: '/dcf' },
   { label: 'Master Valuation',    short: 'Master',   route: '/master-valuation' },

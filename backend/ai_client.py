@@ -176,8 +176,10 @@ def _groq_call(model, messages, max_tokens, temperature):
         # Headroom for the scratchpad on top of the caller's answer budget. Without
         # it a reasoning model spends the whole allowance thinking and returns
         # content=None, which reads downstream as a provider failure rather than a
-        # budget one.
-        kwargs["max_tokens"] = max_tokens + 1024
+        # budget one. Measured on a 20-row screenshot: 2.4k completion tokens for a
+        # ~1.2k answer, so the scratchpad can match the answer. Scale with the ask
+        # rather than adding a constant that only fits small ones.
+        kwargs["max_tokens"] = int(max_tokens * 2) + 512
         if model.startswith("openai/gpt-oss"):
             kwargs["reasoning_effort"] = "low"
     return get_client().chat.completions.create(**kwargs)
@@ -283,9 +285,15 @@ def _groq_vision_call(image_b64: str, media_type: str, prompt: str,
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": content})
     resp = get_client().chat.completions.create(
-        model=VISION_MODEL_GROQ, max_tokens=max_tokens, temperature=0, messages=messages,
+        model=VISION_MODEL_GROQ, max_tokens=int(max_tokens * 2) + 512,
+        temperature=0, messages=messages,
     )
-    return strip_reasoning(resp.choices[0].message.content or "")
+    choice = resp.choices[0]
+    if getattr(choice, "finish_reason", None) == "length":
+        # Truncated output is usually still syntactically plausible for a while,
+        # so it fails at the parser rather than here unless it is named.
+        raise RuntimeError("vision answer truncated before it finished")
+    return strip_reasoning(choice.message.content or "")
 
 
 def _claude_vision_call(image_b64: str, media_type: str, prompt: str,
@@ -309,7 +317,7 @@ def _claude_vision_call(image_b64: str, media_type: str, prompt: str,
 
 def vision_complete(image_b64: str, media_type: str, prompt: str, *,
                      max_tokens: int = 1024, system: str | None = None,
-                     model: str | None = None) -> str:
+                     model: str | None = None, validate=None) -> str:
     """Single-turn image+text completion. `image_b64` is raw base64 (no data-URL
     prefix); `media_type` is e.g. "image/png" or "image/jpeg". Returns stripped
     text — pass through parse_json() for structured output.
@@ -318,6 +326,14 @@ def vision_complete(image_b64: str, media_type: str, prompt: str, *,
     errors and an empty answer: a vision model that returns nothing has failed
     just as surely as one that raised, and on the free tier the 8k TPM ceiling
     makes an empty or refused response the common case rather than an exotic one.
+
+    `validate` extends that to unusable answers. Pass the parser the caller
+    intends to run — if it raises, the response is treated as a provider failure
+    and the next provider is tried. Without it a free model that returns
+    truncated JSON short-circuits the whole chain: the call "succeeds", the
+    caller's own parse blows up afterwards, and the paid fallback that would have
+    got it right is never reached. For a vision-to-JSON task, output the caller
+    cannot parse is the single most likely way to fail.
     """
     if model:                                          # explicit caller override
         return _claude_vision_call(image_b64, media_type, prompt, max_tokens, system)
@@ -340,6 +356,8 @@ def vision_complete(image_b64: str, media_type: str, prompt: str, *,
             )
             if not text:
                 raise RuntimeError("vision model returned no text")
+            if validate is not None:
+                validate(text)                     # raises → treat as provider failure
             metrics.record_ai(name, ok=True)
             return text
         except Exception as exc:                       # noqa: BLE001 — re-raised if chain exhausted

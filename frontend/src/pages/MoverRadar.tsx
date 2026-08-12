@@ -28,7 +28,13 @@ interface Narrative { summary: string; confidence: 'high' | 'medium' | 'low'; ci
 interface MoverResult {
   ticker: string; available: boolean; reason?: string
   company_name?: string | null; sector?: string | null
-  price?: { pct_move: number; z_score: number | null; relative_volume: number | null; last_close: number }
+  price?: {
+    pct_move: number; z_score: number | null; relative_volume: number | null; last_close: number
+    effective_pct_move?: number
+    extended?: { session: string; price: number; pct_vs_close: number; kind: string; note: string } | null
+  }
+  earningsHeadline?: string | null
+  earnings?: { next_report?: { at: string; hoursAway: number } | null } | null
   relative?: { spy_pct: number | null; sector_pct: number | null; sector_etf: string | null; excess_vs_market: number | null }
   verdict?: 'noise' | 'explained' | 'evidence_only'
   evidence?: EvidenceItem[]
@@ -174,12 +180,38 @@ export function MoverRadarContent() {
                 <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 10, color: FAINT }}>${data.price.last_close.toFixed(2)}</span>
               </div>
               <div style={{ display: 'flex' }}>
-                <KpiCell grow align="top" label="Move" value={`${data.price.pct_move >= 0 ? '+' : ''}${data.price.pct_move.toFixed(2)}%`} valueSize={20} color={data.price.pct_move >= 0 ? POS : NEG} sub="today" />
+                {data.price.extended ? (
+                  <KpiCell grow align="top" label="Move"
+                    value={`${data.price.extended.pct_vs_close >= 0 ? '+' : ''}${data.price.extended.pct_vs_close.toFixed(2)}%`}
+                    valueSize={20} color={data.price.extended.pct_vs_close >= 0 ? POS : NEG}
+                    sub={`${data.price.extended.session} vs close · ${data.price.extended.kind}`} />
+                ) : (
+                  <KpiCell grow align="top" label="Move" value={`${data.price.pct_move >= 0 ? '+' : ''}${data.price.pct_move.toFixed(2)}%`} valueSize={20} color={data.price.pct_move >= 0 ? POS : NEG} sub="today" />
+                )}
                 <KpiCell grow align="top" label="Z-Score" value={data.price.z_score != null ? data.price.z_score.toFixed(2) : '—'} valueSize={20} color={data.price.z_score != null && Math.abs(data.price.z_score) >= 1.25 ? GOLD : TEXT} sub="vs its own normal daily move" />
                 <KpiCell grow align="top" label="Rel. Volume" value={data.price.relative_volume != null ? `${data.price.relative_volume.toFixed(2)}x` : '—'} valueSize={20} sub="vs 20-day avg" />
                 <KpiCell grow align="top" label="Vs S&P 500" value={data.relative?.excess_vs_market != null ? `${data.relative.excess_vs_market >= 0 ? '+' : ''}${data.relative.excess_vs_market.toFixed(2)}%` : '—'} valueSize={20} color={data.relative?.excess_vs_market != null && data.relative.excess_vs_market >= 0 ? POS : NEG} sub="idiosyncratic move" />
               </div>
             </div>
+
+            {data.earningsHeadline && (
+              <div style={{ background: SURFACE, border: `1px solid ${GOLD}`, padding: '12px 16px' }}>
+                <div style={{ fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: GOLD, marginBottom: 5 }}>Earnings Catalyst</div>
+                <div style={{ fontFamily: SANS, fontSize: 12.5, color: TEXT, lineHeight: 1.55 }}>{data.earningsHeadline}</div>
+              </div>
+            )}
+
+            {!data.earningsHeadline && data.earnings?.next_report && data.earnings.next_report.hoursAway <= 72 && (
+              <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, padding: '10px 16px', fontFamily: SANS, fontSize: 11.5, color: SEC }}>
+                Reports in {Math.round(data.earnings.next_report.hoursAway)}h ({data.earnings.next_report.at.slice(0, 10)}). A move ahead of a print is often positioning rather than news.
+              </div>
+            )}
+
+            {data.price?.extended && (
+              <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, padding: '10px 16px', fontFamily: SANS, fontSize: 11.5, color: SEC }}>
+                Regular session closed. {data.price.extended.note} Last completed bar showed {data.price.pct_move >= 0 ? '+' : ''}{data.price.pct_move.toFixed(2)}%, which predates this move.
+              </div>
+            )}
 
             {data.verdict === 'noise' && (
               <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, padding: '16px 18px' }}>

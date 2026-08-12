@@ -115,6 +115,59 @@ def _fetch_timeframe_bars(ticker: str, timeframe: str) -> pd.DataFrame:
     return _normalize_download(raw, ticker)
 
 
+def _extended_move(ticker: str, last_close: float) -> dict | None:
+    """The move that has happened since the last completed bar.
+
+    Bars only exist for sessions that have ended, so a company reporting at
+    16:05 and gapping twelve percent registers as a flat day until tomorrow's
+    open — which is exactly when a mover radar is least useful. This reads the
+    live mark instead and measures it against the last regular close.
+
+    Source depends on the session. Overnight quotes are indicative NBBO
+    midpoints rather than trades, so they are labelled as such and never
+    presented as prints.
+    """
+    from market_hours import is_market_open, is_overnight_session, session_label
+
+    if is_market_open() or not last_close:
+        return None                                # regular bars already cover it
+
+    session = session_label()
+    price = None
+    kind = "trade"
+    try:
+        import alpaca
+        if is_overnight_session():
+            quote = (alpaca.get_latest_overnight_quotes((ticker,)) or {}).get(ticker.upper()) or {}
+            price, kind = quote.get("price"), "indicative quote"
+        else:
+            price = alpaca.get_latest_price(ticker)
+    except Exception as exc:                       # noqa: BLE001 — live mark is best-effort
+        logger.debug("mover radar live mark %s unavailable: %s", ticker, exc)
+
+    if price is None and not is_overnight_session():
+        try:
+            import extended_quotes
+            price = (extended_quotes.extended_quote(ticker) or {}).get("price")
+        except Exception as exc:                   # noqa: BLE001
+            logger.debug("mover radar extended quote %s unavailable: %s", ticker, exc)
+
+    if not price:
+        return None
+    pct = (float(price) / float(last_close) - 1) * 100
+    return {
+        "session": session,
+        "price": round(float(price), 2),
+        "pct_vs_close": round(pct, 2),
+        "kind": kind,
+        "note": (
+            "Indicative overnight quote midpoint, not a trade."
+            if kind == "indicative quote"
+            else f"Latest {session} print against the regular-session close."
+        ),
+    }
+
+
 def _pct_move_n(hist: pd.DataFrame, bars_back: int) -> float | None:
     closes = hist["Close"].dropna()
     if len(closes) < bars_back + 1:
@@ -145,13 +198,86 @@ def _price_volume_stats(ticker: str, timeframe: str = _DEFAULT_TIMEFRAME) -> dic
         avg_volume = float(rolling.iloc[:-1].tail(20).mean())
     relative_volume = (window_vol / avg_volume) if avg_volume and window_vol else None
 
+    extended = _extended_move(ticker, last_close)
     return {
         "available": True, "last_close": round(last_close, 2), "pct_move": round(pct_move, 2),
+        "extended": extended,
+        # What a reader should treat as "the move right now". Off-hours that is
+        # the gap the bars have not caught, not yesterday's completed session.
+        "effective_pct_move": round(
+            extended["pct_vs_close"] if extended else pct_move, 2),
         "daily_vol_pct": round(vol_pct, 2) if vol_pct else None,
         "z_score": round(z_score, 2) if z_score is not None else None,
         "avg_volume": avg_volume, "today_volume": window_vol,
         "relative_volume": round(relative_volume, 2) if relative_volume else None,
     }
+
+
+def _earnings_context(ticker: str, fresh_hours: int) -> dict | None:
+    """The most recent report and the next scheduled one, with the surprise.
+
+    Earnings arrive through the news feed as prose a model has to infer from,
+    which is the weakest possible form of the strongest possible catalyst. A
+    structured beat or miss is a fact worth citing, and knowing a print lands
+    tonight explains a move a headline search never will.
+    """
+    ck = f"mover_radar:earn:{ticker}"
+    cached = disk_get(ck)
+    if cached is not None:
+        return cached or None
+
+    out: dict | None = None
+    try:
+        import yfinance as yf
+        df = yf.Ticker(ticker).get_earnings_dates(limit=12)
+        if df is not None and not df.empty:
+            now = pd.Timestamp.now(tz=df.index.tz)
+            past, upcoming = df[df.index < now], df[df.index >= now]
+            out = {}
+            if not past.empty:
+                stamp = past.index[0]
+                row = past.iloc[0]
+                hours_ago = (now - stamp).total_seconds() / 3600.0
+                estimate, actual = row.get("EPS Estimate"), row.get("Reported EPS")
+                surprise = row.get("Surprise(%)")
+                out["last_report"] = {
+                    "at": stamp.isoformat(),
+                    "hoursAgo": round(hours_ago, 1),
+                    "epsEstimate": None if pd.isna(estimate) else round(float(estimate), 2),
+                    "epsActual": None if pd.isna(actual) else round(float(actual), 2),
+                    "surprisePct": None if pd.isna(surprise) else round(float(surprise), 2),
+                    # yfinance timestamps the release itself, so the hour tells
+                    # you before-open from after-close without a separate field.
+                    "timing": "before the open" if stamp.hour < 12 else "after the close",
+                    # The whole point: is this report new enough to BE the move?
+                    "withinWindow": hours_ago <= fresh_hours,
+                }
+            if not upcoming.empty:
+                nxt = upcoming.index[-1]
+                out["next_report"] = {
+                    "at": nxt.isoformat(),
+                    "hoursAway": round((nxt - now).total_seconds() / 3600.0, 1),
+                }
+            out = out or None
+    except Exception as exc:                       # noqa: BLE001 — context is optional
+        logger.debug("mover radar earnings context %s unavailable: %s", ticker, exc)
+
+    disk_set(ck, out or {}, ttl=3600)
+    return out
+
+
+def _earnings_headline(earnings: dict | None) -> str | None:
+    """One line a brief can cite verbatim, or None when there is nothing to say."""
+    last = (earnings or {}).get("last_report") or {}
+    if not last.get("withinWindow"):
+        return None
+    when = f"{last['hoursAgo']:.0f}h ago {last['timing']}"
+    actual, estimate, surprise = last.get("epsActual"), last.get("epsEstimate"), last.get("surprisePct")
+    if actual is None or estimate is None:
+        return f"Reported earnings {when}; EPS actual vs estimate not yet available."
+    verb = "beat" if surprise and surprise > 0 else "missed" if surprise and surprise < 0 else "matched"
+    tail = f" ({surprise:+.1f}% surprise)" if surprise is not None else ""
+    return f"Reported earnings {when}: EPS {actual} vs {estimate} estimate, {verb}{tail}."
 
 
 def _market_relative_stats(ticker_pct_move: float, sector: str | None, timeframe: str = _DEFAULT_TIMEFRAME) -> dict:
@@ -179,11 +305,21 @@ def _fresh_evidence(events, hours: int = 30):
     return [e for e in events if e.timestamp >= cutoff]
 
 
-def _has_material_evidence(events, price: dict) -> bool:
+def _has_material_evidence(events, price: dict, earnings: dict | None = None) -> bool:
     """Whether ANYTHING in the fresh evidence is actually strong enough to be
     a catalyst, as opposed to routine coverage (a 13F "shares purchased by
     fund X" filing, a minor analyst price-target tweak) that shows up on every
     ordinary day for a heavily-covered name regardless of whether it moved."""
+    # A report inside the window is the catalyst, whether or not the newswire
+    # has caught up. Judging that by headline count would call the most
+    # explainable move of the quarter unexplained for the first hour.
+    if (earnings or {}).get("last_report", {}).get("withinWindow"):
+        return True
+    # Likewise a real extended-hours gap: bars have not recorded it yet, so
+    # every bar-derived signal below reads flat while the stock is moving.
+    ext = price.get("extended") or {}
+    if abs(ext.get("pct_vs_close") or 0) >= 2.0:
+        return True
     if any(e.source_name == "SEC EDGAR" for e in events):
         return True
     if any(e.sentiment_score is not None and abs(e.sentiment_score) >= _MATERIAL_SENTIMENT_ABS for e in events):
@@ -371,7 +507,7 @@ def _deep_read_excerpts(ticker_evidence: list, indices: list[int]) -> dict[int, 
 
 def _build_llm_prompt(ticker: str, sector: str | None, price: dict, relative: dict,
                        ticker_evidence: list, market_context: list, peer_context: list,
-                       excerpts: dict[int, str]) -> tuple[str, str]:
+                       excerpts: dict[int, str], earnings: dict | None = None) -> tuple[str, str]:
     system = (
         "You are a markets analyst explaining a single stock's move using ONLY the "
         "evidence provided below. Rules: cite the specific evidence item(s) your "
@@ -380,6 +516,14 @@ def _build_llm_prompt(ticker: str, sector: str | None, price: dict, relative: di
         "source article — use it to identify concrete facts (numbers, named "
         "entities, analyst calls) but ALWAYS paraphrase them in your own words; "
         "never quote more than a few consecutive words verbatim from any excerpt. "
+        "When an EARNINGS block is present it is structured company data, not a "
+        "headline, and it outranks the news: if a report landed inside the window, "
+        "lead with it, state the actual against the estimate, and say plainly "
+        "whether it beat or missed. Cite it as 'the earnings report' rather than "
+        "an index number, since it is not part of the numbered evidence list. "
+        "When a LIVE MARK block is present the regular session is closed and the "
+        "bars have not recorded the current move: explain the live move, and if "
+        "the mark is an indicative quote rather than a trade, say so. "
         "The 'Peer company news' section is that OTHER company's own coverage, not "
         "about this ticker — but a close peer's earnings, guidance, or pricing news "
         "(e.g. a chip foundry announcing a price hike from surging demand) routinely "
@@ -395,12 +539,44 @@ def _build_llm_prompt(ticker: str, sector: str | None, price: dict, relative: di
     )
     lines = [
         f"Ticker: {ticker}" + (f" (sector: {sector})" if sector else ""),
-        f"Move: {price['pct_move']:+.2f}% (z-score vs its own normal daily move: {price.get('z_score')})",
+        f"Move (last completed bar): {price['pct_move']:+.2f}% (z-score vs its own normal daily move: {price.get('z_score')})",
         f"Volume: {price.get('relative_volume')}x its 20-day average" if price.get("relative_volume") else "Volume: unavailable",
         f"Vs S&P 500 today: {relative.get('spy_pct')}% (excess/idiosyncratic move: {relative.get('excess_vs_market')})",
     ]
     if relative.get("sector_etf"):
         lines.append(f"Vs its sector ({relative['sector_etf']}) today: {relative.get('sector_pct')}%")
+
+    ext = price.get("extended") or {}
+    if ext:
+        lines.append(
+            f"\nLIVE MARK — the regular session is closed ({ext['session']}). "
+            f"{ext['price']} is {ext['pct_vs_close']:+.2f}% against the last regular close of "
+            f"{price['last_close']}. Source: {ext['kind']}. {ext['note']} "
+            "The bar-based move above predates this and does not include it."
+        )
+
+    headline = _earnings_headline(earnings)
+    last = (earnings or {}).get("last_report") or {}
+    nxt = (earnings or {}).get("next_report") or {}
+    if headline or nxt:
+        lines.append("\nEARNINGS (structured company data, not a headline):")
+        if headline:
+            lines.append(f"  {headline}")
+            if last.get("epsActual") is not None:
+                lines.append(
+                    f"  EPS actual {last['epsActual']} vs estimate {last['epsEstimate']}"
+                    + (f", surprise {last['surprisePct']:+.1f}%" if last.get("surprisePct") is not None else "")
+                )
+        elif last:
+            lines.append(
+                f"  Last reported {last['hoursAgo']:.0f}h ago, outside this timeframe's window "
+                "— unlikely to be the cause of the current move."
+            )
+        if nxt:
+            lines.append(
+                f"  Next report in {nxt['hoursAway']:.0f}h ({nxt['at'][:10]}). "
+                "A move ahead of a print is often positioning, not news."
+            )
 
     lines.append(f"\nEvidence about {ticker} specifically (newest/highest-signal first):")
     for i, e in enumerate(ticker_evidence[:_MAX_EVIDENCE_FOR_LLM]):
@@ -425,7 +601,7 @@ def _build_llm_prompt(ticker: str, sector: str | None, price: dict, relative: di
 def analyze(ticker: str, timeframe: str = _DEFAULT_TIMEFRAME) -> dict:
     sym = ticker.strip().upper()
     tf = timeframe if timeframe in _TIMEFRAMES else _DEFAULT_TIMEFRAME
-    cache_key = f"mover_radar:v1:{sym}:{tf}"
+    cache_key = f"mover_radar:v2:{sym}:{tf}"   # v2 adds the live mark + earnings block
     cached = disk_get(cache_key)
     if cached is not None:
         return cached
@@ -442,13 +618,32 @@ def analyze(ticker: str, timeframe: str = _DEFAULT_TIMEFRAME) -> dict:
 
     relative = _market_relative_stats(price["pct_move"], sector, tf)
 
-    collected = news_aggregator.collect(sym, company_name)
-    fresh = _fresh_evidence(collected["events"], hours=_timeframe_cfg(tf)["fresh_hours"])
+    fresh_hours = _timeframe_cfg(tf)["fresh_hours"]
+    # Fetched alongside the news rather than after it: earnings is the single
+    # most likely explanation for a large move, and waiting on the slower
+    # multi-source news fan-out to start it would add its latency to every call.
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        earnings_future = pool.submit(_earnings_context, sym, fresh_hours)
+        collected = news_aggregator.collect(sym, company_name)
+        try:
+            earnings = earnings_future.result(timeout=12)
+        except Exception as exc:                   # noqa: BLE001 — context is optional
+            logger.debug("mover radar earnings context %s: %s", sym, exc)
+            earnings = None
+
+    fresh = _fresh_evidence(collected["events"], hours=fresh_hours)
     ranked = _rank_evidence(fresh)
 
     z = price.get("z_score")
     is_small_move = z is None or abs(z) < _NOISE_Z_THRESHOLD
-    material = _has_material_evidence(ranked, price)
+    # Off-hours the bar-based z-score describes a session that already ended, so
+    # a stock gapping on a print would score as small. Judge the live gap instead.
+    ext = price.get("extended") or {}
+    if ext and price.get("daily_vol_pct"):
+        live_z = ext["pct_vs_close"] / price["daily_vol_pct"]
+        if abs(live_z) >= _NOISE_Z_THRESHOLD:
+            is_small_move = False
+    material = _has_material_evidence(ranked, price, earnings)
     # A small move isn't "explained" just because SOME evidence exists — a
     # heavily-covered large-cap has routine analyst notes and mechanical 13F
     # "shares purchased by fund X" filings on every ordinary day, with no
@@ -495,7 +690,7 @@ def analyze(ticker: str, timeframe: str = _DEFAULT_TIMEFRAME) -> dict:
             logger.warning("mover radar deep-read failed for %s: %s", sym, exc)
             excerpts = {}
         try:
-            system, prompt = _build_llm_prompt(sym, sector, price, relative, ticker_evidence, market_context, peer_context, excerpts)
+            system, prompt = _build_llm_prompt(sym, sector, price, relative, ticker_evidence, market_context, peer_context, excerpts, earnings)
             raw = ai_client.groq_complete(prompt, system=system, max_tokens=400)
             narrative = ai_client.parse_json(raw)
         except Exception as exc:
@@ -508,6 +703,9 @@ def analyze(ticker: str, timeframe: str = _DEFAULT_TIMEFRAME) -> dict:
     result = {
         "ticker": sym, "timeframe": tf, "available": True, "company_name": company_name, "sector": sector,
         "price": price, "relative": relative, "verdict": verdict,
+        # Surfaced so the UI can show the catalyst without re-deriving it from prose.
+        "earnings": earnings,
+        "earningsHeadline": _earnings_headline(earnings),
         "evidence": [
             {"source": e.source_name, "headline": e.headline_or_text, "sentiment": e.sentiment_score,
              "url": e.url, "timestamp": e.timestamp.isoformat(), "is_market_context": False}

@@ -594,6 +594,27 @@ export function PortfolioManagerContent() {
     return { ...p, legViews, cost, value: priced ? value : null, pnl, pnlPct, netDelta: priced ? netDelta : null, priced }
   })
 
+  const closeHoldingToCash = (row: (typeof rows)[number], index: number) => {
+    // Proceeds are the live mark, not cost basis: closing realises what the
+    // position is worth now. Without a quote there is no proceeds figure to
+    // post, so the action stays disabled rather than booking a guess.
+    if (!(row.price > 0)) return
+    const amount = Number((row.shares * row.price).toFixed(2))
+    const realised = row.costIsAuto ? null : Number((row.value - row.cost).toFixed(2))
+    const pnlNote = realised == null ? '' : ` Realised P&L ${realised >= 0 ? '+' : ''}${fmtMoney(realised)}.`
+    if (!confirm(
+      `Close ${row.shares} ${normalizeTicker(row.ticker)} at ${fmtMoney(row.price)} and post ${fmtMoney(amount)} to cash?${pnlNote}`
+    )) return
+    setCash(prev => [...prev, {
+      id: uid(),
+      label: `${normalizeTicker(row.ticker)} close`,
+      amount,
+      rate: 0,
+      since: todayISO,
+    }])
+    setHoldings(prev => prev.filter((_, j) => j !== index))
+  }
+
   const closeOptionToCash = (position: (typeof optRows)[number]) => {
     if (position.value == null) return
     const amount = Number(position.value.toFixed(2))
@@ -1001,7 +1022,15 @@ export function PortfolioManagerContent() {
                                   : holding.shares
                                 setEditStock({ i, quantity: String(quantity), quantityMode, avgCost: holding.avgCost > 0 ? String(holding.avgCost) : '', costMode: holding.useMarketPrice ? 'market' : 'manual' })
                               }} style={{ ...editBtn, color: T.muted }}>Edit</button>
-                              <button onClick={() => removeHolding(i)} style={{ background: 'none', border: 'none', color: T.muted, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 4px' }}>×</button>
+                              <button
+                                onClick={() => closeHoldingToCash(r, i)}
+                                disabled={!(r.price > 0)}
+                                title={r.price > 0
+                                  ? 'Close at the current mark and post the proceeds to cash'
+                                  : 'A live quote is required before closing'}
+                                style={{ ...editBtn, color: r.price > 0 ? T.gold : T.muted, opacity: r.price > 0 ? 1 : 0.45, cursor: r.price > 0 ? 'pointer' : 'not-allowed' }}
+                              >Close</button>
+                              <button onClick={() => removeHolding(i)} title="Remove without posting cash" style={{ background: 'none', border: 'none', color: T.muted, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 4px' }}>×</button>
                             </>)}
                           </td>
                         </tr>

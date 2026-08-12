@@ -206,7 +206,7 @@ export function StationLegend({ title }: { title?: string }) {
           width: 12, height: 9,
           background: `color-mix(in srgb, ${T.muted} 20%, transparent)`,
         }} />
-        coverage gap — nothing interpolated
+        coverage gap, nothing interpolated
       </span>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
         <span style={{ width: 14, borderTop: `1px dashed ${T.muted}` }} />

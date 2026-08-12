@@ -22,7 +22,7 @@ export default function RegionalRead({ board, compact }: { board: Board; compact
           fontFamily: T.label, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.12em',
           textTransform: 'uppercase', color: T.muted,
         }}>
-          Regional read — what the stations say together
+          Regional read: what the stations say together
         </span>
         <span
           title="Every sentence here describes the trailing window against an earlier window. Nothing on this board projects forward."

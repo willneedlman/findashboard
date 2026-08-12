@@ -690,7 +690,7 @@ const SectorStrip = () => (
 /* ── Landing ────────────────────────────────────────────────────────────── */
 
 const TAPE_FEATURES = [
-  'Energy Flows', 'Chart Studio', 'Dealer GEX', 'Market Maker', 'Sentiment Tracker',
+  'Energy Flows', 'Chart Studio', 'Dealer Exposure', 'Market Maker', 'Sentiment Tracker',
   'Options Flow', 'Volatility Skew', 'IV Rank', 'Implied Probability', 'Strategy Builder', 'Rate Engine',
   'DCF Valuation', 'Reverse DCF', 'Stock Screener', 'Monte Carlo', 'Credit Spreads',
   'FX Matrix', 'Paper Trading', 'Trade Journal', 'Price Alerts',
@@ -820,7 +820,7 @@ export function Landing() {
             <div className="k">Options intelligence</div><h3>Flow, gamma, and volatility.</h3>
             <p>Unusual activity, dealer GEX, IV rank and skew, and the option-implied odds at every strike.</p>
             <div className="mini">
-              <div className="row"><span>Dealer GEX</span><span className="pos mono">+2.1B</span></div>
+              <div className="row"><span>Dealer Exposure</span><span className="pos mono">+2.1B</span></div>
               <div className="row"><span>IV Rank · SPX</span><span className="mono">18%</span></div>
               <div className="row"><span>Put/Call</span><span className="neg mono">0.92</span></div>
             </div>
@@ -863,7 +863,7 @@ export function Landing() {
         <StaggerGroup className="hubband">
           {([
             ['research', 'Research', 'Screener · Sentiment · Earnings Summarizer'],
-            ['options', 'Options', 'Dealer GEX · Flow · Implied Vol'],
+            ['options', 'Options', 'Dealer Exposure · Flow · Implied Vol'],
             ['macro', 'Macro', 'Rate Engine · Global Markets · Credit'],
             ['charting', 'Charting', 'Chart Studio · Asset Overlay · Compare'],
             ['trading', 'Trading', 'Paper Trading · MM Sim · Journal'],
@@ -1026,13 +1026,13 @@ export function OptionsPage() {
       <section className="blk" style={{ borderTop: '1px solid var(--line)', background: 'var(--bg2)' }}>
         <div className="wrap split">
           <Reveal>
-            <div className="eyebrow">Dealer GEX</div>
+            <div className="eyebrow">Dealer Exposure</div>
             <h2 style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em', margin: '12px 0 14px' }}>Dealer gamma by strike.</h2>
             <p style={{ color: 'var(--muted)', fontSize: 15.5, lineHeight: 1.65 }}>Net dealer gamma at each strike and expiry, the zero-gamma flip level, and the pin zones that shape intraday behavior. Above the flip dealers dampen moves, below it they amplify them.</p>
-            <div className="cta" style={{ marginTop: 24 }}><Link to="/app" className="btn btn-ghost btn-lg">Open Dealer GEX →</Link></div>
+            <div className="cta" style={{ marginTop: 24 }}><Link to="/app" className="btn btn-ghost btn-lg">Open Dealer Exposure →</Link></div>
           </Reveal>
           <Reveal delay={0.12}>
-            <VPanel title="Dealer GEX" tags={['GEX profile', 'Flip point', 'Pin risk']}>
+            <VPanel title="Dealer Exposure" tags={['GEX profile', 'Flip point', 'Pin risk']}>
               <GammaProfile />
             </VPanel>
           </Reveal>
