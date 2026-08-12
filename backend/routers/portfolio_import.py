@@ -18,7 +18,8 @@ _MAX_IMAGE_BYTES = 8 * 1024 * 1024  # Claude's own cap is ~5MB post-decode per i
 _SYSTEM = """You extract positions from a screenshot of a brokerage or portfolio-tracking app.
 Respond ONLY with a JSON object (no prose, no markdown fences):
 {"holdings": [ {"ticker": string, "shares": number, "avgCost": number|null} ],
- "options":  [ {"underlying": string, "type": "call"|"put", "strike": number, "expiry": "YYYY-MM-DD", "side": "long"|"short", "contracts": number, "avgPremium": number|null} ]}
+ "options":  [ {"underlying": string, "type": "call"|"put", "strike": number, "expiry": "YYYY-MM-DD", "side": "long"|"short", "contracts": number, "avgPremium": number|null} ],
+ "cash":     [ {"label": string, "amount": number} ]}
 
 EQUITY / ETF / fund rows go in "holdings":
 - ticker: the exchange ticker symbol only (e.g. "AAPL", "BRK.B"), not the company name.
@@ -42,13 +43,24 @@ OPTION contracts go in "options" (parse each option row/line):
   2026-08-15, C = call, strike 195.000 (the final 8 digits divided by 1000).
 
 Rules:
+CASH balances go in "cash":
+- label: what the app calls it ("Cash", "Cash & sweep", "Money market", "Settled cash").
+- amount: the balance as a plain number. Negative for a margin loan or debit balance.
+- Include a settled/available cash line and any sweep or money-market balance held as cash.
+- Do NOT include the account total, total market value, buying power, or margin
+  buying power. Buying power is a borrowing limit, not a balance, and adding it
+  would double-count the portfolio.
+- A money-market or treasury FUND held as a ticketed position (SGOV, BIL, VMFXX)
+  is a holding, not cash. Put it in "holdings".
+
+Rules:
 - Put every equity row in "holdings" and every option contract in "options".
-- Skip cash balances, headers, totals, and footnotes.
+- Skip headers, totals, footnotes, and buying power.
 - If a section is absent return [] for it. If nothing is readable return
-  {"holdings": [], "options": []}.
+  {"holdings": [], "options": [], "cash": []}.
 """
 
-_PROMPT = "Extract every equity holding and option contract from this portfolio screenshot as the JSON object described."
+_PROMPT = "Extract every equity holding, option contract, and cash balance from this portfolio screenshot as the JSON object described."
 
 
 class ScreenshotImportRequest(BaseModel):
@@ -71,13 +83,41 @@ class ParsedOption(BaseModel):
     avgPremium: float | None = None
 
 
+class ParsedCash(BaseModel):
+    label: str
+    amount: float
+
+
 class ScreenshotImportResponse(BaseModel):
     holdings: list[ParsedHolding]
     options: list[ParsedOption] = []
+    cash: list[ParsedCash] = []
     warning: str | None = None
 
 
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+# Buying power is a borrowing limit and a total is a sum of things already
+# imported. Either one entering as cash silently inflates the book, so they are
+# rejected here as well as in the prompt: the prompt is guidance, this is a rule.
+_CASH_REJECT_RE = re.compile(
+    r"buying\s*power|total|net\s*worth|account\s*value|equity|margin\s*avail", re.I)
+
+
+def _parse_cash(rows) -> tuple[list["ParsedCash"], int]:
+    out: list[ParsedCash] = []
+    skipped = 0
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict):
+            skipped += 1
+            continue
+        label = str(row.get("label") or "").strip()[:40]
+        amount = _num(row.get("amount"))
+        if not label or amount is None or _CASH_REJECT_RE.search(label):
+            skipped += 1
+            continue
+        out.append(ParsedCash(label=label, amount=amount))
+    return out, skipped
 
 
 def _num(v) -> float | None:
@@ -152,10 +192,11 @@ def parse_screenshot(req: ScreenshotImportRequest):
     # New shape is {"holdings": [...], "options": [...]}; tolerate a bare array
     # (older prompt shape) as holdings-only.
     if isinstance(parsed, list):
-        holding_rows, option_rows = parsed, []
+        holding_rows, option_rows, cash_rows = parsed, [], []
     elif isinstance(parsed, dict):
         holding_rows = parsed.get("holdings") if isinstance(parsed.get("holdings"), list) else []
         option_rows = parsed.get("options") if isinstance(parsed.get("options"), list) else []
+        cash_rows = parsed.get("cash") if isinstance(parsed.get("cash"), list) else []
     else:
         raise HTTPException(500, "AI did not return a positions object")
 
@@ -184,11 +225,13 @@ def parse_screenshot(req: ScreenshotImportRequest):
 
     options, opt_skipped = _parse_options(option_rows)
     skipped += opt_skipped
+    cash, cash_skipped = _parse_cash(cash_rows)
+    skipped += cash_skipped
 
     warning = None
-    if not holdings and not options:
-        warning = "No readable holdings or option positions found in that screenshot."
+    if not holdings and not options and not cash:
+        warning = "No readable holdings, option positions, or cash found in that screenshot."
     elif skipped:
         warning = f"Skipped {skipped} row(s) that didn't look like a position."
 
-    return ScreenshotImportResponse(holdings=holdings, options=options, warning=warning)
+    return ScreenshotImportResponse(holdings=holdings, options=options, cash=cash, warning=warning)

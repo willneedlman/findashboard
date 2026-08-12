@@ -480,8 +480,10 @@ export function PortfolioManagerContent() {
   const importScreenshot = useCallback((payload: {
     holdings: { ticker: string; shares: number; avgCost: number | null }[]
     options: { underlying: string; type: OptType; strike: number; expiry: string; side: Side; contracts: number; avgPremium: number | null }[]
+    cash?: { label: string; amount: number }[]
   }) => {
     const { holdings, options } = payload
+    const cashRows = payload.cash ?? []
     if (holdings.length) {
       setHoldings(prev => {
         let next = [...prev]
@@ -511,7 +513,23 @@ export function PortfolioManagerContent() {
           })),
       ])
     }
-  }, [setHoldings, setOptions])
+    // Cash is matched on label so re-importing the same screenshot updates the
+    // balance rather than stacking a second copy of it. Rate stays zero: a
+    // screenshot shows a balance, never the yield it accrues at.
+    if (cashRows.length) {
+      setCash(prev => {
+        const next = [...prev]
+        for (const row of cashRows) {
+          const label = row.label.trim()
+          if (!label) continue
+          const existing = next.findIndex(c => c.label.trim().toLowerCase() === label.toLowerCase())
+          if (existing >= 0) next[existing] = { ...next[existing], amount: row.amount }
+          else next.push({ id: uid(), label, amount: row.amount, rate: 0, since: todayISO })
+        }
+        return next
+      })
+    }
+  }, [setHoldings, setOptions, setCash])
 
   // ── Option entry handlers ──
   const updateLeg = (i: number, patch: Partial<LegDraft>) =>

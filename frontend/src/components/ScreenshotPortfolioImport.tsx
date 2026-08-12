@@ -15,7 +15,9 @@ import { normalizeTicker } from '../lib/pmImport'
 interface ParsedRow { ticker: string; shares: number; avgCost: number | null; include: boolean }
 interface ImportedHolding { ticker: string; shares: number; avgCost: number | null }
 interface ImportedOption { underlying: string; type: 'call' | 'put'; strike: number; expiry: string; side: 'long' | 'short'; contracts: number; avgPremium: number | null }
+interface ImportedCash { label: string; amount: number }
 interface ParsedOptionRow extends ImportedOption { include: boolean }
+interface ParsedCashRow extends ImportedCash { include: boolean }
 interface PendingImage { id: number; dataUrl: string }
 
 const MAX_IMAGES = 8
@@ -42,7 +44,7 @@ const rowInp: React.CSSProperties = {
   fontSize: 11, padding: '4px 6px', width: '100%', outline: 'none', boxSizing: 'border-box',
 }
 
-export default function ScreenshotPortfolioImport({ onImport }: { onImport: (payload: { holdings: ImportedHolding[]; options: ImportedOption[] }) => void }) {
+export default function ScreenshotPortfolioImport({ onImport }: { onImport: (payload: { holdings: ImportedHolding[]; options: ImportedOption[]; cash: ImportedCash[] }) => void }) {
   const [open, setOpen] = useState(false)
   const [images, setImages] = useState<PendingImage[]>([])
   const [busy, setBusy] = useState(false)
@@ -50,10 +52,11 @@ export default function ScreenshotPortfolioImport({ onImport }: { onImport: (pay
   const [warning, setWarning] = useState<string | null>(null)
   const [rows, setRows] = useState<ParsedRow[] | null>(null)
   const [optRows, setOptRows] = useState<ParsedOptionRow[]>([])
+  const [cashRows, setCashRows] = useState<ParsedCashRow[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
   const nextId = useRef(0)
 
-  const resetResults = () => { setRows(null); setOptRows([]); setError(null); setWarning(null) }
+  const resetResults = () => { setRows(null); setOptRows([]); setCashRows([]); setError(null); setWarning(null) }
   const clearAll = () => { setImages([]); resetResults() }
   const close = () => { setOpen(false); clearAll() }
 
@@ -102,12 +105,14 @@ export default function ScreenshotPortfolioImport({ onImport }: { onImport: (pay
       .then(results => {
         const holdings: ImportedHolding[] = []
         const options: ImportedOption[] = []
+        const cash: ImportedCash[] = []
         const notes: string[] = []
         results.forEach((res, i) => {
           const label = images.length > 1 ? `Screenshot ${i + 1}: ` : ''
           if (res.status === 'fulfilled') {
             holdings.push(...(res.value.data.holdings as ImportedHolding[]))
             options.push(...((res.value.data.options ?? []) as ImportedOption[]))
+            cash.push(...((res.value.data.cash ?? []) as ImportedCash[]))
             if (res.value.data.warning) notes.push(`${label}${res.value.data.warning}`)
           } else {
             const detail = res.reason?.response?.data?.detail || 'could not be parsed'
@@ -116,6 +121,7 @@ export default function ScreenshotPortfolioImport({ onImport }: { onImport: (pay
         })
         setRows(holdings.map(h => ({ ...h, include: true })))
         setOptRows(options.map(o => ({ ...o, include: true })))
+        setCashRows(cash.map(c => ({ ...c, include: true })))
         setWarning(notes.length ? notes.join(' · ') : null)
       })
       .finally(() => setBusy(false))
@@ -123,6 +129,9 @@ export default function ScreenshotPortfolioImport({ onImport }: { onImport: (pay
 
   const updateRow = (i: number, patch: Partial<ParsedRow>) =>
     setRows(prev => prev ? prev.map((r, j) => (j === i ? { ...r, ...patch } : r)) : prev)
+  const updateCashRow = (i: number, patch: Partial<ParsedCashRow>) =>
+    setCashRows(prev => prev.map((r, j) => (j === i ? { ...r, ...patch } : r)))
+
   const updateOptRow = (i: number, patch: Partial<ParsedOptionRow>) =>
     setOptRows(prev => prev.map((r, j) => (j === i ? { ...r, ...patch } : r)))
 
@@ -130,14 +139,15 @@ export default function ScreenshotPortfolioImport({ onImport }: { onImport: (pay
   const includedOpts = optRows.filter(r => r.include)
 
   const commit = () => {
+    const cash = cashRows.filter(c => c.include).map(({ include: _i, ...c }) => c)
     const holdings = included
       .filter(r => r.ticker.trim() && r.shares > 0)
       .map(r => ({ ticker: normalizeTicker(r.ticker), shares: r.shares, avgCost: r.avgCost }))
     const options = includedOpts
       .filter(r => r.underlying.trim() && r.strike > 0 && r.expiry.trim() && r.contracts > 0)
       .map(r => ({ ...r, underlying: normalizeTicker(r.underlying) }))
-    if (!holdings.length && !options.length) return
-    onImport({ holdings, options })
+    if (!holdings.length && !options.length && !cash.length) return
+    onImport({ holdings, options, cash })
     close()
   }
 
@@ -237,6 +247,25 @@ export default function ScreenshotPortfolioImport({ onImport }: { onImport: (pay
                           ))}
                           <p style={{ fontFamily: T.label, fontSize: 8, color: T.muted, lineHeight: 1.5 }}>
                             Each contract imports as a single-leg position. Premium is per share (cost per contract ÷ 100).
+                          </p>
+                        </div>
+                      )}
+
+                      {cashRows.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <div style={{ fontFamily: T.label, fontSize: 8.5, fontWeight: 700, color: T.gold, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Cash</div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '18px 1fr 110px', gap: 5, fontFamily: T.label, fontSize: 8, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                            <span /><span>Label</span><span>Amount</span>
+                          </div>
+                          {cashRows.map((r, i) => (
+                            <div key={i} style={{ display: 'grid', gridTemplateColumns: '18px 1fr 110px', gap: 5, alignItems: 'center', opacity: r.include ? 1 : 0.45 }}>
+                              <input type="checkbox" checked={r.include} onChange={e => updateCashRow(i, { include: e.target.checked })} />
+                              <input value={r.label} onChange={e => updateCashRow(i, { label: e.target.value })} style={rowInp} />
+                              <input type="number" value={r.amount} onChange={e => updateCashRow(i, { amount: parseFloat(e.target.value) || 0 })} style={{ ...rowInp, textAlign: 'right' }} />
+                            </div>
+                          ))}
+                          <p style={{ fontFamily: T.label, fontSize: 8, color: T.muted, lineHeight: 1.5 }}>
+                            Cash imports at a zero accrual rate. Buying power and account totals are excluded on purpose: buying power is a borrowing limit, and a total would double-count the positions above.
                           </p>
                         </div>
                       )}

@@ -273,8 +273,23 @@ def _earnings_headline(earnings: dict | None) -> str | None:
         return None
     when = f"{last['hoursAgo']:.0f}h ago {last['timing']}"
     actual, estimate, surprise = last.get("epsActual"), last.get("epsEstimate"), last.get("surprisePct")
-    if actual is None or estimate is None:
-        return f"Reported earnings {when}; EPS actual vs estimate not yet available."
+
+    if actual is None:
+        # Estimate feeds carry the actual hours to days after the release, so for a
+        # report this fresh its absence says nothing about the print. The old copy
+        # read as "no figures exist" while the newswire below was already carrying
+        # the revenue beat, so point at the evidence instead of asserting ignorance.
+        pre_profit = estimate is not None and estimate < 0
+        lens = (" Consensus EPS was negative, so revenue is the number that matters here"
+                " rather than an EPS beat or miss." if pre_profit else "")
+        return (
+            f"Reported earnings {when}. The estimate feed has not posted the actual yet, "
+            f"which is normal this soon after a release; the reported figures are in the "
+            f"news evidence below.{lens}"
+        )
+
+    if estimate is None:
+        return f"Reported earnings {when}: EPS {actual}, with no consensus estimate on file."
     verb = "beat" if surprise and surprise > 0 else "missed" if surprise and surprise < 0 else "matched"
     tail = f" ({surprise:+.1f}% surprise)" if surprise is not None else ""
     return f"Reported earnings {when}: EPS {actual} vs {estimate} estimate, {verb}{tail}."
@@ -517,10 +532,14 @@ def _build_llm_prompt(ticker: str, sector: str | None, price: dict, relative: di
         "entities, analyst calls) but ALWAYS paraphrase them in your own words; "
         "never quote more than a few consecutive words verbatim from any excerpt. "
         "When an EARNINGS block is present it is structured company data, not a "
-        "headline, and it outranks the news: if a report landed inside the window, "
-        "lead with it, state the actual against the estimate, and say plainly "
-        "whether it beat or missed. Cite it as 'the earnings report' rather than "
-        "an index number, since it is not part of the numbered evidence list. "
+        "headline, and it outranks the news on timing and consensus: if a report "
+        "landed inside the window, lead with it. Cite it as 'the earnings report' "
+        "rather than an index number, since it is not part of the numbered evidence "
+        "list. If the block says the actual has not posted yet, do NOT say results "
+        "are unavailable — take the reported figures (revenue, EPS, guidance) from "
+        "the news evidence and attribute them there. Where consensus EPS is "
+        "negative the company is pre-profit, so lead on revenue and guidance rather "
+        "than framing it as an EPS beat or miss. "
         "When a LIVE MARK block is present the regular session is closed and the "
         "bars have not recorded the current move: explain the live move, and if "
         "the mark is an indicative quote rather than a trade, say so. "
