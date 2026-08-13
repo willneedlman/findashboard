@@ -13,9 +13,20 @@ import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip, chartClip } from '../lib/reportCaptureRegistry'
 
 type AssetClass = 'commodities' | 'rates' | 'fx' | 'indices' | 'agriculture'
-type Point = { date: string; net: number; net_pct_oi: number | null; open_interest: number }
-type Cohort = { label: string; long: number; short: number; net: number; net_pct_oi: number | null }
-type Market = { id: string; label: string; contract: string; latest: Point; weekly_flow: number | null; open_interest_change: number | null; crowding: number | null; series: Point[]; cohorts: Cohort[] }
+type Point = { date: string; net: number; net_pct_oi: number | null; open_interest: number; cohort_net?: Record<string, number> }
+type Trend = { w4: number | null; w13: number | null; w26: number | null }
+type Cohort = {
+  label: string; long: number; short: number; net: number; net_pct_oi: number | null
+  trend: Trend; derived: boolean
+  long_usd: number | null; short_usd: number | null; net_usd: number | null
+}
+type ContractValue = { multiplier: number; unit: string; price: number | null; value_usd: number | null; basis: string }
+type Market = {
+  id: string; label: string; contract: string; latest: Point; weekly_flow: number | null
+  open_interest_change: number | null; crowding: number | null; series: Point[]; cohorts: Cohort[]
+  net_residual: number; balanced: boolean; weeks: number; primary: string
+  contract_value: ContractValue | null; open_interest_usd: number | null
+}
 type CotResponse = { available: boolean; asset_label: string; family: string; as_of: string | null; markets: Market[]; source: string }
 
 const ASSET_CLASSES: { id: AssetClass; label: string }[] = [
@@ -24,6 +35,20 @@ const ASSET_CLASSES: { id: AssetClass; label: string }[] = [
 const axisTick = { fontFamily: T.mono, fontSize: 9, fill: T.muted }
 const panel: React.CSSProperties = { border: `1px solid ${T.border}`, background: T.surface }
 const heading: React.CSSProperties = { fontFamily: T.label, fontSize: 9, fontWeight: 800, letterSpacing: '0.15em', textTransform: 'uppercase', color: T.gold }
+
+/** Compact dollars: positioning runs to hundreds of billions, so full digits are noise. */
+function usdCompact(value: number | null): string {
+  if (value == null) return '—'
+  const abs = Math.abs(value)
+  const sign = value < 0 ? '-' : '+'
+  if (abs >= 1e12) return `${sign}$${(abs / 1e12).toFixed(2)}tn`
+  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(2)}bn`
+  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(1)}m`
+  return `${sign}$${Math.round(abs).toLocaleString()}`
+}
+function contracts0(value: number | null): string {
+  return value == null ? '—' : `${value >= 0 ? '+' : ''}${Math.round(value).toLocaleString()}`
+}
 
 function signed(value: number | null, suffix = '') {
   if (value == null) return '—'
@@ -134,7 +159,22 @@ export default function TraderPositioning() {
             <Metric label="Open interest" value={Math.round(selected.latest.open_interest).toLocaleString()} note={selected.open_interest_change == null ? 'contracts' : `${contracts(selected.open_interest_change)} vs prior`} color={T.text} />
           </div>
           <div style={{ padding: '13px 12px 6px' }}><div style={{ ...heading, color: T.muted, padding: '0 4px 8px' }}>Net positioning as % of open interest, 52 weeks</div><ResponsiveContainer width="100%" height={250}><LineChart data={selected.series} margin={{ top: 6, right: 18, left: 0, bottom: 0 }}><CartesianGrid strokeDasharray="2 4" stroke={T.borderFaint} vertical={false} /><XAxis dataKey="date" tick={axisTick} tickLine={false} axisLine={false} minTickGap={30} tickFormatter={date => String(date).slice(5)} /><YAxis tick={axisTick} tickLine={false} axisLine={false} width={42} tickFormatter={value => `${value}%`} /><Tooltip contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} formatter={(value: number) => [`${value.toFixed(1)}%`, 'Net % of OI']} labelFormatter={fmtDate} /><ReferenceLine y={0} stroke={T.muted} strokeDasharray="5 4" /><Line type="monotone" dataKey="net_pct_oi" stroke={T.blue} strokeWidth={2} dot={false} /></LineChart></ResponsiveContainer></div>
-          <div style={{ margin: '4px 12px 0', borderTop: `1px solid ${T.border}` }}><div style={{ ...heading, color: T.muted, padding: '11px 4px 8px' }}>Positioning by reporting cohort</div><div style={{ overflowX: 'auto' }}><table style={{ minWidth: 540, width: '100%', borderCollapse: 'collapse', fontFamily: T.mono, fontSize: 10 }}><thead><tr>{['Cohort', 'Long', 'Short', 'Net', 'Net % OI'].map((label, index) => <th key={label} style={{ padding: '7px 8px', borderBottom: `1px solid ${T.border}`, color: T.muted, fontSize: 8, letterSpacing: '0.12em', textAlign: index ? 'right' : 'left', textTransform: 'uppercase' }}>{label}</th>)}</tr></thead><tbody>{selected.cohorts.map(cohort => <tr key={cohort.label} style={{ borderBottom: `1px solid ${T.borderFaint}` }}><td style={{ padding: '9px 8px', color: T.text, fontFamily: T.label, fontWeight: 700 }}>{cohort.label}</td><td style={{ padding: '9px 8px', textAlign: 'right', color: T.blue }}>{Math.round(cohort.long).toLocaleString()}</td><td style={{ padding: '9px 8px', textAlign: 'right', color: T.gold }}>{Math.round(cohort.short).toLocaleString()}</td><td style={{ padding: '9px 8px', textAlign: 'right', color: tone(cohort.net) }}>{contracts(cohort.net)}</td><td style={{ padding: '9px 8px', textAlign: 'right', color: tone(cohort.net_pct_oi) }}>{signed(cohort.net_pct_oi, '%')}</td></tr>)}</tbody></table></div></div>
+          <div style={{ margin: '4px 12px 0', borderTop: `1px solid ${T.border}` }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, padding: '11px 4px 8px', flexWrap: 'wrap' }}>
+              <div style={{ ...heading, color: T.muted }}>Positioning by reporting cohort</div>
+              <div style={{ fontFamily: T.mono, fontSize: 9, color: selected.balanced ? T.muted : T.neg }}>
+                {selected.balanced
+                  ? `Nets to zero${selected.net_residual ? ` (${selected.net_residual > 0 ? '+' : ''}${selected.net_residual} rounding)` : ''}`
+                  : `Categories do not balance: residual ${contracts0(selected.net_residual)} contracts`}
+                {selected.contract_value?.value_usd != null && (
+                  <span style={{ marginLeft: 10 }}>
+                    1 contract = {selected.contract_value.multiplier.toLocaleString()} {selected.contract_value.unit}
+                    {' '}= ${Math.round(selected.contract_value.value_usd).toLocaleString()} ({selected.contract_value.basis})
+                  </span>
+                )}
+              </div>
+            </div>
+            <div style={{ overflowX: 'auto' }}><table style={{ minWidth: 720, width: '100%', borderCollapse: 'collapse', fontFamily: T.mono, fontSize: 10 }}><thead><tr>{['Cohort', 'Long', 'Short', 'Net', 'Net % OI', 'Net $', '4w', '13w', '26w'].map((label, index) => <th key={label} style={{ padding: '7px 8px', borderBottom: `1px solid ${T.border}`, color: T.muted, fontSize: 8, letterSpacing: '0.12em', textAlign: index ? 'right' : 'left', textTransform: 'uppercase' }}>{label}</th>)}</tr></thead><tbody>{selected.cohorts.map(cohort => <tr key={cohort.label} style={{ borderBottom: `1px solid ${T.borderFaint}` }}><td style={{ padding: '9px 8px', color: T.text, fontFamily: T.label, fontWeight: 700 }}>{cohort.label}{cohort.derived && <span title="Derived as the reportable total less the published slices; the CFTC supplemental report does not publish it directly." style={{ marginLeft: 5, fontFamily: T.mono, fontSize: 8, color: T.muted }}>derived</span>}</td><td style={{ padding: '9px 8px', textAlign: 'right', color: T.blue }}>{Math.round(cohort.long).toLocaleString()}</td><td style={{ padding: '9px 8px', textAlign: 'right', color: T.gold }}>{Math.round(cohort.short).toLocaleString()}</td><td style={{ padding: '9px 8px', textAlign: 'right', color: tone(cohort.net) }}>{contracts(cohort.net)}</td><td style={{ padding: '9px 8px', textAlign: 'right', color: tone(cohort.net_pct_oi) }}>{signed(cohort.net_pct_oi, '%')}</td><td style={{ padding: '9px 8px', textAlign: 'right', color: tone(cohort.net_usd), fontWeight: 700 }}>{usdCompact(cohort.net_usd)}</td>{(['w4', 'w13', 'w26'] as const).map(window => <td key={window} style={{ padding: '9px 8px', textAlign: 'right', color: tone(cohort.trend[window]) }}>{contracts0(cohort.trend[window])}</td>)}</tr>)}</tbody><tfoot><tr><td style={{ padding: '8px', fontFamily: T.label, fontSize: 9, color: T.muted, fontWeight: 700 }}>All categories</td><td colSpan={2} /><td style={{ padding: '8px', textAlign: 'right', color: selected.balanced ? T.muted : T.neg, fontWeight: 700 }}>{contracts0(selected.net_residual)}</td><td /><td style={{ padding: '8px', textAlign: 'right', color: T.muted }}>{selected.open_interest_usd != null ? `${usdCompact(selected.open_interest_usd).replace('+', '')} OI` : ''}</td><td colSpan={3} /></tr></tfoot></table></div></div>
           <div style={{ margin: '14px 12px 12px', paddingTop: 10, borderTop: `1px solid ${T.border}`, display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', fontFamily: T.mono, fontSize: 8.5, color: T.muted }}><span>Methodology: Tuesday positions, usually released Friday at 3:30 p.m. ET.</span><span>Source: CFTC Commitments of Traders</span></div>
         </main>
       </div>}
