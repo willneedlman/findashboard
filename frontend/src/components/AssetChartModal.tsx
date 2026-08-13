@@ -33,29 +33,59 @@ interface HistPoint { date: string | number; value: number }
 interface Hist { price: HistPoint[]; metrics: { total_return: number; current_price: number }; meta?: { intraday?: boolean; as_of?: string | null; window?: string | null } }
 
 const iso = (d: Date) => d.toISOString().split('T')[0]
-const formatChartTime = (time: Time) => {
-  const date = typeof time === 'number'
+const toDate = (time: Time): Date =>
+  typeof time === 'number'
     ? new Date(time * 1000)
     : typeof time === 'string'
       ? new Date(`${time}T00:00:00`)
       : new Date(time.year, time.month - 1, time.day)
-  return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+
+// Daily bars carry no clock, so printing a time against them invents precision
+// the data does not have; multi-year spans need the year or every January tick
+// reads the same.
+const formatChartTime = (time: Time) => {
+  const date = toDate(time)
+  return typeof time === 'number'
+    ? date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+    : date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-const formatChartAxisTime = (time: Time) => {
-  if (typeof time !== 'number') {
-    const date = typeof time === 'string' ? new Date(`${time}T00:00:00`) : new Date(time.year, time.month - 1, time.day)
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+/** Axis granularity follows the span: years on long ranges, dates on short ones. */
+const formatChartAxisTime = (time: Time, span: 'intraday' | 'months' | 'years') => {
+  const date = toDate(time)
+  if (typeof time === 'number' && span === 'intraday') {
+    return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })
   }
-  return new Date(time * 1000).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })
+  if (span === 'years') {
+    // Year alone on January ticks, month+year in between, so two ticks in the
+    // same year never print identically.
+    return date.getMonth() === 0
+      ? String(date.getFullYear())
+      : date.toLocaleDateString(undefined, { month: 'short', year: '2-digit' })
+  }
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-export default function AssetChartModal({ row, yields, onClose }: { row: Row; yields?: boolean; onClose: () => void }) {
+/** Ranges wide enough that a month-and-day tick repeats itself unreadably. */
+const LONG_TFS = new Set(['1Y', '5Y', '10Y', 'MAX'])
+const INTRADAY_TFS = new Set(['10M', '30M', '1H', '1D'])
+
+export default function AssetChartModal({ row, yields, facts, onClose }: {
+  row: Row; yields?: boolean
+  /** Replaces the equity stat block. FX has no meaningful beta to the S&P, so
+   *  the caller supplies facts that suit its own asset class. */
+  facts?: React.ReactNode
+  onClose: () => void
+}) {
   const [tf, setTf] = useState<string>('1D')
   const [data, setData] = useState<Hist | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  // The chart is built once, so the formatter reads the live span from a ref
+  // rather than being rebuilt on every range change.
+  const spanRef = useRef<'intraday' | 'months' | 'years'>('months')
+  spanRef.current = INTRADAY_TFS.has(tf) ? 'intraday' : LONG_TFS.has(tf) ? 'years' : 'months'
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const seriesRef = useRef<ISeriesApi<'Area'> | null>(null)
@@ -97,7 +127,7 @@ export default function AssetChartModal({ row, yields, onClose }: { row: Row; yi
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: 'rgba(255,255,255,0.06)' },
       localization: { timeFormatter: (time: Time) => formatChartTime(time) },
-      timeScale: { borderColor: 'rgba(255,255,255,0.06)', timeVisible: true, fixLeftEdge: true, rightOffset: 3, tickMarkFormatter: (time: Time) => formatChartAxisTime(time) },
+      timeScale: { borderColor: 'rgba(255,255,255,0.06)', timeVisible: true, fixLeftEdge: true, rightOffset: 3, tickMarkFormatter: (time: Time) => formatChartAxisTime(time, spanRef.current) },
       width: el.clientWidth, height: el.clientHeight,
     })
     const pos = readToken('--theme-positive', '#3fb6a0')
@@ -180,7 +210,7 @@ export default function AssetChartModal({ row, yields, onClose }: { row: Row; yi
             )}
             {!loading && !err && data?.meta?.as_of && <div style={{ position: 'absolute', left: 12, bottom: 8, fontFamily: MONO, fontSize: 8.5, color: 'var(--theme-secondary, #5f7893)', pointerEvents: 'none' }}>As of {formatLocalDateTime(data.meta.as_of)} local</div>}
           </div>
-          <AssetFacts ticker={row.symbol} label={row.label} yields={yields} />
+          {facts ?? <AssetFacts ticker={row.symbol} label={row.label} yields={yields} />}
         </div>
       </div>
     </div>

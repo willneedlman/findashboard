@@ -49,15 +49,58 @@ interface FxResp {
 
 function Flag({ ccy, w, h }: { ccy: string; w: number; h: number }) {
   const cc = FLAG[ccy]
+  // Natural aspect, not a cropped fill. `background-size: cover` on a fixed box
+  // sliced the top and bottom off every flag, which on the Stars and Stripes cut
+  // straight to its red edge stripes and read as a red outline. Width follows the
+  // real ratio, matching the Global Markets board.
+  if (!cc) return <span aria-hidden style={{ width: w, height: h, flex: '0 0 auto', display: 'inline-block', border: `1px solid ${T.flagBorder}` }} />
   return (
-    <span
-      aria-hidden
-      style={{
-        width: w, height: h, flex: '0 0 auto', display: 'inline-block',
-        border: `1px solid ${T.flagBorder}`, backgroundSize: 'cover', backgroundPosition: 'center',
-        backgroundImage: cc ? `url(https://flagcdn.com/w40/${cc}.png)` : undefined,
-      }}
+    <img
+      aria-hidden alt="" loading="lazy"
+      src={`https://flagcdn.com/w40/${cc}.png`}
+      height={h}
+      style={{ height: h, width: 'auto', flex: '0 0 auto', display: 'block', borderRadius: 2, border: `1px solid ${T.flagBorder}` }}
     />
+  )
+}
+
+/** What matters for a currency pair: rate differential, forwards, basis, vol.
+ *  Deliberately NOT the equity stat block, whose beta to the S&P means nothing
+ *  here. */
+function FxFacts({ row, usdShortRate }: { row: FxRow | null; usdShortRate: number | null }) {
+  if (!row) {
+    return (
+      <div style={{ padding: '14px 16px', fontFamily: T.mono, fontSize: 10.5, color: T.muted }}>
+        Cross rate. Per-leg carry and forward detail are shown for the USD pairs in the table below.
+      </div>
+    )
+  }
+  const carry = usdShortRate == null ? null : row.short_rate - usdShortRate
+  const stats: { label: string; value: string; note: string; color?: string }[] = [
+    { label: 'Spot', value: String(row.spot), note: 'last' },
+    { label: '1D change', value: row.chg_pct == null ? '—' : `${row.chg_pct >= 0 ? '+' : ''}${row.chg_pct.toFixed(2)}%`,
+      note: 'session', color: row.chg_pct == null ? undefined : row.chg_pct >= 0 ? T.pos : T.neg },
+    { label: 'Carry vs USD', value: carry == null ? '—' : `${carry >= 0 ? '+' : ''}${carry.toFixed(2)}%`,
+      note: 'base 3m rate less USD', color: carry == null ? undefined : carry >= 0 ? T.pos : T.neg },
+    { label: 'Base 3m rate', value: `${row.short_rate.toFixed(2)}%`, note: 'indicative money rate' },
+    { label: '3m forward pts', value: `${row.fwd_pts_3m >= 0 ? '+' : ''}${row.fwd_pts_3m}`,
+      note: 'covered-interest-parity implied', color: row.fwd_pts_3m >= 0 ? T.pos : T.neg },
+    { label: '3m basis', value: `${row.basis_3m_bps >= 0 ? '+' : ''}${row.basis_3m_bps} bp`,
+      note: 'indicative cross-currency', color: row.basis_3m_bps >= 0 ? T.pos : T.neg },
+    { label: 'Realized vol 1w', value: row.vol_1w == null ? '—' : `${row.vol_1w.toFixed(1)}%`, note: 'annualized' },
+    { label: 'Realized vol 1m', value: row.vol_1m == null ? '—' : `${row.vol_1m.toFixed(1)}%`,
+      note: `1w is ${row.vol_trend === 'up' ? 'above' : row.vol_trend === 'down' ? 'below' : 'in line with'} it` },
+  ]
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+      {stats.map(stat => (
+        <div key={stat.label} style={{ padding: '11px 14px', borderRight: `1px solid ${T.rowHair}`, borderBottom: `1px solid ${T.rowHair}` }}>
+          <div style={{ fontFamily: T.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.13em', textTransform: 'uppercase', color: T.faint }}>{stat.label}</div>
+          <div style={{ fontFamily: T.mono, fontSize: 15, fontWeight: 700, color: stat.color ?? T.text, marginTop: 3 }}>{stat.value}</div>
+          <div style={{ fontFamily: T.sans, fontSize: 9.5, color: T.muted, marginTop: 2 }}>{stat.note}</div>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -271,6 +314,7 @@ export function CurrencyMatrixContent() {
       {pick && (
         <AssetChartModal
           row={{ label: pick.label, symbol: pick.symbol, price: pick.price, change_pct: pick.change_pct }}
+          facts={<FxFacts row={rows.find(r => r.pair === pick.label) ?? null} usdShortRate={data?.usd_short_rate ?? null} />}
           onClose={() => setPick(null)}
         />
       )}

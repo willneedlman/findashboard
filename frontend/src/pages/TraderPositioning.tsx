@@ -75,6 +75,7 @@ function Metric({ label, value, note, color = T.text }: { label: string; value: 
 
 export default function TraderPositioning() {
   const [assetClass, setAssetClass] = useState<AssetClass>('commodities')
+  const [cohortView, setCohortView] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const isMobile = useIsMobile()
@@ -132,10 +133,53 @@ export default function TraderPositioning() {
     return pieces
   }, { disabled: !selected || !data?.available, sourceTab: TAB })
 
+  // Which cohort the chart and the header describe. null keeps the report's own
+  // headline cohort (leveraged money, managed money or index traders).
+  const view = useMemo(() => {
+    if (!selected) return null
+    const primaryLabel = selected.primary
+    if (!cohortView) {
+      return {
+        label: primaryLabel,
+        isDefault: true,
+        series: selected.series.map(point => ({ date: point.date, value: point.net_pct_oi, net: point.net })),
+        net: selected.latest.net,
+        pct: selected.latest.net_pct_oi,
+        flow: selected.weekly_flow,
+        crowding: selected.crowding,
+      }
+    }
+    const series = selected.series.map(point => {
+      const net = point.cohort_net?.[cohortView] ?? null
+      return {
+        date: point.date,
+        net,
+        value: net != null && point.open_interest ? (net / point.open_interest) * 100 : null,
+      }
+    })
+    const pcts = series.map(point => point.value).filter((v): v is number => v != null)
+    const last = series[series.length - 1]
+    const prior = series[series.length - 2]
+    // Same percentile definition the backend uses for the headline cohort, so a
+    // switched view stays comparable with the default one.
+    const crowding = pcts.length && last?.value != null
+      ? (pcts.filter(v => v <= (last.value as number)).length / pcts.length) * 100
+      : null
+    return {
+      label: cohortView,
+      isDefault: false,
+      series,
+      net: last?.net ?? null,
+      pct: last?.value ?? null,
+      flow: last?.net != null && prior?.net != null ? last.net - prior.net : null,
+      crowding,
+    }
+  }, [selected, cohortView])
+
   return <PageWrapper title="Trader Positioning">
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ ...panel, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '9px 14px', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>{ASSET_CLASSES.map(item => <button key={item.id} onClick={() => { setAssetClass(item.id); setSelectedId(null); setQuery('') }} style={{ border: 'none', borderBottom: assetClass === item.id ? `2px solid ${T.gold}` : '2px solid transparent', background: 'transparent', color: assetClass === item.id ? T.gold : T.muted, padding: '7px 11px', cursor: 'pointer', fontFamily: T.label, fontSize: 9, fontWeight: 800, letterSpacing: '0.13em', textTransform: 'uppercase' }}>{item.label}</button>)}</div>
+        <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>{ASSET_CLASSES.map(item => <button key={item.id} onClick={() => { setAssetClass(item.id); setSelectedId(null); setQuery(''); setCohortView(null) }} style={{ border: 'none', borderBottom: assetClass === item.id ? `2px solid ${T.gold}` : '2px solid transparent', background: 'transparent', color: assetClass === item.id ? T.gold : T.muted, padding: '7px 11px', cursor: 'pointer', fontFamily: T.label, fontSize: 9, fontWeight: 800, letterSpacing: '0.13em', textTransform: 'uppercase' }}>{item.label}</button>)}</div>
         <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>CFTC · Updated weekly · {data?.family ?? 'Positioning'} · As of {fmtDate(data?.as_of ?? null)}</div>
       </div>
 
@@ -147,21 +191,21 @@ export default function TraderPositioning() {
             <div style={heading}>{data?.asset_label} contracts</div>
             <label style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${T.border}`, padding: '8px 9px', color: T.muted }}><Search size={13} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Filter contracts" style={{ minWidth: 0, width: '100%', border: 'none', outline: 'none', background: 'transparent', color: T.text, fontFamily: T.mono, fontSize: 10 }} /></label>
           </div>
-          <div>{visibleMarkets.map(market => <button key={market.id} onClick={() => setSelectedId(market.id)} style={{ width: '100%', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 58px 47px', gap: 8, alignItems: 'center', border: 'none', borderBottom: `1px solid ${T.borderFaint}`, background: selected.id === market.id ? T.goldTint(12) : 'transparent', color: T.text, padding: '10px 14px', textAlign: 'left', cursor: 'pointer' }}><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: T.label, fontSize: 10, fontWeight: selected.id === market.id ? 800 : 600 }}>{market.label}</span><span style={{ fontFamily: T.mono, fontSize: 10, color: tone(market.latest.net_pct_oi), textAlign: 'right' }}>{signed(market.latest.net_pct_oi, '%')}</span><span style={{ fontFamily: T.mono, fontSize: 9, color: T.blue, textAlign: 'right' }}>{market.crowding == null ? '—' : `${Math.round(market.crowding)}`}</span></button>)}</div>
+          <div>{visibleMarkets.map(market => <button key={market.id} onClick={() => { setSelectedId(market.id); setCohortView(null) }} style={{ width: '100%', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 58px 47px', gap: 8, alignItems: 'center', border: 'none', borderBottom: `1px solid ${T.borderFaint}`, background: selected.id === market.id ? T.goldTint(12) : 'transparent', color: T.text, padding: '10px 14px', textAlign: 'left', cursor: 'pointer' }}><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: T.label, fontSize: 10, fontWeight: selected.id === market.id ? 800 : 600 }}>{market.label}</span><span style={{ fontFamily: T.mono, fontSize: 10, color: tone(market.latest.net_pct_oi), textAlign: 'right' }}>{signed(market.latest.net_pct_oi, '%')}</span><span style={{ fontFamily: T.mono, fontSize: 9, color: T.blue, textAlign: 'right' }}>{market.crowding == null ? '—' : `${Math.round(market.crowding)}`}</span></button>)}</div>
         </aside>
         <main style={{ minWidth: 0 }}>
           <div style={{ padding: '14px 16px 11px', borderBottom: `1px solid ${T.border}`, display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}><div><h2 style={{ margin: 0, fontFamily: T.mono, fontSize: 20, fontWeight: 800, letterSpacing: '0.01em', color: T.text }}>{selected.label}</h2><div style={{ marginTop: 4, fontFamily: T.mono, fontSize: 9, color: T.muted }}>{selected.contract}</div></div><div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, textAlign: 'right' }}>POSITIONS AS OF {fmtDate(selected.latest.date)}<br />{data?.family?.toUpperCase()}</div></div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', borderBottom: `1px solid ${T.border}` }}>
-            <Metric label={`${data?.family?.includes('Financial') ? 'Leveraged money' : data?.family?.includes('Index') ? 'Index trader' : 'Managed money'} net`} value={signed(selected.latest.net, '')} note="contracts" color={tone(selected.latest.net)} />
-            <Metric label="Net % of OI" value={signed(selected.latest.net_pct_oi, '%')} note="net contracts / total OI" color={tone(selected.latest.net_pct_oi)} />
-            <Metric label="Weekly flow" value={contracts(selected.weekly_flow)} note="change in net contracts" color={tone(selected.weekly_flow)} />
-            <Metric label="52W crowding" value={selected.crowding == null ? '—' : `${Math.round(selected.crowding)}`} note="percentile, 100 = most net long" color={T.blue} />
+            <Metric label={`${view?.label} net`} value={signed(view?.net ?? null, '')} note={view?.isDefault ? 'contracts' : 'contracts · selected cohort'} color={tone(view?.net ?? null)} />
+            <Metric label="Net % of OI" value={signed(view?.pct ?? null, '%')} note="net contracts / total OI" color={tone(view?.pct ?? null)} />
+            <Metric label="Weekly flow" value={contracts(view?.flow ?? null)} note="change in net contracts" color={tone(view?.flow ?? null)} />
+            <Metric label={`${selected.weeks}W crowding`} value={view?.crowding == null ? '—' : `${Math.round(view.crowding)}`} note="percentile, 100 = most net long" color={T.blue} />
             <Metric label="Open interest" value={Math.round(selected.latest.open_interest).toLocaleString()} note={selected.open_interest_change == null ? 'contracts' : `${contracts(selected.open_interest_change)} vs prior`} color={T.text} />
           </div>
-          <div style={{ padding: '13px 12px 6px' }}><div style={{ ...heading, color: T.muted, padding: '0 4px 8px' }}>Net positioning as % of open interest, 52 weeks</div><ResponsiveContainer width="100%" height={250}><LineChart data={selected.series} margin={{ top: 6, right: 18, left: 0, bottom: 0 }}><CartesianGrid strokeDasharray="2 4" stroke={T.borderFaint} vertical={false} /><XAxis dataKey="date" tick={axisTick} tickLine={false} axisLine={false} minTickGap={30} tickFormatter={date => String(date).slice(5)} /><YAxis tick={axisTick} tickLine={false} axisLine={false} width={42} tickFormatter={value => `${value}%`} /><Tooltip contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} formatter={(value: number) => [`${value.toFixed(1)}%`, 'Net % of OI']} labelFormatter={fmtDate} /><ReferenceLine y={0} stroke={T.muted} strokeDasharray="5 4" /><Line type="monotone" dataKey="net_pct_oi" stroke={T.blue} strokeWidth={2} dot={false} /></LineChart></ResponsiveContainer></div>
+          <div style={{ padding: '13px 12px 6px' }}><div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, padding: '0 4px 8px', flexWrap: 'wrap' }}><div style={{ ...heading, color: T.muted }}>{view?.label} net positioning as % of open interest, {selected.weeks} weeks</div>{!view?.isDefault && <button onClick={() => setCohortView(null)} style={{ border: `1px solid ${T.border}`, background: 'transparent', color: T.gold, cursor: 'pointer', padding: '2px 8px', fontFamily: T.mono, fontSize: 9 }}>Back to {selected.primary}</button>}</div><ResponsiveContainer width="100%" height={250}><LineChart data={view?.series ?? []} margin={{ top: 6, right: 18, left: 0, bottom: 0 }}><CartesianGrid strokeDasharray="2 4" stroke={T.borderFaint} vertical={false} /><XAxis dataKey="date" tick={axisTick} tickLine={false} axisLine={false} minTickGap={30} tickFormatter={date => String(date).slice(5)} /><YAxis tick={axisTick} tickLine={false} axisLine={false} width={42} tickFormatter={value => `${value}%`} /><Tooltip contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} formatter={(value: number) => [`${value.toFixed(1)}%`, `${view?.label} net % of OI`]} labelFormatter={fmtDate} /><ReferenceLine y={0} stroke={T.muted} strokeDasharray="5 4" /><Line type="monotone" dataKey="value" stroke={view?.isDefault ? T.blue : T.gold} strokeWidth={2} dot={false} connectNulls /></LineChart></ResponsiveContainer></div>
           <div style={{ margin: '4px 12px 0', borderTop: `1px solid ${T.border}` }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, padding: '11px 4px 8px', flexWrap: 'wrap' }}>
-              <div style={{ ...heading, color: T.muted }}>Positioning by reporting cohort</div>
+              <div style={{ ...heading, color: T.muted }}>Positioning by reporting cohort · click a row to chart it</div>
               <div style={{ fontFamily: T.mono, fontSize: 9, color: selected.balanced ? T.muted : T.neg }}>
                 {selected.balanced
                   ? `Nets to zero${selected.net_residual ? ` (${selected.net_residual > 0 ? '+' : ''}${selected.net_residual} rounding)` : ''}`
@@ -174,7 +218,12 @@ export default function TraderPositioning() {
                 )}
               </div>
             </div>
-            <div style={{ overflowX: 'auto' }}><table style={{ minWidth: 720, width: '100%', borderCollapse: 'collapse', fontFamily: T.mono, fontSize: 10 }}><thead><tr>{['Cohort', 'Long', 'Short', 'Net', 'Net % OI', 'Net $', '4w', '13w', '26w'].map((label, index) => <th key={label} style={{ padding: '7px 8px', borderBottom: `1px solid ${T.border}`, color: T.muted, fontSize: 8, letterSpacing: '0.12em', textAlign: index ? 'right' : 'left', textTransform: 'uppercase' }}>{label}</th>)}</tr></thead><tbody>{selected.cohorts.map(cohort => <tr key={cohort.label} style={{ borderBottom: `1px solid ${T.borderFaint}` }}><td style={{ padding: '9px 8px', color: T.text, fontFamily: T.label, fontWeight: 700 }}>{cohort.label}{cohort.derived && <span title="Derived as the reportable total less the published slices; the CFTC supplemental report does not publish it directly." style={{ marginLeft: 5, fontFamily: T.mono, fontSize: 8, color: T.muted }}>derived</span>}</td><td style={{ padding: '9px 8px', textAlign: 'right', color: T.blue }}>{Math.round(cohort.long).toLocaleString()}</td><td style={{ padding: '9px 8px', textAlign: 'right', color: T.gold }}>{Math.round(cohort.short).toLocaleString()}</td><td style={{ padding: '9px 8px', textAlign: 'right', color: tone(cohort.net) }}>{contracts(cohort.net)}</td><td style={{ padding: '9px 8px', textAlign: 'right', color: tone(cohort.net_pct_oi) }}>{signed(cohort.net_pct_oi, '%')}</td><td style={{ padding: '9px 8px', textAlign: 'right', color: tone(cohort.net_usd), fontWeight: 700 }}>{usdCompact(cohort.net_usd)}</td>{(['w4', 'w13', 'w26'] as const).map(window => <td key={window} style={{ padding: '9px 8px', textAlign: 'right', color: tone(cohort.trend[window]) }}>{contracts0(cohort.trend[window])}</td>)}</tr>)}</tbody><tfoot><tr><td style={{ padding: '8px', fontFamily: T.label, fontSize: 9, color: T.muted, fontWeight: 700 }}>All categories</td><td colSpan={2} /><td style={{ padding: '8px', textAlign: 'right', color: selected.balanced ? T.muted : T.neg, fontWeight: 700 }}>{contracts0(selected.net_residual)}</td><td /><td style={{ padding: '8px', textAlign: 'right', color: T.muted }}>{selected.open_interest_usd != null ? `${usdCompact(selected.open_interest_usd).replace('+', '')} OI` : ''}</td><td colSpan={3} /></tr></tfoot></table></div></div>
+            <div style={{ overflowX: 'auto' }}><table style={{ minWidth: 720, width: '100%', borderCollapse: 'collapse', fontFamily: T.mono, fontSize: 10 }}><thead><tr>{['Cohort', 'Long', 'Short', 'Net', 'Net % OI', 'Net $', '4w', '13w', '26w'].map((label, index) => <th key={label} style={{ padding: '7px 8px', borderBottom: `1px solid ${T.border}`, color: T.muted, fontSize: 8, letterSpacing: '0.12em', textAlign: index ? 'right' : 'left', textTransform: 'uppercase' }}>{label}</th>)}</tr></thead><tbody>{selected.cohorts.map(cohort => <tr key={cohort.label}
+  onClick={() => setCohortView(current => current === cohort.label ? null : cohort.label)}
+  role="button" tabIndex={0} aria-pressed={view?.label === cohort.label}
+  onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setCohortView(current => current === cohort.label ? null : cohort.label) } }}
+  title={view?.label === cohort.label ? 'Showing this cohort. Click again to go back.' : `Chart ${cohort.label}`}
+  style={{ borderBottom: `1px solid ${T.borderFaint}`, cursor: 'pointer', background: view?.label === cohort.label ? T.goldTint(10) : 'transparent', borderLeft: `2px solid ${view?.label === cohort.label ? T.gold : 'transparent'}` }}><td style={{ padding: '9px 8px', color: T.text, fontFamily: T.label, fontWeight: 700 }}>{cohort.label}{cohort.derived && <span title="Derived as the reportable total less the published slices; the CFTC supplemental report does not publish it directly." style={{ marginLeft: 5, fontFamily: T.mono, fontSize: 8, color: T.muted }}>derived</span>}</td><td style={{ padding: '9px 8px', textAlign: 'right', color: T.blue }}>{Math.round(cohort.long).toLocaleString()}</td><td style={{ padding: '9px 8px', textAlign: 'right', color: T.gold }}>{Math.round(cohort.short).toLocaleString()}</td><td style={{ padding: '9px 8px', textAlign: 'right', color: tone(cohort.net) }}>{contracts(cohort.net)}</td><td style={{ padding: '9px 8px', textAlign: 'right', color: tone(cohort.net_pct_oi) }}>{signed(cohort.net_pct_oi, '%')}</td><td style={{ padding: '9px 8px', textAlign: 'right', color: tone(cohort.net_usd), fontWeight: 700 }}>{usdCompact(cohort.net_usd)}</td>{(['w4', 'w13', 'w26'] as const).map(window => <td key={window} style={{ padding: '9px 8px', textAlign: 'right', color: tone(cohort.trend[window]) }}>{contracts0(cohort.trend[window])}</td>)}</tr>)}</tbody><tfoot><tr><td style={{ padding: '8px', fontFamily: T.label, fontSize: 9, color: T.muted, fontWeight: 700 }}>All categories</td><td colSpan={2} /><td style={{ padding: '8px', textAlign: 'right', color: selected.balanced ? T.muted : T.neg, fontWeight: 700 }}>{contracts0(selected.net_residual)}</td><td /><td style={{ padding: '8px', textAlign: 'right', color: T.muted }}>{selected.open_interest_usd != null ? `${usdCompact(selected.open_interest_usd).replace('+', '')} OI` : ''}</td><td colSpan={3} /></tr></tfoot></table></div></div>
           <div style={{ margin: '14px 12px 12px', paddingTop: 10, borderTop: `1px solid ${T.border}`, display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', fontFamily: T.mono, fontSize: 8.5, color: T.muted }}><span>Methodology: Tuesday positions, usually released Friday at 3:30 p.m. ET.</span><span>Source: CFTC Commitments of Traders</span></div>
         </main>
       </div>}

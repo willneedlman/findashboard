@@ -439,7 +439,7 @@ export function DealerGEXContent() {
             onKeyDown={e => { if (e.key === 'Enter') load() }}
             style={{ ...INP, width: 92, height: 32, padding: '0 10px', textTransform: 'uppercase' }} />
           <button onClick={load} disabled={isFetching} style={{
-            height: 32, padding: '0 18px', background: T.text, border: `1px solid ${T.text}`, color: T.bg,
+            height: 32, padding: '0 18px', background: T.gold, border: `1px solid ${T.gold}`, color: T.bg,
             cursor: isFetching ? 'wait' : 'pointer', fontFamily: SANS, fontSize: 10, fontWeight: 700,
             letterSpacing: '0.12em', textTransform: 'uppercase', opacity: isFetching ? 0.6 : 1,
           }}>{isFetching ? 'Loading' : 'Load'}</button>
@@ -782,7 +782,7 @@ export function DealerGEXContent() {
                       style={INP} />
                   </label>
                   <button onClick={() => { setScreenOpen(false); load() }} style={{
-                    background: T.text, border: 'none', color: T.bg, cursor: 'pointer', fontFamily: SANS,
+                    background: T.gold, border: 'none', color: T.bg, cursor: 'pointer', fontFamily: SANS,
                     fontSize: 9.5, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '7px 14px',
                   }}>Apply</button>
                 </div>
@@ -889,8 +889,10 @@ function Chip({ on, onClick, children, title }: {
   return (
     <button onClick={onClick} title={title} style={{
       fontFamily: MONO, fontSize: 10, fontWeight: on ? 700 : 400, padding: '4px 9px', cursor: 'pointer',
-      whiteSpace: 'nowrap', background: on ? T.text : 'transparent', color: on ? T.bg : T.muted,
-      border: `1px solid ${on ? T.text : T.border}`,
+      whiteSpace: 'nowrap',
+      background: on ? T.goldTint(16) : 'transparent',
+      color: on ? T.gold : T.muted,
+      border: `1px solid ${on ? T.goldTint(45) : T.border}`,
     }}>{children}</button>
   )
 }
