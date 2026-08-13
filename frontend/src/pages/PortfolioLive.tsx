@@ -71,6 +71,10 @@ interface LiveValueResponse {
   priced: string[]
   unpriced: string[]
   source: string
+  /** Window actually covered, which a short-history holding can cut short. */
+  covered_from: string | null
+  requested_from: string | null
+  limited_by: { ticker: string; from: string }[]
 }
 
 const usd = (v: number, digits = 2) =>
@@ -161,6 +165,9 @@ function timeAxisDomain(range: Range, points: { ts: number }[]): [number, number
   const start = range === '1h' ? end - 60 * 60_000 : firstTs
   return [start, end]
 }
+
+const shortDate = (ts: number | undefined) =>
+  ts == null ? '—' : new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
 
 function axisTickFormatter(range: Range) {
   const opts: Intl.DateTimeFormatOptions = INTRADAY_RANGES.includes(range)
@@ -484,6 +491,7 @@ export function PortfolioLiveContent({ view, onView }: { view?: string; onView?:
         range={range} onRange={setRange}
         chartData={chartData} xDomain={xDomain} yDomain={yDomain} tickFmt={tickFmt}
         loading={curveQ.isLoading} switching={curveQ.isPlaceholderData} error={curveQ.isError}
+        limitedBy={curve?.limited_by ?? []}
       />
 
       <ContributionStrip rows={baseRows} gross={grossMoves} />
@@ -613,10 +621,12 @@ function HeroBand(props: {
   xDomain: [number, number]; yDomain: [number, number] | undefined
   tickFmt: (ts: number) => string
   loading: boolean; switching: boolean; error: boolean
+  limitedBy: { ticker: string; from: string }[]
 }) {
   const {
     value, gainAbs, gainPct, rangeIsToday, rangeLabel, baseline, cash, positions,
-    phase, msToNext, now, range, onRange, chartData, xDomain, yDomain, tickFmt, loading, switching, error,
+    phase, msToNext, now, range, onRange, chartData, xDomain, yDomain, tickFmt,
+    loading, switching, error, limitedBy,
   } = props
   const isMobile = useIsMobile()
   const deltaColor = chg(gainAbs)
@@ -737,6 +747,14 @@ function HeroBand(props: {
             </div>
           )}
         </div>
+
+        {limitedBy.length > 0 && !switching && (
+          <p style={{ fontFamily: MONO, fontSize: 9.5, color: T.warn, margin: '4px 0 0', lineHeight: 1.5 }}>
+            {rangeLabel} starts {shortDate(chartData[0]?.ts)} because{' '}
+            {limitedBy.map(l => `${l.ticker} has no price before ${shortDate(new Date(l.from).getTime())}`).join(', ')}.
+            {' '}Every holding has to be priced for the book to be worth marking.
+          </p>
+        )}
       </div>
     </div>
   )

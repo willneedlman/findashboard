@@ -1136,6 +1136,9 @@ _LIVE_TF = "5m"
 _LIVE_LOOKBACK_DAYS = 6      # enough to reach the last session across a long weekend
 # Frames that are still forming inside the session, and so cannot be cached long.
 _LIVE_FAST_TFS = {"1m", "2m", "3m", "5m", "10m", "15m", "30m"}
+# Weekends and holidays already push a window's first bar a few days in, so only
+# a gap wider than this counts as a holding genuinely capping the range.
+_LIVE_SHORT_TOLERANCE = pd.Timedelta(days=4)
 
 # Bar granularity per chart range, chosen so every window lands at roughly 60-250
 # points: dense enough to read as a line, light enough to keep the payload small.
@@ -1284,6 +1287,7 @@ def live_value(req: LiveValueRequest):
             "change_abs": 0.0, "change_pct": 0.0, "cash": cash,
             "session": session, "as_of": as_of, "interval": tf, "range": req.range,
             "priced": [], "unpriced": [], "source": "none", "session_date": None,
+            "covered_from": None, "requested_from": None, "limited_by": [],
         }
 
     closes, source = _live_intraday_closes(symbols, start, tf)
@@ -1325,6 +1329,20 @@ def live_value(req: LiveValueRequest):
     weights = pd.Series({s: shares[s] for s in priced}, dtype=float)
     curve = marks.mul(weights, axis=1).sum(axis=1) + cash
 
+    # That inner join means ONE short-history holding shortens the WHOLE curve: a
+    # 1Y on a book holding a recent listing is really a few months, which renders
+    # identically to YTD with nothing on screen to say why. Keep the join — marking
+    # the book before a name exists would step the total up as names come online —
+    # but report the window actually covered and which holdings capped it.
+    window_start = _live_window_cutoff(req.range)
+    covered_from = marks.index[0]
+    limited_by: list[dict] = []
+    if window_start is not None and covered_from > window_start + _LIVE_SHORT_TOLERANCE:
+        for sym in priced:
+            first = closes[sym].first_valid_index()
+            if first is not None and first > window_start + _LIVE_SHORT_TOLERANCE:
+                limited_by.append({"ticker": sym, "from": first.date().isoformat()})
+
     if req.range == "1d":
         prior_value = _live_prior_value(priced, shares, session_date, cash, marks.iloc[0])
     else:
@@ -1341,6 +1359,9 @@ def live_value(req: LiveValueRequest):
             {"t": ts.isoformat(), "value": round(float(v), 2)}
             for ts, v in curve.items()
         ],
+        "covered_from": covered_from.isoformat(),
+        "requested_from": window_start.isoformat() if window_start is not None else None,
+        "limited_by": limited_by,
         "value": round(latest, 2),
         "prior_value": round(prior_value, 2) if prior_value else None,
         "change_abs": change_abs,
