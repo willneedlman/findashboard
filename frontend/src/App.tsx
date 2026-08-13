@@ -70,6 +70,7 @@ const SOTP               = lazyWithReload(() => import('./pages/SOTP'))
 const Multiples          = lazyWithReload(() => import('./pages/Multiples'))
 const ReverseDCF         = lazyWithReload(() => import('./pages/ReverseDCF'))
 const OptionsScanner     = lazyWithReload(() => import('./pages/OptionsScanner'))
+const OptionsMM2         = lazyWithReload(() => import('./pages/OptionsMM2'))
 const RegressionAnalysis = lazyWithReload(() => import('./pages/RegressionAnalysis'))
 const CorrelationAnalysis = lazyWithReload(() => import('./pages/CorrelationAnalysis'))
 const PortfolioBacktester = lazyWithReload(() => import('./pages/PortfolioBacktester'))
@@ -306,6 +307,7 @@ export default function App() {
               {/* Chain Scanner + Options Flow merged. The old routes redirect so
                   existing links and saved tabs keep working. */}
               <Route path="/options-scanner" element={<OptionsScanner />} />
+              <Route path="/options-mm-2" element={<OptionsMM2 />} />
               <Route path="/chain"      element={<Navigate to="/options-scanner" replace />} />
               <Route path="/options-desk-demo" element={<Navigate to="/options-scanner" replace />} />
               <Route path="/options-desk" element={<Navigate to="/options-scanner" replace />} />

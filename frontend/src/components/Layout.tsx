@@ -317,8 +317,9 @@ export default function Layout({ children }: LayoutProps) {
             <div style={{ padding: '10px 12px 0' }}><ReportCaptureToolbar /></div>
             {children}
           </div>
-        ) : location.pathname === '/flows-map' || location.pathname === '/chart-studio' ? (
-          // Map cockpit and Chart Studio want the full main width: gutters waste chart area.
+        ) : location.pathname === '/flows-map' || location.pathname === '/chart-studio' || location.pathname === '/options-mm-2' ? (
+          // Map cockpit, Chart Studio and the MM terminal want the full main
+          // width: gutters waste chart area.
           <div className="px-4 py-4" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
             <ReportCaptureToolbar />
             <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
