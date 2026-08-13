@@ -107,6 +107,15 @@ const isOpex = (iso: string) => {
   const d = new Date(`${iso}T00:00:00`)
   return d.getDay() === 5 && d.getDate() >= 15 && d.getDate() <= 21
 }
+function HoverLine({ k, v, strong }: { k: string; v: string; strong?: boolean }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 2 }}>
+      <span style={{ fontFamily: SANS, fontSize: 9, color: T.muted }}>{k}</span>
+      <span style={{ fontFamily: MONO, fontSize: strong ? 10.5 : 9.5, fontWeight: strong ? 700 : 400, color: T.text }}>{v}</span>
+    </div>
+  )
+}
+
 const usd0 = (v: number) => `$${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
 const pct2 = (v: number) => `${v >= 0 ? '' : '−'}${Math.abs(v).toFixed(2)}%`
 
@@ -124,6 +133,7 @@ export function DealerGEXContent() {
   const [metric, setMetric] = useState<Metric>('gex')
   const [selExpiry, setSelExpiry] = useState<string>('ALL')
   const [selStrike, setSelStrike] = useState<number | null>(null)
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null)
   const [screenOpen, setScreenOpen] = useState(false)
   const [volDraft, setVolDraft] = useState(500)
   const [voiDraft, setVoiDraft] = useState(1.5)
@@ -205,8 +215,10 @@ export function DealerGEXContent() {
    *  The spec's 99th percentile assumed a big sample: over the ~70 bars a ±5%
    *  band actually holds, the 99th percentile IS the maximum, so it clipped
    *  nothing and one OPEX strike at 47x the median flattened the profile into a
-   *  line. Clip at the 95th, and never let the ceiling exceed 3x the upper
-   *  quartile. `raw` is kept so a tooltip reports the real number. */
+   *  line. Clip at the 98th, and never let the ceiling exceed 5x the upper
+   *  quartile: the old 95th/3x pair clipped roughly a tenth of the bars on SPY,
+   *  which flattened every wall to the same height and hid which was largest.
+   *  `raw` is kept so the tooltip always reports the real number. */
   const profile = useMemo(() => {
     const empty = { values: [] as number[], raw: [] as number[], ceiling: 0 }
     if (!data || !cols.length) return empty
@@ -216,7 +228,7 @@ export function DealerGEXContent() {
     const abs = raw.map(Math.abs).filter(v => v > 0).sort((a, b) => a - b)
     if (!abs.length) return { values: raw, raw, ceiling: 0 }
     const q = (p: number) => abs[Math.min(abs.length - 1, Math.floor(abs.length * p))]
-    const ceiling = Math.min(q(0.95), q(0.75) * 3) || q(0.95)
+    const ceiling = Math.min(q(0.98), q(0.75) * 5) || q(0.98)
     return { raw, ceiling, values: raw.map(v => Math.sign(v) * Math.min(Math.abs(v), ceiling)) }
   }, [data, cols, sliced, selExpiry, field])
 
@@ -539,7 +551,15 @@ export function DealerGEXContent() {
                 {/* Chip band + plot, one track */}
                 <div style={{ display: 'flex' }}>
                   <div style={{ width: GUTTER_L, flexShrink: 0 }} />
-                  <div style={{ flex: 1, position: 'relative', height: chipBand + PLOT_H }}>
+                  <div
+                    onMouseMove={event => {
+                      const box = event.currentTarget.getBoundingClientRect()
+                      const frac = (event.clientX - box.left) / (box.width || 1)
+                      const idx = Math.floor(frac * cols.length)
+                      setHoverIdx(idx >= 0 && idx < cols.length ? idx : null)
+                    }}
+                    onMouseLeave={() => setHoverIdx(null)}
+                    style={{ flex: 1, position: 'relative', height: chipBand + PLOT_H }}>
                     {/* level chips, lane-packed above the plot */}
                     {markers.map(m => (
                       <span key={m.key} style={{
@@ -592,6 +612,41 @@ export function DealerGEXContent() {
                         }} />
                       )
                     })}
+                    {hoverIdx != null && (
+                      <>
+                        <div aria-hidden style={{
+                          position: 'absolute', left: `${(hoverIdx + 0.5) * colW}%`, top: chipBand,
+                          height: PLOT_H, borderLeft: `1px solid ${mix(T.text, 34)}`, zIndex: 3, pointerEvents: 'none',
+                        }} />
+                        <div style={{
+                          position: 'absolute', zIndex: 4, pointerEvents: 'none',
+                          left: `${(hoverIdx + 0.5) * colW}%`,
+                          transform: (hoverIdx + 0.5) * colW > 62 ? 'translateX(calc(-100% - 10px))' : 'translateX(10px)',
+                          top: chipBand + 6, minWidth: 168,
+                          background: T.bg, border: `1px solid ${T.goldTint(38)}`, padding: '7px 9px',
+                        }}>
+                          <div style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: T.gold }}>{usd0(cols[hoverIdx])}</div>
+                          <HoverLine k={METRICS[metric].noun} v={fmtM(profile.raw[hoverIdx])} strong />
+                          {Math.abs(profile.raw[hoverIdx]) > Math.abs(profile.values[hoverIdx]) + 1e-9 && (
+                            <div style={{ fontFamily: MONO, fontSize: 8.5, color: T.warn, marginTop: 2 }}>
+                              bar clipped at {fmtM(profile.ceiling)} so the rest stay readable
+                            </div>
+                          )}
+                          {(() => {
+                            const row = (sliced ? (data.by_expiry_strike[selExpiry] ?? []) : data.by_strike)
+                              .find(r => r.strike === cols[hoverIdx])
+                            if (!row) return <HoverLine k="open interest" v="no contracts" />
+                            return (
+                              <>
+                                <HoverLine k="call / put OI" v={`${fmtK(row.call_oi)} / ${fmtK(row.put_oi)}`} />
+                                <HoverLine k="call / put vol" v={`${fmtK(row.call_vol)} / ${fmtK(row.put_vol)}`} />
+                                <HoverLine k="distance" v={pct2(((cols[hoverIdx] - data.spot) / data.spot) * 100)} />
+                              </>
+                            )
+                          })()}
+                        </div>
+                      </>
+                    )}
                   </div>
                   {/* y labels */}
                   <div style={{ width: GUTTER_R, flexShrink: 0, position: 'relative', height: chipBand + PLOT_H }}>

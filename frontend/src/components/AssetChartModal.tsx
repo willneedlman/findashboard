@@ -147,7 +147,11 @@ export default function AssetChartModal({ row, yields, facts, onClose }: {
     const col = up ? readToken('--theme-positive', '#3fb6a0') : readToken('--theme-negative', '#cf4b3f')
     s.applyOptions({ lineColor: col, topColor: `${col}3d` })
     s.setData(data.price.map(p => ({ time: p.date as Time, value: p.value })))
-    chart.timeScale().fitContent()
+    // Fit on the next frame: called synchronously after setData the chart has not
+    // laid out the new series yet, so the previous range's bar spacing survives
+    // and a wider window opens scrolled past its own start.
+    const id = requestAnimationFrame(() => chartRef.current?.timeScale().fitContent())
+    return () => cancelAnimationFrame(id)
   }, [data])
 
   useEffect(() => {

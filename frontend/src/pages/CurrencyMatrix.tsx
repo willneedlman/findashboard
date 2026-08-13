@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import AssetChartModal from '../components/AssetChartModal'
+import useIsMobile from '../hooks/useIsMobile'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import EmptyState from '../components/EmptyState'
@@ -67,7 +68,7 @@ function Flag({ ccy, w, h }: { ccy: string; w: number; h: number }) {
 /** What matters for a currency pair: rate differential, forwards, basis, vol.
  *  Deliberately NOT the equity stat block, whose beta to the S&P means nothing
  *  here. */
-function FxFacts({ row, usdShortRate }: { row: FxRow | null; usdShortRate: number | null }) {
+function FxFacts({ row, usdShortRate, isMobile }: { row: FxRow | null; usdShortRate: number | null; isMobile: boolean }) {
   if (!row) {
     return (
       <div style={{ padding: '14px 16px', fontFamily: T.mono, fontSize: 10.5, color: T.muted }}>
@@ -92,7 +93,7 @@ function FxFacts({ row, usdShortRate }: { row: FxRow | null; usdShortRate: numbe
       note: `1w is ${row.vol_trend === 'up' ? 'above' : row.vol_trend === 'down' ? 'below' : 'in line with'} it` },
   ]
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, minmax(0, 1fr))` }}>
       {stats.map(stat => (
         <div key={stat.label} style={{ padding: '11px 14px', borderRight: `1px solid ${T.rowHair}`, borderBottom: `1px solid ${T.rowHair}` }}>
           <div style={{ fontFamily: T.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.13em', textTransform: 'uppercase', color: T.faint }}>{stat.label}</div>
@@ -127,6 +128,7 @@ export function CurrencyMatrixContent() {
   // Clicking any rate opens the same overview the Global Markets board uses, so
   // a pair's history and stats are one click away instead of a separate tool.
   const [pick, setPick] = useState<FxPick | null>(null)
+  const isMobile = useIsMobile()
   const { data, isLoading, error, refetch } = useQuery<FxResp>({
     queryKey: ['fx-matrix'],
     queryFn: () => axios.get('/api/fx/matrix').then(r => r.data),
@@ -314,7 +316,7 @@ export function CurrencyMatrixContent() {
       {pick && (
         <AssetChartModal
           row={{ label: pick.label, symbol: pick.symbol, price: pick.price, change_pct: pick.change_pct }}
-          facts={<FxFacts row={rows.find(r => r.pair === pick.label) ?? null} usdShortRate={data?.usd_short_rate ?? null} />}
+          facts={<FxFacts row={rows.find(r => r.pair === pick.label) ?? null} usdShortRate={data?.usd_short_rate ?? null} isMobile={isMobile} />}
           onClose={() => setPick(null)}
         />
       )}
