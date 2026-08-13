@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import useIsMobile from '../hooks/useIsMobile'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -18,19 +18,18 @@ import { kpiClip, chartClip, tableClip } from '../lib/reportCaptureRegistry'
 // exposure sits by strike, what traded into it today, and how that exposure is
 // distributed across the term structure.
 //
-// The rule the layout depends on: the strike profile, the flow ribbon and the
-// expiry x strike heatmap are all rendered from ONE filtered strike array and
-// ONE column geometry, so a wall, a flow print and a term-structure
-// concentration line up vertically instead of forcing the reader to re-anchor
-// on three separate x-axes. Recharts computes its own plot inset per chart, so
-// three stacked ResponsiveContainers would not register — those three regions
-// are positioned divs on a percentage grid. Recharts stays for the history
-// pane, which has no alignment requirement.
+// The rule the layout depends on: the strike profile and the expiry x strike
+// heatmap are rendered from ONE filtered strike array and ONE column geometry,
+// so a wall and a term-structure concentration line up vertically instead of
+// forcing the reader to re-anchor on separate x-axes. Recharts computes its own
+// plot inset per chart, so stacked ResponsiveContainers would not register —
+// those regions are positioned divs on a percentage grid. Recharts stays for the
+// history pane, which has no alignment requirement.
 
-// Gutter and plot sizes, narrowed on a phone. The profile, ribbon and heatmap
-// share one column geometry, so they cannot be reflowed independently — the
-// frame stays horizontally scrollable and these just buy back width inside it.
-const GUTTER_L_WIDE = 92     // row labels (expiry code + DTE), "flow today" caption
+// Gutter and plot sizes, narrowed on a phone. The profile and heatmap share one
+// column geometry, so they cannot be reflowed independently — the frame stays
+// horizontally scrollable and these just buy back width inside it.
+const GUTTER_L_WIDE = 92     // row labels (expiry code + DTE)
 const GUTTER_L_NARROW = 56
 const GUTTER_R_WIDE = 64     // profile y-labels, heatmap row totals
 const GUTTER_R_NARROW = 44
@@ -39,14 +38,13 @@ const PLOT_H_NARROW = 200
 const CHIP_LANE = 17         // lane pitch for the level markers above the profile
 const CHIP_H = 15            // rendered chip height, where its own rule starts
 const CHIP_MIN = 46
-const RIBBON_H = 34
 const heatRowH = (n: number) => (n > 16 ? 20 : n > 10 ? 24 : 30)
 const BAR_INSET = 11         // % of column, each side — bars fill 78%
 const HISTORY_W = 520        // history pane; full width once the row wraps
 
 /** Panel headers / KPI strip. */
 const SURFACE = T.surface
-/** Regime band, flow ribbon, level KPI cells. */
+/** Regime band, level KPI cells. */
 const QUIET = `color-mix(in srgb, ${T.surface} 50%, ${T.bg})`
 
 type Metric = 'gex' | 'dex' | 'vanna' | 'charm'
@@ -107,6 +105,77 @@ const isOpex = (iso: string) => {
   const d = new Date(`${iso}T00:00:00`)
   return d.getDay() === 5 && d.getDate() >= 15 && d.getDate() <= 21
 }
+/** Crosshair and readout for the strike profile.
+ *
+ *  Owns its own hover state on purpose. Held in the page, every pointer move
+ *  re-rendered the expiry x strike heatmap — well over a thousand positioned
+ *  divs — plus the flow table and the history chart, which made the hover crawl.
+ *  Here a move only reconciles this overlay. */
+function ProfileHover({ cols, colW, chipBand, plotH, raw, noun, spot, rows }: {
+  cols: number[]; colW: number; chipBand: number; plotH: number
+  raw: number[]; noun: string; spot: number; rows: StrikeRow[]
+}) {
+  const [idx, setIdx] = useState<number | null>(null)
+  const frame = useRef(0)
+  const byStrike = useMemo(() => new Map(rows.map(r => [r.strike, r])), [rows])
+
+  // Coalesce to one update per frame; a fast sweep fires far more pointer
+  // events than the screen can show.
+  const onMove = (event: React.MouseEvent<HTMLDivElement>) => {
+    const box = event.currentTarget.getBoundingClientRect()
+    const x = event.clientX - box.left
+    const width = box.width || 1
+    cancelAnimationFrame(frame.current)
+    frame.current = requestAnimationFrame(() => {
+      const next = Math.floor((x / width) * cols.length)
+      setIdx(current => {
+        const clamped = next >= 0 && next < cols.length ? next : null
+        return clamped === current ? current : clamped
+      })
+    })
+  }
+
+  useEffect(() => () => cancelAnimationFrame(frame.current), [])
+
+  const strike = idx == null ? null : cols[idx]
+  const row = strike == null ? undefined : byStrike.get(strike)
+  const left = idx == null ? 0 : (idx + 0.5) * colW
+
+  return (
+    <>
+      <div
+        onMouseMove={onMove}
+        onMouseLeave={() => { cancelAnimationFrame(frame.current); setIdx(null) }}
+        style={{ position: 'absolute', left: 0, right: 0, top: chipBand, height: plotH, zIndex: 3 }}
+      />
+      {idx != null && strike != null && (
+        <>
+          <div aria-hidden style={{
+            position: 'absolute', left: `${left}%`, top: chipBand, height: plotH,
+            borderLeft: `1px solid ${mix(T.text, 34)}`, zIndex: 4, pointerEvents: 'none',
+          }} />
+          <div style={{
+            position: 'absolute', zIndex: 5, pointerEvents: 'none',
+            left: `${left}%`, top: chipBand + 6, minWidth: 170,
+            transform: left > 62 ? 'translateX(calc(-100% - 10px))' : 'translateX(10px)',
+            background: T.bg, border: `1px solid ${T.goldTint(38)}`, padding: '7px 9px',
+          }}>
+            <div style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: T.gold }}>{usd0(strike)}</div>
+            <HoverLine k={noun} v={fmtM(raw[idx])} strong />
+            {row ? (
+              <>
+                <HoverLine k="call / put OI" v={`${fmtK(row.call_oi)} / ${fmtK(row.put_oi)}`} />
+                <HoverLine k="call / put vol" v={`${fmtK(row.call_vol)} / ${fmtK(row.put_vol)}`} />
+              </>
+            ) : <HoverLine k="open interest" v="no contracts" />}
+            <HoverLine k="distance" v={pct2(((strike - spot) / spot) * 100)} />
+          </div>
+        </>
+      )}
+    </>
+  )
+}
+
 function HoverLine({ k, v, strong }: { k: string; v: string; strong?: boolean }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 2 }}>
@@ -133,7 +202,6 @@ export function DealerGEXContent() {
   const [metric, setMetric] = useState<Metric>('gex')
   const [selExpiry, setSelExpiry] = useState<string>('ALL')
   const [selStrike, setSelStrike] = useState<number | null>(null)
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null)
   const [screenOpen, setScreenOpen] = useState(false)
   const [volDraft, setVolDraft] = useState(500)
   const [voiDraft, setVoiDraft] = useState(1.5)
@@ -196,7 +264,6 @@ export function DealerGEXContent() {
     return data.by_strike.map(r => r.strike).filter(s => s >= lo && s <= hi).sort((a, b) => a - b)
   }, [data, spot])
   const colW = cols.length ? 100 / cols.length : 0
-  const colIndex = useMemo(() => new Map(cols.map((s, i) => [s, i])), [cols])
   /** Percent-of-track position for a price. Interpolated between the two
    *  columns it falls between rather than snapped to the nearer one: strikes
    *  are ordinal here, and snapping collapsed distinct levels onto one column
@@ -211,25 +278,19 @@ export function DealerGEXContent() {
     return (i + 0.5 + (price - cols[i]) / span) * colW
   }
 
-  /** Metric value per column for the active slice, with a clipping ceiling.
-   *  The spec's 99th percentile assumed a big sample: over the ~70 bars a ±5%
-   *  band actually holds, the 99th percentile IS the maximum, so it clipped
-   *  nothing and one OPEX strike at 47x the median flattened the profile into a
-   *  line. Clip at the 98th, and never let the ceiling exceed 5x the upper
-   *  quartile: the old 95th/3x pair clipped roughly a tenth of the bars on SPY,
-   *  which flattened every wall to the same height and hid which was largest.
-   *  `raw` is kept so the tooltip always reports the real number. */
+  /** Metric value per column for the active slice.
+   *
+   *  No ceiling: bars always plot their true height. An earlier version clipped
+   *  at a percentile so one OPEX strike could not flatten the profile, but that
+   *  traded a real problem for a worse one — several walls rendered at identical
+   *  height and which was largest became unreadable. A dominant strike
+   *  compressing the rest is at least the truth. */
   const profile = useMemo(() => {
-    const empty = { values: [] as number[], raw: [] as number[], ceiling: 0 }
-    if (!data || !cols.length) return empty
+    if (!data || !cols.length) return { values: [] as number[], raw: [] as number[] }
     const rows = sliced ? (data.by_expiry_strike[selExpiry] ?? []) : data.by_strike
     const byStrike = new Map(rows.map(r => [r.strike, r[field] as number]))
     const raw = cols.map(s => byStrike.get(s) ?? 0)
-    const abs = raw.map(Math.abs).filter(v => v > 0).sort((a, b) => a - b)
-    if (!abs.length) return { values: raw, raw, ceiling: 0 }
-    const q = (p: number) => abs[Math.min(abs.length - 1, Math.floor(abs.length * p))]
-    const ceiling = Math.min(q(0.98), q(0.75) * 5) || q(0.98)
-    return { raw, ceiling, values: raw.map(v => Math.sign(v) * Math.min(Math.abs(v), ceiling)) }
+    return { raw, values: raw }
   }, [data, cols, sliced, selExpiry, field])
 
   const domain = useMemo(() => {
@@ -245,12 +306,6 @@ export function DealerGEXContent() {
     return sliced ? data.flow.filter(f => f.expiry === selExpiry) : data.flow
   }, [data, sliced, selExpiry])
   // Only prints that land on a plotted column can be drawn on the shared axis.
-  const ribbon = useMemo(() => {
-    const inBand = flow.filter(f => colIndex.has(f.strike))
-    const max = Math.max(1, ...inBand.map(f => f.premium))
-    return inBand.map(f => ({ ...f, h: Math.max(14, (f.premium / max) * 100) }))
-  }, [flow, colIndex])
-
   // ── Level markers, lane-packed so no two chips ever overlap ──────────────
   const markers = useMemo(() => {
     if (!spot || !view) return [] as { key: string; label: string; x: number; color: string; lane: number; dashed?: boolean }[]
@@ -514,7 +569,7 @@ export function DealerGEXContent() {
               sub={`${fmtK(view.call_vol + view.put_vol)} traded today`} />
           </div>
 
-          {/* ── Aligned stack: profile, ribbon, axis, heatmap ─────────────── */}
+          {/* ── Aligned stack: profile, axis, heatmap ─────────────────────── */}
           {/* One scroller around all three registered regions. They share a
               single column geometry, so they must scroll together or not at
               all — reflowing any one of them breaks the alignment the whole
@@ -551,15 +606,7 @@ export function DealerGEXContent() {
                 {/* Chip band + plot, one track */}
                 <div style={{ display: 'flex' }}>
                   <div style={{ width: GUTTER_L, flexShrink: 0 }} />
-                  <div
-                    onMouseMove={event => {
-                      const box = event.currentTarget.getBoundingClientRect()
-                      const frac = (event.clientX - box.left) / (box.width || 1)
-                      const idx = Math.floor(frac * cols.length)
-                      setHoverIdx(idx >= 0 && idx < cols.length ? idx : null)
-                    }}
-                    onMouseLeave={() => setHoverIdx(null)}
-                    style={{ flex: 1, position: 'relative', height: chipBand + PLOT_H }}>
+                  <div style={{ flex: 1, position: 'relative', height: chipBand + PLOT_H }}>
                     {/* level chips, lane-packed above the plot */}
                     {markers.map(m => (
                       <span key={m.key} style={{
@@ -592,10 +639,8 @@ export function DealerGEXContent() {
                     {profile.values.map((v, i) => {
                       const h = (Math.abs(v) / domain.span) * PLOT_H
                       const on = selStrike === cols[i]
-                      const clipped = Math.abs(profile.raw[i]) > Math.abs(v) + 1e-9
                       return (
                         <div key={cols[i]}
-                          title={`${usd0(cols[i])} · ${fmtM(profile.raw[i])}${clipped ? ' (bar clipped)' : ''}`}
                           style={{
                           position: 'absolute',
                           left: `${i * colW + colW * (BAR_INSET / 100)}%`,
@@ -605,48 +650,14 @@ export function DealerGEXContent() {
                           background: v >= 0 ? cc.gain : cc.loss,
                           opacity: 0.85,
                           outline: on ? `1px solid ${T.text}` : undefined,
-                          // a clipped bar shows a broken end rather than pretending to be its height
-                          ...(clipped ? (v >= 0
-                            ? { borderTop: `2px dotted ${T.bg}` }
-                            : { borderBottom: `2px dotted ${T.bg}` }) : null),
                         }} />
                       )
                     })}
-                    {hoverIdx != null && (
-                      <>
-                        <div aria-hidden style={{
-                          position: 'absolute', left: `${(hoverIdx + 0.5) * colW}%`, top: chipBand,
-                          height: PLOT_H, borderLeft: `1px solid ${mix(T.text, 34)}`, zIndex: 3, pointerEvents: 'none',
-                        }} />
-                        <div style={{
-                          position: 'absolute', zIndex: 4, pointerEvents: 'none',
-                          left: `${(hoverIdx + 0.5) * colW}%`,
-                          transform: (hoverIdx + 0.5) * colW > 62 ? 'translateX(calc(-100% - 10px))' : 'translateX(10px)',
-                          top: chipBand + 6, minWidth: 168,
-                          background: T.bg, border: `1px solid ${T.goldTint(38)}`, padding: '7px 9px',
-                        }}>
-                          <div style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: T.gold }}>{usd0(cols[hoverIdx])}</div>
-                          <HoverLine k={METRICS[metric].noun} v={fmtM(profile.raw[hoverIdx])} strong />
-                          {Math.abs(profile.raw[hoverIdx]) > Math.abs(profile.values[hoverIdx]) + 1e-9 && (
-                            <div style={{ fontFamily: MONO, fontSize: 8.5, color: T.warn, marginTop: 2 }}>
-                              bar clipped at {fmtM(profile.ceiling)} so the rest stay readable
-                            </div>
-                          )}
-                          {(() => {
-                            const row = (sliced ? (data.by_expiry_strike[selExpiry] ?? []) : data.by_strike)
-                              .find(r => r.strike === cols[hoverIdx])
-                            if (!row) return <HoverLine k="open interest" v="no contracts" />
-                            return (
-                              <>
-                                <HoverLine k="call / put OI" v={`${fmtK(row.call_oi)} / ${fmtK(row.put_oi)}`} />
-                                <HoverLine k="call / put vol" v={`${fmtK(row.call_vol)} / ${fmtK(row.put_vol)}`} />
-                                <HoverLine k="distance" v={pct2(((cols[hoverIdx] - data.spot) / data.spot) * 100)} />
-                              </>
-                            )
-                          })()}
-                        </div>
-                      </>
-                    )}
+                    <ProfileHover
+                      cols={cols} colW={colW} chipBand={chipBand} plotH={PLOT_H}
+                      raw={profile.raw} noun={METRICS[metric].noun} spot={data.spot}
+                      rows={sliced ? (data.by_expiry_strike[selExpiry] ?? []) : data.by_strike}
+                    />
                   </div>
                   {/* y labels */}
                   <div style={{ width: GUTTER_R, flexShrink: 0, position: 'relative', height: chipBand + PLOT_H }}>
@@ -658,44 +669,6 @@ export function DealerGEXContent() {
                       }}>{axisM(domain.hi - (i / 4) * domain.span)}</span>
                     ))}
                   </div>
-                </div>
-
-                {/* Flow ribbon — same columns, directly under the profile */}
-                <div style={{ display: 'flex', background: QUIET, borderTop: `1px solid ${T.borderFaint}`, borderBottom: `1px solid ${T.borderFaint}` }}>
-                  <div style={{
-                    width: GUTTER_L, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
-                    paddingRight: 10, fontFamily: SANS, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em',
-                    textTransform: 'uppercase', color: T.muted, textAlign: 'right', lineHeight: 1.25,
-                  }}>Flow<br />today</div>
-                  <div style={{ flex: 1, position: 'relative', height: RIBBON_H }}>
-                    {rules.map(m => (
-                      <div key={`rb-${m.key}`} aria-hidden style={{
-                        position: 'absolute', left: `${m.x}%`, marginLeft: m.nudge, top: 0, bottom: 0,
-                        borderLeft: `1px ${m.dashed ? 'dashed' : 'solid'} ${mix(m.color, 55)}`,
-                      }} />
-                    ))}
-                    {ribbon.map((f, i) => {
-                      const idx = colIndex.get(f.strike)!
-                      const on = selStrike === f.strike
-                      return (
-                        <div key={`${f.expiry}-${f.type}-${f.strike}-${i}`}
-                          title={`${f.expiry} ${f.type.toUpperCase()} ${usd0(f.strike)} · ${fmtPrem(f.premium)}`}
-                          style={{
-                            position: 'absolute',
-                            left: `${idx * colW + colW * (BAR_INSET / 100)}%`,
-                            width: `${colW * (1 - 2 * BAR_INSET / 100)}%`,
-                            bottom: 0, height: `${f.h}%`,
-                            background: f.type === 'call' ? cc.gain : cc.loss, opacity: 0.85,
-                            outline: on ? `1px solid ${T.text}` : undefined,
-                          }} />
-                      )
-                    })}
-                  </div>
-                  <div style={{
-                    width: GUTTER_R, flexShrink: 0, display: 'flex', alignItems: 'center',
-                    paddingLeft: 8, fontFamily: SANS, fontSize: 8, fontWeight: 700,
-                    letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted,
-                  }}>Premium</div>
                 </div>
 
                 {/* Shared x axis */}
