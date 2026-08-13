@@ -1101,35 +1101,56 @@ def dealer_exposure(ticker: str, expiries: int = 8, min_volume: int = 250, min_v
                 "net_dex": 0.0, "net_vanna": 0.0, "net_charm": 0.0,
                 "call_oi": 0, "put_oi": 0, "call_vol": 0, "put_vol": 0}
 
+    # One HTTP round trip per expiry, and there are up to 32 of them. Fetched in
+    # sequence a cold SPY load spent ~15s almost entirely waiting on the network,
+    # so the chains are pulled concurrently and the maths below is unchanged.
+    from concurrent.futures import ThreadPoolExecutor
+
+    def _pull(exp: str):
+        try:
+            chain = _tradier.get_options_chain(sym, exp, greeks=True)
+            if chain and (chain.get("calls") or chain.get("puts")):
+                return exp, chain
+        except Exception as e:
+            logger.warning("Tradier exposure chain %s %s: %s", sym, exp, e)
+        return exp, None
+
+    with ThreadPoolExecutor(max_workers=min(8, len(processed) or 1)) as pool:
+        chains = dict(pool.map(_pull, processed))
+
+    # yfinance fills the gaps SEQUENTIALLY on purpose: it is rate limited and
+    # throttled app-wide, and firing a fan-out at it trips that limit. With
+    # Tradier healthy this loop does nothing.
+    def _yf_rows(df):
+        return [{
+            "strike": float(x.get("strike", 0)),
+            "openInterest": int(x.get("openInterest", 0)),
+            "volume": int(x.get("volume", 0)),
+            "impliedVolatility": float(x.get("impliedVolatility", 0)),
+            "bid": float(x.get("bid", 0)), "ask": float(x.get("ask", 0)),
+            "lastPrice": float(x.get("lastPrice", 0)),
+            "delta": 0, "gamma": 0,
+        } for _, x in df.fillna(0).iterrows()]
+
+    for exp in processed:
+        if chains.get(exp):
+            continue
+        used_yf = True
+        try:
+            yc = yf.Ticker(sym).option_chain(exp)
+            chains[exp] = {"calls": _yf_rows(yc.calls), "puts": _yf_rows(yc.puts)}
+        except Exception as e2:
+            logger.warning("yfinance exposure fallback %s %s: %s", sym, exp, e2)
+            chains[exp] = None
+
     for exp in processed:
         exp_dt = _dt.date.fromisoformat(exp)
         dte = max((exp_dt - today).days, 0)
         T = max(dte, 1) / 365.25
 
-        chain = None
-        try:
-            chain = _tradier.get_options_chain(sym, exp, greeks=True)
-        except Exception as e:
-            logger.warning("Tradier exposure chain %s %s: %s", sym, exp, e)
-        if not chain or (not chain.get("calls") and not chain.get("puts")):
-            used_yf = True
-            try:
-                yc = yf.Ticker(sym).option_chain(exp)
-
-                def _rows(df):
-                    return [{
-                        "strike": float(x.get("strike", 0)),
-                        "openInterest": int(x.get("openInterest", 0)),
-                        "volume": int(x.get("volume", 0)),
-                        "impliedVolatility": float(x.get("impliedVolatility", 0)),
-                        "bid": float(x.get("bid", 0)), "ask": float(x.get("ask", 0)),
-                        "lastPrice": float(x.get("lastPrice", 0)),
-                        "delta": 0, "gamma": 0,
-                    } for _, x in df.fillna(0).iterrows()]
-                chain = {"calls": _rows(yc.calls), "puts": _rows(yc.puts)}
-            except Exception as e2:
-                logger.warning("yfinance exposure fallback %s %s: %s", sym, exp, e2)
-                continue
+        chain = chains.get(exp)
+        if not chain:
+            continue
 
         strikes: dict[float, dict] = {}
         for side, rows, sign in (("call", chain["calls"], 1), ("put", chain["puts"], -1)):
