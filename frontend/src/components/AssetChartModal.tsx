@@ -17,10 +17,15 @@ const GOLD = 'var(--theme-primary, #c9a84c)'
 
 // Short windows use exact intraday lookbacks. Longer windows retain the existing
 // date-based history route, which resolves to intraday or daily bars as needed.
-const TFS: { k: string; days?: number; window?: '10m' | '30m' | '1h' }[] = [
+// `max` reaches back past any listed history and lets the source clamp to what
+// it actually has, which is what makes full cycles visible rather than a fixed
+// lookback that silently truncates older instruments.
+const MAX_START = '1900-01-01'
+const TFS: { k: string; days?: number; window?: '10m' | '30m' | '1h'; max?: boolean }[] = [
   { k: '10M', window: '10m' }, { k: '30M', window: '30m' }, { k: '1H', window: '1h' },
   { k: '1D', days: 1 }, { k: '1W', days: 7 }, { k: '1M', days: 31 },
   { k: '3M', days: 93 }, { k: '1Y', days: 366 }, { k: '5Y', days: 1826 },
+  { k: '10Y', days: 3653 }, { k: 'MAX', max: true },
 ] as const
 
 interface Row { label: string; symbol: string; quote_symbol?: string; price: number | null; change_pct: number | null }
@@ -65,8 +70,10 @@ export default function AssetChartModal({ row, yields, onClose }: { row: Row; yi
       ? { ticker, window: selected.window }
       : (() => {
           const end = new Date()
-          const start = new Date(end.getTime() - selected.days! * 86400000)
-          return { ticker, start: iso(start), end: iso(end) }
+          const start = selected.max
+            ? MAX_START
+            : iso(new Date(end.getTime() - selected.days! * 86400000))
+          return { ticker, start, end: iso(end) }
         })()
     axios.get<Hist>('/api/market/history', { params })
       .then(r => { if (!cancel) { setData(r.data); setLoading(false) } })

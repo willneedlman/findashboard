@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import AssetChartModal from '../components/AssetChartModal'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import EmptyState from '../components/EmptyState'
@@ -76,7 +78,12 @@ function Panel({ title, sub, children }: { title: string; sub?: string; children
   )
 }
 
+interface FxPick { label: string; symbol: string; price: number | null; change_pct: number | null }
+
 export function CurrencyMatrixContent() {
+  // Clicking any rate opens the same overview the Global Markets board uses, so
+  // a pair's history and stats are one click away instead of a separate tool.
+  const [pick, setPick] = useState<FxPick | null>(null)
   const { data, isLoading, error, refetch } = useQuery<FxResp>({
     queryKey: ['fx-matrix'],
     queryFn: () => axios.get('/api/fx/matrix').then(r => r.data),
@@ -177,7 +184,12 @@ export function CurrencyMatrixContent() {
                     const { min, max } = colRange[j]
                     const t = (v - min) / ((max - min) || 1)
                     return (
-                      <td key={colc} style={{ ...td, fontSize: 12.5, padding: '10px 13px', borderTop: `1px solid rgba(255,255,255,0.045)`, color: T.text, background: goldAlpha(t * HEAT_INTENSITY) }}>
+                      <td key={colc}
+                        onClick={() => setPick({ label: `${rowc}/${colc}`, symbol: `${rowc}${colc}=X`, price: v, change_pct: null })}
+                        role="button" tabIndex={0}
+                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPick({ label: `${rowc}/${colc}`, symbol: `${rowc}${colc}=X`, price: v, change_pct: null }) } }}
+                        title={`Open ${rowc}/${colc} overview`}
+                        style={{ ...td, fontSize: 12.5, padding: '10px 13px', borderTop: `1px solid rgba(255,255,255,0.045)`, color: T.text, background: goldAlpha(t * HEAT_INTENSITY), cursor: 'pointer' }}>
                         {v.toLocaleString('en-US', { maximumFractionDigits: colc === 'JPY' ? 2 : 4 })}
                       </td>
                     )
@@ -216,7 +228,12 @@ export function CurrencyMatrixContent() {
                 const [base, quote] = r.pair.split('/')
                 const volPct = r.vol_1w == null ? 0 : Math.min(r.vol_1w / 6 * 100, 100)
                 return (
-                  <tr key={r.ccy} style={{ borderTop: `1px solid ${T.rowHair}` }}>
+                  <tr key={r.ccy}
+                    onClick={() => setPick({ label: r.pair, symbol: `${base}${quote}=X`, price: r.spot, change_pct: r.chg_pct })}
+                    role="button" tabIndex={0}
+                    onKeyDown={e => { if (e.key === 'Enter') setPick({ label: r.pair, symbol: `${base}${quote}=X`, price: r.spot, change_pct: r.chg_pct }) }}
+                    title={`Open ${r.pair} overview`}
+                    style={{ borderTop: `1px solid ${T.rowHair}`, cursor: 'pointer' }}>
                     <td style={{ padding: '11px 16px', textAlign: 'left', whiteSpace: 'nowrap' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         <Flag ccy={base} w={18} h={12} />
@@ -248,8 +265,15 @@ export function CurrencyMatrixContent() {
       </Panel>
 
       <div style={{ padding: '12px 14px', background: T.surface, border: `1px solid ${T.panelBorder}`, borderLeft: `2px solid ${T.gold}`, fontFamily: T.sans, fontSize: 10, color: T.muted, lineHeight: '17px' }}>
-        Spot and realized volatility are live. Forward points are covered-interest-parity implied from indicative 3-month money rates. The cross-currency basis is an indicative reference. Vol is annualized 1-week realized. The trend arrow compares it to the 1-month.
+        Spot and realized volatility are live. Forward points are covered-interest-parity implied from indicative 3-month money rates. The cross-currency basis is an indicative reference. Vol is annualized 1-week realized. The trend arrow compares it to the 1-month. Click any rate for its price history and stats.
       </div>
+
+      {pick && (
+        <AssetChartModal
+          row={{ label: pick.label, symbol: pick.symbol, price: pick.price, change_pct: pick.change_pct }}
+          onClose={() => setPick(null)}
+        />
+      )}
     </div>
   )
 }
