@@ -849,7 +849,7 @@ function PanelHead({ title, right, children }: { title: string; right?: React.Re
     }}>
       <span style={{
         fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em',
-        textTransform: 'uppercase', color: T.text, whiteSpace: 'nowrap',
+        textTransform: 'uppercase', color: T.gold, whiteSpace: 'nowrap',
       }}>{title}</span>
       {children}
       {right && <span style={{ marginLeft: 'auto' }}>{right}</span>}

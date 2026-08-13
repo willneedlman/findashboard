@@ -1380,8 +1380,10 @@ textarea.ft-control {
   justify-content: space-between;
   gap: 16px;
   padding: 9px 22px;
-  background: rgba(0,0,0,0.18);
-  border-bottom: 1px solid var(--theme-border-faint, rgba(255,255,255,0.05));
+  /* Token, not a hardcoded black wash: the band has to track the theme the same
+     way Dealer Exposure's PanelHead does, or the two tools drift apart. */
+  background: var(--theme-surface, #0d1826);
+  border-bottom: 1px solid var(--theme-border, rgba(255,255,255,0.08));
   color: var(--theme-primary, #c9a84c);
   font: 700 10px/1.2 var(--theme-sans, sans-serif);
   letter-spacing: 0.16em;
