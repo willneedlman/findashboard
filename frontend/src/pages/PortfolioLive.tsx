@@ -483,7 +483,7 @@ export function PortfolioLiveContent({ view, onView }: { view?: string; onView?:
         phase={phase} msToNext={status.msToNext} now={now}
         range={range} onRange={setRange}
         chartData={chartData} xDomain={xDomain} yDomain={yDomain} tickFmt={tickFmt}
-        loading={curveQ.isLoading} error={curveQ.isError}
+        loading={curveQ.isLoading} switching={curveQ.isPlaceholderData} error={curveQ.isError}
       />
 
       <ContributionStrip rows={baseRows} gross={grossMoves} />
@@ -612,11 +612,11 @@ function HeroBand(props: {
   chartData: { ts: number; value: number }[]
   xDomain: [number, number]; yDomain: [number, number] | undefined
   tickFmt: (ts: number) => string
-  loading: boolean; error: boolean
+  loading: boolean; switching: boolean; error: boolean
 }) {
   const {
     value, gainAbs, gainPct, rangeIsToday, rangeLabel, baseline, cash, positions,
-    phase, msToNext, now, range, onRange, chartData, xDomain, yDomain, tickFmt, loading, error,
+    phase, msToNext, now, range, onRange, chartData, xDomain, yDomain, tickFmt, loading, switching, error,
   } = props
   const isMobile = useIsMobile()
   const deltaColor = chg(gainAbs)
@@ -683,32 +683,58 @@ function HeroBand(props: {
       <div style={{ padding: '14px 16px 10px', minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <span style={eyebrow}>
-            {rangeIsToday
-              ? `Today · 09:30 → ${tickFmt(xDomain[1])} ET`
-              : `${rangeLabel} · ${tickFmt(xDomain[0])} → ${tickFmt(xDomain[1])}`}
+            {switching || loading
+              ? `Loading ${rangeLabel}…`
+              : rangeIsToday
+                ? `Today · 09:30 → ${tickFmt(xDomain[1])} ET`
+                : `${rangeLabel} · ${tickFmt(xDomain[0])} → ${tickFmt(xDomain[1])}`}
           </span>
           <div style={{ display: 'flex', gap: 1, background: T.borderFaint }}>
-            {RANGES.map(r => (
-              <button key={r.key} onClick={() => onRange(r.key)} aria-pressed={range === r.key} style={{
-                fontFamily: MONO, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.08em',
-                padding: '4px 9px', border: 'none', cursor: 'pointer',
-                color: range === r.key ? T.gold : mix(T.muted, 75),
-                background: range === r.key ? T.goldTint(16) : 'transparent',
-              }}>{r.label}</button>
-            ))}
+            {RANGES.map(r => {
+              const active = range === r.key
+              const pending = active && (switching || loading)
+              return (
+                <button key={r.key} onClick={() => onRange(r.key)} aria-pressed={active}
+                  aria-busy={pending || undefined} style={{
+                    position: 'relative', overflow: 'hidden',
+                    fontFamily: MONO, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.08em',
+                    padding: '4px 9px', border: 'none', cursor: 'pointer',
+                    color: active ? T.gold : mix(T.muted, 75),
+                    background: active ? T.goldTint(16) : 'transparent',
+                  }}>
+                  {r.label}
+                  {pending && (
+                    <span style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 2, overflow: 'hidden' }}>
+                      <span className="es-load-fill" style={{
+                        display: 'block', width: '40%', height: '100%', background: T.gold,
+                        animation: 'es-load-slide 1.1s ease-in-out infinite',
+                      }} />
+                    </span>
+                  )}
+                </button>
+              )
+            })}
           </div>
         </div>
 
-        <div style={{ height: 208, marginTop: 8 }}>
+        <div style={{ height: 208, marginTop: 8, position: 'relative' }}>
           {error ? (
             <Centered>No price data for this book in this range.</Centered>
           ) : !chartData.length ? (
-            <Centered>{loading ? 'Loading the value curve…' : 'No bars for this range.'}</Centered>
+            <Centered>{loading || switching ? 'Loading the value curve…' : 'No bars for this range.'}</Centered>
           ) : (
-            <ValueChart
-              data={chartData} xDomain={xDomain} yDomain={yDomain} tickFmt={tickFmt}
-              baseline={baseline} rangeIsToday={rangeIsToday}
-            />
+            // The previous range's curve stays up while the new one loads, so it
+            // is dimmed to make clear it is not the range that is selected.
+            <div style={{
+              height: '100%',
+              opacity: switching ? 0.4 : 1,
+              transition: 'opacity 0.18s var(--ease-out, ease-out)',
+            }}>
+              <ValueChart
+                data={chartData} xDomain={xDomain} yDomain={yDomain} tickFmt={tickFmt}
+                baseline={baseline} rangeIsToday={rangeIsToday}
+              />
+            </div>
           )}
         </div>
       </div>

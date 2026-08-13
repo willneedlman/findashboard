@@ -1134,6 +1134,8 @@ def stress_test(req: StressRequest):
 # session keeps the payload small while still reading as a continuous line.
 _LIVE_TF = "5m"
 _LIVE_LOOKBACK_DAYS = 6      # enough to reach the last session across a long weekend
+# Frames that are still forming inside the session, and so cannot be cached long.
+_LIVE_FAST_TFS = {"1m", "2m", "3m", "5m", "10m", "15m", "30m"}
 
 # Bar granularity per chart range, chosen so every window lands at roughly 60-250
 # points: dense enough to read as a line, light enough to keep the payload small.
@@ -1228,7 +1230,10 @@ def _live_intraday_closes(symbols: list[str], start: str, tf: str = _LIVE_TF) ->
     if missing:
         end = (_pd_today() + pd.Timedelta(days=1)).date().isoformat()
         try:
-            dl = get_download(tuple(sorted(missing)), start, end, tf, cache_ttl=60)
+            # A 1h/1d window does not move inside a session, so the 60s live-cache
+            # bucket only made every range switch pay a fresh vendor download.
+            ttl = 60 if tf in _LIVE_FAST_TFS else 300
+            dl = get_download(tuple(sorted(missing)), start, end, tf, cache_ttl=ttl)
             frame = _download_field(dl, "Close", missing)
             # cache.get_download calls tz_localize(None), which drops the zone but
             # keeps the wall-clock — and yfinance stamps US intraday bars in

@@ -118,6 +118,21 @@ def history_df(symbol: str, tf: str, start, end=None) -> "pd.DataFrame":
     return df[["Open", "High", "Low", "Close", "Volume"]].dropna(subset=["Close"])
 
 
+# Bar windows are re-requested constantly — the Portfolio Live range selector
+# alone refetches a whole basket every time the user switches 1W/1M/3M/YTD. A
+# 1-hour or daily window does not change inside a session, so serving those from
+# memory turns a paginated multi-second round trip into an instant response.
+# Caches are deliberately small: one entry can hold tens of thousands of bars and
+# the prod VM is memory-capped.
+_FAST_TFS = {"1m", "2m", "3m", "5m", "10m", "15m", "30m"}
+_BARS_FAST_TTL = 45       # still forming inside the session
+_BARS_SLOW_TTL = 900      # 1h and coarser barely move intraday
+
+
+class _NoBars(RuntimeError):
+    """Sentinel so an empty basket escapes the cache instead of being stored."""
+
+
 def bars_multi(symbols: tuple[str, ...], tf: str, start, end=None, adjustment: str = "all") -> dict:
     """Bars for a basket of equities in ONE request, as {symbol: [{t,o,h,l,c,v}, ...]}.
 
@@ -125,41 +140,66 @@ def bars_multi(symbols: tuple[str, ...], tf: str, start, end=None, adjustment: s
     per-symbol fan-out would be N round trips against a shared rate limit. Returns
     {} on any failure so callers can fall back. Symbols with no bars are absent
     from the mapping rather than present-and-empty.
+
+    Results are memoised per (symbols, timeframe, window). The returned mapping is
+    the cached object, so callers must treat it as read-only.
     """
     if not available():
         return {}
-    atf = alpaca_timeframe(tf)
-    if not atf:
+    if not alpaca_timeframe(tf):
         return {}
     requested = tuple(dict.fromkeys(s.strip().upper() for s in symbols if is_equity(s)))
     if not requested:
         return {}
-    alpaca_to_symbol = {to_alpaca_symbol(s): s for s in requested}
+    fetch = _bars_multi_fast if tf in _FAST_TFS else _bars_multi_slow
+    try:
+        return fetch(requested, tf, _iso(start), _iso(end) if end is not None else None, adjustment)
+    except Exception:
+        # Raising past the cache is deliberate: cachetools stores return values but
+        # not exceptions, so a vendor blip is never memoised. Caching an empty
+        # result would blank the chart for the whole TTL after the vendor recovered.
+        return {}
+
+
+@ttl_cache(maxsize=12, ttl=_BARS_FAST_TTL)
+def _bars_multi_fast(symbols: tuple[str, ...], tf: str, start: str, end: str | None, adjustment: str) -> dict:
+    return _bars_multi_fetch(symbols, tf, start, end, adjustment)
+
+
+@ttl_cache(maxsize=12, ttl=_BARS_SLOW_TTL)
+def _bars_multi_slow(symbols: tuple[str, ...], tf: str, start: str, end: str | None, adjustment: str) -> dict:
+    return _bars_multi_fetch(symbols, tf, start, end, adjustment)
+
+
+def _bars_multi_fetch(symbols: tuple[str, ...], tf: str, start: str, end: str | None, adjustment: str) -> dict:
+    atf = alpaca_timeframe(tf)
+    alpaca_to_symbol = {to_alpaca_symbol(s): s for s in symbols}
     params = {
-        "symbols": ",".join(alpaca_to_symbol), "timeframe": atf, "start": _iso(start),
+        "symbols": ",".join(alpaca_to_symbol), "timeframe": atf, "start": start,
         "limit": 10_000, "adjustment": adjustment, "feed": _FEED, "sort": "asc",
     }
     if end is not None:
-        params["end"] = _iso(end)
+        params["end"] = end
     out: dict[str, list] = {}
     token, total = None, 0
-    try:
-        while total < _MAX_BARS:
-            if token:
-                params["page_token"] = token
-            r = httpx.get(f"{_DATA_BASE}/v2/stocks/bars", headers=_HEADERS, params=params, timeout=15)
-            r.raise_for_status()
-            j = r.json()
-            for alpaca_symbol, bars in (j.get("bars") or {}).items():
-                symbol = alpaca_to_symbol.get(alpaca_symbol)
-                if symbol and bars:
-                    out.setdefault(symbol, []).extend(bars)
-                    total += len(bars)
-            token = j.get("next_page_token")
-            if not token:
-                break
-    except Exception:
-        return {}
+    while total < _MAX_BARS:
+        if token:
+            params["page_token"] = token
+        r = httpx.get(f"{_DATA_BASE}/v2/stocks/bars", headers=_HEADERS, params=params, timeout=15)
+        r.raise_for_status()
+        j = r.json()
+        for alpaca_symbol, bars in (j.get("bars") or {}).items():
+            symbol = alpaca_to_symbol.get(alpaca_symbol)
+            if symbol and bars:
+                out.setdefault(symbol, []).extend(bars)
+                total += len(bars)
+        token = j.get("next_page_token")
+        if not token:
+            break
+    if not out:
+        # Empty is indistinguishable from a silent vendor failure, so refuse to
+        # memoise it and let the caller fall back to yfinance this time round.
+        raise _NoBars
     return out
 
 
