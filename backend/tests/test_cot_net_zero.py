@@ -201,3 +201,48 @@ def test_dollar_nets_also_sum_to_zero(monkeypatch):
     market = _cot_market("tff", "spx", "E-mini S&P 500", "E-MINI S&P 500")
     assert sum(cohort["net_usd"] for cohort in market["cohorts"]) == 0
     assert market["open_interest_usd"] == 2116079 * 50 * 5000.0
+
+
+def test_contract_name_stays_a_string(monkeypatch):
+    """The contract name is rendered directly, so it must never become an object.
+
+    A local variable named `contract` was reused for the contract-value dict and
+    shipped that dict as the contract name, which crashed the page with "objects
+    are not valid as a React child".
+    """
+    monkeypatch.setattr("routers.official._contract_prices", lambda: {"^GSPC": 5000.0})
+
+    class _Resp:
+        status_code = 200
+        def raise_for_status(self): pass
+        def json(self): return [_tff_row()]
+
+    monkeypatch.setattr("routers.official.requests.get", lambda *a, **k: _Resp())
+    market = _cot_market("tff", "spx", "E-mini S&P 500", "E-MINI S&P 500")
+
+    assert isinstance(market["contract"], str)
+    assert market["contract"].startswith("E-MINI S&P 500")
+    assert isinstance(market["contract_value"], dict)
+
+
+def test_every_directly_rendered_field_is_a_scalar(monkeypatch):
+    """Guards the whole payload, not just the field that happened to break."""
+    monkeypatch.setattr("routers.official._contract_prices", lambda: {"^GSPC": 5000.0})
+
+    class _Resp:
+        status_code = 200
+        def raise_for_status(self): pass
+        def json(self): return [_tff_row()]
+
+    monkeypatch.setattr("routers.official.requests.get", lambda *a, **k: _Resp())
+    market = _cot_market("tff", "spx", "E-mini S&P 500", "E-MINI S&P 500")
+
+    for field in ("id", "label", "contract", "primary"):
+        assert isinstance(market[field], str), f"{field} is rendered as text"
+    for field in ("net_residual", "weeks"):
+        assert isinstance(market[field], (int, float)), f"{field} is rendered as a number"
+    assert isinstance(market["balanced"], bool)
+    for cohort in market["cohorts"]:
+        assert isinstance(cohort["label"], str)
+        assert isinstance(cohort["derived"], bool)
+        assert set(cohort["trend"]) == {"w4", "w13", "w26"}

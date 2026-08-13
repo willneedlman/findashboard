@@ -235,8 +235,11 @@ def _cot_market(family_key: str, market_key: str, label: str, term: str) -> dict
     if not latest:
         return None
 
-    contract = _contract_value(market_key)
-    unit_value = contract["value_usd"] if contract else None
+    # Distinct name from `contract`: that already holds the CFTC contract name
+    # string this market was matched on, and shadowing it shipped the dict to the
+    # UI in its place.
+    contract_value = _contract_value(market_key)
+    unit_value = contract_value["value_usd"] if contract_value else None
     cohorts = []
     for cohort_label, long, short in latest_split:
         net = long - short
@@ -273,7 +276,7 @@ def _cot_market(family_key: str, market_key: str, label: str, term: str) -> dict
         "balanced": abs(residual) <= _NET_ZERO_TOLERANCE,
         "weeks": len(series),
         "primary": family["primary"],
-        "contract_value": contract,
+        "contract_value": contract_value,
         "open_interest_usd": latest["open_interest"] * unit_value if unit_value else None,
     }
 
