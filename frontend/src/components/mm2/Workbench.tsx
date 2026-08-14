@@ -107,7 +107,7 @@ function PnlCell({ eng, reviewT, onScrub }: {
         </div>
       </div>
       <div style={{ flex: 1, minHeight: 0, padding: '2px 4px' }}>
-        <Canvas height={118} onPick={xf => {
+        <Canvas height={78} onPick={xf => {
           if (s.length < 2) return
           onScrub(s[0].t + xf * (s[s.length - 1].t - s[0].t))
         }} draw={(ctx, w, h) => {
@@ -145,14 +145,16 @@ function PnlCell({ eng, reviewT, onScrub }: {
           }
         }} />
       </div>
-      <div style={{ padding: '4px 8px 6px', borderTop: `1px solid ${T.borderFaint}`, flexShrink: 0 }}>
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', gap: '0 10px', padding: '3px 8px 5px',
+        borderTop: `1px solid ${T.borderFaint}`, flexShrink: 0,
+      }}>
         {list.map(ser => (
-          <div key={ser.key} style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
-            <span style={{ ...MONO, fontSize: 9, color: tok.gold ? ser.color(tok) : T.muted }}>{ser.label}</span>
-            <span style={{ ...MONO, fontSize: 9, color: T.text }}>
-              {latest ? fmtK(latest[ser.key] as number) : '—'}
-            </span>
-          </div>
+          <span key={ser.key} style={{ ...MONO, fontSize: 9, whiteSpace: 'nowrap' }}>
+            <span style={{ color: tok.gold ? ser.color(tok) : T.muted }}>{ser.label}</span>
+            {' '}
+            <span style={{ color: T.text }}>{latest ? fmtK(latest[ser.key] as number) : '—'}</span>
+          </span>
         ))}
       </div>
     </>

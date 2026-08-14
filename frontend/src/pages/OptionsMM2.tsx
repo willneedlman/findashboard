@@ -22,11 +22,9 @@ import MetricsOverlay from '../components/mm2/MetricsOverlay'
 import { Chain, ExpiryStrip, fmtK, type Highlight } from '../components/mm2/Chain'
 import { ChainHeader } from '../components/mm2/Center'
 import { Mm2Engine, DEFAULT_CONFIG, DTE_LABELS, STEP_MS, fmtClock, fmtMoney, type Config, type Sample } from '../lib/mm2/engine'
+import { BOTTOM_H } from '../components/mm2/layout'
 
 const SPEEDS = [1, 5, 10, 25, 100]
-// Fixed vertical budget. The page must not scroll on a 1440x900 laptop, so the
-// bottom pane is a hard height and the middle row takes what is left.
-const BOTTOM_H = 264
 // Everything ran four times too quickly to read. Each labelled speed now
 // advances a quarter as much simulated time, and the underlying slows with it
 // because the whole clock does.
@@ -164,7 +162,7 @@ export default function OptionsMM2() {
   const statusColor = eng.killed || eng.riskStop ? BAD : running ? GOOD : WARN
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, height: 'calc(100vh - 62px)', minHeight: 600, ...MONO }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, height: '100%', minHeight: 560, ...MONO }}>
 
       {/* Command bar (46) */}
       <header style={{

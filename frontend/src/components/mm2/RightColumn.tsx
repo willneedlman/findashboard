@@ -49,7 +49,7 @@ export default function RightColumn({ eng, cfg, set, tick, highlight, onHighligh
         </div>
       </Panel>
 
-      <Panel style={{ flex: '1 1 auto', minHeight: 0, overflow: 'hidden' }}>
+      <Panel style={{ flex: '1 1 auto', minHeight: 84, overflow: 'hidden' }}>
         <Exposure eng={eng} metric={highlight === 'none' || highlight === 'theta' ? 'vega' : highlight} />
       </Panel>
 
@@ -77,28 +77,28 @@ function Meter({ label, unit, value, prior, soft, hard, fmt, active, onClick }: 
 
   return (
     <div onClick={onClick} style={{
-      padding: '4px 9px', cursor: 'pointer', borderBottom: `1px solid ${T.borderFaint}`,
+      padding: '3px 9px', cursor: 'pointer', borderBottom: `1px solid ${T.borderFaint}`,
       borderLeft: `2px solid ${breach ? BAD : warn ? WARN : active ? T.gold : 'transparent'}`,
       background: breach ? alpha(BAD, 7) : warn ? alpha(WARN, 7) : active ? alpha(T.gold, 10) : undefined,
     }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-        <span style={{ ...LABEL, fontSize: 9, letterSpacing: '0.14em', color: breach || warn ? tone : T.muted }}>{label}</span>
-        <span style={{ ...MONO, fontSize: 9, color: T.muted }}>{unit}</span>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+        <span style={{ ...LABEL, fontSize: 8.5, letterSpacing: '0.14em', color: breach || warn ? tone : T.muted }}>{label}</span>
+        <span style={{ ...MONO, fontSize: 14, fontWeight: 700, color: tone, marginLeft: 'auto' }}>{fmt(value)}</span>
+        <span style={{ ...MONO, fontSize: 8.5, color: T.muted }}>{unit}</span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-        <span style={{ ...MONO, fontSize: 15, fontWeight: 700, color: tone }}>{fmt(value)}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         {delta !== null && (
-          <span style={{ ...MONO, fontSize: 9.5, color: breach || warn ? tone : T.muted }}>
-            {delta >= 0 ? '↑' : '↓'}{fmt(Math.abs(delta))} in 1m
+          <span style={{ ...MONO, fontSize: 9, color: breach || warn ? tone : T.muted, flexShrink: 0 }}>
+            {delta >= 0 ? '↑' : '↓'}{fmt(Math.abs(delta))}
           </span>
         )}
-        <span style={{ ...MONO, fontSize: 9.5, color: breach || warn ? tone : T.muted, marginLeft: 'auto' }}>
+        <div style={{ position: 'relative', height: 3, flex: 1, background: alpha(T.muted, 18) }}>
+          <div style={{ position: 'absolute', inset: 0, width: `${Math.min(100, used * 100)}%`, background: breach ? BAD : warn ? WARN : alpha(T.gold, 70) }} />
+          <div style={{ position: 'absolute', top: -1, bottom: -1, left: `${Math.min(100, (soft / Math.max(hard, 1e-9)) * 100)}%`, width: 1, background: alpha(T.text, 55) }} />
+        </div>
+        <span style={{ ...MONO, fontSize: 9, color: breach || warn ? tone : T.muted, flexShrink: 0 }}>
           {(used * 100).toFixed(0)}% of {warn && !breach ? 'soft' : fmt(hard)}
         </span>
-      </div>
-      <div style={{ position: 'relative', height: 3, background: alpha(T.muted, 18), marginTop: 2 }}>
-        <div style={{ position: 'absolute', inset: 0, width: `${Math.min(100, used * 100)}%`, background: breach ? BAD : warn ? WARN : alpha(T.gold, 70) }} />
-        <div style={{ position: 'absolute', top: -1, bottom: -1, left: `${Math.min(100, (soft / Math.max(hard, 1e-9)) * 100)}%`, width: 1, background: alpha(T.text, 55) }} />
       </div>
     </div>
   )
@@ -193,16 +193,16 @@ function Hedge({ eng, cfg, live, onTick }: {
 
   return (
     <div style={{ padding: '6px 9px' }}>
-      <div style={{ ...MONO, fontSize: 10, color: T.text, lineHeight: 1.45 }}>
-        {cfg.autoHedge
-          ? p
-            ? `Auto hedge will ${p.qty > 0 ? 'buy' : 'sell'} ${Math.abs(p.qty)} at ${p.px.toFixed(2)}.`
-            : `Delta ${fmtK(r.delta)} is inside the ${cfg.hedgeThreshold} threshold.`
-          : `Manual. Delta is ${fmtK(r.delta)}; nothing hedges unless you do it.`}
-      </div>
+      {!p && (
+        <div style={{ ...MONO, fontSize: 10, color: T.text, lineHeight: 1.4 }}>
+          {cfg.autoHedge
+            ? `Delta ${fmtK(r.delta)} is inside the ${cfg.hedgeThreshold} threshold.`
+            : `Manual. Delta ${fmtK(r.delta)}, nothing hedges unless you do.`}
+        </div>
+      )}
 
       {p && (
-        <div style={{ marginTop: 4 }}>
+        <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
             <span style={{ ...MONO, fontSize: 10.5, color: T.gold, fontWeight: 700 }}>
               {p.qty > 0 ? 'BUY' : 'SELL'} {Math.abs(p.qty)} @ {p.px.toFixed(2)}

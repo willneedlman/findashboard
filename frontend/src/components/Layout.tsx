@@ -317,7 +317,12 @@ export default function Layout({ children }: LayoutProps) {
             <div style={{ padding: '10px 12px 0' }}><ReportCaptureToolbar /></div>
             {children}
           </div>
-        ) : location.pathname === '/flows-map' || location.pathname === '/chart-studio' || location.pathname === '/options-mm-2' ? (
+        ) : location.pathname === '/options-mm-2' ? (
+          // The MM terminal owns the viewport. No capture toolbar and no footer,
+          // and a thin gutter, so its own fixed vertical budget gets the whole
+          // window rather than competing with page chrome for it.
+          <div style={{ height: '100vh', padding: 6, boxSizing: 'border-box' }}>{children}</div>
+        ) : location.pathname === '/flows-map' || location.pathname === '/chart-studio' ? (
           // Map cockpit, Chart Studio and the MM terminal want the full main
           // width: gutters waste chart area.
           <div className="px-4 py-4" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
