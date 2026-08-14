@@ -104,29 +104,29 @@ export function Chain({ eng, rows, sel, onSel, expIdx, highlight, live, spot, ti
             <th colSpan={7} style={{ ...BAND, textAlign: 'right', background: '#1b1c33', color: VIOLET }}>Puts</th>
           </tr>
           <tr>
-            <th style={{ ...GROUP, top: 21 }}>pos</th>
-            <th colSpan={2} style={{ ...GROUP, top: 21, borderLeft: `1px solid ${T.border}` }}>Model</th>
-            <th colSpan={2} style={{ ...GROUP, top: 21, borderLeft: `1px solid ${T.border}`, background: quoteTint(T.blue), color: T.blue }}>Your quote</th>
-            <th colSpan={2} style={{ ...GROUP, top: 21, borderLeft: `1px solid ${T.border}` }}>Market</th>
-            <th colSpan={2} style={{ ...GROUP, top: 21, borderLeft: `1px solid ${T.border}` }} />
-            <th colSpan={2} style={{ ...GROUP, top: 21, borderLeft: `1px solid ${T.border}` }}>Market</th>
-            <th colSpan={2} style={{ ...GROUP, top: 21, borderLeft: `1px solid ${T.border}`, background: quoteTint(VIOLET), color: VIOLET }}>Your quote</th>
-            <th colSpan={2} style={{ ...GROUP, top: 21, borderLeft: `1px solid ${T.border}` }}>Model</th>
-            <th style={{ ...GROUP, top: 21, borderLeft: `1px solid ${T.border}` }}>pos</th>
+            <th style={{ ...GROUP }}>pos</th>
+            <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}` }}>Model</th>
+            <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}`, background: quoteTint(T.blue), color: T.blue }}>Your quote</th>
+            <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}` }}>Market</th>
+            <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}` }} />
+            <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}` }}>Market</th>
+            <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}`, background: quoteTint(VIOLET), color: VIOLET }}>Your quote</th>
+            <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}` }}>Model</th>
+            <th style={{ ...GROUP, borderLeft: `1px solid ${T.border}` }}>pos</th>
           </tr>
           <tr>
-            <th style={{ ...COL, top: 38 }} />
-            <th style={{ ...COL, top: 38 }}>iv</th><th style={{ ...COL, top: 38 }}>theo</th>
-            <th style={{ ...COL, top: 38, background: quoteTint(T.blue), color: T.blue }}>bid</th>
-            <th style={{ ...COL, top: 38, background: quoteTint(T.blue), color: T.blue }}>ask</th>
-            <th style={{ ...COL, top: 38 }}>bid</th><th style={{ ...COL, top: 38 }}>ask</th>
-            <th style={{ ...COL, top: 38, background: '#1a2438', textAlign: 'center' }}>K</th>
-            <th style={{ ...COL, top: 38, background: '#1a2438' }}>%</th>
-            <th style={{ ...COL, top: 38 }}>bid</th><th style={{ ...COL, top: 38 }}>ask</th>
-            <th style={{ ...COL, top: 38, background: quoteTint(VIOLET), color: VIOLET }}>bid</th>
-            <th style={{ ...COL, top: 38, background: quoteTint(VIOLET), color: VIOLET }}>ask</th>
-            <th style={{ ...COL, top: 38 }}>theo</th><th style={{ ...COL, top: 38 }}>iv</th>
-            <th style={{ ...COL, top: 38 }} />
+            <th style={{ ...COL }} />
+            <th style={{ ...COL }}>iv</th><th style={{ ...COL }}>theo</th>
+            <th style={{ ...COL, background: quoteTint(T.blue), color: T.blue }}>bid</th>
+            <th style={{ ...COL, background: quoteTint(T.blue), color: T.blue }}>ask</th>
+            <th style={{ ...COL }}>bid</th><th style={{ ...COL }}>ask</th>
+            <th style={{ ...COL, background: '#1a2438', textAlign: 'center' }}>K</th>
+            <th style={{ ...COL, background: '#1a2438' }}>%</th>
+            <th style={{ ...COL }}>bid</th><th style={{ ...COL }}>ask</th>
+            <th style={{ ...COL, background: quoteTint(VIOLET), color: VIOLET }}>bid</th>
+            <th style={{ ...COL, background: quoteTint(VIOLET), color: VIOLET }}>ask</th>
+            <th style={{ ...COL }}>theo</th><th style={{ ...COL }}>iv</th>
+            <th style={{ ...COL }} />
           </tr>
         </thead>
         <tbody>
@@ -161,19 +161,30 @@ export function Chain({ eng, rows, sel, onSel, expIdx, highlight, live, spot, ti
 const VIOLET = T.violet
 const quoteTint = (c: string) => `color-mix(in srgb, ${c} 10%, ${T.surface})`
 
-// Sticky offsets sit 1-3px tighter than the natural row heights so no sliver of
-// a scrolling row can show between the three header rows.
+// Header geometry is pinned, not inferred. Each row gets an explicit height and
+// the next row sticks 1px ABOVE where the previous one ends, so the three
+// overlap slightly. Letting the offsets follow natural line heights left ~3px
+// gaps that scrolling rows showed straight through.
+export const BAND_H = 20
+export const GROUP_H = 17
+export const GROUP_TOP = BAND_H - 1          // 19
+export const COL_TOP = GROUP_TOP + GROUP_H - 1   // 35
+
 const BAND: React.CSSProperties = {
-  ...LABEL, fontSize: 9, letterSpacing: '0.18em', padding: '3px 8px',
-  position: 'sticky', top: 0, zIndex: 4,
+  ...LABEL, fontSize: 9, letterSpacing: '0.18em', padding: '0 8px',
+  height: BAND_H, boxSizing: 'border-box', lineHeight: `${BAND_H}px`,
+  position: 'sticky', top: 0, zIndex: 6,
 }
 const GROUP: React.CSSProperties = {
-  ...LABEL, fontSize: 8, letterSpacing: '0.14em', padding: '2px 6px', textAlign: 'center',
-  background: T.surface, position: 'sticky', zIndex: 3,
+  ...LABEL, fontSize: 8, letterSpacing: '0.14em', padding: '0 6px', textAlign: 'center',
+  height: GROUP_H, boxSizing: 'border-box', lineHeight: `${GROUP_H}px`,
+  background: T.surface, position: 'sticky', top: GROUP_TOP, zIndex: 5,
 }
 const COL: React.CSSProperties = {
-  ...MONO, fontSize: 9, fontWeight: 600, color: T.muted, padding: '2px 6px', textAlign: 'right',
-  background: T.surface, position: 'sticky', zIndex: 3, borderBottom: `1px solid ${T.border}`,
+  ...MONO, fontSize: 9, fontWeight: 600, color: T.muted, padding: '0 6px', textAlign: 'right',
+  height: GROUP_H, boxSizing: 'border-box', lineHeight: `${GROUP_H}px`,
+  background: T.surface, position: 'sticky', top: COL_TOP, zIndex: 5,
+  borderBottom: `1px solid ${T.border}`,
 }
 
 function contribution(leg: LegView, h: Highlight): number {

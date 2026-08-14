@@ -222,7 +222,7 @@ export function ContractBody({ eng, sel, live, sample, leg }: {
           ))}
         </Col>
 
-        <Col title="Depth" flex divide caption="your size in colour">
+        <Col title="Depth" flex divide caption="you versus the street">
           <DepthLadder eng={eng} sel={sel} live={live} />
         </Col>
       </div>
@@ -258,40 +258,79 @@ function Row({ k, v, tone, bold }: { k: string; v: string; tone?: string; bold?:
   )
 }
 
-/** Eight levels with your own resting size printed in the side's hue. */
+/**
+ * Depth around the touch, with your own resting size in its own column.
+ *
+ * The handoff put your size in the same cell as the street's. In practice that
+ * was unreadable — a second number in a cell gives no clue whose it is — so the
+ * two get separate, labelled columns.
+ *
+ * Slicing the top eight prices also hid your bids: the rows come back sorted
+ * high to low, so eight rows is the whole ask side and nothing else. The ladder
+ * is now built outwards from the touch instead.
+ */
 function DepthLadder({ eng, sel, live }: { eng: Mm2Engine; sel: number; live: boolean }) {
   if (!live) return <Empty>Depth is not recorded historically.</Empty>
-  const rows = eng.depth(sel).slice(0, 8)
-  if (!rows.length) return <Empty>This contract has expired.</Empty>
+  const all = eng.depth(sel)
+  if (!all.length) return <Empty>This contract has expired.</Empty>
+
+  const mktBid = eng.mktBid[sel]
+  const mktAsk = eng.mktAsk[sel]
+  const asks = all.filter(r => r.px >= mktAsk - 1e-9)
+  const bids = all.filter(r => r.px <= mktBid + 1e-9)
+  const inside = all.filter(r => r.px < mktAsk - 1e-9 && r.px > mktBid + 1e-9)
+  // Nearest the touch on both sides, plus every level where we are resting.
+  const rows = [...asks.slice(-4), ...inside, ...bids.slice(0, 4)]
+
+  const mineOf = (r: typeof all[number], side: 'B' | 'A') =>
+    r.ours.filter(o => o.side === side).reduce((a, o) => a + o.remaining, 0)
+  const resting = rows.reduce((n, r) => n + mineOf(r, 'B') + mineOf(r, 'A'), 0)
+
+  const head: React.CSSProperties = {
+    ...LABEL, fontSize: 8.5, letterSpacing: '0.14em', padding: '1px 6px', whiteSpace: 'nowrap',
+  }
+  const cell: React.CSSProperties = { ...MONO, fontSize: 11, padding: '1px 6px', whiteSpace: 'nowrap' }
+
   return (
-    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-      <thead>
-        <tr>
-          {['Bid', 'Price', 'Ask'].map((h, i) => (
-            <th key={h} style={{ ...LABEL, fontSize: 8.5, letterSpacing: '0.14em', padding: '1px 6px', textAlign: i === 0 ? 'right' : i === 1 ? 'center' : 'left' }}>{h}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map(r => {
-          const mineBid = r.ours.filter(o => o.side === 'B').reduce((a, o) => a + o.remaining, 0)
-          const mineAsk = r.ours.filter(o => o.side === 'A').reduce((a, o) => a + o.remaining, 0)
-          const touch = Math.abs(r.px - eng.mktBid[sel]) < 1e-9 || Math.abs(r.px - eng.mktAsk[sel]) < 1e-9
-          const mineHue = mineBid ? T.blue : mineAsk ? T.violet : null
-          return (
-            <tr key={r.px.toFixed(2)} style={{ background: mineHue ? alpha(mineHue, 12) : touch ? alpha(T.text, 5) : undefined }}>
-              <td style={{ ...MONO, fontSize: 11, padding: '1px 6px', textAlign: 'right', color: alpha(GOOD, 78) }}>
-                {r.bidSize || ''}{mineBid ? <span style={{ color: T.blue, fontWeight: 700 }}> {mineBid}</span> : null}
-              </td>
-              <td style={{ ...MONO, fontSize: 11, padding: '1px 6px', textAlign: 'center', color: T.text, fontWeight: touch ? 700 : 400 }}>{r.px.toFixed(2)}</td>
-              <td style={{ ...MONO, fontSize: 11, padding: '1px 6px', textAlign: 'left', color: alpha(BAD, 78) }}>
-                {mineAsk ? <span style={{ color: T.violet, fontWeight: 700 }}>{mineAsk} </span> : null}{r.askSize || ''}
-              </td>
-            </tr>
-          )
-        })}
-      </tbody>
-    </table>
+    <>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={{ ...head, textAlign: 'right', color: T.blue }}>You</th>
+            <th style={{ ...head, textAlign: 'right' }}>Bid</th>
+            <th style={{ ...head, textAlign: 'center' }}>Price</th>
+            <th style={{ ...head, textAlign: 'left' }}>Ask</th>
+            <th style={{ ...head, textAlign: 'left', color: T.violet }}>You</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(r => {
+            const mineBid = mineOf(r, 'B')
+            const mineAsk = mineOf(r, 'A')
+            const mine = mineBid || mineAsk
+            const touch = Math.abs(r.px - mktBid) < 1e-9 || Math.abs(r.px - mktAsk) < 1e-9
+            const hue = mineBid ? T.blue : mineAsk ? T.violet : null
+            return (
+              <tr key={r.px.toFixed(2)} style={{
+                background: hue ? alpha(hue, 12) : touch ? alpha(T.text, 5) : undefined,
+                borderLeft: `2px solid ${hue ?? 'transparent'}`,
+              }}>
+                <td style={{ ...cell, textAlign: 'right', color: T.blue, fontWeight: 700 }}>{mineBid || ''}</td>
+                <td style={{ ...cell, textAlign: 'right', color: alpha(GOOD, 78) }}>{r.bidSize || ''}</td>
+                <td style={{ ...cell, textAlign: 'center', color: T.text, fontWeight: touch || mine ? 700 : 400 }}>{r.px.toFixed(2)}</td>
+                <td style={{ ...cell, textAlign: 'left', color: alpha(BAD, 78) }}>{r.askSize || ''}</td>
+                <td style={{ ...cell, textAlign: 'left', color: T.violet, fontWeight: 700 }}>{mineAsk || ''}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      <p style={{ ...MONO, fontSize: 9.5, color: T.muted, margin: '4px 0 0' }}>
+        {resting > 0
+          ? `${resting} of yours resting here.`
+          : 'Nothing of yours resting in this contract.'}
+      </p>
+    </>
   )
 }
 

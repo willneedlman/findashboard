@@ -28,3 +28,27 @@ describe('chain column geometry', () => {
     expect(all.every(w => w > 0)).toBe(true)
   })
 })
+
+import { BAND_H, GROUP_H, GROUP_TOP, COL_TOP } from './Chain'
+
+/**
+ * The three header rows are sticky at fixed offsets. If a row's offset lands
+ * below where the previous row ends, the gap is transparent and scrolling body
+ * rows show straight through it.
+ */
+describe('sticky header geometry', () => {
+  it('sticks each header row above where the previous one ends', () => {
+    expect(GROUP_TOP).toBeLessThan(BAND_H)
+    expect(COL_TOP).toBeLessThan(GROUP_TOP + GROUP_H)
+  })
+
+  it('never leaves a vertical gap between the rows', () => {
+    expect(BAND_H - GROUP_TOP).toBeGreaterThanOrEqual(1)
+    expect(GROUP_TOP + GROUP_H - COL_TOP).toBeGreaterThanOrEqual(1)
+  })
+
+  it('keeps the rows in order, so none can render above the band', () => {
+    expect(GROUP_TOP).toBeGreaterThan(0)
+    expect(COL_TOP).toBeGreaterThan(GROUP_TOP)
+  })
+})

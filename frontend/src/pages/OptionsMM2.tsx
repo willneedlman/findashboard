@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import axios from 'axios'
 import { T, alpha } from '../lib/theme'
 import { MONO, LABEL, Panel, Btn, Seg, GOOD, BAD, WARN, pnlColor } from '../components/mm2/ui'
 import StrategyRail from '../components/mm2/StrategyRail'
@@ -52,6 +53,31 @@ export default function OptionsMM2() {
   const [reviewT, setReviewT] = useState<number | null>(null)
   const [setup, setSetup] = useState<SetupTab | null>(null)
   const [metricsOpen, setMetricsOpen] = useState(false)
+
+  // Open on the real index level. A hardcoded 5320 was wrong the day it was
+  // written and drifts further every session, and the strike ladder is built
+  // from the opening spot, so the whole chain inherits the error.
+  const seedRef = useRef(seed)
+  seedRef.current = seed
+  useEffect(() => {
+    let cancelled = false
+    axios.get('/api/market/quotes', { params: { tickers: '^GSPC' } })
+      .then(res => {
+        const px = Number(res.data?.quotes?.['^GSPC']?.current_price)
+        if (cancelled || !Number.isFinite(px) || px <= 0) return
+        // A session already under way is left alone rather than reset under you.
+        if (engRef.current && engRef.current.clock > 0) return
+        const open = Math.round(px / 10) * 10
+        const next = { ...DEFAULT_CONFIG, spot0: open }
+        const fresh = new Mm2Engine(next, seedRef.current)
+        engRef.current = fresh
+        setCfg(next)
+        setSel(fresh.nearestAtm(1, 'C'))
+        setTick(t => t + 1)
+      })
+      .catch(() => { /* the default opening level stands */ })
+    return () => { cancelled = true }
+  }, [])
 
   const set = useCallback((patch: Partial<Config>) => {
     setCfg(c => {
