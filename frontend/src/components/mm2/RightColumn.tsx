@@ -11,7 +11,7 @@
 
 import { useState } from 'react'
 import { T, alpha } from '../../lib/theme'
-import { Panel, Field, Num, Toggle, Btn, MONO, LABEL, GOOD, BAD, WARN, pnlColor } from './ui'
+import { Panel, Toggle, Btn, MONO, LABEL, GOOD, BAD, WARN, pnlColor } from './ui'
 import { fmtK } from './Chain'
 import type { Highlight } from './Chain'
 import { fmtMoney, type Config, type Mm2Engine } from '../../lib/mm2/engine'
@@ -26,7 +26,10 @@ export default function RightColumn({ eng, cfg, set, tick, highlight, onHighligh
   const toggle = (h: Highlight) => onHighlight(highlight === h ? 'none' : h)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: '100%', gap: 4 }}>
+    // overflowY is a safety valve, not the plan: the three panels are budgeted to
+    // fit, but a hidden EXECUTE HEDGE button is far worse than a scrollbar if a
+    // short viewport or a longer breach block ever pushes them over.
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: '100%', gap: 4, overflowY: 'auto' }}>
       <Panel title="Risk limits" right={<span style={{ ...MONO, fontSize: 9, color: T.muted }}>click to trace</span>}
         style={{ flex: '0 0 auto' }}>
         <Meter label="Net delta" unit="shares" value={r.delta} prior={back?.netDelta}
@@ -45,13 +48,13 @@ export default function RightColumn({ eng, cfg, set, tick, highlight, onHighligh
         </div>
       </Panel>
 
-      <Panel style={{ flex: '1 1 auto', minHeight: 107, overflow: 'hidden' }}>
+      <Panel style={{ flex: '1 1 auto', minHeight: 90, overflow: 'hidden' }}>
         <Exposure eng={eng} metric={highlight === 'none' || highlight === 'theta' ? 'vega' : highlight} />
       </Panel>
 
       <Panel title="Hedge" right={<Toggle value={cfg.autoHedge} onChange={v => set({ autoHedge: v })} on="AUTO" off="MANUAL" />}
         style={{ flex: '0 0 auto' }}>
-        <Hedge eng={eng} cfg={cfg} set={set} live={live} />
+        <Hedge eng={eng} cfg={cfg} live={live} />
       </Panel>
     </div>
   )
@@ -171,9 +174,7 @@ function Exposure({ eng, metric }: { eng: Mm2Engine; metric: 'delta' | 'gamma' |
   )
 }
 
-function Hedge({ eng, cfg, set, live }: {
-  eng: Mm2Engine; cfg: Config; set: (p: Partial<Config>) => void; live: boolean
-}) {
+function Hedge({ eng, cfg, live }: { eng: Mm2Engine; cfg: Config; live: boolean }) {
   const p = eng.hedgeProposal()
   const r = eng.risk()
   return (
@@ -199,9 +200,6 @@ function Hedge({ eng, cfg, set, live }: {
       <div style={{ display: 'flex', gap: 10, marginTop: 5, ...MONO, fontSize: 9.5, color: T.muted }}>
         <span>hedges {eng.stat.hedges}</span>
         <span>slippage {fmtMoney(eng.stat.hedgeCost)}</span>
-      </div>
-      <div style={{ marginTop: 4, borderTop: `1px solid ${T.borderFaint}`, paddingTop: 4 }}>
-        <Field label="threshold"><Num value={cfg.hedgeThreshold} onChange={v => set({ hedgeThreshold: v })} step={50} min={0} width={54} /></Field>
       </div>
     </div>
   )

@@ -192,6 +192,8 @@ export default function SetupModal({ eng, cfg, set, sel, onClose, initial = 'mar
             <Field label="max net per expiry"><Num value={cfg.perExpiryCap} onChange={v => set({ perExpiryCap: v })} step={50} min={1} /></Field>
           </Col>
           <Col title="Hedge execution">
+            <Field label="threshold shares" hint="Net delta the hedger acts on"><Num value={cfg.hedgeThreshold} onChange={v => set({ hedgeThreshold: v })} step={50} min={0} /></Field>
+            <Field label="target delta"><Num value={cfg.targetDelta} onChange={v => set({ targetDelta: v })} step={50} /></Field>
             <Field label="min hedge"><Num value={cfg.minHedge} onChange={v => set({ minHedge: v })} step={5} min={1} /></Field>
             <Field label="max hedge"><Num value={cfg.maxHedge} onChange={v => set({ maxHedge: v })} step={100} min={1} /></Field>
             <Field label="min interval ms"><Num value={cfg.hedgeIntervalMs} onChange={v => set({ hedgeIntervalMs: v })} step={250} min={0} /></Field>

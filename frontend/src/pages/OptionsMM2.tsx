@@ -20,12 +20,16 @@ import SetupModal from '../components/mm2/SetupModal'
 import MetricsOverlay from '../components/mm2/MetricsOverlay'
 import { Chain, ExpiryStrip, fmtK, type Highlight } from '../components/mm2/Chain'
 import { ChainHeader } from '../components/mm2/Center'
-import { Mm2Engine, DEFAULT_CONFIG, DTE_LABELS, fmtClock, fmtMoney, type Config, type Sample } from '../lib/mm2/engine'
+import { Mm2Engine, DEFAULT_CONFIG, DTE_LABELS, STEP_MS, fmtClock, fmtMoney, type Config, type Sample } from '../lib/mm2/engine'
 
 const SPEEDS = [1, 5, 10, 25, 100]
 // Fixed vertical budget. The page must not scroll on a 1440x900 laptop, so the
 // bottom pane is a hard height and the middle row takes what is left.
 const BOTTOM_H = 264
+// Everything ran four times too quickly to read. Each labelled speed now
+// advances a quarter as much simulated time, and the underlying slows with it
+// because the whole clock does.
+const TIME_DIVISOR = 4
 const FRAME_MS = 100
 type SetupTab = 'market' | 'flow' | 'edge' | 'limits'
 
@@ -40,7 +44,7 @@ export default function OptionsMM2() {
   const eng = engRef.current
 
   const [running, setRunning] = useState(false)
-  const [speed, setSpeed] = useState(10)
+  const [speed, setSpeed] = useState(1)
   const [tick, setTick] = useState(0)
   const [expIdx, setExpIdx] = useState(1)
   const [sel, setSel] = useState(() => eng.nearestAtm(1, 'C'))
@@ -56,14 +60,22 @@ export default function OptionsMM2() {
     })
   }, [])
 
+  // Fractional steps carry across frames: at 1x the budget is half a step per
+  // frame, and rounding that up to one would silently run at double speed.
+  const stepDebt = useRef(0)
   useEffect(() => {
     const id = window.setInterval(() => {
       if (running && engRef.current && !engRef.current.riskStop) {
-        engRef.current.run(Math.max(1, Math.round((speed * FRAME_MS) / 50)))
+        stepDebt.current += (speed * FRAME_MS) / STEP_MS / TIME_DIVISOR
+        const steps = Math.floor(stepDebt.current)
+        if (steps > 0) {
+          stepDebt.current -= steps
+          engRef.current.run(steps)
+        }
       }
       setTick(t => t + 1)
     }, FRAME_MS)
-    return () => window.clearInterval(id)
+    return () => { window.clearInterval(id); stepDebt.current = 0 }
   }, [running, speed])
 
   useEffect(() => { if (eng.riskStop && running) setRunning(false) }, [eng.riskStop, running, tick, eng])
