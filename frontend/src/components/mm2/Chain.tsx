@@ -11,8 +11,20 @@ import { T, alpha } from '../../lib/theme'
 import { MONO, LABEL, pnlColor, GOOD, BAD, WARN } from './ui'
 import { DTE_LABELS, DTES, MULT, type ChainRow, type LegView, type Mm2Engine, type QuoteState } from '../../lib/mm2/engine'
 
-export type Density = 'full' | 'compact'
 export type Highlight = 'none' | 'delta' | 'gamma' | 'vega' | 'theta'
+
+/**
+ * Chain column widths, as percentages of the table.
+ *
+ * Percentages, never pixels: this is the single thing that makes horizontal
+ * scrolling impossible at laptop width, which is why the total is asserted in
+ * Chain.test.ts rather than left to arithmetic in a review.
+ * Order is calls (pos, iv, theo, your bid/ask, market bid/ask), strike, then
+ * puts mirrored.
+ */
+export const CALL_COLS = [5, 5.4, 6.4, 7, 6.2, 6.2, 7]
+export const STRIKE_COLS = [8, 5.6]
+export const PUT_COLS = [7, 6.2, 6.2, 7, 6.4, 5.4, 5]
 
 // ── Expiry strip ──────────────────────────────────────────────────────────────
 
@@ -62,62 +74,81 @@ export function ExpiryStrip({ eng, expIdx, onPick, tick }: {
 
 // ── Chain ─────────────────────────────────────────────────────────────────────
 
-export function Chain({ eng, rows, sel, onSel, expIdx, density, highlight, live, spot, tick }: {
+export function Chain({ eng, rows, sel, onSel, expIdx, highlight, live, spot, tick }: {
   eng: Mm2Engine; rows: ChainRow[]; sel: number; onSel: (ck: number) => void
-  expIdx: number; density: Density; highlight: Highlight; live: boolean; spot: number; tick: number
+  expIdx: number; highlight: Highlight; live: boolean; spot: number; tick: number
 }) {
   void tick
   const flash = useFlash(eng, live)
-  const full = density === 'full'
   const selStrike = eng.contracts[sel]?.strike
   const selExp = eng.contracts[sel]?.expIdx
-
-  const t = eng.expiryT(expIdx)
-  const move = spot * eng.atmIv(expIdx) * Math.sqrt(Math.max(t, 0))
-
   const maxContribution = Math.max(1e-9, ...rows.flatMap(r =>
     [contribution(r.call, highlight), contribution(r.put, highlight)].map(Math.abs)))
 
+  const atmK = Math.round(spot / 10) * 10
+  const inScope = (k: number) => Math.abs(k - atmK) <= eng.cfg.quoteWidth * 10
+
   return (
-    <div style={{ overflow: 'auto', height: '100%' }}>
+    <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+        {/* Percentages, never pixels: this is what makes sideways scrolling impossible. */}
         <colgroup>
-          {sideCols(full, false, 'c')}
-          <col style={{ width: 52 }} /><col style={{ width: 42 }} />
-          {sideCols(full, true, 'p')}
+          {CALL_COLS.map((w, i) => <col key={`c${i}`} style={{ width: `${w}%` }} />)}
+          {STRIKE_COLS.map((w, i) => <col key={`k${i}`} style={{ width: `${w}%` }} />)}
+          {PUT_COLS.map((w, i) => <col key={`p${i}`} style={{ width: `${w}%` }} />)}
         </colgroup>
         <thead>
           <tr>
-            <th colSpan={full ? 11 : 7} style={groupHead(T.blue)}>Calls</th>
-            <th colSpan={2} style={{ ...groupHead(T.muted), background: T.surface }}>Strike</th>
-            <th colSpan={full ? 11 : 7} style={groupHead(T.gold)}>Puts</th>
+            <th colSpan={7} style={{ ...BAND, textAlign: 'left', background: '#16202f', color: T.blue }}>Calls</th>
+            <th colSpan={2} style={{ ...BAND, textAlign: 'center', background: '#1a2438', color: T.text }}>Strike</th>
+            <th colSpan={7} style={{ ...BAND, textAlign: 'right', background: '#1b1c33', color: VIOLET }}>Puts</th>
           </tr>
           <tr>
-            {headCells(full, false, 'c')}
-            <th style={hSt}>K</th><th style={hSt}>%</th>
-            {headCells(full, true, 'p')}
+            <th style={{ ...GROUP, top: 21 }}>pos</th>
+            <th colSpan={2} style={{ ...GROUP, top: 21, borderLeft: `1px solid ${T.border}` }}>Model</th>
+            <th colSpan={2} style={{ ...GROUP, top: 21, borderLeft: `1px solid ${T.border}`, background: quoteTint(T.blue), color: T.blue }}>Your quote</th>
+            <th colSpan={2} style={{ ...GROUP, top: 21, borderLeft: `1px solid ${T.border}` }}>Market</th>
+            <th colSpan={2} style={{ ...GROUP, top: 21, borderLeft: `1px solid ${T.border}` }} />
+            <th colSpan={2} style={{ ...GROUP, top: 21, borderLeft: `1px solid ${T.border}` }}>Market</th>
+            <th colSpan={2} style={{ ...GROUP, top: 21, borderLeft: `1px solid ${T.border}`, background: quoteTint(VIOLET), color: VIOLET }}>Your quote</th>
+            <th colSpan={2} style={{ ...GROUP, top: 21, borderLeft: `1px solid ${T.border}` }}>Model</th>
+            <th style={{ ...GROUP, top: 21, borderLeft: `1px solid ${T.border}` }}>pos</th>
+          </tr>
+          <tr>
+            <th style={{ ...COL, top: 38 }} />
+            <th style={{ ...COL, top: 38 }}>iv</th><th style={{ ...COL, top: 38 }}>theo</th>
+            <th style={{ ...COL, top: 38, background: quoteTint(T.blue), color: T.blue }}>bid</th>
+            <th style={{ ...COL, top: 38, background: quoteTint(T.blue), color: T.blue }}>ask</th>
+            <th style={{ ...COL, top: 38 }}>bid</th><th style={{ ...COL, top: 38 }}>ask</th>
+            <th style={{ ...COL, top: 38, background: '#1a2438', textAlign: 'center' }}>K</th>
+            <th style={{ ...COL, top: 38, background: '#1a2438' }}>%</th>
+            <th style={{ ...COL, top: 38 }}>bid</th><th style={{ ...COL, top: 38 }}>ask</th>
+            <th style={{ ...COL, top: 38, background: quoteTint(VIOLET), color: VIOLET }}>bid</th>
+            <th style={{ ...COL, top: 38, background: quoteTint(VIOLET), color: VIOLET }}>ask</th>
+            <th style={{ ...COL, top: 38 }}>theo</th><th style={{ ...COL, top: 38 }}>iv</th>
+            <th style={{ ...COL, top: 38 }} />
           </tr>
         </thead>
         <tbody>
           {rows.map(r => {
-            const atm = Math.abs(r.strike - spot) < 5
-            const inBand = Math.abs(r.strike - spot) <= move
+            const atm = Math.abs(r.strike - spot) < 6
             const rowSel = r.strike === selStrike && expIdx === selExp
+            const scoped = inScope(r.strike)
             return (
               <tr key={r.strike} style={{
-                background: rowSel ? alpha(T.gold, 9) : atm ? alpha(T.text, 4) : undefined,
-                borderTop: atm ? `1px solid ${alpha(T.gold, 26)}` : `1px solid ${T.borderFaint}`,
+                background: rowSel ? alpha(T.gold, 9) : atm ? alpha(T.gold, 9) : undefined,
+                borderTop: atm ? `1px solid ${alpha(T.gold, 30)}` : `1px solid ${T.borderFaint}`,
               }}>
-                {legCells(r.call, full, sel, onSel, flash, highlight, maxContribution, live)}
+                {legCells(r.call, 'C', sel, onSel, flash, highlight, maxContribution, live)}
                 <td onClick={() => onSel(r.call.ck)} style={{
-                  ...MONO, fontSize: 11.5, fontWeight: 700, padding: '3px 5px', textAlign: 'center', cursor: 'pointer',
-                  color: rowSel ? T.gold : T.text, background: inBand ? alpha(T.gold, 7) : undefined,
-                  borderLeft: `1px solid ${T.border}`,
+                  ...MONO, fontSize: 12, fontWeight: 700, padding: '4px 6px', textAlign: 'center', cursor: 'pointer',
+                  color: atm ? T.gold : T.text, background: scoped ? alpha(T.gold, 6) : undefined,
                 }}>{r.strike}</td>
-                <td style={{ ...MONO, fontSize: 9.5, padding: '3px 5px', textAlign: 'right', color: T.muted, borderRight: `1px solid ${T.border}` }}>
-                  {((r.strike / spot - 1) * 100).toFixed(1)}
-                </td>
-                {legCells(r.put, full, sel, onSel, flash, highlight, maxContribution, live, true)}
+                <td style={{
+                  ...MONO, fontSize: 9.5, padding: '4px 6px', textAlign: 'right', color: T.muted,
+                  background: scoped ? alpha(T.gold, 6) : undefined, borderRight: `1px solid ${T.border}`,
+                }}>{((r.strike / spot - 1) * 100).toFixed(1)}</td>
+                {legCells(r.put, 'P', sel, onSel, flash, highlight, maxContribution, live)}
               </tr>
             )
           })}
@@ -127,33 +158,22 @@ export function Chain({ eng, rows, sel, onSel, expIdx, density, highlight, live,
   )
 }
 
-// Header cells use plain mono: LABEL's 0.16em tracking runs adjacent short
-// headings together at these column widths.
-const hSt: React.CSSProperties = {
-  ...MONO, fontSize: 9, fontWeight: 600, color: T.muted, padding: '3px 5px',
-  textAlign: 'right', background: T.surface, borderBottom: `1px solid ${T.border}`,
-  whiteSpace: 'nowrap', position: 'sticky', top: 22, zIndex: 1,
-}
-const groupHead = (c: string): React.CSSProperties => ({
-  ...LABEL, fontSize: 8.5, padding: '3px 5px', textAlign: 'center', color: alpha(c, 80),
-  background: alpha(c, 7), borderBottom: `1px solid ${T.border}`,
-  position: 'sticky', top: 0, zIndex: 2,
-})
+const VIOLET = T.violet
+const quoteTint = (c: string) => `color-mix(in srgb, ${c} 10%, ${T.surface})`
 
-function sideCols(full: boolean, mirror = false, tag = 'c') {
-  const w = full
-    ? [38, 52, 38, 44, 50, 32, 50, 48, 48, 50, 32]
-    : [42, 46, 52, 54, 52, 52, 54]
-  const list = mirror ? [...w].reverse() : w
-  return list.map((x, i) => <col key={`${tag}${i}`} style={{ width: x }} />)
+// Sticky offsets sit 1-3px tighter than the natural row heights so no sliver of
+// a scrolling row can show between the three header rows.
+const BAND: React.CSSProperties = {
+  ...LABEL, fontSize: 9, letterSpacing: '0.18em', padding: '3px 8px',
+  position: 'sticky', top: 0, zIndex: 4,
 }
-
-function headCells(full: boolean, mirror: boolean, tag: string) {
-  const labels = full
-    ? ['pos', 'p&l', 'delta', 'iv', 'theo', 'sz', 'bid', 'mkt bid', 'mkt ask', 'ask', 'sz']
-    : ['pos', 'iv', 'theo', 'bid', 'mkt bid', 'mkt ask', 'ask']
-  const list = mirror ? [...labels].reverse() : labels
-  return list.map((l, i) => <th key={`${tag}${i}`} style={hSt}>{l}</th>)
+const GROUP: React.CSSProperties = {
+  ...LABEL, fontSize: 8, letterSpacing: '0.14em', padding: '2px 6px', textAlign: 'center',
+  background: T.surface, position: 'sticky', zIndex: 3,
+}
+const COL: React.CSSProperties = {
+  ...MONO, fontSize: 9, fontWeight: 600, color: T.muted, padding: '2px 6px', textAlign: 'right',
+  background: T.surface, position: 'sticky', zIndex: 3, borderBottom: `1px solid ${T.border}`,
 }
 
 function contribution(leg: LegView, h: Highlight): number {
@@ -165,9 +185,8 @@ function contribution(leg: LegView, h: Highlight): number {
 }
 
 function legCells(
-  leg: LegView, full: boolean, sel: number, onSel: (ck: number) => void,
-  flash: Map<number, number>, highlight: Highlight, maxContribution: number,
-  live: boolean, mirror = false,
+  leg: LegView, kind: 'C' | 'P', sel: number, onSel: (ck: number) => void,
+  flash: Map<number, number>, highlight: Highlight, maxContribution: number, live: boolean,
 ) {
   const isSel = leg.ck === sel
   const flashed = flash.get(leg.ck)
@@ -175,68 +194,61 @@ function legCells(
   const contribBg = highlight !== 'none' && contrib !== 0
     ? alpha(contrib > 0 ? GOOD : BAD, Math.min(22, 6 + 16 * Math.abs(contrib) / maxContribution))
     : undefined
-
+  const hue = kind === 'C' ? T.blue : VIOLET
   const kp = leg.ck
-  const selRing = isSel ? { boxShadow: `inset 0 1px 0 ${T.gold}, inset 0 -1px 0 ${T.gold}` } : null
+  const ring = isSel ? { boxShadow: `inset 0 1px 0 ${T.gold}, inset 0 -1px 0 ${T.gold}` } : null
   const base: React.CSSProperties = {
-    ...MONO, fontSize: 10.5, padding: '3px 5px', textAlign: 'right', cursor: 'pointer',
+    ...MONO, fontSize: 11, padding: '4px 6px', textAlign: 'right', cursor: 'pointer',
     background: flashed ? alpha(flashed > 0 ? GOOD : BAD, 26) : contribBg,
-    opacity: leg.expired ? 0.4 : 1,
-    ...selRing,
+    opacity: leg.expired ? 0.4 : 1, ...ring,
   }
   const click = () => onSel(leg.ck)
   const dash = leg.expired ? '—' : null
 
-  const cells = [
+  const pos = (
     <td key={`${kp}pos`} onClick={click} style={{ ...base, color: leg.pos > 0 ? GOOD : leg.pos < 0 ? BAD : alpha(T.muted, 50), fontWeight: leg.pos ? 700 : 400 }}>
       {leg.pos || '·'}
-    </td>,
-    full && <td key={`${kp}pnl`} onClick={click} style={{ ...base, color: pnlColor(leg.pnl) }}>{leg.pnl ? fmtK(leg.pnl) : '·'}</td>,
-    full && <td key={`${kp}dl`} onClick={click} style={{ ...base, color: alpha(T.text, 68) }}>{dash ?? leg.delta.toFixed(2)}</td>,
-    <td key={`${kp}iv`} onClick={click} style={{ ...base, color: T.text }}>{dash ?? (leg.iv * 100).toFixed(1)}</td>,
-    <td key={`${kp}th`} onClick={click} style={{ ...base, color: T.gold, fontWeight: 600, borderRight: `1px solid ${T.borderFaint}` }}>{dash ?? leg.theo.toFixed(2)}</td>,
-    full && <td key={`${kp}bs`} onClick={click} style={{ ...base, color: alpha(T.muted, 80), fontSize: 9 }}>{leg.live && leg.ourBidSz ? leg.ourBidSz : '·'}</td>,
-    <QuoteCell key={`${kp}ob`} leg={leg} side="B" onClick={click} live={live} ring={selRing} />,
-    <td key={`${kp}mb`} onClick={click} style={{ ...base, color: alpha(T.text, 60) }}>{dash ?? leg.mktBid.toFixed(2)}</td>,
-    <td key={`${kp}ma`} onClick={click} style={{ ...base, color: alpha(T.text, 60) }}>{dash ?? leg.mktAsk.toFixed(2)}</td>,
-    <QuoteCell key={`${kp}oa`} leg={leg} side="A" onClick={click} live={live} ring={selRing} />,
-    full && <td key={`${kp}as`} onClick={click} style={{ ...base, color: alpha(T.muted, 80), fontSize: 9 }}>{leg.live && leg.ourAskSz ? leg.ourAskSz : '·'}</td>,
-  ].filter(Boolean) as React.ReactElement[]
-
-  return mirror ? [...cells].reverse() : cells
+    </td>
+  )
+  const model = [
+    <td key={`${kp}iv`} onClick={click} style={{ ...base, color: alpha(T.text, 78) }}>{dash ?? (leg.iv * 100).toFixed(1)}</td>,
+    <td key={`${kp}th`} onClick={click} style={{ ...base, color: T.gold, fontWeight: 600 }}>{dash ?? leg.theo.toFixed(2)}</td>,
+  ]
+  const ours = [
+    <QuoteCell key={`${kp}ob`} leg={leg} side="B" hue={hue} onClick={click} live={live} ring={ring} />,
+    <QuoteCell key={`${kp}oa`} leg={leg} side="A" hue={hue} onClick={click} live={live} ring={ring} />,
+  ]
+  // Market is deliberately recessed: the surface fill is what makes it read as
+  // the backdrop your own quote sits against.
+  const market = [
+    <td key={`${kp}mb`} onClick={click} style={{ ...base, color: alpha(T.text, 58), background: base.background ?? T.surface }}>{dash ?? leg.mktBid.toFixed(2)}</td>,
+    <td key={`${kp}ma`} onClick={click} style={{ ...base, color: alpha(T.text, 58), background: base.background ?? T.surface }}>{dash ?? leg.mktAsk.toFixed(2)}</td>,
+  ]
+  return kind === 'C'
+    ? [pos, ...model, ...ours, ...market]
+    : [...market, ...ours, ...model.reverse(), pos]
 }
 
-/** Own-quote cell: colour carries the state, so a glance reads the whole book. */
-function QuoteCell({ leg, side, onClick, live, ring }: {
-  leg: LegView; side: 'B' | 'A'; onClick: () => void; live: boolean; ring: React.CSSProperties | null
+/** Your quote: hue by side, and inside-versus-outside the market is the loudest signal. */
+function QuoteCell({ leg, side, hue, onClick, live, ring }: {
+  leg: LegView; side: 'B' | 'A'; hue: string; onClick: () => void
+  live: boolean; ring: React.CSSProperties | null
 }) {
   const px = side === 'B' ? leg.ourBid : leg.ourAsk
   const state: QuoteState = side === 'B' ? leg.bidState : leg.askState
   const size = side === 'B' ? leg.ourBidSz : leg.ourAskSz
-  const sideColor = side === 'B' ? T.blue : '#a78bfa'
   const inside = side === 'B' ? px >= leg.mktBid - 1e-9 : px <= leg.mktAsk + 1e-9
-
-  let color = alpha(T.text, 55)
-  let border = '1px solid transparent'
-  let bg: string | undefined
-
-  if (!live) color = alpha(T.muted, 45)
-  else if (state === 'riskBlocked') { color = BAD; bg = alpha(BAD, 12) }
-  else if (state === 'capped') { color = WARN; bg = alpha(WARN, 10) }
-  else if (state === 'modelBlocked' || state === 'off') color = alpha(T.muted, 42)
-  else if (size > 0) {
-    color = inside ? sideColor : alpha(sideColor, 60)
-    border = `1px solid ${alpha(sideColor, inside ? 55 : 20)}`
-    bg = inside ? alpha(sideColor, 9) : undefined
-  }
+  const quoted = live && size > 0 && px > 0 && state === 'active'
 
   return (
     <td onClick={onClick} style={{
-      ...MONO, fontSize: 10.5, padding: '2px 5px', textAlign: 'right', cursor: 'pointer',
-      color, background: bg, border, fontWeight: inside && size > 0 && live ? 700 : 400,
+      ...MONO, fontSize: 11, padding: '4px 6px', textAlign: 'right', cursor: 'pointer',
+      color: !quoted ? alpha(T.muted, 42) : inside ? hue : alpha(hue, 62),
+      background: !quoted ? undefined : alpha(hue, inside ? 13 : 5),
+      fontWeight: quoted && inside ? 700 : 400,
       opacity: leg.expired ? 0.4 : 1, ...ring,
     }}>
-      {!live ? '—' : state === 'off' || px <= 0 ? '·' : px.toFixed(2)}
+      {!live ? '—' : quoted ? px.toFixed(2) : '·'}
     </td>
   )
 }

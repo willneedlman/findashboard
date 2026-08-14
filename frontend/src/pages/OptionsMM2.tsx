@@ -16,13 +16,16 @@ import { MONO, LABEL, Panel, Btn, Seg, GOOD, BAD, WARN, pnlColor } from '../comp
 import StrategyRail from '../components/mm2/StrategyRail'
 import RightColumn from '../components/mm2/RightColumn'
 import Workbench from '../components/mm2/Workbench'
-import PnlBand from '../components/mm2/PnlBand'
 import SetupModal from '../components/mm2/SetupModal'
-import { Chain, ExpiryStrip, fmtK, type Density, type Highlight } from '../components/mm2/Chain'
-import { UnderlyingStrip } from '../components/mm2/Center'
+import MetricsOverlay from '../components/mm2/MetricsOverlay'
+import { Chain, ExpiryStrip, fmtK, type Highlight } from '../components/mm2/Chain'
+import { ChainHeader } from '../components/mm2/Center'
 import { Mm2Engine, DEFAULT_CONFIG, DTE_LABELS, fmtClock, fmtMoney, type Config, type Sample } from '../lib/mm2/engine'
 
 const SPEEDS = [1, 5, 10, 25, 100]
+// Fixed vertical budget. The page must not scroll on a 1440x900 laptop, so the
+// bottom pane is a hard height and the middle row takes what is left.
+const BOTTOM_H = 264
 const FRAME_MS = 100
 type SetupTab = 'market' | 'flow' | 'edge' | 'limits'
 
@@ -43,21 +46,14 @@ export default function OptionsMM2() {
   const [sel, setSel] = useState(() => eng.nearestAtm(1, 'C'))
   const [highlight, setHighlight] = useState<Highlight>('none')
   const [reviewT, setReviewT] = useState<number | null>(null)
-  const [density, setDensity] = useState<Density>('compact')
   const [setup, setSetup] = useState<SetupTab | null>(null)
+  const [metricsOpen, setMetricsOpen] = useState(false)
 
   const set = useCallback((patch: Partial<Config>) => {
     setCfg(c => {
       if (engRef.current) Object.assign(engRef.current.cfg, patch)
       return { ...c, ...patch }
     })
-  }, [])
-
-  useEffect(() => {
-    const pick = () => setDensity(window.innerWidth >= 2000 ? 'full' : 'compact')
-    pick()
-    window.addEventListener('resize', pick)
-    return () => window.removeEventListener('resize', pick)
   }, [])
 
   useEffect(() => {
@@ -132,26 +128,35 @@ export default function OptionsMM2() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, height: 'calc(100vh - 62px)', minHeight: 600, ...MONO }}>
 
-      {/* Command bar */}
+      {/* Command bar (46) */}
       <header style={{
-        display: 'flex', alignItems: 'center', gap: 14, padding: '5px 10px', flexShrink: 0,
-        background: T.surface, border: `1px solid ${T.border}`, borderTop: `2px solid ${statusColor}`,
+        display: 'flex', alignItems: 'center', gap: 14, padding: '6px 12px', flexShrink: 0, height: 46,
+        boxSizing: 'border-box', background: T.surface, border: `1px solid ${T.border}`,
+        borderTop: `2px solid ${statusColor}`,
       }}>
-        <span style={{ ...MONO, fontSize: 10, color: statusColor, fontWeight: 700, minWidth: 92 }}>{status}</span>
-        <span style={{ ...MONO, fontSize: 13, color: T.text, fontWeight: 600 }}>{fmtClock(eng.clock)}</span>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, minWidth: 176 }}>
+          <span style={{ ...LABEL, fontSize: 9, color: statusColor }}>{status}</span>
+          <span style={{ ...MONO, fontSize: 14, fontWeight: 600, color: T.text }}>{fmtClock(eng.clock)}</span>
+        </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <Btn tone={running ? 'bad' : 'good'} onClick={() => setRunning(x => !x)}>{running ? 'PAUSE' : 'RUN'}</Btn>
-          <Btn onClick={() => { eng.step(); setTick(t => t + 1) }} disabled={running}>STEP</Btn>
-          <Seg options={SPEEDS.map(s => ({ label: `${s}x`, value: s }))} value={speed} onChange={setSpeed} size={9} />
+          <Seg options={SPEEDS.map(sp2 => ({ label: `${sp2}x`, value: sp2 }))} value={speed} onChange={setSpeed} size={9} />
           <Btn onClick={() => reset()}>RESET</Btn>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginLeft: 'auto' }}>
-          <Tick label="Total P&L" value={fmtMoney(pnl)} big color={pnlColor(pnl)} />
-          <Tick label="realized" value={fmtK(eng.realized)} color={pnlColor(eng.realized)} />
-          <Tick label="net delta" value={fmtK(r.delta)} color={Math.abs(r.delta) > cfg.deltaSoft ? WARN : T.text} />
-          <Tick label="net vega" value={fmtK(r.vega)} color={Math.abs(r.vega) > cfg.vegaSoft ? WARN : T.text} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginLeft: 'auto' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
+            <span style={{ ...LABEL, fontSize: 8.5 }}>Total P&L</span>
+            <span style={{ ...MONO, fontSize: 21, fontWeight: 700, color: pnlColor(pnl) }}>{fmtMoney(pnl)}</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', ...MONO, fontSize: 10, lineHeight: 1.25 }}>
+            <span style={{ color: T.muted }}>realized <span style={{ color: pnlColor(eng.realized) }}>{fmtK(eng.realized)}</span></span>
+            <span style={{ color: T.muted }}>open <span style={{ color: pnlColor(pnl - eng.realized) }}>{fmtK(pnl - eng.realized)}</span></span>
+          </div>
+          <LimitChip label="Delta" value={fmtK(r.delta)} used={Math.abs(r.delta) / Math.max(cfg.deltaHard, 1)} soft={Math.abs(r.delta) > cfg.deltaSoft} />
+          <LimitChip label="Gamma" value={r.gamma.toFixed(1)} used={Math.abs(r.gamma) / Math.max(cfg.gammaHard, 1)} soft={Math.abs(r.gamma) > cfg.gammaSoft} />
+          <LimitChip label="Vega" value={fmtK(r.vega)} used={Math.abs(r.vega) / Math.max(cfg.vegaHard, 1)} soft={Math.abs(r.vega) > cfg.vegaSoft} />
           <Btn onClick={() => eng.flatten()} title="Cross the street on every position and go flat">FLATTEN</Btn>
           {eng.killed
             ? <Btn tone="good" onClick={() => { eng.clearKill(); setTick(t => t + 1) }}>CLEAR KILL</Btn>
@@ -178,59 +183,59 @@ export default function OptionsMM2() {
 
       {/* Rail, workspace, risk */}
       <div style={{ display: 'flex', gap: 4, flex: 1, minHeight: 0 }}>
-        <div style={{ width: 196, flexShrink: 0, minHeight: 0, display: 'flex' }}>
-          <StrategyRail eng={eng} cfg={cfg} set={set} onSetup={t => setSetup(t ?? 'market')} />
+        <div style={{ width: 178, flexShrink: 0, minHeight: 0, display: 'flex' }}>
+          <StrategyRail eng={eng} cfg={cfg} set={set}
+            onSetup={() => setSetup('market')} onMetrics={() => setMetricsOpen(true)} />
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0, minHeight: 0 }}>
-          <UnderlyingStrip eng={eng} tick={tick} reviewT={reviewT} onScrub={setReviewT} />
-
-          <Panel
-            title="Options chain"
-            style={{ flex: '1 1 auto', minHeight: 200 }}
-            right={
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                {highlight !== 'none' && <span style={{ ...MONO, fontSize: 9, color: T.gold }}>tracing {highlight}</span>}
-                <span style={{ ...MONO, fontSize: 9, color: T.muted }}>{DTE_LABELS[expIdx]}</span>
-                <Seg<Density> options={[{ label: 'DENSE', value: 'full' }, { label: 'SIMPLE', value: 'compact' }]}
-                  value={density} onChange={setDensity} size={8.5} />
-              </div>
-            }
-          >
+          <Panel style={{ flex: '1 1 auto', minHeight: 0 }}>
+            <ChainHeader eng={eng} tick={tick} reviewT={reviewT} onScrub={setReviewT}
+              highlight={highlight} expLabel={DTE_LABELS[expIdx]} />
             <ExpiryStrip eng={eng} expIdx={expIdx} onPick={pickExpiry} tick={tick} />
             <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
               <Chain eng={eng} rows={rows} sel={sel} onSel={setSel} expIdx={expIdx}
-                density={density} highlight={highlight} live={live} spot={viewSpot} tick={tick} />
+                highlight={highlight} live={live} spot={viewSpot} tick={tick} />
             </div>
           </Panel>
 
-          <div style={{ height: 238, flexShrink: 0, display: 'flex', minHeight: 0 }}>
-            <Workbench eng={eng} sel={sel} onSel={setSel} tick={tick} live={live} sample={sample} leg={selLeg} />
-          </div>
+
         </div>
 
-        <div style={{ width: 250, flexShrink: 0, minHeight: 0 }}>
+        <div style={{ width: 236, flexShrink: 0, minHeight: 0 }}>
           <RightColumn eng={eng} cfg={cfg} set={set} tick={tick} highlight={highlight} onHighlight={setHighlight} live={live} />
         </div>
       </div>
 
-      {/* P&L band */}
-      <div style={{ height: 128, flexShrink: 0, minHeight: 0 }}>
-        <PnlBand eng={eng} tick={tick} reviewT={reviewT} onScrub={setReviewT} />
+      {/* Bottom pane: inspector tabs and the P&L cell, one pane not two */}
+      <div style={{ height: BOTTOM_H, flexShrink: 0, minHeight: 0, display: 'flex' }}>
+        <Workbench eng={eng} sel={sel} onSel={setSel} tick={tick} live={live}
+          sample={sample} leg={selLeg} reviewT={reviewT} onScrub={setReviewT} />
       </div>
 
       {setup && (
         <SetupModal eng={eng} cfg={cfg} set={set} sel={sel} initial={setup} onClose={() => setSetup(null)} />
       )}
+      {metricsOpen && <MetricsOverlay eng={eng} onClose={() => setMetricsOpen(false)} />}
     </div>
   )
 }
 
-function Tick({ label, value, big, color }: { label: string; value: string; big?: boolean; color?: string }) {
+/** Level and limit usage in one chip, so the bar carries headroom, not just a number. */
+function LimitChip({ label, value, used, soft }: { label: string; value: string; used: number; soft: boolean }) {
+  const tone = soft ? WARN : T.text
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-      <span style={{ ...LABEL, fontSize: 7.5 }}>{label}</span>
-      <span style={{ ...MONO, fontSize: big ? 15 : 11.5, fontWeight: big ? 700 : 600, color: color ?? T.text }}>{value}</span>
+    <div style={{ padding: '3px 9px', background: T.bg, border: `1px solid ${T.border}`, minWidth: 92 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+        <span style={{ ...LABEL, fontSize: 8.5, color: soft ? WARN : T.muted }}>{label}</span>
+        <span style={{ ...MONO, fontSize: 12.5, fontWeight: 700, color: tone }}>{value}</span>
+        <span style={{ ...MONO, fontSize: 9, color: soft ? WARN : T.muted, marginLeft: 'auto' }}>
+          {(used * 100).toFixed(0)}%{soft ? ' soft' : ''}
+        </span>
+      </div>
+      <div style={{ height: 2, background: alpha(T.muted, 20), marginTop: 3 }}>
+        <div style={{ height: '100%', width: `${Math.min(100, used * 100)}%`, background: soft ? WARN : alpha(T.gold, 65) }} />
+      </div>
     </div>
   )
 }

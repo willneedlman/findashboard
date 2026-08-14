@@ -1,68 +1,176 @@
 /*
- * Options MM 2 — the workbench.
+ * Options MM 2 — the bottom pane.
  *
- * One pane, eight views. The book, the surface, the quote explanation and every
- * execution table used to fight for width simultaneously; putting them behind
- * tabs gives each one room to be readable, and selection stays shared so a tab
- * switch never loses your place.
+ * One pane where there used to be two: the eight-tab workbench and the separate
+ * P&L band. Four tabs now, and the P&L timeline is a fixed cell on the right
+ * that never goes away, because it is the thing you glance at while reading
+ * anything else.
+ *
+ * Alerts are folded into the log. Two lists of things-that-happened, filtered
+ * differently, was one list too many.
  */
 
 import { useState } from 'react'
 import { T, alpha } from '../../lib/theme'
-import { Panel, Tabs, MONO, LABEL, Empty, GOOD, BAD, WARN, pnlColor } from './ui'
+import { Panel, Canvas, useTokens, hexAlpha, MONO, LABEL, Seg, Btn, Empty, GOOD, BAD, WARN, pnlColor } from './ui'
 import { fmtK } from './Chain'
-import { BookBody, SurfaceBody, ContractBody } from './Center'
-import { MULT, fmtClock, fmtMoney, type LegView, type Mm2Engine, type Sample } from '../../lib/mm2/engine'
+import { ContractBody } from './Center'
+import { DTE_LABELS, fmtClock, type LegView, type Mm2Engine, type Sample } from '../../lib/mm2/engine'
 
-type Tab = 'contract' | 'book' | 'surface' | 'fills' | 'orders' | 'metrics' | 'alerts' | 'log'
+type Tab = 'contract' | 'fills' | 'orders' | 'log'
+type LogFilter = 'all' | 'warn' | 'breach'
 
-export default function Workbench({ eng, sel, onSel, tick, live, sample, leg }: {
+export default function Workbench({ eng, sel, onSel, tick, live, sample, leg, reviewT, onScrub }: {
   eng: Mm2Engine; sel: number; onSel: (ck: number) => void; tick: number
   live: boolean; sample: Sample | null; leg: LegView | null
+  reviewT: number | null; onScrub: (t: number | null) => void
 }) {
-  void tick
+  void tick; void onSel
   const [tab, setTab] = useState<Tab>('contract')
-  const alerts = eng.alerts.length
+  const c = eng.contracts[sel]
+
   const tabs: { key: Tab; label: string }[] = [
-    { key: 'contract', label: 'Quote math' },
-    { key: 'book', label: 'Book' },
-    { key: 'surface', label: 'Surface' },
+    { key: 'contract', label: 'Contract' },
     { key: 'fills', label: `Fills ${eng.stat.fillsN}` },
     { key: 'orders', label: `Orders ${eng.orders.size}` },
-    { key: 'metrics', label: 'Metrics' },
-    { key: 'alerts', label: alerts ? `Alerts ${alerts}` : 'Alerts' },
     { key: 'log', label: 'Log' },
   ]
 
   return (
-    <Panel style={{ minHeight: 0 }}>
-      <Tabs tabs={tabs} value={tab} onChange={setTab}
-        right={<span style={{ ...MONO, fontSize: 9, color: T.muted }}>{eng.label(sel)}</span>} />
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-        {tab === 'contract' && <ContractBody eng={eng} sel={sel} live={live} sample={sample} leg={leg} />}
-        {tab === 'book' && <BookBody eng={eng} sel={sel} live={live} />}
-        {tab === 'surface' && <SurfaceBody eng={eng} sel={sel} onSel={onSel} />}
-        {tab === 'fills' && <Fills eng={eng} sample={sample} />}
-        {tab === 'orders' && <Orders eng={eng} />}
-        {tab === 'metrics' && <Metrics eng={eng} />}
-        {tab === 'alerts' && <Alerts eng={eng} />}
-        {tab === 'log' && <EventLog eng={eng} sample={sample} />}
+    <Panel style={{ flex: 1, minWidth: 0 }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', flexShrink: 0,
+        borderBottom: `1px solid ${T.border}`, background: alpha(T.gold, 4),
+      }}>
+        {tabs.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)} style={{
+            ...LABEL, fontSize: 9, padding: '6px 12px', cursor: 'pointer', border: 'none',
+            borderBottom: `2px solid ${tab === t.key ? T.gold : 'transparent'}`,
+            background: 'transparent', color: tab === t.key ? T.gold : T.muted,
+          }}>{t.label}</button>
+        ))}
+        <span style={{ ...MONO, fontSize: 10, color: T.muted, marginLeft: 'auto', paddingRight: 12 }}>
+          selected <span style={{ color: T.gold }}>{DTE_LABELS[c.expIdx]} {c.strike} {c.kind === 'C' ? 'CALL' : 'PUT'}</span>
+        </span>
+      </div>
+
+      <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+        <div style={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
+          {tab === 'contract' && <ContractBody eng={eng} sel={sel} live={live} sample={sample} leg={leg} />}
+          {tab === 'fills' && <Fills eng={eng} sample={sample} />}
+          {tab === 'orders' && <Orders eng={eng} />}
+          {tab === 'log' && <Log eng={eng} sample={sample} />}
+        </div>
+        <div style={{ width: 230, flexShrink: 0, borderLeft: `1px solid ${T.borderFaint}`, display: 'flex', flexDirection: 'column' }}>
+          <PnlCell eng={eng} reviewT={reviewT} onScrub={onScrub} />
+        </div>
       </div>
     </Panel>
   )
 }
 
+// ── P&L cell ──────────────────────────────────────────────────────────────────
+
+const PNL_SERIES = [
+  { key: 'total', label: 'Total', color: (t: Record<string, string>) => t.gold },
+  { key: 'realized', label: 'Realized', color: (t: Record<string, string>) => t.blue },
+  { key: 'spread', label: 'Spread', color: (t: Record<string, string>) => t.pos },
+  { key: 'hedge', label: 'Hedge', color: (t: Record<string, string>) => t.orange },
+] as const
+const INV_SERIES = [
+  { key: 'netDelta', label: 'Delta', color: (t: Record<string, string>) => t.gold },
+  { key: 'vega', label: 'Vega', color: (t: Record<string, string>) => t.blue },
+  { key: 'stock', label: 'Stock', color: (t: Record<string, string>) => t.pos },
+] as const
+
+function PnlCell({ eng, reviewT, onScrub }: {
+  eng: Mm2Engine; reviewT: number | null; onScrub: (t: number | null) => void
+}) {
+  const tok = useTokens()
+  const [mode, setMode] = useState<'pnl' | 'inventory'>('pnl')
+  const s = eng.samples
+  const list = mode === 'pnl' ? PNL_SERIES : INV_SERIES
+  const latest = s[s.length - 1]
+
+  return (
+    <>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
+        padding: '5px 8px', borderBottom: `1px solid ${T.borderFaint}`, flexShrink: 0,
+      }}>
+        <span style={{ ...LABEL, fontSize: 9, color: alpha(T.gold, 70) }}>P&L timeline</span>
+        <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+          {reviewT !== null && <Btn tone="gold" onClick={() => onScrub(null)}>LIVE</Btn>}
+          <Seg options={[{ label: 'P&L', value: 'pnl' }, { label: 'INV', value: 'inventory' }]}
+            value={mode} onChange={v => setMode(v as 'pnl' | 'inventory')} size={8.5} />
+        </div>
+      </div>
+      <div style={{ flex: 1, minHeight: 0, padding: '2px 4px' }}>
+        <Canvas height={118} onPick={xf => {
+          if (s.length < 2) return
+          onScrub(s[0].t + xf * (s[s.length - 1].t - s[0].t))
+        }} draw={(ctx, w, h) => {
+          if (!tok.gold || s.length < 2) return
+          let lo = 0, hi = 0
+          for (const p of s) for (const ser of list) {
+            const v = p[ser.key] as number
+            lo = Math.min(lo, v); hi = Math.max(hi, v)
+          }
+          if (lo === hi) { lo -= 1; hi += 1 }
+          const pad = (hi - lo) * 0.1
+          lo -= pad; hi += pad
+          const t0 = s[0].t, span = Math.max(s[s.length - 1].t - t0, 1)
+          const X = (t: number) => ((t - t0) / span) * w
+          const Y = (v: number) => h - 6 - ((v - lo) / (hi - lo)) * (h - 12)
+
+          ctx.strokeStyle = hexAlpha(tok.muted, 0.38)
+          ctx.beginPath(); ctx.moveTo(0, Y(0)); ctx.lineTo(w, Y(0)); ctx.stroke()
+          for (const ser of list) {
+            ctx.beginPath()
+            s.forEach((p, i) => {
+              const x = X(p.t), y = Y(p[ser.key] as number)
+              i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)
+            })
+            ctx.strokeStyle = ser.color(tok)
+            ctx.lineWidth = ser.key === 'total' || ser.key === 'netDelta' ? 1.7 : 1
+            ctx.stroke()
+          }
+          if (reviewT !== null) {
+            const x = X(reviewT)
+            ctx.strokeStyle = tok.text
+            ctx.setLineDash([3, 3])
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke()
+            ctx.setLineDash([])
+          }
+        }} />
+      </div>
+      <div style={{ padding: '4px 8px 6px', borderTop: `1px solid ${T.borderFaint}`, flexShrink: 0 }}>
+        {list.map(ser => (
+          <div key={ser.key} style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
+            <span style={{ ...MONO, fontSize: 9, color: tok.gold ? ser.color(tok) : T.muted }}>{ser.label}</span>
+            <span style={{ ...MONO, fontSize: 9, color: T.text }}>
+              {latest ? fmtK(latest[ser.key] as number) : '—'}
+            </span>
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
+
+// ── Tables ────────────────────────────────────────────────────────────────────
+
 const th = {
-  ...LABEL, fontSize: 8, padding: '4px 7px', textAlign: 'right' as const,
+  ...LABEL, fontSize: 8.5, letterSpacing: '0.14em', padding: '4px 10px', textAlign: 'right' as const,
   position: 'sticky' as const, top: 0, background: T.surface,
   borderBottom: `1px solid ${T.border}`, whiteSpace: 'nowrap' as const, zIndex: 1,
 }
-const td = { ...MONO, fontSize: 10, padding: '2px 7px', textAlign: 'right' as const, whiteSpace: 'nowrap' as const }
+const td = { ...MONO, fontSize: 11, padding: '4px 10px', textAlign: 'right' as const, whiteSpace: 'nowrap' as const }
 
 function Fills({ eng, sample }: { eng: Mm2Engine; sample: Sample | null }) {
   const list = eng.fills.filter(f => sample === null || f.t <= sample.t).slice(-200).reverse()
   if (!list.length) return <Empty>No fills yet. Run the session and wait for flow to arrive.</Empty>
-  const cols = ['Time', 'Contract', 'Side', 'Qty', 'Price', 'Fair', 'Edge', 'Queue', 'Counterparty', '+1s', '+5s', '+30s']
+  const cols = ['Time', 'Contract', 'Side', 'Qty', 'Price', 'Fair', 'Edge', 'Counterparty', 'After 30s']
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
       <thead><tr>{cols.map(h => (
@@ -78,10 +186,7 @@ function Fills({ eng, sample }: { eng: Mm2Engine; sample: Sample | null }) {
             <td style={{ ...td, color: T.text }}>{f.px.toFixed(2)}</td>
             <td style={{ ...td, color: T.muted }}>{f.fair.toFixed(2)}</td>
             <td style={{ ...td, color: pnlColor(f.edge), fontWeight: 600 }}>{fmtK(f.edge)}</td>
-            <td style={{ ...td, color: T.muted }}>{f.queueMs}ms</td>
             <td style={{ ...td, textAlign: 'left', color: f.who === 'informed' ? BAD : T.muted }}>{f.who}</td>
-            <td style={{ ...td, color: f.p1 === null ? alpha(T.muted, 40) : pnlColor(f.p1) }}>{f.p1 === null ? '···' : fmtK(f.p1)}</td>
-            <td style={{ ...td, color: f.p5 === null ? alpha(T.muted, 40) : pnlColor(f.p5) }}>{f.p5 === null ? '···' : fmtK(f.p5)}</td>
             <td style={{ ...td, color: f.p30 === null ? alpha(T.muted, 40) : pnlColor(f.p30) }}>{f.p30 === null ? '···' : fmtK(f.p30)}</td>
           </tr>
         ))}
@@ -104,7 +209,7 @@ function Orders({ eng }: { eng: Mm2Engine }) {
           <tr key={o.id} style={{ borderTop: `1px solid ${T.borderFaint}` }}>
             <td style={{ ...td, color: T.muted }}>{o.id}</td>
             <td style={{ ...td, textAlign: 'left', color: T.text }}>{eng.label(o.ck)}</td>
-            <td style={{ ...td, color: o.side === 'B' ? T.blue : '#a78bfa', fontWeight: 700 }}>{o.side === 'B' ? 'BID' : 'ASK'}</td>
+            <td style={{ ...td, color: o.side === 'B' ? T.blue : T.violet, fontWeight: 700 }}>{o.side === 'B' ? 'BID' : 'ASK'}</td>
             <td style={td}>{o.level + 1}</td>
             <td style={{ ...td, color: T.text }}>{o.px.toFixed(2)}</td>
             <td style={td}>{o.size}</td>
@@ -120,138 +225,64 @@ function Orders({ eng }: { eng: Mm2Engine }) {
   )
 }
 
-function Metrics({ eng }: { eng: Mm2Engine }) {
-  const s = eng.stat
-  const n = Math.max(1, s.fillsN)
-  const ct = Math.max(1, s.contractsTraded)
-  const r = eng.risk()
-  const samples = eng.samples
-  let vol = 0
-  if (samples.length > 5) {
-    const d: number[] = []
-    for (let i = 1; i < samples.length; i++) d.push(samples[i].total - samples[i - 1].total)
-    const m = d.reduce((a, b) => a + b, 0) / d.length
-    vol = Math.sqrt(d.reduce((a, b) => a + (b - m) ** 2, 0) / d.length)
-  }
-  const marked = Math.max(1, s.markedFills)
+/** Events and alerts on one timeline. An alert is just an event that carries a limit. */
+function Log({ eng, sample }: { eng: Mm2Engine; sample: Sample | null }) {
+  const [filter, setFilter] = useState<LogFilter>('all')
+  const cut = sample?.t ?? Infinity
 
-  const groups: [string, [string, string][]][] = [
-    ['Quoting', [
-      ['Average quoted width', `$${(s.widthSum / Math.max(1, s.widthN)).toFixed(3)}`],
-      ['Average intended edge', `$${(s.edgeIntended / ct / MULT).toFixed(3)}`],
-      ['Average realized edge', `$${(s.edgeRealized / ct / MULT).toFixed(3)}`],
-      ['Quote uptime', `${((s.quotedRefreshes / Math.max(1, s.refreshes)) * 100).toFixed(0)}%`],
-      ['Chain quoted', `${s.quotedContracts} of ${s.scopeContracts}`],
-      ['Messages sent', s.msgs.toLocaleString('en-US')],
-      ['Throttled requotes', s.throttled.toLocaleString('en-US')],
-    ]],
-    ['Execution', [
-      ['Fills', String(s.fillsN)],
-      ['Contracts traded', s.contractsTraded.toLocaleString('en-US')],
-      ['Fill rate per order', `${((s.fillsN / Math.max(1, s.orders)) * 100).toFixed(1)}%`],
-      ['Partial fills', `${((s.partials / n) * 100).toFixed(0)}%`],
-      ['Average queue time', `${(s.queueMsTotal / n).toFixed(0)} ms`],
-      ['Maker rebates', fmtMoney(eng.rebates, 2)],
-      ['Cancel to fill ratio', (s.cancels / n).toFixed(1)],
-    ]],
-    ['Adverse selection', [
-      ['Profitable fills', `${((s.winFills / marked) * 100).toFixed(0)}%`],
-      ['Mark-out total, 30s', fmtMoney(eng.attr.adverse)],
-      ['Fills to informed flow', String(s.informedFills)],
-      ['Loss to informed flow', fmtMoney(s.informedLoss)],
-      ['Toxicity index', eng.toxicity.toFixed(2)],
-      ['Edge kept after 30s', `${(((s.edgeRealized + eng.attr.adverse) / Math.max(1, s.edgeRealized)) * 100).toFixed(0)}%`],
-    ]],
-    ['Performance', [
-      ['Total P&L', fmtMoney(eng.totalPnl())],
-      ['Realized', fmtMoney(eng.realized)],
-      ['Unrealized', fmtMoney(eng.totalPnl() - eng.realized)],
-      ['Max drawdown', fmtMoney(-eng.maxDrawdown)],
-      ['P&L volatility per second', fmtMoney(vol, 2)],
-      ['Profit per contract', fmtMoney(eng.totalPnl() / ct, 2)],
-      ['Profit per vega unit', r.vega ? fmtMoney(eng.totalPnl() / Math.abs(r.vega), 2) : 'flat'],
-      ['Hedge slippage paid', fmtMoney(s.hedgeCost, 2)],
-    ]],
+  const merged = [
+    ...eng.events.filter(e => e.t <= cut).map(e => ({
+      t: e.t, sev: e.sev, kind: e.kind.toUpperCase(), text: e.text,
+    })),
+    ...eng.alerts.filter(a => a.t <= cut).map(a => ({
+      t: a.t, sev: a.sev, kind: a.sev === 2 ? 'BREACH' : 'WARN',
+      text: `${a.title}. ${a.value} against ${a.limit}. ${a.action}.`,
+    })),
+  ].sort((a, b) => b.t - a.t)
+
+  const warnings = merged.filter(r => r.sev === 1).length
+  const breaches = merged.filter(r => r.sev === 2).length
+  const shown = merged.filter(r => filter === 'all' || (filter === 'warn' ? r.sev === 1 : r.sev === 2)).slice(0, 300)
+
+  const chips: { key: LogFilter; label: string }[] = [
+    { key: 'all', label: 'All' },
+    { key: 'warn', label: `Warnings ${warnings}` },
+    { key: 'breach', label: `Breaches ${breaches}` },
   ]
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-      {groups.map(([title, rows]) => (
-        <div key={title} style={{ borderRight: `1px solid ${T.borderFaint}`, padding: '6px 10px' }}>
-          <span style={{ ...LABEL, fontSize: 8.5, color: alpha(T.gold, 75) }}>{title}</span>
-          <div style={{ marginTop: 3 }}>
-            {rows.map(([k, v]) => (
-              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '1.5px 0' }}>
-                <span style={{ ...MONO, fontSize: 10, color: T.muted }}>{k}</span>
-                <span style={{ ...MONO, fontSize: 10, color: T.text }}>{v}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function Alerts({ eng }: { eng: Mm2Engine }) {
-  const list = [...eng.alerts].reverse()
-  if (!list.length) return <Empty>No alerts. Limits, latency and flow toxicity are all inside tolerance.</Empty>
-  const cols = ['Time', 'Severity', 'Alert', 'Value', 'Limit', 'Automatic action', 'Suggested']
-  return (
-    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-      <thead><tr>{cols.map(h => (
-        <th key={h} style={{ ...th, textAlign: h === 'Time' || h === 'Severity' ? 'right' : 'left' }}>{h}</th>
-      ))}</tr></thead>
-      <tbody>
-        {list.map((a, i) => (
-          <tr key={i} style={{ borderTop: `1px solid ${T.borderFaint}`, background: a.sev === 2 ? alpha(BAD, 8) : undefined }}>
-            <td style={{ ...td, color: T.muted }}>{fmtClock(a.t).slice(0, 8)}</td>
-            <td style={{ ...td, color: a.sev === 2 ? BAD : WARN, fontWeight: 700 }}>{a.sev === 2 ? 'BREACH' : 'WARN'}</td>
-            <td style={{ ...td, textAlign: 'left', color: T.text }}>{a.title}</td>
-            <td style={{ ...td, textAlign: 'left', color: a.sev === 2 ? BAD : T.text }}>{a.value}</td>
-            <td style={{ ...td, textAlign: 'left', color: T.muted }}>{a.limit}</td>
-            <td style={{ ...td, textAlign: 'left', color: T.text }}>{a.action}</td>
-            <td style={{ ...td, textAlign: 'left', color: T.muted }}>{a.suggest}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
-}
-
-function EventLog({ eng, sample }: { eng: Mm2Engine; sample: Sample | null }) {
-  const [filter, setFilter] = useState('')
-  const kinds = [...new Set(eng.events.map(e => e.kind))]
-  const list = eng.events
-    .filter(e => sample === null || e.t <= sample.t)
-    .filter(e => !filter || e.kind === filter)
-    .slice(-300).reverse()
-  return (
     <div>
       <div style={{
-        display: 'flex', gap: 4, padding: '4px 7px', flexWrap: 'wrap',
+        display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
         borderBottom: `1px solid ${T.borderFaint}`, position: 'sticky', top: 0, background: T.bg, zIndex: 1,
       }}>
-        <Chip label="all" on={filter === ''} onClick={() => setFilter('')} />
-        {kinds.map(k => <Chip key={k} label={k} on={filter === k} onClick={() => setFilter(k)} />)}
+        <span style={{ ...LABEL, fontSize: 9 }}>Show</span>
+        {chips.map(chip => (
+          <button key={chip.key} onClick={() => setFilter(chip.key)} style={{
+            ...MONO, fontSize: 9.5, padding: '2px 8px', cursor: 'pointer',
+            border: `1px solid ${filter === chip.key ? alpha(T.gold, 45) : T.border}`,
+            background: filter === chip.key ? alpha(T.gold, 12) : 'transparent',
+            color: filter === chip.key ? T.gold : T.muted,
+          }}>{chip.label}</button>
+        ))}
+        <span style={{ ...MONO, fontSize: 9.5, color: T.muted, marginLeft: 'auto' }}>
+          Alerts appear here with the action the engine took.
+        </span>
       </div>
-      {list.length === 0 ? <Empty>Nothing logged yet.</Empty> : list.map((e, i) => (
-        <div key={i} style={{ display: 'flex', gap: 9, padding: '2px 8px', borderTop: `1px solid ${T.borderFaint}` }}>
-          <span style={{ ...MONO, fontSize: 9.5, color: T.muted, width: 62, flexShrink: 0 }}>{fmtClock(e.t).slice(0, 8)}</span>
-          <span style={{ ...MONO, fontSize: 9.5, color: e.sev === 2 ? BAD : e.sev === 1 ? WARN : alpha(T.gold, 68), width: 48, flexShrink: 0 }}>{e.kind}</span>
-          <span style={{ ...MONO, fontSize: 9.5, color: e.sev ? T.text : alpha(T.text, 74) }}>{e.text}</span>
-        </div>
-      ))}
+      {shown.length === 0 ? <Empty>Nothing logged yet.</Empty> : shown.map((r, i) => {
+        const tone = r.sev === 2 ? BAD : r.sev === 1 ? WARN : null
+        return (
+          <div key={i} style={{
+            display: 'flex', gap: 12, padding: '4px 12px', borderTop: `1px solid ${T.borderFaint}`,
+            borderLeft: `2px solid ${tone ?? 'transparent'}`,
+            background: r.sev === 2 ? alpha(BAD, 8) : r.sev === 1 ? alpha(WARN, 6) : undefined,
+          }}>
+            <span style={{ ...MONO, fontSize: 10, color: T.muted, width: 54, flexShrink: 0 }}>{fmtClock(r.t).slice(0, 8)}</span>
+            <span style={{ ...MONO, fontSize: 10, fontWeight: tone ? 700 : 400, color: tone ?? alpha(T.gold, 68), width: 62, flexShrink: 0 }}>{r.kind}</span>
+            <span style={{ ...MONO, fontSize: 10, color: tone ? T.text : alpha(T.text, 74) }}>{r.text}</span>
+          </div>
+        )
+      })}
     </div>
-  )
-}
-
-function Chip({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) {
-  return (
-    <button onClick={onClick} style={{
-      ...MONO, fontSize: 9, padding: '1px 7px', cursor: 'pointer',
-      border: `1px solid ${on ? alpha(T.gold, 45) : T.border}`,
-      background: on ? alpha(T.gold, 12) : 'transparent', color: on ? T.gold : T.muted,
-    }}>{label}</button>
   )
 }

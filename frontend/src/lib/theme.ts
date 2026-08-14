@@ -20,6 +20,8 @@ export const T = {
   neg:         'var(--theme-negative, #ef4444)',
   warn:        'var(--theme-warn, #e8c04a)',
   chartNeutral:'var(--theme-chart-neutral, #4a7fa5)',
+  violet:      'var(--theme-accent-violet, #a78bfa)',
+  orange:      'var(--theme-accent-orange, #f97316)',
   goldTint:  (pct: number) => `color-mix(in srgb, var(--theme-primary) ${pct}%, transparent)`,
   posTint:   (pct: number) => `color-mix(in srgb, var(--theme-positive) ${pct}%, transparent)`,
   negTint:   (pct: number) => `color-mix(in srgb, var(--theme-negative) ${pct}%, transparent)`,
