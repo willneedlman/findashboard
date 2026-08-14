@@ -29,25 +29,35 @@ describe('chain column geometry', () => {
   })
 })
 
-import { BAND_H, GROUP_H, GROUP_TOP, COL_TOP } from './Chain'
+import { BAND_H, GROUP_H, GROUP_TOP, COL_TOP, HEADER_H } from './Chain'
 
 /**
- * The three header rows are sticky at fixed offsets. If a row's offset lands
- * below where the previous row ends, the gap is transparent and scrolling body
- * rows show straight through it.
+ * The three header rows are sticky at fixed offsets, and the offsets must be
+ * exactly cumulative.
+ *
+ * Overlapping them looks safer and is not: sticking a row a pixel high shrinks
+ * the band the three of them cover, leaving a transparent window at the BOTTOM
+ * of the header that body rows scroll straight through. That is the bug these
+ * assertions exist to catch, so they check both directions.
  */
 describe('sticky header geometry', () => {
-  it('sticks each header row above where the previous one ends', () => {
-    expect(GROUP_TOP).toBeLessThan(BAND_H)
-    expect(COL_TOP).toBeLessThan(GROUP_TOP + GROUP_H)
+  it('stacks the rows contiguously, with no gap between them', () => {
+    expect(GROUP_TOP).toBe(BAND_H)
+    expect(COL_TOP).toBe(BAND_H + GROUP_H)
   })
 
-  it('never leaves a vertical gap between the rows', () => {
-    expect(BAND_H - GROUP_TOP).toBeGreaterThanOrEqual(1)
-    expect(GROUP_TOP + GROUP_H - COL_TOP).toBeGreaterThanOrEqual(1)
+  it('covers the full header height, leaving no window at the bottom', () => {
+    const natural = BAND_H + GROUP_H + GROUP_H
+    expect(HEADER_H).toBe(natural)
+    expect(COL_TOP + GROUP_H).toBeGreaterThanOrEqual(natural)
   })
 
-  it('keeps the rows in order, so none can render above the band', () => {
+  it('never overlaps, which would shrink the covered band', () => {
+    expect(GROUP_TOP).toBeGreaterThanOrEqual(BAND_H)
+    expect(COL_TOP).toBeGreaterThanOrEqual(GROUP_TOP + GROUP_H)
+  })
+
+  it('keeps the rows in order and off the top edge', () => {
     expect(GROUP_TOP).toBeGreaterThan(0)
     expect(COL_TOP).toBeGreaterThan(GROUP_TOP)
   })

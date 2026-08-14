@@ -167,14 +167,18 @@ const CALLS_BAND = '#16202f'
 const STRIKE_BAND = '#1a2438'
 const PUTS_BAND = '#1b1c33'
 
-// Header geometry is pinned, not inferred. Each row gets an explicit height and
-// the next row sticks 1px ABOVE where the previous one ends, so the three
-// overlap slightly. Letting the offsets follow natural line heights left ~3px
-// gaps that scrolling rows showed straight through.
+// Header geometry is pinned, not inferred, and the offsets are exactly cumulative.
+//
+// Overlapping them was the bug: sticking each row a pixel high SHRINKS the band
+// the three of them cover, so 20/17/17 rows covered 52px of a 54px thead and
+// body rows scrolled through the 2px window left at the bottom. Contiguous
+// offsets cover the header exactly, with no gap and no overlap.
 export const BAND_H = 20
 export const GROUP_H = 17
-export const GROUP_TOP = BAND_H - 1          // 19
-export const COL_TOP = GROUP_TOP + GROUP_H - 1   // 35
+export const GROUP_TOP = BAND_H                 // 20
+export const COL_TOP = BAND_H + GROUP_H         // 37
+/** What the three sticky rows cover; must equal the thead's own height. */
+export const HEADER_H = COL_TOP + GROUP_H       // 54
 
 const BAND: React.CSSProperties = {
   ...LABEL, fontSize: 9, letterSpacing: '0.18em', padding: '0 8px',
