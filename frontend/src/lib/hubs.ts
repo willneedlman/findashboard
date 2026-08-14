@@ -65,6 +65,7 @@ export const HUBS: Hub[] = [
       { title: 'Implied Probability', chip: 'Implied Probability', desc: 'Risk-neutral distributions from the chain',         route: '/probability',     icon: Percent },
       { title: 'Options Pricer',      chip: 'Options Pricer',      desc: 'Black-Scholes greeks and payoff diagrams',          route: '/options',         icon: LineChart },
       { title: 'Options Strategy',    chip: 'Options Strategy',    desc: 'Multi-leg P&L and risk profiles',                   route: '/strategy',        icon: Shuffle },
+      { title: 'Options MM 2',        chip: 'Options MM 2',        desc: 'Quote a chain, carry the inventory, hedge the greeks, on one screen', route: '/options-mm-2', icon: Gauge },
     ],
   },
   {

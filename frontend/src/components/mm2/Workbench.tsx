@@ -25,7 +25,8 @@ export default function Workbench({ eng, sel, onSel, tick, live, sample, leg, re
   live: boolean; sample: Sample | null; leg: LegView | null
   reviewT: number | null; onScrub: (t: number | null) => void
 }) {
-  void tick; void onSel
+  void tick
+  void onSel
   const [tab, setTab] = useState<Tab>('contract')
   const c = eng.contracts[sel]
 
