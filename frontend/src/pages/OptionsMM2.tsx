@@ -241,7 +241,8 @@ export default function OptionsMM2() {
         </div>
 
         <div style={{ width: 236, flexShrink: 0, minHeight: 0 }}>
-          <RightColumn eng={eng} cfg={cfg} set={set} tick={tick} highlight={highlight} onHighlight={setHighlight} live={live} />
+          <RightColumn eng={eng} cfg={cfg} set={set} tick={tick} highlight={highlight}
+            onHighlight={setHighlight} live={live} onTick={() => setTick(t => t + 1)} />
         </div>
       </div>
 

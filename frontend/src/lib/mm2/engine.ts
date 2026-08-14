@@ -924,6 +924,34 @@ export class Mm2Engine {
     return { need, qty, px, cost: Math.abs(qty) * Math.abs(px - this.spot), deltaBefore: r.delta, deltaAfter: r.delta + qty }
   }
 
+  /**
+   * Trade the underlying directly. This is the shared path for both the auto
+   * hedger and a manual ticket, so a hand-entered trade books cash, average
+   * price, slippage and attribution exactly the way an automatic one does.
+   */
+  tradeUnderlying(qty: number, label = 'Manual'): void {
+    if (!qty || !Number.isFinite(qty)) return
+    const c = this.cfg
+    const halfSpread = this.spot * (c.underlyingSpreadBps / 10000) / 2
+    const px = this.spot + Math.sign(qty) * halfSpread * (c.hedgeAggressive ? 1 : 0.35)
+    const slip = (px - this.spot) * qty
+    const prevStock = this.stock
+    this.cash -= qty * px
+    this.stock += qty
+    if (prevStock !== 0 && Math.sign(prevStock) !== Math.sign(qty)) {
+      const closed = Math.min(Math.abs(prevStock), Math.abs(qty))
+      this.realized += (prevStock > 0 ? px - this.stockAvg : this.stockAvg - px) * closed
+    }
+    const denom = Math.abs(prevStock) + Math.abs(qty)
+    this.stockAvg = this.stock === 0 ? 0 : (this.stockAvg * Math.abs(prevStock) + px * Math.abs(qty)) / denom
+    this.attr.hedge -= slip
+    this.stat.hedges++
+    this.stat.hedgeShares += Math.abs(qty)
+    this.stat.hedgeCost += Math.abs(slip)
+    this.lastHedge = this.clock
+    this.mark('hedge', `${label} ${qty > 0 ? 'BUY' : 'SELL'} ${Math.abs(qty)} underlying @ ${px.toFixed(2)}`)
+  }
+
   executeHedge(manual = false): void {
     const p = this.hedgeProposal()
     if (!p) return
@@ -933,22 +961,7 @@ export class Mm2Engine {
       this.lastHedge = this.clock
       return
     }
-    const slip = (p.px - this.spot) * p.qty
-    const prevStock = this.stock
-    this.cash -= p.qty * p.px
-    this.stock += p.qty
-    if (prevStock !== 0 && Math.sign(prevStock) !== Math.sign(p.qty)) {
-      const closed = Math.min(Math.abs(prevStock), Math.abs(p.qty))
-      this.realized += (prevStock > 0 ? p.px - this.stockAvg : this.stockAvg - p.px) * closed
-    }
-    const denom = Math.abs(prevStock) + Math.abs(p.qty)
-    this.stockAvg = this.stock === 0 ? 0 : (this.stockAvg * Math.abs(prevStock) + p.px * Math.abs(p.qty)) / denom
-    this.attr.hedge -= slip
-    this.stat.hedges++
-    this.stat.hedgeShares += Math.abs(p.qty)
-    this.stat.hedgeCost += Math.abs(slip)
-    this.lastHedge = this.clock
-    this.mark('hedge', `${p.qty > 0 ? 'BUY' : 'SELL'} ${Math.abs(p.qty)} underlying @ ${p.px.toFixed(2)} — delta ${fmt0(p.deltaBefore)} to ${fmt0(p.deltaAfter)}`)
+    this.tradeUnderlying(p.qty, manual ? 'Manual hedge' : 'Auto hedge')
   }
 
   private runHedger(): void {

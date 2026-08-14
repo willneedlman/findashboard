@@ -169,7 +169,7 @@ export function ContractBody({ eng, sel, live, sample, leg }: {
   ]
 
   return (
-    <div style={{ padding: '10px 12px', height: '100%', overflow: 'auto', boxSizing: 'border-box' }}>
+    <div style={{ padding: '10px 12px', height: '100%', overflow: 'hidden', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8 }}>
         <span style={{ ...MONO, fontSize: 15, fontWeight: 700, color: T.gold }}>
           {DTE_LABELS[c.expIdx]} {c.strike} {c.kind === 'C' ? 'CALL' : 'PUT'}
@@ -182,8 +182,8 @@ export function ContractBody({ eng, sel, live, sample, leg }: {
         </span>
       </div>
 
-      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-        <Col title="Model and market" width={190}>
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', minHeight: 0 }}>
+        <Col title="Model and market">
           <Row k="theoretical" v={expired ? '—' : theo.toFixed(2)} tone={T.gold} bold />
           <Row k="implied vol" v={expired ? '—' : `${(iv * 100).toFixed(1)}%`} />
           <Row k="market" v={expired ? '—' : `${mktBid.toFixed(2)} – ${mktAsk.toFixed(2)}`} />
@@ -198,7 +198,7 @@ export function ContractBody({ eng, sel, live, sample, leg }: {
           )}
         </Col>
 
-        <Col title="Your position" width={190} divide>
+        <Col title="Your position" divide>
           <Row k="position" v={String(pos)} tone={pos > 0 ? GOOD : pos < 0 ? BAD : undefined} bold={!!pos} />
           <Row k="average price" v={pos ? eng.avgPx[sel].toFixed(2) : '—'} />
           <Row k="contract P&L" v={live ? fmtK(pnl) : '—'} tone={live ? pnlColor(pnl) : undefined} bold />
@@ -207,7 +207,7 @@ export function ContractBody({ eng, sel, live, sample, leg }: {
           <Row k="last fill" v={last ? `${last.ourSide === 'BUY' ? 'bought' : 'sold'} ${last.size} at ${last.px.toFixed(2)}` : 'none'} />
         </Col>
 
-        <Col title="Greeks" width={214} divide caption="each / book">
+        <Col title="Greeks" divide caption="each / book">
           {greeks.map(([name, per, tot, flip]) => (
             <div key={name} style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
               <span style={{ ...MONO, fontSize: 11, color: T.muted }}>{name}</span>
@@ -222,7 +222,7 @@ export function ContractBody({ eng, sel, live, sample, leg }: {
           ))}
         </Col>
 
-        <Col title="Depth" flex divide caption="you versus the street">
+        <Col title="Depth" divide caption="you versus the street" grow={1.35}>
           <DepthLadder eng={eng} sel={sel} live={live} />
         </Col>
       </div>
@@ -230,13 +230,13 @@ export function ContractBody({ eng, sel, live, sample, leg }: {
   )
 }
 
-function Col({ title, width, flex, divide, caption, children }: {
-  title: string; width?: number; flex?: boolean; divide?: boolean
+function Col({ title, grow = 1, divide, caption, children }: {
+  title: string; grow?: number; divide?: boolean
   caption?: string; children: React.ReactNode
 }) {
   return (
     <div style={{
-      width, flex: flex ? 1 : undefined, minWidth: 0,
+      flex: `${grow} 1 0`, minWidth: 0,
       borderLeft: divide ? `1px solid ${T.borderFaint}` : undefined,
       paddingLeft: divide ? 16 : undefined,
     }}>
@@ -280,7 +280,7 @@ function DepthLadder({ eng, sel, live }: { eng: Mm2Engine; sel: number; live: bo
   const bids = all.filter(r => r.px <= mktBid + 1e-9)
   const inside = all.filter(r => r.px < mktAsk - 1e-9 && r.px > mktBid + 1e-9)
   // Nearest the touch on both sides, plus every level where we are resting.
-  const rows = [...asks.slice(-4), ...inside, ...bids.slice(0, 4)]
+  const rows = [...asks.slice(-3), ...inside, ...bids.slice(0, 3)]
 
   const mineOf = (r: typeof all[number], side: 'B' | 'A') =>
     r.ours.filter(o => o.side === side).reduce((a, o) => a + o.remaining, 0)
@@ -289,7 +289,7 @@ function DepthLadder({ eng, sel, live }: { eng: Mm2Engine; sel: number; live: bo
   const head: React.CSSProperties = {
     ...LABEL, fontSize: 8.5, letterSpacing: '0.14em', padding: '1px 6px', whiteSpace: 'nowrap',
   }
-  const cell: React.CSSProperties = { ...MONO, fontSize: 11, padding: '1px 6px', whiteSpace: 'nowrap' }
+  const cell: React.CSSProperties = { ...MONO, fontSize: 11, padding: '0 6px', lineHeight: '15px', whiteSpace: 'nowrap' }
 
   return (
     <>

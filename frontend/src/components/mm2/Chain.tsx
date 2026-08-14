@@ -99,16 +99,16 @@ export function Chain({ eng, rows, sel, onSel, expIdx, highlight, live, spot, ti
         </colgroup>
         <thead>
           <tr>
-            <th colSpan={7} style={{ ...BAND, textAlign: 'left', background: '#16202f', color: T.blue }}>Calls</th>
-            <th colSpan={2} style={{ ...BAND, textAlign: 'center', background: '#1a2438', color: T.text }}>Strike</th>
-            <th colSpan={7} style={{ ...BAND, textAlign: 'right', background: '#1b1c33', color: VIOLET }}>Puts</th>
+            <th colSpan={7} style={{ ...BAND, textAlign: 'left', background: CALLS_BAND, color: T.blue }}>Calls</th>
+            <th colSpan={2} style={{ ...BAND, textAlign: 'center', background: STRIKE_BAND, color: T.text }}>Strike</th>
+            <th colSpan={7} style={{ ...BAND, textAlign: 'right', background: PUTS_BAND, color: VIOLET }}>Puts</th>
           </tr>
           <tr>
             <th style={{ ...GROUP }}>pos</th>
             <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}` }}>Model</th>
             <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}`, background: quoteTint(T.blue), color: T.blue }}>Your quote</th>
             <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}` }}>Market</th>
-            <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}` }} />
+            <th colSpan={2} style={{ ...GROUP, background: STRIKE_BAND, borderLeft: `1px solid ${T.border}` }} />
             <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}` }}>Market</th>
             <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}`, background: quoteTint(VIOLET), color: VIOLET }}>Your quote</th>
             <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}` }}>Model</th>
@@ -120,8 +120,8 @@ export function Chain({ eng, rows, sel, onSel, expIdx, highlight, live, spot, ti
             <th style={{ ...COL, background: quoteTint(T.blue), color: T.blue }}>bid</th>
             <th style={{ ...COL, background: quoteTint(T.blue), color: T.blue }}>ask</th>
             <th style={{ ...COL }}>bid</th><th style={{ ...COL }}>ask</th>
-            <th style={{ ...COL, background: '#1a2438', textAlign: 'center' }}>K</th>
-            <th style={{ ...COL, background: '#1a2438' }}>%</th>
+            <th style={{ ...COL, background: STRIKE_BAND, textAlign: 'center' }}>K</th>
+            <th style={{ ...COL, background: STRIKE_BAND }}>%</th>
             <th style={{ ...COL }}>bid</th><th style={{ ...COL }}>ask</th>
             <th style={{ ...COL, background: quoteTint(VIOLET), color: VIOLET }}>bid</th>
             <th style={{ ...COL, background: quoteTint(VIOLET), color: VIOLET }}>ask</th>
@@ -160,6 +160,12 @@ export function Chain({ eng, rows, sel, onSel, expIdx, highlight, live, spot, ti
 
 const VIOLET = T.violet
 const quoteTint = (c: string) => `color-mix(in srgb, ${c} 10%, ${T.surface})`
+// Opaque literals for the three header bands. They must be opaque so a sticky
+// row can never show body content through it, and the strike band repeats down
+// its own column so it reads as one block rather than three shades.
+const CALLS_BAND = '#16202f'
+const STRIKE_BAND = '#1a2438'
+const PUTS_BAND = '#1b1c33'
 
 // Header geometry is pinned, not inferred. Each row gets an explicit height and
 // the next row sticks 1px ABOVE where the previous one ends, so the three

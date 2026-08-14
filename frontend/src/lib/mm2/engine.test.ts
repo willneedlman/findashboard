@@ -170,3 +170,67 @@ describe('Mm2Engine', () => {
     expect(e.risk().deltaOpt).toBeCloseTo(10 * e.delta[i] * MULT, 8)
   })
 })
+
+
+// ── Manual underlying trades ──────────────────────────────────────────────────
+
+describe('tradeUnderlying', () => {
+  it('books a buy into stock and cash', () => {
+    const e = new Mm2Engine(cfg(), 5)
+    const before = e.cash
+    e.tradeUnderlying(100)
+    expect(e.stock).toBe(100)
+    expect(e.cash).toBeLessThan(before)
+    expect(e.stat.hedges).toBe(1)
+    expect(e.stat.hedgeShares).toBe(100)
+  })
+
+  it('books a sell the other way', () => {
+    const e = new Mm2Engine(cfg(), 5)
+    e.tradeUnderlying(-100)
+    expect(e.stock).toBe(-100)
+    expect(e.cash).toBeGreaterThan(0)
+  })
+
+  it('moves net delta by exactly the shares traded', () => {
+    const e = new Mm2Engine(cfg(), 5)
+    const before = e.risk().delta
+    e.tradeUnderlying(250)
+    expect(e.risk().delta).toBeCloseTo(before + 250, 6)
+  })
+
+  it('pays the spread, so a round trip loses money', () => {
+    const e = new Mm2Engine(cfg({ underlyingSpreadBps: 5 }), 5)
+    e.tradeUnderlying(100)
+    e.tradeUnderlying(-100)
+    expect(e.stock).toBe(0)
+    expect(e.totalPnl()).toBeLessThan(0)
+    expect(e.stat.hedgeCost).toBeGreaterThan(0)
+  })
+
+  it('ignores a zero or non-finite size instead of corrupting the book', () => {
+    const e = new Mm2Engine(cfg(), 5)
+    e.tradeUnderlying(0)
+    e.tradeUnderlying(Number.NaN)
+    expect(e.stock).toBe(0)
+    expect(e.stat.hedges).toBe(0)
+  })
+
+  it('keeps the attribution identity that the auto hedger keeps', () => {
+    const e = new Mm2Engine(cfg(), 21)
+    runFor(e, 60_000)
+    e.tradeUnderlying(300)
+    runFor(e, 60_000)
+    const a = e.attr
+    const sum = a.spread + a.delta + a.gamma + a.vega + a.theta + a.hedge + a.fees + a.model
+    expect(sum).toBeCloseTo(e.totalPnl(), 4)
+  })
+
+  it('is the same path the auto hedger uses', () => {
+    const e = new Mm2Engine(cfg({ autoHedge: true, arrivalRate: 8 }), 5)
+    runFor(e, 120_000)
+    const autoHedges = e.stat.hedges
+    e.tradeUnderlying(50)
+    expect(e.stat.hedges).toBe(autoHedges + 1)
+  })
+})

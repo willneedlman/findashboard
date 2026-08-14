@@ -11,14 +11,15 @@
 
 import { useState } from 'react'
 import { T, alpha } from '../../lib/theme'
-import { Panel, Toggle, Btn, MONO, LABEL, GOOD, BAD, WARN, pnlColor } from './ui'
+import { Panel, Seg, Num, Btn, MONO, LABEL, GOOD, BAD, WARN, pnlColor } from './ui'
 import { fmtK } from './Chain'
 import type { Highlight } from './Chain'
 import { fmtMoney, type Config, type Mm2Engine } from '../../lib/mm2/engine'
 
-export default function RightColumn({ eng, cfg, set, tick, highlight, onHighlight, live }: {
+export default function RightColumn({ eng, cfg, set, tick, highlight, onHighlight, live, onTick }: {
   eng: Mm2Engine; cfg: Config; set: (p: Partial<Config>) => void; tick: number
   highlight: Highlight; onHighlight: (h: Highlight) => void; live: boolean
+  onTick: () => void
 }) {
   void tick
   const r = eng.risk()
@@ -26,10 +27,10 @@ export default function RightColumn({ eng, cfg, set, tick, highlight, onHighligh
   const toggle = (h: Highlight) => onHighlight(highlight === h ? 'none' : h)
 
   return (
-    // overflowY is a safety valve, not the plan: the three panels are budgeted to
-    // fit, but a hidden EXECUTE HEDGE button is far worse than a scrollbar if a
-    // short viewport or a longer breach block ever pushes them over.
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: '100%', gap: 4, overflowY: 'auto' }}>
+    // Nothing in this column scrolls. The meters and the hedge ticket keep their
+    // natural height and the exposure panel takes the squeeze, because it is the
+    // only one of the three that degrades gracefully when it is short.
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: '100%', gap: 4 }}>
       <Panel title="Risk limits" right={<span style={{ ...MONO, fontSize: 9, color: T.muted }}>click to trace</span>}
         style={{ flex: '0 0 auto' }}>
         <Meter label="Net delta" unit="shares" value={r.delta} prior={back?.netDelta}
@@ -48,13 +49,15 @@ export default function RightColumn({ eng, cfg, set, tick, highlight, onHighligh
         </div>
       </Panel>
 
-      <Panel style={{ flex: '1 1 auto', minHeight: 90, overflow: 'hidden' }}>
+      <Panel style={{ flex: '1 1 auto', minHeight: 0, overflow: 'hidden' }}>
         <Exposure eng={eng} metric={highlight === 'none' || highlight === 'theta' ? 'vega' : highlight} />
       </Panel>
 
-      <Panel title="Hedge" right={<Toggle value={cfg.autoHedge} onChange={v => set({ autoHedge: v })} on="AUTO" off="MANUAL" />}
-        style={{ flex: '0 0 auto' }}>
-        <Hedge eng={eng} cfg={cfg} live={live} />
+      <Panel title="Hedge" right={
+        <Seg options={[{ label: 'AUTO', value: 1 }, { label: 'MANUAL', value: 0 }]}
+          value={cfg.autoHedge ? 1 : 0} onChange={v => set({ autoHedge: v === 1 })} size={9} />
+      } style={{ flex: '0 0 auto' }}>
+        <Hedge eng={eng} cfg={cfg} live={live} onTick={onTick} />
       </Panel>
     </div>
   )
@@ -74,7 +77,7 @@ function Meter({ label, unit, value, prior, soft, hard, fmt, active, onClick }: 
 
   return (
     <div onClick={onClick} style={{
-      padding: '5px 9px', cursor: 'pointer', borderBottom: `1px solid ${T.borderFaint}`,
+      padding: '4px 9px', cursor: 'pointer', borderBottom: `1px solid ${T.borderFaint}`,
       borderLeft: `2px solid ${breach ? BAD : warn ? WARN : active ? T.gold : 'transparent'}`,
       background: breach ? alpha(BAD, 7) : warn ? alpha(WARN, 7) : active ? alpha(T.gold, 10) : undefined,
     }}>
@@ -83,7 +86,7 @@ function Meter({ label, unit, value, prior, soft, hard, fmt, active, onClick }: 
         <span style={{ ...MONO, fontSize: 9, color: T.muted }}>{unit}</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-        <span style={{ ...MONO, fontSize: 16, fontWeight: 700, color: tone }}>{fmt(value)}</span>
+        <span style={{ ...MONO, fontSize: 15, fontWeight: 700, color: tone }}>{fmt(value)}</span>
         {delta !== null && (
           <span style={{ ...MONO, fontSize: 9.5, color: breach || warn ? tone : T.muted }}>
             {delta >= 0 ? '↑' : '↓'}{fmt(Math.abs(delta))} in 1m
@@ -93,7 +96,7 @@ function Meter({ label, unit, value, prior, soft, hard, fmt, active, onClick }: 
           {(used * 100).toFixed(0)}% of {warn && !breach ? 'soft' : fmt(hard)}
         </span>
       </div>
-      <div style={{ position: 'relative', height: 4, background: alpha(T.muted, 18), marginTop: 3 }}>
+      <div style={{ position: 'relative', height: 3, background: alpha(T.muted, 18), marginTop: 2 }}>
         <div style={{ position: 'absolute', inset: 0, width: `${Math.min(100, used * 100)}%`, background: breach ? BAD : warn ? WARN : alpha(T.gold, 70) }} />
         <div style={{ position: 'absolute', top: -1, bottom: -1, left: `${Math.min(100, (soft / Math.max(hard, 1e-9)) * 100)}%`, width: 1, background: alpha(T.text, 55) }} />
       </div>
@@ -106,7 +109,7 @@ function Cell({ label, value, tone, onClick, active }: {
 }) {
   return (
     <div onClick={onClick} style={{
-      padding: '4px 8px', borderRight: `1px solid ${T.borderFaint}`, cursor: onClick ? 'pointer' : undefined,
+      padding: '3px 8px', borderRight: `1px solid ${T.borderFaint}`, cursor: onClick ? 'pointer' : undefined,
       background: active ? alpha(T.gold, 10) : undefined,
     }}>
       <div style={{ ...LABEL, fontSize: 8.5, letterSpacing: '0.14em' }}>{label}</div>
@@ -142,15 +145,17 @@ function Exposure({ eng, metric }: { eng: Mm2Engine; metric: 'delta' | 'gamma' |
           ))}
         </div>
       </div>
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '7px 9px' }}>
+      {/* Sized so eight buckets fit without scrolling at the 900px design target;
+          `auto` is only a fallback for shorter windows. */}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '5px 9px' }}>
         {data.length === 0 ? (
           <p style={{ ...MONO, fontSize: 10, color: T.muted, margin: 0 }}>Flat book.</p>
         ) : (
           <>
             {data.map(d => (
-              <div key={d.label} style={{ display: 'flex', alignItems: 'center', gap: 5, height: 14 }}>
+              <div key={d.label} style={{ display: 'flex', alignItems: 'center', gap: 5, height: 12 }}>
                 <span style={{ ...MONO, fontSize: 9.5, color: T.muted, width: 38, textAlign: 'right', flexShrink: 0 }}>{d.label}</span>
-                <div style={{ flex: 1, position: 'relative', height: 8, background: alpha(T.muted, 10) }}>
+                <div style={{ flex: 1, position: 'relative', height: 7, background: alpha(T.muted, 10) }}>
                   <div style={{
                     position: 'absolute', top: 0, bottom: 0,
                     left: d.value < 0 ? `${50 - (Math.abs(d.value) / max) * 50}%` : '50%',
@@ -174,17 +179,30 @@ function Exposure({ eng, metric }: { eng: Mm2Engine; metric: 'delta' | 'gamma' |
   )
 }
 
-function Hedge({ eng, cfg, live }: { eng: Mm2Engine; cfg: Config; live: boolean }) {
+function Hedge({ eng, cfg, live, onTick }: {
+  eng: Mm2Engine; cfg: Config; live: boolean; onTick: () => void
+}) {
+  const [qty, setQty] = useState(100)
   const p = eng.hedgeProposal()
   const r = eng.risk()
+  const trade = (dir: 1 | -1) => {
+    if (!live || qty <= 0) return
+    eng.tradeUnderlying(dir * Math.round(qty))
+    onTick()
+  }
+
   return (
     <div style={{ padding: '6px 9px' }}>
-      {!p ? (
-        <p style={{ ...MONO, fontSize: 10, color: T.text, margin: 0, lineHeight: 1.45 }}>
-          Delta {fmtK(r.delta)} is inside the {cfg.hedgeThreshold} threshold.
-        </p>
-      ) : (
-        <>
+      <div style={{ ...MONO, fontSize: 10, color: T.text, lineHeight: 1.45 }}>
+        {cfg.autoHedge
+          ? p
+            ? `Auto hedge will ${p.qty > 0 ? 'buy' : 'sell'} ${Math.abs(p.qty)} at ${p.px.toFixed(2)}.`
+            : `Delta ${fmtK(r.delta)} is inside the ${cfg.hedgeThreshold} threshold.`
+          : `Manual. Delta is ${fmtK(r.delta)}; nothing hedges unless you do it.`}
+      </div>
+
+      {p && (
+        <div style={{ marginTop: 4 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
             <span style={{ ...MONO, fontSize: 10.5, color: T.gold, fontWeight: 700 }}>
               {p.qty > 0 ? 'BUY' : 'SELL'} {Math.abs(p.qty)} @ {p.px.toFixed(2)}
@@ -193,13 +211,30 @@ function Hedge({ eng, cfg, live }: { eng: Mm2Engine; cfg: Config; live: boolean 
           </div>
           <div style={{ ...MONO, fontSize: 9.5, color: T.muted }}>delta {fmtK(p.deltaBefore)} to {fmtK(p.deltaAfter)}</div>
           <div style={{ marginTop: 4 }}>
-            <Btn wide tone="gold" onClick={() => eng.executeHedge(true)} disabled={!live}>EXECUTE HEDGE</Btn>
+            <Btn wide tone="gold" onClick={() => { eng.executeHedge(true); onTick() }} disabled={!live}>
+              FLATTEN DELTA
+            </Btn>
           </div>
-        </>
+        </div>
       )}
+
+      <div style={{ marginTop: 5, borderTop: `1px solid ${T.borderFaint}`, paddingTop: 4 }}>
+        <div style={{ ...LABEL, fontSize: 8.5, letterSpacing: '0.14em', marginBottom: 3 }}>Trade the underlying</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <Num value={qty} onChange={setQty} step={50} min={1} width={54} />
+          <div style={{ flex: '1 1 0' }}>
+            <Btn wide tone="good" onClick={() => trade(1)} disabled={!live}>BUY</Btn>
+          </div>
+          <div style={{ flex: '1 1 0' }}>
+            <Btn wide tone="bad" onClick={() => trade(-1)} disabled={!live}>SELL</Btn>
+          </div>
+        </div>
+      </div>
+
       <div style={{ display: 'flex', gap: 10, marginTop: 5, ...MONO, fontSize: 9.5, color: T.muted }}>
         <span>hedges {eng.stat.hedges}</span>
-        <span>slippage {fmtMoney(eng.stat.hedgeCost)}</span>
+        <span>stock {fmtK(eng.stock)}</span>
+        <span>slip {fmtMoney(eng.stat.hedgeCost)}</span>
       </div>
     </div>
   )
