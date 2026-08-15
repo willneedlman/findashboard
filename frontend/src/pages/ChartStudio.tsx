@@ -618,6 +618,9 @@ export function ChartStudioContent() {
     return best
   }, [gexQ.data])
 
+  // Rebuilding the registry (fifteen defs, each closing over a fetch) inside the
+  // rail's JSX meant doing it on every render, crosshair moves included.
+  const overlayGroups = useMemo(() => APP_OVERLAY_GROUPS(tf, params.hvP), [tf, params.hvP])
   const overlayDefs = useMemo<OverlayDef[]>(() => {
     const app = APP_OVERLAYS(tf, params.hvP).map(d => {
       if (d.id.startsWith('fund:')) {
@@ -765,6 +768,7 @@ export function ChartStudioContent() {
   // the tf effect re-applies them so the scale drops its formatted-label cache.
   const intradayRef = useRef(INTRADAY.has(tf))
   const barCountRef = useRef(0)
+  const gexOnRef = useRef(ind.gexProfile); gexOnRef.current = ind.gexProfile
   const tickFmt = useMemo(() => makeTickFormatter(intradayRef), [])
   const crossFmt = useMemo(() => makeCrosshairFormatter(intradayRef), [])
   const mainRef = useRef<HTMLDivElement>(null)
@@ -989,9 +993,12 @@ export function ChartStudioContent() {
     })
 
     // Hand-driven pan or zoom drops the range control to Custom.
+    // scaleTick re-anchors the GEX-by-strike overlay, and nothing else reads it,
+    // so bumping it while that layer is off re-rendered this whole component on
+    // every frame of every scroll for nothing.
     main.timeScale().subscribeVisibleTimeRangeChange(() => {
       if (!applyingSpan.current) dispatch({ type: 'customRange' })
-      setScaleTick(t => t + 1)
+      if (gexOnRef.current) setScaleTick(t => t + 1)
     })
     // Double-click anywhere on the price panel re-frames the active range.
     main.subscribeDblClick(() => resetView.current?.())
@@ -1389,7 +1396,10 @@ export function ChartStudioContent() {
   const lastC = candles.length ? candles[candles.length - 1] : undefined
   const inspectT = crossTime ?? lastC?.time ?? null
   const inspectC = inspectT != null ? (candleStore.current.get(inspectT) ?? lastC) : lastC
-  const barIdx = inspectT != null ? candles.findIndex(c => c.time === inspectT) : candles.length - 1
+  // Bar lookups run on every crosshair move, which during a zoom is every
+  // frame — a linear scan of nine thousand bars there is not free.
+  const barIndex = useMemo(() => new Map(candles.map((c, i) => [c.time, i])), [candles])
+  const barIdx = inspectT != null ? (barIndex.get(inspectT) ?? -1) : candles.length - 1
   const at = (key: string) => inspectT != null ? floorVal(store.current.get(key), inspectT) : null
   const overlayColor = useCallback((id: string, i: number) =>
     overlaySeries.current.get(id)?.srs.options().color ?? OVERLAY_PALETTE[i % OVERLAY_PALETTE.length], [])
@@ -1624,7 +1634,7 @@ export function ChartStudioContent() {
             // Global running index so pre-activation fallback colors stay
             // distinct across groups (active series read their real color).
             let idx = compares.length
-            return APP_OVERLAY_GROUPS(tf, params.hvP).map(g => (
+            return overlayGroups.map(g => (
               <div key={g.group} style={{ padding: '11px 16px 9px', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span style={eyebrow}>{g.group}</span><span style={{ fontFamily: MONO, fontSize: 8, color: 'var(--theme-secondary, #8099b0)' }}>{g.tag}</span></div>
                 {g.defs.map(d => {
@@ -1679,40 +1689,42 @@ export function ChartStudioContent() {
         {/* Chart column */}
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           {/* Tape strip: the bar under the crosshair, read left to right at a
-              size you can take in without hunting the side panel. */}
-          <div style={{ padding: '7px 16px 6px', display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}>
-            <span style={{ fontFamily: MONO, fontSize: 14, fontWeight: 700, letterSpacing: '0.04em', color: 'var(--theme-primary, #c9a84c)' }}>{ticker}</span>
-            <span style={{ fontFamily: MONO, fontSize: 10, letterSpacing: '0.1em', color: 'var(--theme-secondary, #8099b0)' }}>{TF_LABEL[tf].toUpperCase()}</span>
-            <span style={{ fontFamily: MONO, fontSize: 11, color: 'var(--theme-text, #d7e3fc)' }}>{stampOf(inspectT)}</span>
+              size you can take in without hunting the side panel. Every slot is
+              fixed-width and the row never wraps — a value that reflows on each
+              crosshair move shakes everything below it, and a row that wraps and
+              unwraps toggles the window scrollbar. */}
+          <div style={{ padding: '7px 16px 6px', height: 31, boxSizing: 'border-box', display: 'flex', alignItems: 'baseline', gap: 14, whiteSpace: 'nowrap', overflow: 'hidden' }}>
+            <span style={{ flex: 'none', fontFamily: MONO, fontSize: 14, fontWeight: 700, letterSpacing: '0.04em', color: 'var(--theme-primary, #c9a84c)' }}>{ticker}</span>
+            <span style={{ flex: 'none', fontFamily: MONO, fontSize: 10, letterSpacing: '0.1em', color: 'var(--theme-secondary, #8099b0)' }}>{TF_LABEL[tf].toUpperCase()}</span>
+            <span style={{ flex: 'none', minWidth: 148, fontFamily: MONO, fontSize: 11, color: 'var(--theme-text, #d7e3fc)' }}>{stampOf(inspectT)}</span>
             {inspectC && (
-              <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 10, fontFamily: MONO, fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
-                {([['O', inspectC.open], ['H', inspectC.high], ['L', inspectC.low], ['C', inspectC.close]] as [string, number][]).map(([k, v]) => (
+              <span style={{ flex: 'none', display: 'inline-flex', alignItems: 'baseline', gap: 10, fontFamily: MONO, fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+                {([['O', inspectC.open.toFixed(2)], ['H', inspectC.high.toFixed(2)], ['L', inspectC.low.toFixed(2)], ['C', inspectC.close.toFixed(2)], ['V', fmtVol(inspectC.volume)]] as [string, string][]).map(([k, v]) => (
                   <span key={k}>
                     <span style={{ color: 'var(--theme-secondary, #8099b0)', marginRight: 3 }}>{k}</span>
-                    <span style={{ color: barDir }}>{v.toFixed(2)}</span>
+                    <span style={{ display: 'inline-block', minWidth: 54, color: barDir }}>{v}</span>
                   </span>
                 ))}
-                <span>
-                  <span style={{ color: 'var(--theme-secondary, #8099b0)', marginRight: 3 }}>V</span>
-                  <span style={{ color: barDir }}>{fmtVol(inspectC.volume)}</span>
-                </span>
-                <span style={{ color: barDir, fontWeight: 700 }}>{pct >= 0 ? '+' : ''}{pct.toFixed(2)}%</span>
+                <span style={{ display: 'inline-block', minWidth: 54, color: barDir, fontWeight: 700 }}>{pct >= 0 ? '+' : ''}{pct.toFixed(2)}%</span>
               </span>
             )}
-            <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 8.5, letterSpacing: '0.08em', color: 'var(--theme-secondary, #8099b0)', whiteSpace: 'nowrap' }}>
+            <span style={{ marginLeft: 'auto', flex: 'none', fontFamily: MONO, fontSize: 8.5, letterSpacing: '0.08em', color: 'var(--theme-secondary, #8099b0)' }}>
               {candles.length} BARS · REFRESH {INTRADAY.has(tf) ? '60S' : '5M'}{candlesQ.dataUpdatedAt ? ` · AS OF ${formatLocalTime(candlesQ.dataUpdatedAt)}` : ''}
             </span>
           </div>
 
+          {/* Legend wraps, so its entries must keep a constant width or the wrap
+              point moves on every crosshair move and the chart jumps. Each value
+              gets a fixed slot, present even when empty. */}
           <div style={{ padding: '0 16px 7px', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.06))', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
             {activeLegend.length === 0 && (
               <span style={{ fontFamily: SANS, fontSize: 9.5, color: 'var(--theme-secondary, #8099b0)' }}>No overlays. Toggle layers in the left rail.</span>
             )}
             {activeLegend.map(l => (
-              <span key={l.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <span key={l.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                 <Glyph style={l.style} color={l.color} />
                 <span style={{ fontFamily: MONO, fontSize: 10, color: 'var(--theme-secondary, #a9bacf)' }}>{l.label}</span>
-                {l.value && <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: l.color, fontVariantNumeric: 'tabular-nums' }}>{l.value}</span>}
+                <span style={{ display: 'inline-block', minWidth: 46, fontFamily: MONO, fontSize: 10, fontWeight: 700, color: l.color, fontVariantNumeric: 'tabular-nums' }}>{l.value}</span>
               </span>
             ))}
           </div>
