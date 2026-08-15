@@ -13,44 +13,7 @@ from fastapi import HTTPException
 logger = logging.getLogger(__name__)
 _GROQ_KEY = os.getenv("GROQ_API_KEY", "")
 _CEREBRAS_KEY = os.getenv("CEREBRAS_API_KEY", "")
-_ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
-# Vision: Haiku first, Groq only when Anthropic cannot serve the call.
-#
-# Ordering is the whole design. Groq was tried in FRONT of Claude and removed,
-# because a free leg that runs first makes every parse pay its reasoning tokens
-# before the good model starts — latency with extra steps. Behind Claude it costs
-# nothing until Anthropic is unavailable, and then it is the difference between a
-# degraded parse and a dead feature. Credits running out is not hypothetical.
-#
-# Haiku rather than Sonnet because a screenshot parse is transcription, not
-# judgement, and the price difference is roughly fivefold: a typical 1400x1000
-# screenshot runs ~2.6k input and ~900 output tokens, which is about 2 cents on
-# Sonnet. Image tokens dominate that (w*h/750), so downscaling before upload is a
-# bigger lever than the model choice.
-VISION_MODEL = "claude-haiku-4-5-20251001"
-VISION_MODEL_STRONG = "claude-sonnet-5"    # for a caller that needs the harder read
-VISION_MODEL_GROQ = "qwen/qwen3.6-27b"     # last resort, free
-# Qwen prices prompt and completion together against an 8k/minute ceiling and an
-# image is most of the prompt, so the completion has to stay small enough that the
-# sum clears it.
-# Qwen prices prompt and completion together against this per-minute ceiling, and
-# an image is most of the prompt. A fixed completion cap therefore cannot work:
-# improving the instructions grew the prompt and the same 3,500 cap started
-# returning 429s. The budget is computed from what the prompt actually leaves.
-_GROQ_VISION_TPM = 8_000
-_GROQ_VISION_HEADROOM = 0.80   # leave room for other calls inside the same minute
-_GROQ_VISION_MIN_COMPLETION = 900
-
-# Vision prompts are dominated by pixels: Anthropic charges about w*h/750 image
-# tokens, so a 2318x930 screenshot is ~2,900 tokens before a word of instruction.
-# Downscaling is therefore the cheapest lever available on both cost and headroom,
-# and screenshot text stays legible well below native retina resolution. Capped on
-# the longest edge so a wide holdings table is not squashed out of readability.
-_VISION_MAX_EDGE = 1_600
-
-# Model tiers. SMART = deep reasoning (100K TPD free); FAST = structured JSON (500K TPD).
-# The constants are the Groq model ids; each fallback provider maps them to its own.
 #
 # Groq decommissioned llama-3.3-70b-versatile on 2026-08-16 and named gpt-oss-120b
 # and qwen3.6-27b as the replacements — both of which we already ran beside it, so
@@ -123,19 +86,6 @@ def get_cerebras():
         # See get_client(): our backoff and failover own retries, not the SDK's.
         _cerebras_client = Cerebras(api_key=_CEREBRAS_KEY, max_retries=0)
     return _cerebras_client
-
-
-_anthropic_client = None
-
-
-def get_anthropic():
-    global _anthropic_client
-    if not _ANTHROPIC_KEY:
-        raise HTTPException(503, "ANTHROPIC_API_KEY not configured")
-    if _anthropic_client is None:
-        from anthropic import Anthropic
-        _anthropic_client = Anthropic(api_key=_ANTHROPIC_KEY)
-    return _anthropic_client
 
 
 _CONN_ERRORS = ("APIConnectionError", "APITimeoutError", "Timeout", "ConnectionError")
@@ -247,11 +197,6 @@ def _exhausted(exc: Exception, provider: str) -> Exception:
             "This is a free-tier quota, not a problem with your report. Wait a minute and retry."
         ))
     if status == 413:
-        if "vision" in provider:
-            return HTTPException(503, (
-                f"The image is larger than {provider} accepts in one call. "
-                "Crop or downscale the screenshot and retry."
-            ))
         return HTTPException(503, (
             f"The request is larger than {provider} accepts in one call. "
             "Reduce the report length or the number of clips and retry."
@@ -308,162 +253,6 @@ def groq_complete(prompt: str, max_tokens: int = 512, *,
     # content can be None when a reasoning fallback model (gpt-oss) spends its
     # whole budget thinking; coerce so callers never hit .strip() on None.
     return (resp.choices[0].message.content or "").strip()
-
-
-def downscale_image(image_b64: str, media_type: str, max_edge: int = _VISION_MAX_EDGE):
-    """Shrink an oversized screenshot before it is priced as tokens.
-
-    Returns (base64, media_type), unchanged when the image already fits or when
-    anything goes wrong — a failed resize must never block a parse that would
-    otherwise have worked.
-    """
-    try:
-        import base64 as _b64
-        import io
-        from PIL import Image
-
-        raw = _b64.b64decode(image_b64)
-        img = Image.open(io.BytesIO(raw))
-        longest = max(img.size)
-        if longest <= max_edge:
-            return image_b64, media_type
-
-        scale = max_edge / longest
-        resized = img.resize((max(1, round(img.width * scale)), max(1, round(img.height * scale))),
-                             Image.LANCZOS)
-        buf = io.BytesIO()
-        # PNG keeps text edges crisp, which is the whole point of the image. JPEG
-        # would be smaller on disk but the tokens are priced on pixels, not bytes.
-        if resized.mode not in ("RGB", "L"):
-            resized = resized.convert("RGB")
-        resized.save(buf, format="PNG", optimize=True)
-        logger.info("vision image downscaled %sx%s -> %sx%s",
-                    img.width, img.height, resized.width, resized.height)
-        return _b64.b64encode(buf.getvalue()).decode(), "image/png"
-    except Exception as exc:  # noqa: BLE001 — resizing is an optimisation, not a gate
-        logger.warning("vision image downscale failed, sending original: %s", exc)
-        return image_b64, media_type
-
-
-def _claude_vision_call(image_b64: str, media_type: str, prompt: str,
-                        max_tokens: int, system: str | None, model: str) -> str:
-    kwargs: dict = {
-        "model": model,
-        "max_tokens": max_tokens,
-        "messages": [{
-            "role": "user",
-            "content": [
-                {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": image_b64}},
-                {"type": "text", "text": prompt},
-            ],
-        }],
-    }
-    if system:
-        kwargs["system"] = system
-    resp = get_anthropic().messages.create(**kwargs)
-    return "".join(block.text for block in resp.content if block.type == "text").strip()
-
-
-def _estimate_image_tokens(image_b64: str) -> int:
-    """Anthropic's w*h/750 rule is close enough for Groq budgeting too."""
-    try:
-        import base64 as _b64
-        import io
-        from PIL import Image
-        w, h = Image.open(io.BytesIO(_b64.b64decode(image_b64))).size
-        return int(w * h / 750)
-    except Exception:  # noqa: BLE001 — a rough guess beats refusing to budget
-        return 1_500
-
-
-def _groq_vision_budget(image_b64: str, system: str | None, prompt: str, max_tokens: int) -> int:
-    """Completion tokens that still leave the whole request inside the ceiling."""
-    prompt_tokens = _estimate_image_tokens(image_b64) + (len(system or "") + len(prompt)) // 4
-    room = int(_GROQ_VISION_TPM * _GROQ_VISION_HEADROOM) - prompt_tokens
-    return max(_GROQ_VISION_MIN_COMPLETION, min(max_tokens, room))
-
-
-def _groq_vision_call(image_b64: str, media_type: str, prompt: str,
-                      max_tokens: int, system: str | None, model: str) -> str:
-    content = [
-        {"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{image_b64}"}},
-        {"type": "text", "text": prompt},
-    ]
-    messages: list[dict] = []
-    if system:
-        messages.append({"role": "system", "content": system})
-    messages.append({"role": "user", "content": content})
-    budget = _groq_vision_budget(image_b64, system, prompt, max_tokens)
-    resp = get_client().chat.completions.create(
-        model=VISION_MODEL_GROQ, max_tokens=budget,
-        # Reading a table is transcription, not reasoning, and the scratchpad is
-        # charged against the same budget as the answer — on a wide screenshot it
-        # consumed the budget and truncated the JSON mid-object. "none" is the only
-        # value Groq accepts besides "default" here.
-        reasoning_effort="none",
-        temperature=0, messages=messages,
-    )
-    choice = resp.choices[0]
-    if getattr(choice, "finish_reason", None) == "length":
-        raise RuntimeError("vision answer truncated before it finished")
-    return strip_reasoning(choice.message.content or "")
-
-
-# Out of credit is a 400 from Anthropic, not a 429, so the generic retry/failover
-# predicates do not catch it. It is also the one failure a paid-primary chain most
-# needs to survive, which is the reason this fallback exists at all.
-_CREDIT_MARKERS = ("credit balance", "insufficient", "quota", "billing", "payment")
-
-
-def _is_exhausted_account(exc: Exception) -> bool:
-    return any(marker in str(exc).lower() for marker in _CREDIT_MARKERS)
-
-
-def vision_complete(image_b64: str, media_type: str, prompt: str, *,
-                     max_tokens: int = 1024, system: str | None = None,
-                     model: str = VISION_MODEL, validate=None) -> str:
-    """Single-turn image+text completion. `image_b64` is raw base64 (no data-URL
-    prefix); `media_type` is e.g. "image/png" or "image/jpeg". Returns stripped
-    text — pass through parse_json() for structured output.
-
-    Claude serves this. Groq is tried only if Anthropic cannot: no key, no credit,
-    rate limited, or a server error. `validate` is the caller's parser and runs
-    inside each attempt, so an answer the caller cannot use is treated as a
-    failure here instead of blowing up downstream.
-    """
-    image_b64, media_type = downscale_image(image_b64, media_type)
-
-    providers: list[tuple[str, object, str]] = []
-    if _ANTHROPIC_KEY:
-        providers.append(("claude-vision", _claude_vision_call, model))
-    if _GROQ_KEY:
-        providers.append(("groq-vision", _groq_vision_call, VISION_MODEL_GROQ))
-    if not providers:
-        raise HTTPException(503, "No vision provider configured (set ANTHROPIC_API_KEY or GROQ_API_KEY)")
-
-    import metrics
-    last_exc: Exception | None = None
-    for i, (name, call, use_model) in enumerate(providers):
-        try:
-            text = with_backoff(
-                lambda c=call, m=use_model: c(image_b64, media_type, prompt, max_tokens, system, m),
-                retries=1,
-            )
-            if not text:
-                raise RuntimeError("vision model returned no text")
-            if validate is not None:
-                validate(text)
-            metrics.record_ai(name, ok=True)
-            return text
-        except Exception as exc:  # noqa: BLE001 — re-raised if the chain is exhausted
-            last_exc = exc
-            metrics.record_ai(name, ok=False, error=_status_str(exc))
-            if i == len(providers) - 1:
-                raise _exhausted(exc, name)
-            reason = "out of credit" if _is_exhausted_account(exc) else _status_str(exc)
-            logger.warning("vision provider %s failed (%s); falling back to %s",
-                           name, reason, providers[i + 1][0])
-    raise last_exc  # unreachable
 
 
 _THINK_BLOCK = re.compile(r"<(think|thinking|reasoning)>.*?</\1>", re.DOTALL | re.IGNORECASE)

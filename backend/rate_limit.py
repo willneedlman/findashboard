@@ -16,7 +16,7 @@ from starlette.responses import JSONResponse
 
 # tier -> (max requests, window seconds). Generous vs. a human; deadly to a script.
 _TIERS = {
-    "ai":      (20, 60),    # /api/ai, filings, sentiment — Groq/Cerebras/Anthropic quota
+    "ai":      (20, 60),    # /api/ai, filings, sentiment — Groq/Cerebras quota
     "auth":    (30, 60),    # /api/users — login/register/reset brute-force guard
     "data":    (150, 60),   # market/options/compute — bursty dashboards
     "default": (400, 60),

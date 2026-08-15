@@ -6,7 +6,6 @@ import axios from 'axios'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import PageWrapper from '../components/PageWrapper'
 import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
-import ScreenshotPortfolioImport from '../components/ScreenshotPortfolioImport'
 import { usePortfolio } from '../contexts/PortfolioContext'
 import { FUTURES, FUTURES_BY_GROUP, futuresSpec } from '../lib/futures'
 import { normalizeTicker, notifyPortfolioContextChanged } from '../lib/pmImport'
@@ -474,64 +473,6 @@ export function PortfolioManagerContent() {
     setHoldings(imported)
   }, [])
 
-  // Merge holdings parsed from a screenshot (see ScreenshotPortfolioImport): a
-  // ticker already held gets its shares/cost updated (null avgCost keeps the
-  // existing cost basis), a new ticker is appended — same semantics as addHolding,
-  // just batched for however many rows the user confirmed.
-  const importScreenshot = useCallback((payload: {
-    holdings: { ticker: string; shares: number; avgCost: number | null }[]
-    options: { underlying: string; type: OptType; strike: number; expiry: string; side: Side; contracts: number; avgPremium: number | null }[]
-    cash?: { label: string; amount: number }[]
-  }) => {
-    const { holdings, options } = payload
-    const cashRows = payload.cash ?? []
-    if (holdings.length) {
-      setHoldings(prev => {
-        let next = [...prev]
-        for (const row of holdings) {
-          const ticker = normalizeTicker(row.ticker)
-          if (!ticker || !(row.shares > 0)) continue
-          const existing = next.findIndex(h => h.ticker === ticker)
-          const avgCost = row.avgCost ?? (existing >= 0 ? next[existing].avgCost : 0)
-          if (existing >= 0) next[existing] = { ...next[existing], shares: row.shares, avgCost }
-          else next.push({ ticker, shares: row.shares, avgCost })
-        }
-        return next
-      })
-    }
-    // Each parsed contract lands as its own single-leg option position (the same
-    // shape the manual Add-Option form produces); the user can merge legs later.
-    if (options.length) {
-      setOptions(prev => [
-        ...prev,
-        ...options
-          .filter(o => o.underlying.trim() && o.strike > 0 && o.expiry.trim() && o.contracts > 0)
-          .map(o => ({
-            id: uid(),
-            underlying: normalizeTicker(o.underlying),
-            name: `${o.side === 'long' ? 'Long' : 'Short'} ${o.type === 'call' ? 'Call' : 'Put'}`,
-            legs: [{ type: o.type, strike: o.strike, expiry: o.expiry, side: o.side, contracts: o.contracts, avgPremium: o.avgPremium ?? 0 }],
-          })),
-      ])
-    }
-    // Cash is matched on label so re-importing the same screenshot updates the
-    // balance rather than stacking a second copy of it. Rate stays zero: a
-    // screenshot shows a balance, never the yield it accrues at.
-    if (cashRows.length) {
-      setCash(prev => {
-        const next = [...prev]
-        for (const row of cashRows) {
-          const label = row.label.trim()
-          if (!label) continue
-          const existing = next.findIndex(c => c.label.trim().toLowerCase() === label.toLowerCase())
-          if (existing >= 0) next[existing] = { ...next[existing], amount: row.amount }
-          else next.push({ id: uid(), label, amount: row.amount, rate: 0, since: todayISO })
-        }
-        return next
-      })
-    }
-  }, [setHoldings, setOptions, setCash])
-
   // ── Option entry handlers ──
   const updateLeg = (i: number, patch: Partial<LegDraft>) =>
     setOptLegs(prev => prev.map((l, j) => (j === i ? { ...l, ...patch } : l)))
@@ -900,7 +841,6 @@ export function PortfolioManagerContent() {
                 Exports as <span style={{ fontFamily: T.mono }}>{(portfolioName.trim() || 'Portfolio').replace(/\s+/g, '-')}-{todayLocal()}</span><br />
                 CSV columns: <span style={{ fontFamily: T.mono }}>TICKER,SHARES,AVG_COST</span>
               </p>
-              <ScreenshotPortfolioImport onImport={importScreenshot} />
             </div>
 
 
