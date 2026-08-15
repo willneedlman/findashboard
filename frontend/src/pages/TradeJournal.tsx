@@ -241,7 +241,7 @@ function AddTradeForm({ onAdd }: { onAdd: (t: Trade) => void }) {
         }}
       >
         <span>+ Add Trade</span>
-        <span style={{ color: C.muted }}>{open ? '▲' : '▼'}</span>
+        <span style={{ color: C.muted }}>{open ? '↑' : '↓'}</span>
       </button>
 
       {open && (
@@ -439,7 +439,7 @@ function CloseForm({ trade, onClose }: { trade: Trade; onClose: (exitDate: strin
       </div>
       <div>
         <span style={label('Notes')}>Notes</span>
-        <textarea style={{ ...inp, resize: 'vertical', minHeight: 56 }} rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Lessons learned…" />
+        <textarea style={{ ...inp, resize: 'vertical', minHeight: 56 }} rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Lessons learned..." />
       </div>
       <button
         onClick={submit}
@@ -557,7 +557,7 @@ function DetailPanel({ trade, onUpdateNotes }: { trade: Trade; onUpdateNotes: (n
           value={notes}
           onChange={e => setNotes(e.target.value)}
           onBlur={() => onUpdateNotes(notes)}
-          placeholder="Observations, lessons, adjustments…"
+          placeholder="Observations, lessons, adjustments..."
         />
       </div>
     </div>
@@ -760,7 +760,7 @@ export default function TradeJournal() {
                   outline: 'none',
                   boxSizing: 'border-box',
                 }}
-                placeholder="Search ticker or thesis…"
+                placeholder="Search ticker or thesis..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />

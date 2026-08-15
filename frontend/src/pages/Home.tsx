@@ -820,7 +820,7 @@ export default function Home() {
                     <>
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 10 }}>
                         <span style={{ fontFamily: F.mono, fontSize: 34, fontWeight: 700, color: F.bright, fontVariantNumeric: 'tabular-nums', letterSpacing: 'var(--theme-num-tracking, normal)' }}>{money(totalValue)}</span>
-                        <span style={{ fontFamily: F.mono, fontSize: 13, color: dayPnl >= 0 ? F.pos : F.neg }}>{dayPct >= 0 ? '▲' : '▼'} {Math.abs(dayPct).toFixed(2)}%</span>
+                        <span style={{ fontFamily: F.mono, fontSize: 13, color: dayPnl >= 0 ? F.pos : F.neg }}>{dayPct >= 0 ? '↑' : '↓'} {Math.abs(dayPct).toFixed(2)}%</span>
                       </div>
                       <div style={{ marginTop: 12, height: 80 }}>
                         <PerformanceSpark tickers={perfTickers} weights={perfWeights} rangeIdx={rangeIdx} />

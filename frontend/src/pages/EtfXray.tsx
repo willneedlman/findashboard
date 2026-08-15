@@ -264,7 +264,7 @@ export function EtfXrayContent() {
     </>}>
       {!data && !isPending && <EmptyState title="ETF Analyzer" hint="Pick one or more ETFs to inspect holdings, overlap and concentration."
         action="FETCH" />}
-      {isPending && <EmptyState title="Reading holdings…" hint="Pulling each fund's holdings." variant="loading" />}
+      {isPending && <EmptyState title="Reading holdings..." hint="Pulling each fund's holdings." variant="loading" />}
 
       {data && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -298,7 +298,7 @@ export function EtfXrayContent() {
                   <span style={{ ...EYEBROW, fontSize: 8, color: SEC }}>Sort</span>
                   <div style={{ display: 'flex', border: `1px solid ${BORDER}` }}>
                     {([['weight', 'Weight'], ['funds', 'Funds'], ['ticker', 'A–Z'], ['change', '1D %']] as const).map(([k, lbl], i, arr) => (
-                      <button key={k} title="Click to sort; click again to reverse"
+                      <button key={k} title="Click to sort. Click again to reverse"
                         onClick={() => { if (sort === k) setSortDir(d => d === 'desc' ? 'asc' : 'desc'); else { setSort(k); setSortDir(k === 'ticker' ? 'asc' : 'desc') } }}
                         style={{
                           background: sort === k ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' : 'transparent',

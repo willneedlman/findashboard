@@ -1,6 +1,7 @@
 // Shared cockpit primitives for the redesigned tool screens (Pairs Trader,
 // Factor Decomposition, Chokepoint Exposure). Token-driven so both themes hold.
 import { T } from '../lib/theme'
+import { Info } from 'lucide-react'
 import HelpTip from '../components/HelpTip'
 
 export const MONO = 'var(--theme-mono)'
@@ -28,7 +29,7 @@ export const seg = (on: boolean, disabled = false): React.CSSProperties => ({
 })
 
 export interface KpiCellSpec { label: string; value: string; vc?: string; sub?: string; sc?: string; tip?: { title: string; body: string; source: string } }
-// KPI strip: flex row with ⓘ per cell.
+// KPI strip: flex row with an info affordance per cell.
 export function KpiStrip({ cells, cellHeight }: { cells: KpiCellSpec[]; cellHeight?: number }) {
   return (
     <div className="ft-kpi-strip" style={{ display: 'flex', alignItems: 'stretch', background: T.surface, border: `1px solid ${T.border}` }}>

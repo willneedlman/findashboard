@@ -816,7 +816,7 @@ export function DCFValuationContent() {
 
             {/* Value-driver tornado — one-way sensitivity of intrinsic $/share */}
             {data.tornado.length > 0 && (
-              <ChartPanel title="Value Drivers — one-way sensitivity" height={252}>
+              <ChartPanel title="Value Drivers, one-way sensitivity" height={252}>
                 <Tornado rows={data.tornado} base={data.tornado_base} />
               </ChartPanel>
             )}

@@ -228,7 +228,7 @@ export function EconomyMonitorContent() {
       <CyclePanel />
 
       {/* Inflation — multi-line vs 2% target */}
-      <Panel title="Inflation — Year over Year" note="Fed target 2%">
+      <Panel title="Inflation. Year over Year" note="Fed target 2%">
         <ResponsiveContainer width="100%" height={240}>
           <LineChart data={inf.trend} margin={{ top: 6, right: 12, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="2 4" stroke={T.border} vertical={false} />

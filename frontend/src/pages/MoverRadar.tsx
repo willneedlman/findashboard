@@ -162,7 +162,7 @@ export function MoverRadarContent() {
           <EmptyState title="Mover Radar" hint="Enter a ticker to see what is actually moving it: real news, filings, and social chatter, or confirmation it is just noise." action="SCAN" />
         )}
         {ticker && isFetching && (
-          <EmptyState title="Scanning…" hint={`Pulling price action, filings, and news/social evidence for ${ticker}.`} variant="loading" />
+          <EmptyState title="Scanning..." hint={`Pulling price action, filings, and news/social evidence for ${ticker}.`} variant="loading" />
         )}
         {ticker && !isFetching && (isError || (data && !data.available)) && (
           <EmptyState title="Unavailable" hint={data?.reason || 'Could not analyze this ticker. Check the symbol and try again.'} variant="unavailable" />

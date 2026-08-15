@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Info } from 'lucide-react'
 import { useToolState } from '../hooks/useToolState'
 import { useMutation } from '@tanstack/react-query'
 import { ComposedChart, Line, Scatter, XAxis, YAxis, ReferenceLine, ResponsiveContainer, Tooltip, CartesianGrid, AreaChart, Area, LineChart } from 'recharts'
@@ -120,7 +121,7 @@ export default function PairsTrader() {
 
       <div style={{ padding: '13px 12px', display: 'flex', flexDirection: 'column', gap: 9 }}>
         <button onClick={run} disabled={m.isPending} style={{ textAlign: 'center', fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.gold, border: `1px solid ${T.gold}`, background: mix(T.gold, 8), padding: '9px 8px', cursor: m.isPending ? 'wait' : 'pointer' }}>{m.isPending ? 'Testing' : 'Test Pair'}</button>
-        <div style={{ fontFamily: MONO, fontSize: 9, color: T.textDim, lineHeight: 1.5 }}>Hover any ⓘ for what a metric means.</div>
+        <div style={{ fontFamily: MONO, fontSize: 9, color: T.textDim, lineHeight: 1.5 }}>Hover any info icon for what a metric means.</div>
       </div>
     </div>
   )

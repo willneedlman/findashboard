@@ -337,7 +337,7 @@ function SubjectPicker({ scope, onChange, isMobile }: {
 
       {source === 'manual' && (
         <input value={scope.researchSymbols} onChange={e => onChange({ researchSymbols: e.target.value })}
-          placeholder="Tickers, comma separated — e.g. MSFT, NVDA" style={{ ...field, fontFamily: T.mono, fontSize: 11 }} />
+          placeholder="Tickers, comma separated, e.g. MSFT, NVDA" style={{ ...field, fontFamily: T.mono, fontSize: 11 }} />
       )}
 
       {source === 'portfolio' && (
@@ -378,7 +378,7 @@ function SubjectPicker({ scope, onChange, isMobile }: {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <textarea value={scope.screenerQuery} rows={2}
             onChange={e => onChange({ screenerQuery: e.target.value })}
-            placeholder="Describe the screen — e.g. profitable US software names under 25x earnings growing revenue over 20%"
+            placeholder="Describe the screen, e.g. profitable US software names under 25x earnings growing revenue over 20%"
             style={field} />
           <button type="button" onClick={() => void runAiScreen()} disabled={busy || !scope.screenerQuery.trim()}
             style={{

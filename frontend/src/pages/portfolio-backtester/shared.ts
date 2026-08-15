@@ -101,7 +101,7 @@ export const ALGO_STRATEGIES = [
   { value: 'bollinger_breakout',  label: 'Bollinger Breakout' },
   { value: 'momentum',            label: 'Momentum' },
   { value: 'macd_crossover',      label: 'MACD Crossover' },
-  { value: 'value_pe',            label: 'Value — P/E' },
+  { value: 'value_pe',            label: 'Value. P/E' },
   { value: 'earnings_momentum',   label: 'Earnings Growth' },
   { value: 'micro_scalp',         label: 'EMA Micro-Scalp (3/8)' },
 ]

@@ -701,7 +701,7 @@ function PositionCard({ p, index, tradeSize, strategyName, saved, patchPosition,
               </select>
             )}
             <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
-              <input value={cloneInput} onChange={e => setCloneInput(e.target.value)} placeholder="MSFT, NVDA, TSLA…"
+              <input value={cloneInput} onChange={e => setCloneInput(e.target.value)} placeholder="MSFT, NVDA, TSLA..."
                 onKeyDown={e => e.key === 'Enter' && cloneToTickers(p)}
                 autoFocus style={{ ...INPUT, fontSize: 9, flex: 1, textTransform: 'uppercase' }} />
               <button onClick={() => cloneToTickers(p)} disabled={!cloneInput.trim()} style={{

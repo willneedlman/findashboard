@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Info } from 'lucide-react'
 import { useMutation } from '@tanstack/react-query'
 import { LineChart, Line, XAxis, YAxis, ReferenceLine, ResponsiveContainer, Tooltip, CartesianGrid } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
@@ -90,7 +91,7 @@ export default function FactorDecomposition() {
       <div style={{ padding: '12px 12px 13px', borderBottom: `1px solid ${T.border}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 7 }}>
           <span style={LABEL}>Factor set</span>
-          <HelpTip anchor="left" title="Macro vs. style factors" body="Macro: sensitivity to market, rates, credit, oil, and the dollar via liquid ETF proxies. Style: Fama-French/Carhart tilt toward size, value, and momentum, from the Ken French Data Library. Different lenses on the same book — macro sensitivity vs. equity style tilt." source="Two independent factor models" />
+          <HelpTip anchor="left" title="Macro vs. style factors" body="Macro: sensitivity to market, rates, credit, oil, and the dollar via liquid ETF proxies. Style: Fama-French/Carhart tilt toward size, value, and momentum, from the Ken French Data Library. Different lenses on the same book: macro sensitivity against equity style tilt." source="Two independent factor models" />
         </div>
         <div style={{ display: 'flex', gap: 5 }}>
           <button onClick={() => setFactorSet('macro')} style={seg(factorSet === 'macro')}>Macro</button>
@@ -99,7 +100,7 @@ export default function FactorDecomposition() {
       </div>
       <div style={{ padding: '13px 12px', display: 'flex', flexDirection: 'column', gap: 9 }}>
         <button onClick={() => m.mutate()} disabled={m.isPending} style={{ textAlign: 'center', fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.gold, border: `1px solid ${T.gold}`, background: mix(T.gold, 8), padding: '9px 8px', cursor: m.isPending ? 'wait' : 'pointer' }}>{m.isPending ? 'Running' : 'Decompose'}</button>
-        <div style={{ fontFamily: MONO, fontSize: 9, color: T.textDim, lineHeight: 1.5 }}>Hover any ⓘ for what a metric means.</div>
+        <div style={{ fontFamily: MONO, fontSize: 9, color: T.textDim, lineHeight: 1.5 }}>Hover any info icon for what a metric means.</div>
       </div>
     </div>
   )

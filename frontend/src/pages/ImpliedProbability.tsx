@@ -150,7 +150,7 @@ export function ImpliedProbabilityContent() {
         { label: 'P10', value: `$${dist.p10.toLocaleString()}` },
         { label: 'P50', value: `$${dist.p50.toLocaleString()}` },
         { label: 'P90', value: `$${dist.p90.toLocaleString()}` },
-        { label: 'IV Skew (P−C)', value: `${dist.iv_skew > 0 ? '+' : ''}${dist.iv_skew.toFixed(1)}%` },
+        { label: 'IV Skew (P-C)', value: `${dist.iv_skew > 0 ? '+' : ''}${dist.iv_skew.toFixed(1)}%` },
         { label: 'Avg OTM Call IV', value: `${dist.avg_call_iv.toFixed(1)}%` },
       ]))
       pieces.push(kpiClip(TAB, `Explorer @ $${k.toLocaleString()}`, [
@@ -271,7 +271,7 @@ export function ImpliedProbabilityContent() {
                 <KpiCell grow label="P10 Strike" value={`$${dist.p10.toLocaleString()}`} color={cc.gain} sub="10% finish above" />
                 <KpiCell grow minWidth={130} label="P50 Strike" value={`$${dist.p50.toLocaleString()}`} color={GOLD} valueSize={16} sub="median" />
                 <KpiCell grow label="P90 Strike" value={`$${dist.p90.toLocaleString()}`} color={cc.loss} sub="90% finish above" />
-                <KpiCell grow label="IV Skew (P−C)" value={`${dist.iv_skew > 0 ? '+' : ''}${dist.iv_skew.toFixed(1)}%`} color={dist.iv_skew > 0 ? cc.loss : cc.gain} sub="put-rich" />
+                <KpiCell grow label="IV Skew (P-C)" value={`${dist.iv_skew > 0 ? '+' : ''}${dist.iv_skew.toFixed(1)}%`} color={dist.iv_skew > 0 ? cc.loss : cc.gain} sub="put-rich" />
               </div>
 
               <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', letterSpacing: '0.06em', lineHeight: 1.5 }}>
@@ -320,7 +320,7 @@ export function ImpliedProbabilityContent() {
                   </ChartPanel>
                 </div>
                 <div style={{ flex: 1, minWidth: 320 }}>
-                  <ChartPanel label="Cumulative — P(Finish Above Strike)" height={324} note={`P50 = $${dist.p50}`}>
+                  <ChartPanel label="Cumulative. P(Finish Above Strike)" height={324} note={`P50 = $${dist.p50}`}>
                     <ResponsiveContainer width="100%" height={296}>
                       <LineChart data={dist.delta_curve} margin={{ top: 22, right: 8, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.045)" />

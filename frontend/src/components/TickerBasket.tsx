@@ -159,7 +159,7 @@ export default function TickerBasket({ value, onChange, cap = 25, label = 'Ticke
 
         <input ref={fileRef} type="file" accept=".csv,.txt,.tsv" style={{ display: 'none' }}
           onChange={e => void onFile(e.target.files?.[0])} />
-        <button onClick={() => fileRef.current?.click()} title="CSV or text file — first column, or a plain list"
+        <button onClick={() => fileRef.current?.click()} title="CSV or text file, first column, or a plain list"
           style={btn}>Import file</button>
 
         {value.length > 0 && (

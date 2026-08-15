@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { ChevronDown, ChevronUp, Info } from 'lucide-react'
 import CustomStrategyModal, { type CustomStrategyDef } from './CustomStrategyModal'
 import { loadCustomStrategies, saveCustomStrategy, deleteCustomStrategy } from '../utils/customStrategies'
 
@@ -134,7 +134,7 @@ function CNum({ label, value, step, min, max, help, onChange }: {
             style={{ fontSize: 10, color: 'var(--theme-text-faint, var(--theme-text-faint, rgba(255,255,255,0.22)))', cursor: 'help', lineHeight: 1, flexShrink: 0 }}
             onMouseEnter={() => setShowTip(true)}
             onMouseLeave={() => setShowTip(false)}
-          >ⓘ</span>
+          ><Info size={10} /></span>
         )}
       </div>
       {showTip && help && (

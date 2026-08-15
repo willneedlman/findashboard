@@ -1121,7 +1121,7 @@ export function EarningsScannerContent() {
           <Divider />
 
           <GroupLabel htmlFor="ec-mincap"
-            title="Filtered results are matched against a curated list of ~1,000 major US names, IPOs, and large ADRs — a name outside that list won't appear while a cap filter is set, even if it would qualify.">
+            title="Filtered results are matched against a curated list of ~1,000 major US names, IPOs, and large ADRs, a name outside that list won't appear while a cap filter is set, even if it would qualify.">
             Cap ≥
           </GroupLabel>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, border: `1px solid ${C.border}`, background: C.inset, padding: '0 10px', flexShrink: 0 }}>
@@ -1189,7 +1189,7 @@ export function EarningsScannerContent() {
             : 'That book has no positions. Pick another book, or switch scope to All to screen the market.'} />
       )}
       {isBookScope(scope) && !bookEmpty && bookLoading && visible.length === 0 && (
-        <EmptyState title="Loading…" variant="loading" hint="Resolving report dates for your book…" />
+        <EmptyState title="Loading..." variant="loading" hint="Resolving report dates for your book..." />
       )}
       {isBookScope(scope) && !bookEmpty && !bookLoading && visible.length === 0 && (
         <EmptyState title="Nothing Scheduled" hint="No name in this scope reports inside the horizon. Widen it, or clear filters." />
@@ -1198,7 +1198,7 @@ export function EarningsScannerContent() {
         <EmptyState title="Earnings Scanner" hint="Set the date, window, and market cap above, then click SCAN." action="SCAN" />
       )}
       {!isBookScope(scope) && started && !error && (loading || !ready) && (
-        <EmptyState title="Loading…" variant="loading"
+        <EmptyState title="Loading..." variant="loading"
           hint={loading ? 'Fetching the earnings calendar…' : `Enriching companies — ${enrichedCount} / ${visible.length}…`}
           progress={loading ? undefined : (visible.length ? (enrichedCount / visible.length) * 100 : 100)} />
       )}
@@ -1723,7 +1723,7 @@ function InsiderTable({ txs }: { txs: InsiderTx[] }) {
 }
 
 function insiderDetail90d(txs: InsiderTx[] | null): { text: string; color: string } {
-  if (txs == null) return { text: 'Loading Form 4 activity…', color: C.dim }
+  if (txs == null) return { text: 'Loading Form 4 activity...', color: C.dim }
   const cutoff = Date.now() - 90 * 86_400_000
   const recent = txs.filter(t => { const d = new Date(`${t.date}T00:00:00`); return !isNaN(+d) && +d >= cutoff })
   if (recent.length === 0) return { text: 'No Form 4 activity filed (90d)', color: C.dim }
@@ -2229,7 +2229,7 @@ function SummarySection({ ticker, state, onFetch, aiTarget, onClearTarget, onPic
             {aiTarget
               ? `${aiTarget.form} · ${aiTarget.period} · filed ${fmtDate(aiTarget.filed)}`
               : 'Latest 10-Q'}
-            <span style={{ marginLeft: 6, fontSize: 9 }}>{pickerOpen ? '▲' : '▼'}</span>
+            <span style={{ marginLeft: 6, fontSize: 9 }}>{pickerOpen ? '↑' : '↓'}</span>
           </button>
           {aiTarget && onClearTarget && (
             <button onClick={onClearTarget} style={ghostBtn} title="Back to the latest 10-Q">Reset</button>

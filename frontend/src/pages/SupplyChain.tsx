@@ -263,7 +263,7 @@ function SegmentBreakdown({ title, block, hideHeader = false }: { title: string;
         <div style={{ marginTop: 12, fontFamily: T.mono, fontSize: 10, color: T.muted, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           <span>Top <b style={{ color: T.text }}>{block.concentration.topShare.toFixed(1)}%</b></span>
           <span>{block.concentration.count} segments</span>
-          <span title="Herfindahl-Hirschman index (0–10,000). Higher = more concentrated.">
+          <span title="Herfindahl-Hirschman index (0-10,000). Higher = more concentrated.">
             HHI <b style={{ color: block.concentration.hhi >= 2500 ? T.gold : T.text }}>{block.concentration.hhi.toLocaleString()}</b>
           </span>
         </div>
@@ -338,7 +338,7 @@ function HolderRow({ h, last, maxPct }: { h: Holder; last: boolean; maxPct: numb
           <div style={{ fontFamily: T.label, fontSize: 11, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.holder}</div>
           {!isLseg && h.pct_change != null && h.pct_change !== 0 && (
             <div style={{ marginTop: 2, fontFamily: T.mono, fontSize: 9, color: h.pct_change > 0 ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)' }}>
-              {h.pct_change > 0 ? '▲' : '▼'} {h.pct_change > 0 ? '+' : ''}{h.pct_change}% since prior filing
+              {h.pct_change > 0 ? '↑' : '↓'} {h.pct_change > 0 ? '+' : ''}{h.pct_change}% since prior filing
             </div>
           )}
           {isLseg && (
@@ -346,7 +346,7 @@ function HolderRow({ h, last, maxPct }: { h: Holder; last: boolean; maxPct: numb
               <span style={{ color: styleColor, fontWeight: 700 }}>{h.investment_style}</span>
               {h.change_shares != null && h.change_shares !== 0 && (
                 <span style={{ color: h.change_shares > 0 ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)' }}>
-                  {h.change_shares > 0 ? '▲' : '▼'} {h.change_shares > 0 ? '+' : ''}{fmtEmp(h.change_shares)} shares
+                  {h.change_shares > 0 ? '↑' : '↓'} {h.change_shares > 0 ? '+' : ''}{fmtEmp(h.change_shares)} shares
                 </span>
               )}
             </div>
@@ -1450,7 +1450,7 @@ function DebtMaturityPanel({ ticker }: { ticker: string }) {
         {state === 'loading' && <LoadingState label="Loading debt schedule" />}
         {state === 'err' && <EmptyState title="Debt Maturity" hint="Could not load debt schedule for this name." />}
         {state === 'ok' && !d && (
-          <EmptyState title="Debt Maturity" hint="No long-term debt maturity schedule disclosed — this filer may carry no long-term debt, or the maturity-schedule tags aren't present (common for small or newly-listed filers)." />
+          <EmptyState title="Debt Maturity" hint="No long-term debt maturity schedule disclosed, this filer may carry no long-term debt, or the maturity-schedule tags aren't present (common for small or newly-listed filers)." />
         )}
         {state === 'ok' && d && (
           <>

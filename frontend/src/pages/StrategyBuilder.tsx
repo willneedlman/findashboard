@@ -441,7 +441,7 @@ export default function StrategyBuilder() {
                       }}
                     >
                       <span>{group.label}</span>
-                      <span style={{ fontSize: 8, opacity: 0.6 }}>{openGroups[group.label] ? '▲' : '▼'}</span>
+                      <span style={{ fontSize: 8, opacity: 0.6 }}>{openGroups[group.label] ? '↑' : '↓'}</span>
                     </button>
                     {openGroups[group.label] && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 4, paddingLeft: 4 }}>
@@ -570,7 +570,7 @@ export default function StrategyBuilder() {
                           LEG {i + 1}
                         </span>
                         {daysFromNow > dte(leg.expiry) && (
-                          <span title="This leg has expired at the selected time; it is settled at intrinsic value."
+                          <span title="This leg has expired at the selected time. It is settled at intrinsic value."
                             style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', border: '1px solid var(--theme-text-subtle, rgba(255,255,255,0.14))', padding: '0 4px' }}>
                             Expired
                           </span>
@@ -1129,7 +1129,7 @@ export default function StrategyBuilder() {
               <span key={i} style={{ fontSize: 10, padding: '3px 8px', fontFamily: 'var(--theme-mono)',
                 border: `1px solid ${LEG_COLORS[i % LEG_COLORS.length]}`,
                 color: LEG_COLORS[i % LEG_COLORS.length] }}>
-                {leg.action === 'buy' ? '▲' : '▼'} {leg.ticker} {leg.option_type.toUpperCase()} K={leg.K} @ ${leg.premium} ×{leg.quantity}
+                {leg.action === 'buy' ? '↑' : '↓'} {leg.ticker} {leg.option_type.toUpperCase()} K={leg.K} @ ${leg.premium} ×{leg.quantity}
               </span>
             ))}
             {chartData.breakevens.length > 0 && (
@@ -1412,7 +1412,7 @@ function AiOptionsStrategyChat({ onAccept }: { onAccept: (draft: OptionsStrategy
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
             {draft.legs.map((leg, idx) => (
               <div key={idx} style={{ fontSize: 9, fontFamily: T.mono, color: T.text }}>
-                {leg.action === 'buy' ? '▲ BUY' : '▼ SELL'} {leg.ticker} {leg.option_type.toUpperCase()} K={leg.K} exp={leg.expiry} ×{leg.quantity}
+                {leg.action === 'buy' ? '↑ BUY' : '↓ SELL'} {leg.ticker} {leg.option_type.toUpperCase()} K={leg.K} exp={leg.expiry} ×{leg.quantity}
               </div>
             ))}
           </div>

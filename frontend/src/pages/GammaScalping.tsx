@@ -417,7 +417,7 @@ export function GammaScalpingContent() {
       <div>
         <span style={LABEL}>
           Implied Vol (%)
-          <HelpTip text="Option pricing vol. Edge = RV − IV. IV > RV favors short gamma." width={160} />
+          <HelpTip text="Option pricing vol. Edge = RV - IV. IV > RV favors short gamma." width={160} />
         </span>
         <input style={INPUT} type="number" min={1} max={500} step={0.1} value={iv}
           onChange={e => setIv(parseFloat(e.target.value) || 0)} />
@@ -593,7 +593,7 @@ export function GammaScalpingContent() {
               </ChartPanel>
 
               {/* Chart 2 — Sample Paths */}
-              <ChartPanel label="Sample Paths — worst · p10 · median · p90 · best" height={220} note="cumulative PnL">
+              <ChartPanel label="Sample Paths, worst · p10 · median · p90 · best" height={220} note="cumulative PnL">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={pathData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                     <CartesianGrid stroke={cc.gridLine} />

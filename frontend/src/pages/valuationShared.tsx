@@ -1,5 +1,5 @@
 import { useState, useRef, useLayoutEffect } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Info } from 'lucide-react'
 
 // Shared design tokens for the Stock Valuation tabs so every tool reads as one
 // consistent, well-spaced system. Matches the DCF tab's density.
@@ -173,7 +173,7 @@ export function SliderField({ label, value, onChange, min, max, step, suffix = '
   )
 }
 
-// Accent-topped metric card with an optional hover ⓘ tooltip — the shared
+// Accent-topped metric card with an optional hover info tooltip — the shared
 // readout used by the options/volatility tools (skew, GEX, implied probability).
 // `color` overrides the gold top-border and value color (e.g. red for crash skew).
 export function MetricCard({ label, value, sub, help, color }:
@@ -183,7 +183,7 @@ export function MetricCard({ label, value, sub, help, color }:
     <div className="ft-metric-tile" style={{ background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.07))', borderTop: `3px solid ${color ?? 'var(--theme-primary, #c9a84c)'}`, padding: 10, position: 'relative' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
         <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)' }}>{label}</span>
-        {help && <span style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', cursor: 'help' }} onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>ⓘ</span>}
+        {help && <span style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', cursor: 'help' }} onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}><Info size={10} /></span>}
         {show && help && (
           <div style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 6, background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', padding: '6px 8px', width: 180, fontSize: 11, color: 'var(--theme-text, #d7e3fc)', lineHeight: '15px', zIndex: 50, pointerEvents: 'none' }}>{help}</div>
         )}

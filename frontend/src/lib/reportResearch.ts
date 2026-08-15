@@ -1533,7 +1533,7 @@ async function runSource(
         const clips: ClipDraft[] = [
           tagClip(kpiClip('DCF Valuation', `DCF verdict · ${ticker}`, [
             { label: 'Intrinsic / share', value: money(intrinsic) },
-            { label: 'Market price', value: money(marketPrice), sub: 'Latest value returned by the fundamentals source; verify quote time before acting' },
+            { label: 'Market price', value: money(marketPrice), sub: 'Latest value returned by the fundamentals source. Verify quote time before acting' },
             { label: 'Upside to intrinsic', value: upside == null ? '—' : percent(upside) },
             { label: 'Enterprise value', value: moneyMillions(data.enterprise_value) },
             { label: 'PV of explicit FCF', value: moneyMillions(data.pv_fcfs) },
@@ -1558,9 +1558,9 @@ async function runSource(
             ? ((lastRevenue / firstRevenue) - 1) * 100
             : null
           clips.push(tagClip(kpiClip('DCF Valuation', `Projection math · ${ticker}`, [
-            { label: 'Starting revenue', value: moneyMillions(revenue), sub: 'Model input; USD millions' },
-            { label: 'Year 1 revenue', value: moneyMillions(firstRevenue), sub: 'Model output; USD millions' },
-            { label: `Year ${plain(fcfs[fcfs.length - 1].year)} revenue`, value: moneyMillions(lastRevenue), sub: 'Model output; USD millions' },
+            { label: 'Starting revenue', value: moneyMillions(revenue), sub: 'Model input. USD millions' },
+            { label: 'Year 1 revenue', value: moneyMillions(firstRevenue), sub: 'Model output. USD millions' },
+            { label: `Year ${plain(fcfs[fcfs.length - 1].year)} revenue`, value: moneyMillions(lastRevenue), sub: 'Model output. USD millions' },
             { label: `Y1–Y${plain(fcfs[fcfs.length - 1].year)} CAGR`, value: projectionCagr == null ? '—' : percent(projectionCagr), sub: `${intervals} compounding intervals` },
             { label: 'Cumulative growth', value: cumulativeGrowth == null ? '—' : percent(cumulativeGrowth), sub: 'Not an annualized rate' },
           ]), source, `${ticker}:projection-math`, ticker))
@@ -1646,9 +1646,9 @@ async function runSource(
           { label: 'WACC', value: `${wacc.toFixed(1)}%`, sub: 'AI-assisted assumption' },
           { label: 'Terminal growth', value: `${terminalGrowth.toFixed(1)}%`, sub: 'AI-assisted assumption' },
           { label: 'Target margin', value: `${targetMargin.toFixed(1)}%`, sub: `current ${currentMargin.toFixed(1)}%` },
-          { label: 'Years 1–3 growth', value: `${growth1.toFixed(1)}%` },
-          { label: 'Years 4–7 growth', value: `${growth2.toFixed(1)}%` },
-          { label: 'Years 8–10 growth', value: `${growth3.toFixed(1)}%` },
+          { label: 'Years 1-3 growth', value: `${growth1.toFixed(1)}%` },
+          { label: 'Years 4-7 growth', value: `${growth2.toFixed(1)}%` },
+          { label: 'Years 8-10 growth', value: `${growth3.toFixed(1)}%` },
           { label: 'CapEx / revenue', value: `${capexPct.toFixed(1)}%` },
           { label: 'D&A / revenue', value: `${daPct.toFixed(1)}%` },
           { label: 'Working capital / revenue', value: `${wcPct.toFixed(1)}%`, sub: `fades to ${(wcPct * 0.5).toFixed(1)}%` },
@@ -3630,7 +3630,7 @@ async function runSource(
               ? (finite(best.sharpe)! - finite(current.sharpe)!).toFixed(2) : '—',
             // In-sample by construction. Saying so here stops the gap being read
             // as money left on the table.
-            sub: 'In-sample optimum; not repeatable out of sample',
+            sub: 'In-sample optimum. Not repeatable out of sample',
           },
           { label: 'Assets priced', value: `${array(data.tickers).length}`, sub: array(data.dropped).length ? `${array(data.dropped).length} dropped` : 'All holdings covered' },
           { label: 'Window', value: `${plain(record(data.span).start)} to ${plain(record(data.span).end)}`, sub: `${plain(data.days)} sessions` },

@@ -167,7 +167,7 @@ export default function DeltaPriceTarget({ config }: { config: WidgetConfig }) {
           onChange={e => setTickerInput(e.target.value.toUpperCase())}
           onKeyDown={e => { if (e.key === 'Enter') handleFetch() }}
           style={{ ...inputStyle, flex: 1, textTransform: 'uppercase' }}
-          placeholder="Ticker…"
+          placeholder="Ticker..."
         />
         <button
           onClick={handleFetch}

@@ -431,7 +431,7 @@ export function PortfolioTab() {
       />
       <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
         {isPending && (
-          <EmptyState title="Running Portfolio…" hint="Fetching price history and evaluating the rules across the date range."
+          <EmptyState title="Running Portfolio..." hint="Fetching price history and evaluating the rules across the date range."
             variant="loading" />
         )}
 
@@ -517,7 +517,7 @@ export function PortfolioTab() {
               )
             })()}
 
-            <PortChartPanel label="Cumulative Return — Base 100" height={308}>
+            <PortChartPanel label="Cumulative Return. Base 100" height={308}>
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={data.strategyResult?.cumulative || data.cumulative}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
@@ -1084,7 +1084,7 @@ export function StrategyTab() {
       )}
 
       {backtestMutation.isPending && (
-        <EmptyState title="Computing Strategy Signals…" hint="Fetching price history and evaluating the rules across the date range."
+        <EmptyState title="Computing Strategy Signals..." hint="Fetching price history and evaluating the rules across the date range."
           variant="loading" />
       )}
 

@@ -27,7 +27,7 @@ const S = {
  * Chip-based ticker input. Type a symbol and press Enter, Tab, Space or comma
  * to add it as a tag. Click × on a chip to remove it.
  */
-export default function TickerTagInput({ tickers, onChange, placeholder = 'Add ticker…', maxTags, allowMarketSymbols = false }: Props) {
+export default function TickerTagInput({ tickers, onChange, placeholder = 'Add ticker...', maxTags, allowMarketSymbols = false }: Props) {
   const [input, setInput]     = useState('')
   const [focused, setFocused] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)

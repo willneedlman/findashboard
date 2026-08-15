@@ -98,7 +98,7 @@ export function CreditSpreadsContent() {
           label: s.label,
           value: s.current != null ? `${s.current.toFixed(0)} bps` : '—',
           sub: s.change_1y != null
-            ? `${s.change_1y >= 0 ? '▲' : '▼'} ${Math.abs(s.change_1y).toFixed(0)} bps vs 1Y`
+            ? `${s.change_1y >= 0 ? '↑' : '↓'} ${Math.abs(s.change_1y).toFixed(0)} bps vs 1Y`
             : s.benchmark,
         })),
         ...(data.series.vix ? [{
@@ -139,7 +139,7 @@ export function CreditSpreadsContent() {
               {Object.entries(data.series).filter(([k]) => k !== 'vix').map(([key, s]) => {
                 const change = s.change_1y ?? null
                 const sub = change != null
-                  ? `${s.benchmark ?? ''} · ${change >= 0 ? '▲' : '▼'} ${Math.abs(change).toFixed(0)} bps vs 1Y ago`
+                  ? `${s.benchmark ?? ''} · ${change >= 0 ? '↑' : '↓'} ${Math.abs(change).toFixed(0)} bps vs 1Y ago`
                   : (s.benchmark ?? '')
                 return <KpiCell key={key} grow label={s.label} value={s.current != null ? `${s.current.toFixed(0)} bps` : '—'}
                   sub={sub} subColor={change != null ? (change >= 0 ? T.neg : T.pos) : undefined} />
@@ -221,8 +221,8 @@ export function CreditSpreadsContent() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
             {[
-              { label: 'Investment Grade', color: '#60a5fa', text: 'AAA–BBB corps vs. matched-maturity Treasuries. <100 bps: benign. 100–200: caution. >200: stress. Rising = tightening conditions for IG issuers.' },
-              { label: 'High Yield', color: 'var(--theme-negative, #ef4444)', text: 'BB–CCC corps vs. matched-maturity Treasuries. <350 bps: risk-on. 350–600: stress building. >600: distress. Leads equity drawdowns by days to weeks.' },
+              { label: 'Investment Grade', color: '#60a5fa', text: 'AAA-BBB corps vs. matched-maturity Treasuries. <100 bps: benign. 100-200: caution. >200: stress. Rising = tightening conditions for IG issuers.' },
+              { label: 'High Yield', color: 'var(--theme-negative, #ef4444)', text: 'BB-CCC corps vs. matched-maturity Treasuries. <350 bps: risk-on. 350-600: stress building. >600: distress. Leads equity drawdowns by days to weeks.' },
               { label: 'High Yield CCC', color: '#a78bfa', text: 'Lowest-rated junk vs. Treasuries. Most recession-sensitive. Spikes signal weakest borrowers losing market access, a leading indicator of credit seizure.' },
               { label: 'VIX vs Spreads', color: 'var(--theme-primary, #c9a84c)', text: 'VIX = equity implied vol. Spreads = credit risk premium. Divergence matters: spreads widening while VIX is calm = credit market leading equities lower.' },
             ].map((item, i) => (

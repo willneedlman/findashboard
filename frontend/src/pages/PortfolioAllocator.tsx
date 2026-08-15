@@ -549,7 +549,7 @@ export function PortfolioAllocatorContent() {
             <label style={lbl}>Risk tolerance</label>
             <div style={{ display: 'flex', border: `1px solid ${BORDER}` }}>
               {RISK_PRESETS.map((p, i) => (
-                <button key={p.key} onClick={() => setRiskPreset(p.key)} title="Drives the Capital Allocation Line — updates instantly, no re-run needed."
+                <button key={p.key} onClick={() => setRiskPreset(p.key)} title="Drives the Capital Allocation Line, updates instantly, no re-run needed."
                   style={{ flex: 1, background: riskPreset === p.key ? `color-mix(in srgb, ${GOLD} 16%, transparent)` : 'transparent', border: 'none', borderRight: i < RISK_PRESETS.length - 1 ? `1px solid ${BORDER}` : 'none', cursor: 'pointer', color: riskPreset === p.key ? GOLD : SEC, fontFamily: MONO, fontSize: 10, fontWeight: 700, padding: '7px 10px', whiteSpace: 'nowrap' }}>{p.label}</button>
               ))}
             </div>
@@ -761,7 +761,7 @@ export function PortfolioAllocatorContent() {
               </div>
               <div style={{ display: 'flex', gap: 5 }}>
                 <input value={tickerDraft} onChange={e => setTickerDraft(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTicker()}
-                  placeholder="Add ticker…" aria-label="Add a ticker by hand" style={{ ...inp, textTransform: 'uppercase' }} />
+                  placeholder="Add ticker..." aria-label="Add a ticker by hand" style={{ ...inp, textTransform: 'uppercase' }} />
                 <button onClick={addTicker} style={{ background: GOLD, border: `1px solid ${GOLD}`, color: 'var(--theme-bg)', fontFamily: SANS, fontSize: 10, fontWeight: 700, padding: '0 11px', cursor: 'pointer' }}>Add</button>
               </div>
               {importMsg && <div style={{ fontSize: 9, color: importMsg.startsWith('Loaded') || importMsg.startsWith('Imported') ? POS : NEG, fontFamily: SANS, lineHeight: 1.4 }}>{importMsg}</div>}
@@ -915,7 +915,7 @@ export function PortfolioAllocatorContent() {
                 </div>
               </div>
               {!data && !isPending && <div style={{ height: 300, display: 'grid' }}><EmptyState title="Portfolio Allocator" hint="Add 2+ tickers to solve the frontier and see where your allocation sits on it." /></div>}
-              {isPending && <div style={{ height: 300, display: 'grid' }}><EmptyState title="Solving…" hint="Fetching aligned history and the efficient frontier." variant="loading" /></div>}
+              {isPending && <div style={{ height: 300, display: 'grid' }}><EmptyState title="Solving..." hint="Fetching aligned history and the efficient frontier." variant="loading" /></div>}
               {data && (
                 <>
                   <div style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${BORDER}` }}>

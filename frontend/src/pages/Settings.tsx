@@ -124,7 +124,7 @@ function FontSelector({ label, value, options, onChange, onUpload, isMono = true
           style={{ flex: 1, background: 'var(--theme-bg, #0a1220)', border: `1px solid ${open ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`, color: 'var(--theme-text, #d7e3fc)', fontFamily: `'${value}', ${fallback}`, fontSize: 11, padding: '4px 8px', cursor: 'pointer', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', outline: 'none' }}
         >
           <span>{value}{isCustom ? ' (custom)' : ''}</span>
-          <span style={{ opacity: 0.4, fontSize: 8, fontFamily: 'var(--theme-sans)', marginLeft: 6 }}>{open ? '▲' : '▼'}</span>
+          <span style={{ opacity: 0.4, fontSize: 8, fontFamily: 'var(--theme-sans)', marginLeft: 6 }}>{open ? '↑' : '↓'}</span>
         </button>
 
         <button

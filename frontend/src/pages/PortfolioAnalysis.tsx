@@ -594,7 +594,7 @@ function DetailInspector({ selection, data, anchor, onClose }: { selection: Deta
       { label: 'Capital retained', value: `${(100 + selection.point.drawdown).toFixed(1)}%` },
       { label: 'Severity', value: selection.point.drawdown <= -20 ? 'Bear market' : selection.point.drawdown <= -10 ? 'Correction' : selection.point.drawdown < 0 ? 'Pullback' : 'At peak' },
     ]
-    note = 'Drawdown measures the decline from the portfolio’s prior high-water mark, not the return from the analysis start.'
+    note = 'Drawdown measures the decline from the portfolio\'s prior high-water mark, not the return from the analysis start.'
   } else if (selection.kind === 'monte') {
     title = `Day ${selection.point.day}`
     context = 'Monte Carlo distribution'

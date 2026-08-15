@@ -311,9 +311,9 @@ export function OptionsScannerContent() {
 
       {!scan && !loading && !error && (
         <EmptyState title="No scan yet" action="SCAN" onAction={runScan}
-          hint="Add tickers and press SCAN. The screen finds unusual contracts grouped by name; click any row to open the chain it sits in." />
+          hint="Add tickers and press SCAN. The screen finds unusual contracts grouped by name. Click any row to open the chain it sits in." />
       )}
-      {loading && <EmptyState title="Scanning…" variant="loading" hint="Screening every listed contract in the window…" />}
+      {loading && <EmptyState title="Scanning..." variant="loading" hint="Screening every listed contract in the window..." />}
       {scan && !loading && rows.length === 0 && failedList.length === 0 && (
         <EmptyState title="Nothing Unusual"
           hint={`${scan.scanned.length} name${scan.scanned.length === 1 ? '' : 's'} screened and no contract cleared ${minVolume} volume with ${minVolOi}× vol/OI. Lower the thresholds.`} />
@@ -512,7 +512,7 @@ export function OptionsScannerContent() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, background: T.borderFaint }}>
                     <Stat label={stats.pcRatio < 1 ? 'P/C OI · Bullish' : 'P/C OI · Bearish'}
                       value={stats.pcRatio.toFixed(2)} size={15} color={stats.pcRatio < 1 ? cc.gain : cc.loss} />
-                    <Stat label="IV skew (P−C)" size={15}
+                    <Stat label="IV skew (P-C)" size={15}
                       value={`${stats.ivSkew > 0 ? '+' : ''}${stats.ivSkew.toFixed(1)}%`}
                       color={stats.ivSkew > 0 ? cc.loss : cc.gain} />
                     <Stat label="Call OI" value={fmtNum(stats.callOI)} size={13} color={cc.gain} />

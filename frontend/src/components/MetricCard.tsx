@@ -1,4 +1,5 @@
 import clsx from 'clsx'
+import { Info } from 'lucide-react'
 import { useState } from 'react'
 
 interface MetricCardProps {
@@ -35,7 +36,7 @@ export default function MetricCard({ label, value, delta, deltaPositive, classNa
               fontSize: 10,
               lineHeight: 1,
               userSelect: 'none',
-            }}>ⓘ</span>
+            }}><Info size={10} /></span>
             {visible && (
               <div style={{
                 position: 'absolute',

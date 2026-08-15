@@ -201,8 +201,8 @@ interface HistoryResp {
 type Timeframe = '1h' | '4h' | '6h' | '24h' | '48h' | '72h' | '168h'
 
 const TIMEFRAMES: { id: Timeframe; label: string; hours: number; desc: string }[] = [
-  { id: '1h',   label: '1H',  hours: 1,   desc: 'Breaking — last 60 min' },
-  { id: '4h',   label: '4H',  hours: 4,   desc: 'Session — last 4 hrs' },
+  { id: '1h',   label: '1H',  hours: 1,   desc: 'Breaking, last 60 min' },
+  { id: '4h',   label: '4H',  hours: 4,   desc: 'Session, last 4 hrs' },
   { id: '6h',   label: '6H',  hours: 6,   desc: 'Extended session' },
   { id: '24h',  label: '1D',  hours: 24,  desc: 'Full trading day' },
   { id: '48h',  label: '2D',  hours: 48,  desc: 'Two-day picture' },
@@ -625,7 +625,7 @@ function SourcePanel({ src, timeframeHours }: { src: Source; timeframeHours: num
             {src.avg_direction > 0 ? '+' : ''}{src.avg_direction.toFixed(2)}
           </div>
         </div>
-        <span style={{ color: T.muted, fontSize: 10 }}>{expanded ? '▲' : '▼'}</span>
+        <span style={{ color: T.muted, fontSize: 10 }}>{expanded ? '↑' : '↓'}</span>
       </div>
 
       {expanded && (
@@ -764,7 +764,7 @@ function MarketContextCard({ ctx }: { ctx: MarketContext }) {
         <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, fontFamily: T.mono }}>
           Market Context
         </div>
-        <span style={{ fontSize: 9, color: T.muted }}>{open ? '▲' : '▼'}</span>
+        <span style={{ fontSize: 9, color: T.muted }}>{open ? '↑' : '↓'}</span>
       </div>
 
       {open && (

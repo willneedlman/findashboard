@@ -192,7 +192,7 @@ type OptionsPathModel = 'gbm' | 'student_t' | 'bootstrap' | 'gbm_rn'
 const OPTIONS_PATH_MODELS: { value: OptionsPathModel; label: string; hint: string }[] = [
   { value: 'gbm', label: 'GBM (physical)', hint: 'Lognormal paths, σ = max(ATM IV, HV). Multi-name correlated when possible.' },
   { value: 'student_t', label: 'Student-t (fat tails)', hint: 'Same drift/vol as GBM with fatter crash tails (df=5).' },
-  { value: 'bootstrap', label: 'Block bootstrap', hint: 'Resamples each name’s historical log-return blocks (vol clustering + real tails).' },
+  { value: 'bootstrap', label: 'Block bootstrap', hint: 'Resamples each name\'s historical log-return blocks (vol clustering + real tails).' },
   { value: 'gbm_rn', label: 'GBM (risk-neutral)', hint: 'Classic options RN measure: drift ≈ r, vol = ATM IV only.' },
 ]
 
@@ -643,7 +643,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
       if (strategy === 'imported_algo' && !rulesPayload) {
         throw new Error('Imported strategy has no buy/sell rules attached — re-export from Algo Strategy Builder.')
       }
-      setMcProgress({ pct: 0, message: 'Starting job…' })
+      setMcProgress({ pct: 0, message: 'Starting job...' })
       // Async job + poll — no client wait timeout; progress comes from the server.
       if (tickers.length === 0) throw new Error('Add at least one ticker (or import a portfolio / screen).')
       if (legs.length === 0) throw new Error('Add at least one option leg, or pick a structure preset.')
@@ -925,7 +925,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
               min={1}
               max={365}
               onCommit={v => setComboDte(Math.round(v))}
-              title="Days to expiry for the option structure (1–365)."
+              title="Days to expiry for the option structure (1-365)."
               style={{ ...paramInput, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
             />
           </div>
@@ -1145,7 +1145,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', ...SECTION_LABEL, color: 'var(--theme-primary, #c9a84c)', marginBottom: 8 }}>
                   Sizing &amp; Leverage
-                  <HelpTip text="Each admitted trade sizes to Position Size% × Leverage of the full account (same as the Algo backtester) — not split across tickers. Leg qty ratios stay fixed. Wipeout floors at $0." />
+                  <HelpTip text="Each admitted trade sizes to Position Size% × Leverage of the full account (same as the Algo backtester), not split across tickers. Leg qty ratios stay fixed. Wipeout floors at $0." />
                 </div>
                 <div style={{ display: 'flex', gap: 10 }}>
                   <div style={{ flex: 1 }}>

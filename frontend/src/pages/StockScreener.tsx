@@ -119,7 +119,7 @@ const TABLE_COLS: { key: keyof ScreenResult; label: string; w: string; align: 'l
 // Client-side seeded screens (presets). Selecting one loads its filters + sort.
 export interface Preset { id: string; name: string; desc: string; universes?: string[]; sortBy: string; sortDir: 'asc' | 'desc'; sortParam?: string; filters: { field: string; operator: string; value: string; param?: string }[] }
 const PRESETS: Preset[] = [
-  { id: 'liquid-large-caps', name: 'Liquid Large Caps', desc: 'Big, liquid names — loads instantly', sortBy: 'marketCap', sortDir: 'desc',
+  { id: 'liquid-large-caps', name: 'Liquid Large Caps', desc: 'Big, liquid names, loads instantly', sortBy: 'marketCap', sortDir: 'desc',
     filters: [{ field: 'marketCap', operator: 'gt', value: '10' }] },
   { id: 'mega-cap-quality', name: 'Mega-Cap Quality', desc: 'Large, profitable compounders', sortBy: 'marketCap', sortDir: 'desc',
     filters: [{ field: 'marketCap', operator: 'gt', value: '100' }, { field: 'operatingMargin', operator: 'gt', value: '20' }, { field: 'roe', operator: 'gt', value: '15' }] },
@@ -287,7 +287,7 @@ export default function StockScreener() {
     staleTime: Infinity,
   })
   const medianFields: Set<string> = new Set(sectorMedians?.fields ?? [])
-  // Quartile marker (▲ top quartile, ▼ bottom quartile) alongside the value —
+  // Quartile marker (↑ top quartile, ↓ bottom quartile) alongside the value —
   // visible without hovering, no new column. Deliberately neutral-colored
   // rather than green/red: which quartile is "good" depends on the ratio
   // (top-quartile margin is good, top-quartile debt/equity usually isn't),
@@ -298,8 +298,8 @@ export default function StockScreener() {
     if (!entry) return null
     const delta = value - entry.median
     const tip = `${sector} median: ${entry.median.toFixed(2)} (n=${entry.n}) · this name is ${delta >= 0 ? '+' : ''}${delta.toFixed(2)} ${delta >= 0 ? 'above' : 'below'}`
-    if (entry.p75 != null && value > entry.p75) return { symbol: '▲', tip: `${tip} · top quartile` }
-    if (entry.p25 != null && value < entry.p25) return { symbol: '▼', tip: `${tip} · bottom quartile` }
+    if (entry.p75 != null && value > entry.p75) return { symbol: '↑', tip: `${tip} · top quartile` }
+    if (entry.p25 != null && value < entry.p25) return { symbol: '↓', tip: `${tip} · bottom quartile` }
     return { symbol: '', tip }
   }
   const fields: FieldMeta[] = meta?.fields ?? []
@@ -692,7 +692,7 @@ export default function StockScreener() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 9, flex: 'none', width: isMobile ? '100%' : undefined, minWidth: 0 }}>
-                  <input value={textFilter} onChange={e => setTextFilter(e.target.value)} placeholder="Filter by ticker / name / sector…"
+                  <input value={textFilter} onChange={e => setTextFilter(e.target.value)} placeholder="Filter by ticker / name / sector..."
                     style={{ background: C.surface, border: '1px solid var(--theme-border, rgba(255,255,255,0.13))', color: C.text, fontFamily: C.sans, fontSize: 11, padding: '7px 12px', minWidth: isMobile ? 0 : 230, flex: isMobile ? 1 : undefined, outline: 'none' }} onFocus={focus} onBlur={blur} />
                   <div style={{ position: 'relative' }}>
                     <button onClick={() => setColPanelOpen(o => !o)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-text-muted, #9fb0c7)', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 7%, transparent)', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', padding: '7px 12px', cursor: 'pointer' }}>

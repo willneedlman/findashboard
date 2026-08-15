@@ -520,7 +520,7 @@ export function DealerGEXContent() {
       )}
       {isFetching && !data && (
         <div style={{ border: `1px solid ${T.border}` }}>
-          <EmptyState title="Loading…" variant="loading" hint="One pass over every chain in the window…" />
+          <EmptyState title="Loading..." variant="loading" hint="One pass over every chain in the window..." />
         </div>
       )}
       {!isFetching && !data && !error && (

@@ -43,8 +43,8 @@ function StrategySignalChart({ data, ticker, mode, intervalMs = 15_000 }: {
         <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', color: T.muted, textTransform: 'uppercase' }}>
           {mode === 'live' ? '● LIVE' : '▶ REPLAY'} · {ticker}
         </span>
-        <span style={{ fontSize: 9, color: T.pos, fontFamily: T.mono }}>▲ {buyCount} BUY</span>
-        <span style={{ fontSize: 9, color: T.neg, fontFamily: T.mono }}>▼ {sellCount} SELL</span>
+        <span style={{ fontSize: 9, color: T.pos, fontFamily: T.mono }}>↑ {buyCount} BUY</span>
+        <span style={{ fontSize: 9, color: T.neg, fontFamily: T.mono }}>↓ {sellCount} SELL</span>
         {stats && (
           <>
             <span style={{ width: 1, height: 12, background: T.border, display: 'inline-block' }} />
@@ -89,8 +89,8 @@ function StrategySignalChart({ data, ticker, mode, intervalMs = 15_000 }: {
             labelStyle={{ color: T.gold }}
             formatter={(value: number, name: string) => {
               if (name === 'price') return [`$${value.toFixed(2)}`, 'Price']
-              if (name === 'buy')   return [`$${value.toFixed(2)}`, '▲ BUY']
-              if (name === 'sell')  return [`$${value.toFixed(2)}`, '▼ SELL']
+              if (name === 'buy')   return [`$${value.toFixed(2)}`, '↑ BUY']
+              if (name === 'sell')  return [`$${value.toFixed(2)}`, '↓ SELL']
               return [`${value}`, name]
             }}
           />
@@ -485,7 +485,7 @@ export function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy
             PENDING
           </span>
         )}
-        <span style={{ marginLeft: 'auto', fontSize: 10, color: T.muted }}>{open ? '▲' : '▼'}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 10, color: T.muted }}>{open ? '↑' : '↓'}</span>
       </button>
 
       {/* Pending strategy from Strategy Builder */}
@@ -504,7 +504,7 @@ export function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy
               {pendingBuilderStrategy.legs.map((l, i) => (
                 <span key={i} style={{ fontSize: 8, fontFamily: T.mono, color: l.side === 'buy_to_open' ? T.pos : T.neg,
                   padding: '1px 5px', border: `1px solid ${l.side === 'buy_to_open' ? 'color-mix(in srgb, var(--theme-positive) 30%, transparent)' : 'color-mix(in srgb, var(--theme-negative) 30%, transparent)'}` }}>
-                  {l.side === 'buy_to_open' ? '▲' : '▼'} {l.occ}
+                  {l.side === 'buy_to_open' ? '↑' : '↓'} {l.occ}
                 </span>
               ))}
             </div>
@@ -610,7 +610,7 @@ export function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy
                       }}
                       title={cOpen ? 'Collapse' : 'Expand settings'}
                     >
-                      {cOpen ? '▼' : '▶'}
+                      {cOpen ? '↓' : '▶'}
                     </button>
 
                     {/* Strategy name — clicking also expands */}
@@ -674,7 +674,7 @@ export function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy
                               letterSpacing: '0.08em',
                             }}
                           >
-                            <span style={{ fontSize: 8 }}>{pOpen ? '▼' : '▶'}</span> Parameters
+                            <span style={{ fontSize: 8 }}>{pOpen ? '↓' : '▶'}</span> Parameters
                             {hasCustomParams && (
                               <span style={{ fontSize: 7, color: T.gold, fontFamily: T.mono, padding: '0 3px',
                                 border: '1px solid color-mix(in srgb, var(--theme-primary) 40%, transparent)', marginLeft: 2 }}>customised</span>
@@ -722,7 +722,7 @@ export function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy
                             letterSpacing: '0.08em',
                           }}
                         >
-                          <span style={{ fontSize: 8 }}>{rOpen ? '▼' : '▶'}</span> Risk Controls
+                          <span style={{ fontSize: 8 }}>{rOpen ? '↓' : '▶'}</span> Risk Controls
                           {hasRisk && (
                             <span style={{ fontSize: 7, color: T.warn, padding: '0 3px',
                               border: '1px solid color-mix(in srgb, var(--theme-warn) 40%, transparent)', marginLeft: 2 }}>active</span>

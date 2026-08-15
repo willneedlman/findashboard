@@ -1061,7 +1061,7 @@ function PositionsTable({ rows, flash, sort, onSort, openSparks, onToggleSpark, 
           background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit',
           letterSpacing: 'inherit', textTransform: 'inherit', color: active ? T.gold : 'inherit',
         }}>
-        {label}{active && (sort.dir === 'desc' ? ' ▼' : ' ▲')}
+        {label}{active && (sort.dir === 'desc' ? ' ↓' : ' ↑')}
       </button>
     )
   }

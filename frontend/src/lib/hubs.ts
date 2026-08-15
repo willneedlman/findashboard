@@ -46,7 +46,7 @@ export const HUBS: Hub[] = [
     tools: [
       { title: 'Stock Screener',    chip: 'Stock Screener',  desc: '25+ fundamental and technical filters across the universe', route: '/screener',           icon: Filter },
       { title: 'IPO Scanner',      chip: 'IPO Scanner',    desc: 'Upcoming and recent public offerings with pricing and deal size', route: '/ipo-calendar',    icon: Rocket },
-      { title: 'Mover Radar',       chip: 'Mover Radar',     desc: 'Why a ticker is moving right now — news, filings, and social, or confirmation it’s just noise', route: '/mover-radar', tickerParam: true, icon: Gauge },
+      { title: 'Mover Radar',       chip: 'Mover Radar',     desc: 'Why a ticker is moving right now: news, filings, and social, or confirmation it is just noise', route: '/mover-radar', tickerParam: true, icon: Gauge },
       { title: 'Company Profile',   chip: 'Company Profile', desc: 'Price history, revenue mix, ownership, and credit for one name', route: '/company-profile', tickerParam: true,  icon: Globe },
       { title: 'Peer Comparison',   chip: 'Peer Comparison', desc: 'Trading multiples versus sector peers',                    route: '/relative-valuation', tickerParam: true, icon: Scale },
       { title: 'Earnings Scanner',  chip: 'Earnings Scanner', desc: 'One calendar: who reports when, your holdings inline, and an AI filing summary on any row', route: '/earnings', tickerParam: true, icon: CalendarDays },
@@ -126,7 +126,7 @@ export const HUBS: Hub[] = [
       { title: 'Algo Builder',             chip: 'Algo Builder', desc: 'Compose entry/exit rules and risk, then save and run', route: '/algo-strategy', icon: Workflow },
       { title: 'Pairs Trader',             chip: 'Pairs Trader',  desc: 'Cointegration, mean-reversion half-life, and a z-score spread backtest', route: '/pairs-trader',        icon: Shuffle },
       { title: 'Paper Trading',            chip: 'Paper Trading', desc: 'Simulated live execution across asset classes', route: '/paper-trading', icon: Terminal },
-      { title: 'Market Maker',             chip: 'Market Maker',  desc: 'Quote two-sided markets and hedge — options and Treasury desks', route: '/market-maker', icon: Gauge },
+      { title: 'Market Maker',             chip: 'Market Maker',  desc: 'Quote two-sided markets and hedge on the options and Treasury desks', route: '/market-maker', icon: Gauge },
       { title: 'Trade Journal',            chip: 'Trade Journal', desc: 'Entry/exit, P&L, and win-rate analytics',       route: '/trade-journal',     icon: BookOpen },
       { title: 'Price Alerts',             chip: 'Price Alerts',  desc: 'Price and percent-change notifications',        route: '/alerts',            icon: Bell },
     ],
@@ -149,7 +149,7 @@ export const HUBS: Hub[] = [
   {
     slug: 'logistics',
     label: 'Geo-Logistics',
-    tagline: 'Track the physical economy — ships, freighters, and freight tonnage.',
+    tagline: 'Track the physical economy: ships, freighters, and freight tonnage.',
     masthead: 'Follow physical trade in near real time: liner connectivity and container rates, canal chokepoint transits, air-freighter frequency at the global cargo hubs, and US inventories and freight tonnage.',
     icon: Container,
     tools: [

@@ -12,6 +12,46 @@ import { describe, it, expect } from 'vitest'
 // need one for a source-text check.
 const SOURCES = import.meta.glob('./**/*.tsx', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 
+// Copy does not only live between tags. It also rides in props and in data
+// tables: title=, placeholder=, hint=, and `desc:` rows in *.ts files. Every
+// violation the audit found lived in exactly that blind spot, because the JSX
+// text scan above cannot see it. So there is a second scan, over string
+// literals bound to a name that carries something a reader will see.
+const ALL_SOURCES = import.meta.glob('./**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+
+const COPY_KEYS = [
+  'title', 'label', 'placeholder', 'hint', 'desc', 'description', 'text',
+  'sub', 'note', 'tooltip', 'caption', 'message', 'summary', 'name',
+  'aria-label', 'ariaLabel', 'chip', 'blurb', 'detail', 'reason', 'rule',
+  'legend', 'heading', 'subtitle', 'cta', 'empty', 'error', 'helper',
+  'tagline', 'masthead', 'action', 'prompt', 'body', 'footnote', 'meta',
+]
+const COPY_LITERAL = new RegExp(
+  String.raw`\b(?:${COPY_KEYS.join('|')})\s*[:=]\s*(['"])((?:\\.|(?!\1).)*)\1`,
+  'g',
+)
+
+/** Every copy-carrying string literal, with the file and line it sits on. */
+function copyLiterals(): { where: string; value: string }[] {
+  const out: { where: string; value: string }[] = []
+  for (const [path, source] of Object.entries(ALL_SOURCES)) {
+    if (path.includes('.test.')) continue
+    const lines = stripComments(source)
+    lines.forEach((line, i) => {
+      for (const m of line.matchAll(COPY_LITERAL)) {
+        out.push({ where: `${path}:${i + 1}`, value: m[2] })
+      }
+    })
+  }
+  return out
+}
+
+function scanCopy(bad: (value: string) => boolean): string[] {
+  return copyLiterals()
+    .filter(({ value }) => value.trim() !== '—' && bad(value))
+    .map(({ where, value }) => `${where}: ${value.slice(0, 100)}`)
+}
+
 /** Blank out every comment, keeping the line count so hits stay locatable. */
 function stripComments(source: string): string[] {
   const out: string[] = []
@@ -92,5 +132,32 @@ describe('shipped copy', () => {
   it('has no semicolons in prose', () => {
     // HTML entities (&nbsp;, &lt;) end in a semicolon and are not prose.
     expect(scan(runs => runs.join(' ').replace(/&[a-z]+;|&#\d+;/gi, ' ').includes(';'))).toEqual([])
+  })
+})
+
+// The same rules over props and *.ts data tables. This is where the audit found
+// every violation, because the scan above can only see between tags.
+describe('copy in props and data', () => {
+  it('finds copy literals to check', () => {
+    expect(copyLiterals().length).toBeGreaterThan(500)
+  })
+
+  it('has no em dashes', () => {
+    expect(scanCopy(v => v.includes('—'))).toEqual([])
+  })
+
+  it('has no semicolons', () => {
+    expect(scanCopy(v => v.replace(/&[a-z]+;|&#\d+;/gi, ' ').includes(';'))).toEqual([])
+  })
+
+  // Arrows are house style and stay. This is the typographic punctuation that
+  // has an ASCII spelling: an ellipsis is three dots, a range takes a hyphen,
+  // and quotes are straight.
+  it('uses ASCII punctuation', () => {
+    expect(scanCopy(v => /[…–−‘’“”]/.test(v))).toEqual([])
+  })
+
+  it('has no decorative unicode', () => {
+    expect(scanCopy(v => /[■-◿☀-➿⬀-⯿Ⓐ-⓪①-⓿]/u.test(v))).toEqual([])
   })
 })

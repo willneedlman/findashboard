@@ -129,7 +129,7 @@ export default function CommandPalette() {
         boxShadow: '0 24px 64px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', maxHeight: '70vh',
       }}>
         <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} onKeyDown={onInputKey}
-          placeholder="Jump to a tool…"
+          placeholder="Jump to a tool..."
           style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${BORDER}`, outline: 'none',
             color: TEXT, fontFamily: SANS, fontSize: 15, padding: '14px 16px', width: '100%', boxSizing: 'border-box' }} />
         <div style={{ overflowY: 'auto', padding: 6 }}>

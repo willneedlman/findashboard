@@ -347,7 +347,7 @@ export default function StrategyCodePanel({ rules, name, code, useCode, setup, o
         <div style={{ display: 'flex', gap: 6, padding: 10, borderTop: `1px solid ${T.borderFaint}` }}>
           <input value={prompt} onChange={e => setPrompt(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') void ask() }}
-            placeholder="Describe a strategy or a change…"
+            placeholder="Describe a strategy or a change..."
             style={{
               flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.text,
               fontFamily: MONO, fontSize: 11.5, padding: '7px 9px', outline: 'none', minWidth: 0,

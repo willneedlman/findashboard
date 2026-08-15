@@ -288,7 +288,7 @@ export function ReverseDCFContent() {
           {/* Sensitivity — how much the implied-growth answer moves if margin/
               WACC/terminal growth were different, holding the price fixed */}
           {data.sensitivity && data.sensitivity.length > 0 && (
-            <ChartPanel title="Growth Sensitivity — one-way" height={210}>
+            <ChartPanel title="Growth Sensitivity, one-way" height={210}>
               <Tornado rows={data.sensitivity} base={implied} fmt={v => `${v.toFixed(1)}%`}
                 legend={['Less demanding', 'More demanding']} />
             </ChartPanel>

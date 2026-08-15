@@ -217,7 +217,7 @@ export default function DataAuditTab({ secret }: { secret: string }) {
           <option value="">By source…</option>
           {(domainMeta?.allSources ?? []).map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Filter entity…" style={{ ...inp, width: 120 }} />
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Filter entity..." style={{ ...inp, width: 120 }} />
         <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 10, color: DIM }}>{rows.length} rows{loading ? ' · loading' : ''}</span>
       </div>
 

@@ -61,7 +61,7 @@ export default function MacroToolbar({ filters, onChange, count }: {
         <input
           value={filters.query}
           onChange={e => onChange({ ...filters, query: e.target.value })}
-          placeholder="Search events — CPI, FOMC, payrolls…"
+          placeholder="Search events. CPI, FOMC, payrolls..."
           style={{ ...dateInput, width: '100%', fontFamily: T.label, fontSize: 11 }}
         />
         {filters.query && <button type="button" onClick={() => onChange({ ...filters, query: '' })} aria-label="Clear"

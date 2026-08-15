@@ -276,7 +276,7 @@ export default function LogisticsMap() {
               <option value="">{facetInds.length ? 'All industries' : 'No data yet'}</option>
               {facetInds.map(i => <option key={i} value={i}>{i}</option>)}
             </select>
-            <input value={supProduct} onChange={e => setSupProduct(e.target.value)} placeholder="product keyword…" style={{ ...selStyle, width: '100%' }} />
+            <input value={supProduct} onChange={e => setSupProduct(e.target.value)} placeholder="product keyword..." style={{ ...selStyle, width: '100%' }} />
             {supQ.data && !supQ.data.available && <div style={{ fontFamily: L.sans, fontSize: 11, color: L.faint, marginTop: 7, lineHeight: 1.5 }}>Supplier data not yet ingested. Run the Veridion ETL with a valid DEWEY_API_KEY.</div>}
           </div>
           <div style={{ flex: 'none', marginTop: 'auto', pointerEvents: 'auto', background: panel, border: `1px solid ${L.border}`, padding: '13px 16px' }}>

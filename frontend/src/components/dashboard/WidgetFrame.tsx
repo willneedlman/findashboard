@@ -62,7 +62,7 @@ const DEFAULT_MACRO_CAL_CATS = ['monetary', 'inflation', 'employment', 'growth',
 const SPREAD_SERIES_OPTIONS: { key: string; label: string; color: string }[] = [
   { key: 'ig',     label: 'IG OAS',   color: 'var(--theme-tertiary, #60a5fa)' },
   { key: 'hy',     label: 'HY OAS',   color: 'var(--theme-negative, #ef4444)' },
-  { key: 'ig_3_5', label: 'IG 3–5Y',  color: '#818cf8' },
+  { key: 'ig_3_5', label: 'IG 3-5Y',  color: '#818cf8' },
   { key: 'hy_b',   label: 'HY B',     color: 'var(--theme-accent-orange, #f97316)' },
   { key: 'hy_ccc', label: 'HY CCC',   color: '#fb7185' },
   { key: 'vix',    label: 'VIX',      color: 'var(--theme-primary)' },
