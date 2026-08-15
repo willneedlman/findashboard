@@ -64,21 +64,40 @@ SOURCES: dict[str, dict] = {
     "^NSEI":      dict(page="NIFTY_50",                          col="symbol", suffix=".NS",  weighting="cap",   min_rows=45),
     "^AXJO":      dict(page="S%26P/ASX_200",                     col="code",   suffix=".AX",  weighting="cap",   min_rows=150),
     "^STI":       dict(page="Straits_Times_Index",               col="symbol", suffix=".SI",  weighting="cap",   min_rows=20),
-    "^KS11":      dict(skip="No free published constituent list for the full KOSPI."),
+    # Where the full index has no free list, the tradeable large-cap subset
+    # stands in and the note says so — the same trade the Nasdaq Composite and
+    # the TSX Composite already make above. Printing "no list" was accurate
+    # about the wrong index and left the panel with nothing at all.
+    "^KS11":      dict(page="KOSPI_200",                        col="symbol", suffix=".KS",  weighting="cap",   min_rows=180,
+                       note="KOSPI 200 members, the large-cap subset. The full KOSPI has roughly 800 members and no published list."),
     "^TWII":      dict(skip="No free published constituent list for the TAIEX."),
-    "000001.SS":  dict(skip="The Shanghai Composite has roughly 2,200 members and no published list."),
-    "000300.SS":  dict(skip="No free published constituent list for the CSI 300."),
-    "^MXX":       dict(skip="No reliable free constituent list for the IPC."),
+    "000001.SS":  dict(page="SSE_50_Index",           col="ticker symbol", suffix=".SS",  weighting="cap",   min_rows=45,
+                       note="SSE 50 members, the large-cap subset. The Shanghai Composite has roughly 2,200 members and no published list."),
+    # The CSI 300 spans two exchanges, so the Yahoo suffix comes from the venue
+    # prefix in each row rather than from one index-wide setting.
+    "000300.SS":  dict(page="CSI_300_Index",                    col="ticker", suffix=".SS",  weighting="cap",   min_rows=250,
+                       suffix_map={"SSE": ".SS", "SZSE": ".SZ"}),
+    "^MXX":       dict(page="Índice_de_Precios_y_Cotizaciones", col="symbol", suffix=".MX",  weighting="cap",   min_rows=30),
     "^BVSP":      dict(skip="No reliable free constituent list for the Bovespa."),
     "^VIX":       dict(skip="The VIX is a volatility calculation, not a basket of shares."),
 }
 
 # Hong Kong codes are zero-padded to four digits on Yahoo; Tokyo codes are bare.
-def _normalise(raw: str, suffix: str) -> str | None:
+def _normalise(raw: str, suffix: str, suffix_map: dict | None = None) -> str | None:
     t = str(raw).strip().upper()
     t = re.sub(r"\[.*?\]", "", t).strip()
-    # Some tables write the venue inline: "SGX: J36".
-    t = t.split(":")[-1].strip()
+    # Some tables write the venue inline: "SGX: J36". When one index spans two
+    # exchanges that prefix is the only thing saying which Yahoo suffix a name
+    # takes: the CSI 300 runs 187 names in Shanghai (.SS) and 113 in Shenzhen
+    # (.SZ), and a single suffix would price a third of the index as dead.
+    if ":" in t:
+        venue, rest = t.split(":", 1)
+        if suffix_map:
+            suffix = suffix_map.get(venue.strip(), suffix)
+        t = rest.strip()
+    # Mexican tables carry the share class as a separate word ("ALFA A"), which
+    # Yahoo writes closed up. Every other source is already space-free.
+    t = t.replace(" ", "")
     if not t or t in ("NAN", "-", "—"):
         return None
     if "." in t and not t.endswith("."):          # already carries an exchange suffix
@@ -101,7 +120,7 @@ def _normalise(raw: str, suffix: str) -> str | None:
 # granularity. The broad one is what a mix chart wants.
 _SECTOR_COLUMNS = (
     "gics sector", "icb industry", "ftse industry classification benchmark sector",
-    "prime standard sector", "sub-index", "sector", "industry",
+    "prime standard sector", "sub-index", "segment", "sector", "industry",
 )
 
 
@@ -168,7 +187,7 @@ def _scrape(spec: dict) -> list[tuple[str, str, str | None]]:
                 break
         out: list[tuple[str, str, str | None]] = []
         for _, row in table.iterrows():
-            sym = _normalise(row[tcol], spec["suffix"])
+            sym = _normalise(row[tcol], spec["suffix"], spec.get("suffix_map"))
             if not sym:
                 continue
             name = _clean(row[ncol]) if ncol is not None else sym

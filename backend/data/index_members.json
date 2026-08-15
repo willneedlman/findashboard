@@ -1,11 +1,2412 @@
 {
- "built": "2026-08-08",
+ "built": "2026-08-15",
  "indices": {
   "000001.SS": {
-   "unavailable": "The Shanghai Composite has roughly 2,200 members and no published list."
+   "as_of": "2026-08-15",
+   "currency": "CNY",
+   "members": [
+    {
+     "currency": "CNY",
+     "name": "China Petroleum & Chemical Corporation",
+     "shares": 120747576172,
+     "ticker": "600028.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "CITIC Securities",
+     "shares": 15624272212,
+     "ticker": "600030.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Sany Heavy Industries",
+     "shares": 9195004437,
+     "ticker": "600031.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Merchants Bank",
+     "shares": 25219845601,
+     "ticker": "600036.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Poly Real Estate",
+     "shares": 11970443418,
+     "ticker": "600048.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China United Network Communications Limited",
+     "shares": 31264425327,
+     "ticker": "600050.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "TBEA Co., Ltd.",
+     "shares": 5052792571,
+     "ticker": "600089.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "SAIC Motor",
+     "shares": 11495277504,
+     "ticker": "600104.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Northern Rare Earth",
+     "shares": 3615065842,
+     "ticker": "600111.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China CSSC Holdings Limited",
+     "shares": 7525621288,
+     "ticker": "600150.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Jiangsu Hengrui Pharmaceuticals",
+     "shares": 6637199874,
+     "ticker": "600276.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Wanhua Chemical Group",
+     "shares": 3130471626,
+     "ticker": "600309.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "NARI Technology",
+     "shares": 8031756156,
+     "ticker": "600406.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Zhangzhou Pientzehuang Pharmaceutical",
+     "shares": 603317210,
+     "ticker": "600436.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Tongwei Company",
+     "shares": 4501990940,
+     "ticker": "600438.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Kweichow Moutai",
+     "shares": 1250081601,
+     "ticker": "600519.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Haier Smart Home",
+     "shares": 9377629650,
+     "ticker": "600690.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Shanxi Xinghuacun Fen Wine Factory",
+     "shares": 1219964222,
+     "ticker": "600809.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Yili Group",
+     "shares": 6325360667,
+     "ticker": "600887.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "AECC Aviation Power",
+     "shares": 2665594238,
+     "ticker": "600893.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Yangtze Power",
+     "shares": 24468217716,
+     "ticker": "600900.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Three Gorges Renewables",
+     "shares": 28587650142,
+     "ticker": "600905.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "LONGi Green Energy Technology",
+     "shares": 7578069148,
+     "ticker": "601012.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Shenhua Energy",
+     "shares": 21689434304,
+     "ticker": "601088.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Industrial Bank",
+     "shares": 21162859513,
+     "ticker": "601166.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Shaanxi Coal Industry",
+     "shares": 9695000000,
+     "ticker": "601225.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Agricultural Bank of China",
+     "shares": 349983033873,
+     "ticker": "601288.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Ping An Insurance",
+     "shares": 18107641995,
+     "ticker": "601318.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Railway Group Limited",
+     "shares": 24531310329,
+     "ticker": "601390.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Industrial and Commercial Bank of China",
+     "shares": 356406257089,
+     "ticker": "601398.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Pacific Insurance Company",
+     "shares": 9620341455,
+     "ticker": "601601.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Life Insurance",
+     "shares": 28264705000,
+     "ticker": "601628.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Great Wall Motor Company",
+     "shares": 8573970071,
+     "ticker": "601633.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China State Construction Engineering",
+     "shares": 41320390444,
+     "ticker": "601668.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Power Construction Corporation of China",
+     "shares": 17226159334,
+     "ticker": "601669.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Telecom",
+     "shares": 91507138699,
+     "ticker": "601728.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "PetroChina",
+     "shares": 183020977818,
+     "ticker": "601857.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Tourism Group Duty Free Corporation",
+     "shares": 2077796644,
+     "ticker": "601888.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Zijin Mining Group",
+     "shares": 26590714622,
+     "ticker": "601899.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Cosco Shipping",
+     "shares": 15233545741,
+     "ticker": "601919.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Bank of China",
+     "shares": 322212411814,
+     "ticker": "601988.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "WuXi AppTec",
+     "shares": 2983757155,
+     "ticker": "603259.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Foshan Haitian Flavouring & Food Co",
+     "shares": 5851045044,
+     "ticker": "603288.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Will Semiconductor",
+     "shares": 1257704429,
+     "ticker": "603501.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Zhejiang Huayou Cobalt",
+     "shares": 1893527517,
+     "ticker": "603799.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "GigaDevice",
+     "shares": 701745034,
+     "ticker": "603986.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Beijing Kingsoft Office Software",
+     "shares": 464013435,
+     "ticker": "688111.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Hygon Information Technology",
+     "shares": 2324338091,
+     "ticker": "688041.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Trina Solar",
+     "shares": 2342567686,
+     "ticker": "688599.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Semiconductor Manufacturing International Corporation",
+     "shares": 8560805995,
+     "ticker": "688981.SS"
+    }
+   ],
+   "note": "SSE 50 members, the large-cap subset. The Shanghai Composite has roughly 2,200 members and no published list.",
+   "resolved": 50,
+   "scraped": 50,
+   "source": "en.wikipedia.org/wiki/SSE_50_Index",
+   "weighting": "cap"
   },
   "000300.SS": {
-   "unavailable": "No free published constituent list for the CSI 300."
+   "as_of": "2026-08-15",
+   "currency": "CNY",
+   "members": [
+    {
+     "currency": "CNY",
+     "name": "Kweichow Moutai",
+     "sector": "Consumer Staples",
+     "shares": 1250081601,
+     "ticker": "600519.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Ping An Insurance",
+     "sector": "Financials",
+     "shares": 18107641995,
+     "ticker": "601318.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "CATL",
+     "sector": "Industrials",
+     "shares": 4626654919,
+     "ticker": "300750.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Merchants Bank",
+     "sector": "Financials",
+     "shares": 25219845601,
+     "ticker": "600036.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Midea Group",
+     "sector": "Consumer Discretionary",
+     "shares": 7628595162,
+     "ticker": "000333.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Wuliangye Yibin",
+     "sector": "Consumer Staples",
+     "shares": 3881608005,
+     "ticker": "000858.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Yangtze Power",
+     "sector": "Utilities",
+     "shares": 24468217716,
+     "ticker": "600900.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Industrial Bank",
+     "sector": "Financials",
+     "shares": 21162859513,
+     "ticker": "601166.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Zijin Mining Group",
+     "sector": "Materials",
+     "shares": 26590714622,
+     "ticker": "601899.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "CITIC Securities",
+     "sector": "Financials",
+     "shares": 15624272212,
+     "ticker": "600030.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Jiangsu Hengrui Medicine",
+     "sector": "Health Care",
+     "shares": 6637199874,
+     "ticker": "600276.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Industrial and Commercial Bank of China",
+     "sector": "Financials",
+     "shares": 356406257089,
+     "ticker": "601398.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Inner Mongolia Yili Industrial Group",
+     "sector": "Consumer Staples",
+     "shares": 6325360667,
+     "ticker": "600887.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "East Money",
+     "sector": "Financials",
+     "shares": 15822199875,
+     "ticker": "300059.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Gree Electric",
+     "sector": "Consumer Discretionary",
+     "shares": 5601405741,
+     "ticker": "000651.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Mindray",
+     "sector": "Health Care",
+     "shares": 1211799431,
+     "ticker": "300760.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "BYD",
+     "sector": "Consumer Discretionary",
+     "shares": 9117197565,
+     "ticker": "002594.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Bank of Communications",
+     "sector": "Financials",
+     "shares": 88363784223,
+     "ticker": "601328.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Wanhua Chemical Group",
+     "sector": "Materials",
+     "shares": 3130471626,
+     "ticker": "600309.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "BOE Technology Group",
+     "sector": "Information Technology",
+     "shares": 37044328064,
+     "ticker": "000725.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Bank of Jiangsu",
+     "sector": "Financials",
+     "shares": 18351324463,
+     "ticker": "600919.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Luxshare Precision Industry",
+     "sector": "Information Technology",
+     "shares": 7737819806,
+     "ticker": "002475.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Shenzhen Inovance Technology",
+     "sector": "Industrials",
+     "shares": 2707603944,
+     "ticker": "300124.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Agricultural Bank of China",
+     "sector": "Financials",
+     "shares": 349983033873,
+     "ticker": "601288.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Hangzhou Hikvision Digital Technology",
+     "sector": "Information Technology",
+     "shares": 9164871550,
+     "ticker": "002415.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Luzhou Lao Jiao",
+     "sector": "Consumer Staples",
+     "shares": 1471901463,
+     "ticker": "000568.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Longi Green Energy Technology",
+     "sector": "Information Technology",
+     "shares": 7578069148,
+     "ticker": "601012.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Shenhua Energy",
+     "sector": "Energy",
+     "shares": 21689434304,
+     "ticker": "601088.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Beijing-Shanghai High Speed Railway",
+     "sector": "Industrials",
+     "shares": 48925679370,
+     "ticker": "601816.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Petroleum & Chemical Corporation",
+     "sector": "Energy",
+     "shares": 120747576172,
+     "ticker": "600028.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Shanxi Xinghuacun Fen Wine Factory",
+     "sector": "Consumer Staples",
+     "shares": 1219964222,
+     "ticker": "600809.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China State Construction Engineering",
+     "sector": "Industrials",
+     "shares": 41320390444,
+     "ticker": "601668.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "WuXi AppTec",
+     "sector": "Health Care",
+     "shares": 2983757155,
+     "ticker": "603259.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Muyuan Foodstuff",
+     "sector": "Consumer Staples",
+     "shares": 5772996144,
+     "ticker": "002714.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Ping An Bank",
+     "sector": "Financials",
+     "shares": 19405918198,
+     "ticker": "000001.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Wens Foodstuff Group",
+     "sector": "Consumer Staples",
+     "shares": 6653929305,
+     "ticker": "300498.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Minsheng Bank",
+     "sector": "Financials",
+     "shares": 43782418502,
+     "ticker": "600016.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "PetroChina",
+     "sector": "Energy",
+     "shares": 183020977818,
+     "ticker": "601857.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Shaanxi Coal Industry Company",
+     "sector": "Energy",
+     "shares": 9695000000,
+     "ticker": "601225.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Zhongji Innolight",
+     "sector": "Information Technology",
+     "shares": 1169734641,
+     "ticker": "300308.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Semiconductor Manufacturing International Corporation",
+     "sector": "Information Technology",
+     "shares": 8560805995,
+     "ticker": "688981.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "ZTE",
+     "sector": "Information Technology",
+     "shares": 4783534887,
+     "ticker": "000063.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Bank of China",
+     "sector": "Financials",
+     "shares": 322212411814,
+     "ticker": "601988.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "S.F. Holding",
+     "sector": "Industrials",
+     "shares": 5265308078,
+     "ticker": "002352.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "NARI Technology",
+     "sector": "Industrials",
+     "shares": 8031756156,
+     "ticker": "600406.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Mobile",
+     "sector": "Communication",
+     "shares": 21644606612,
+     "ticker": "600941.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Weichai Power",
+     "sector": "Industrials",
+     "shares": 8640220621,
+     "ticker": "000338.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "China United Network Communications",
+     "sector": "Communication",
+     "shares": 31264425327,
+     "ticker": "600050.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Iflytek",
+     "sector": "Information Technology",
+     "shares": 2402079842,
+     "ticker": "002230.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Qingdao Haier",
+     "sector": "Consumer Discretionary",
+     "shares": 9377629650,
+     "ticker": "600690.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Telecom Corporation",
+     "sector": "Communication",
+     "shares": 91507138699,
+     "ticker": "601728.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Sungrow Power Supply",
+     "sector": "Industrials",
+     "shares": 2073211424,
+     "ticker": "300274.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Bank of Ningbo",
+     "sector": "Financials",
+     "shares": 6603590792,
+     "ticker": "002142.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Qinghai Salt Lake Potash",
+     "sector": "Materials",
+     "shares": 5291572541,
+     "ticker": "000792.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Pacific Insurance",
+     "sector": "Financials",
+     "shares": 9620341455,
+     "ticker": "601601.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "TCL Corporation",
+     "sector": "Information Technology",
+     "shares": 20800862447,
+     "ticker": "000100.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "China International Travel Service",
+     "sector": "Consumer Discretionary",
+     "shares": 2077796644,
+     "ticker": "601888.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Shanghai Pudong Development Bank",
+     "sector": "Financials",
+     "shares": 33305838300,
+     "ticker": "600000.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Sany Heavy Industry",
+     "sector": "Industrials",
+     "shares": 9195004437,
+     "ticker": "600031.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China National Nuclear Power",
+     "sector": "Utilities",
+     "shares": 20568002074,
+     "ticker": "601985.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China CSSC Holdings",
+     "sector": "Industrials",
+     "shares": 7525621288,
+     "ticker": "600150.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Hygon Information Technology",
+     "sector": "Information Technology",
+     "shares": 2324338091,
+     "ticker": "688041.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "CRRC Corporation",
+     "sector": "Industrials",
+     "shares": 28698864088,
+     "ticker": "601766.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Bank of Beijing",
+     "sector": "Financials",
+     "shares": 21142984273,
+     "ticker": "601169.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "NAURA Technology Group",
+     "sector": "Information Technology",
+     "shares": 725689200,
+     "ticker": "002371.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "TBEA",
+     "sector": "Industrials",
+     "shares": 5052792571,
+     "ticker": "600089.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Huatai Securities",
+     "sector": "Financials",
+     "shares": 9026863786,
+     "ticker": "601688.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Foxconn Industrial Internet",
+     "sector": "Information Technology",
+     "shares": 19844092284,
+     "ticker": "601138.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Chongqing Changan Automobile",
+     "sector": "Consumer Discretionary",
+     "shares": 9912905548,
+     "ticker": "000625.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Tongwei Company",
+     "sector": "Information Technology",
+     "shares": 4501990940,
+     "ticker": "600438.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Poly Real Estate Group",
+     "sector": "Real Estate",
+     "shares": 11970443418,
+     "ticker": "600048.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Will Semiconductor",
+     "sector": "Information Technology",
+     "shares": 1257704429,
+     "ticker": "603501.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "SAIC Motor",
+     "sector": "Consumer Discretionary",
+     "shares": 11495277504,
+     "ticker": "600104.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Fuyao Glass Industry Group",
+     "sector": "Consumer Discretionary",
+     "shares": 2609743532,
+     "ticker": "600660.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Vanke",
+     "sector": "Real Estate",
+     "shares": 11930709471,
+     "ticker": "000002.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Aier Eye Hospital",
+     "sector": "Health Care",
+     "shares": 9299564734,
+     "ticker": "300015.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Guotai Junan Securities",
+     "sector": "Financials",
+     "shares": 17581057948,
+     "ticker": "601211.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Foshan Haitian Flavouring & Food Co",
+     "sector": "Consumer Staples",
+     "shares": 5851045044,
+     "ticker": "603288.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Zhangzhou Pientzehuang Pharmaceutical",
+     "sector": "Health Care",
+     "shares": 603317210,
+     "ticker": "600436.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Cosco Holdings",
+     "sector": "Industrials",
+     "shares": 15233545741,
+     "ticker": "601919.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Three Gorges Renewables (Group)",
+     "sector": "Utilities",
+     "shares": 28587650142,
+     "ticker": "600905.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Railway Group Limited",
+     "sector": "Industrials",
+     "shares": 24531310329,
+     "ticker": "601390.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Bank of Shanghai",
+     "sector": "Financials",
+     "shares": 14209038737,
+     "ticker": "601229.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Chongqing Zhifei Biological Products",
+     "sector": "Health Care",
+     "shares": 2393789747,
+     "ticker": "300122.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Focus Media Information Technology",
+     "sector": "Communication",
+     "shares": 14442199726,
+     "ticker": "002027.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Advanced Micro-Fabrication Equipment",
+     "sector": "Information Technology",
+     "shares": 957842348,
+     "ticker": "688012.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Beijing Kingsoft Office Software",
+     "sector": "Information Technology",
+     "shares": 464013435,
+     "ticker": "688111.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Daqin Railway",
+     "sector": "Industrials",
+     "shares": 19862892778,
+     "ticker": "601006.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Jiangsu Yanghe Brewery Joint-Stock",
+     "sector": "Consumer Staples",
+     "shares": 1506445074,
+     "ticker": "002304.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Everbright Bank",
+     "sector": "Financials",
+     "shares": 59085551061,
+     "ticker": "601818.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Baoshan Iron and Steel",
+     "sector": "Materials",
+     "shares": 21782084749,
+     "ticker": "600019.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "United Imaging",
+     "sector": "Health Care",
+     "shares": 824157988,
+     "ticker": "688271.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Dawning Information Industry",
+     "sector": "Information Technology",
+     "shares": 1463115784,
+     "ticker": "603019.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Anhui Conch Cement",
+     "sector": "Materials",
+     "shares": 5277060044,
+     "ticker": "600585.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "ZHEJIANG SANHUA INTELLIGENT CONTROLS",
+     "sector": "Industrials",
+     "shares": 4208013935,
+     "ticker": "002050.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Tianqi Lithium Industries",
+     "sector": "Materials",
+     "shares": 1713218321,
+     "ticker": "002466.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Postal Savings Bank of China",
+     "sector": "Financials",
+     "shares": 120095053492,
+     "ticker": "601658.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "CNOOC Limited",
+     "sector": "Energy",
+     "shares": 47529953984,
+     "ticker": "600938.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Merchants Securities",
+     "sector": "Financials",
+     "shares": 8696526806,
+     "ticker": "600999.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Transsion",
+     "sector": "Information Technology",
+     "shares": 1151184545,
+     "ticker": "688036.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Unisplendour",
+     "sector": "Information Technology",
+     "shares": 2860079874,
+     "ticker": "000938.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Life Insurance Company",
+     "sector": "Financials",
+     "shares": 28264705000,
+     "ticker": "601628.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "GigaDevice",
+     "sector": "Information Technology",
+     "shares": 701745034,
+     "ticker": "603986.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Unigroup Guoxin Microelectronics",
+     "sector": "Information Technology",
+     "shares": 843233676,
+     "ticker": "002049.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Aluminum Corporation of China Limited",
+     "sector": "Materials",
+     "shares": 17154971327,
+     "ticker": "601600.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Northern Rare Earth Group",
+     "sector": "Materials",
+     "shares": 3615065842,
+     "ticker": "600111.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Montage Technology",
+     "sector": "Information Technology",
+     "shares": 1220538021,
+     "ticker": "688008.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Eve Energy",
+     "sector": "Industrials",
+     "shares": 2173296935,
+     "ticker": "300014.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Construction Bank",
+     "sector": "Financials",
+     "shares": 261600381459,
+     "ticker": "601939.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Orient Securities",
+     "sector": "Financials",
+     "shares": 8496645292,
+     "ticker": "600958.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "AVIC Aviation Engine Corporation",
+     "sector": "Industrials",
+     "shares": 2665594238,
+     "ticker": "600893.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Ganfeng Lithium",
+     "sector": "Materials",
+     "shares": 2096694404,
+     "ticker": "002460.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Bank of Nanjing",
+     "sector": "Financials",
+     "shares": 12363567245,
+     "ticker": "601009.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Yunnan Baiyao Group",
+     "sector": "Health Care",
+     "shares": 1784262603,
+     "ticker": "000538.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Power Construction Corporation of China",
+     "sector": "Industrials",
+     "shares": 17226159334,
+     "ticker": "601669.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Shanghai International Airport",
+     "sector": "Industrials",
+     "shares": 2488313040,
+     "ticker": "600009.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Tianjin Zhonghuan Semiconductor",
+     "sector": "Information Technology",
+     "shares": 4043103887,
+     "ticker": "002129.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Molybdenum",
+     "sector": "Materials",
+     "shares": 21394310176,
+     "ticker": "603993.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "SDIC Power Holdings",
+     "sector": "Utilities",
+     "shares": 8004494262,
+     "ticker": "600886.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "AVIC SHENYANG AIRCRAFT COMPANY",
+     "sector": "Industrials",
+     "shares": 2834929431,
+     "ticker": "600760.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "XCMG Construction Machinery",
+     "sector": "Industrials",
+     "shares": 11711210449,
+     "ticker": "000425.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "GF Securities",
+     "sector": "Financials",
+     "shares": 7824845511,
+     "ticker": "000776.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Zheshang Bank",
+     "sector": "Financials",
+     "shares": 27464635963,
+     "ticker": "601916.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "GD Power Development",
+     "sector": "Utilities",
+     "shares": 17835619082,
+     "ticker": "600795.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Chang Chun High and New Technology Industry (Group)",
+     "sector": "Health Care",
+     "shares": 407937530,
+     "ticker": "000661.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Shenwan Hongyuan",
+     "sector": "Financials",
+     "shares": 25039944560,
+     "ticker": "000166.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Shandong Hualu-Hengsheng Chemical",
+     "sector": "Materials",
+     "shares": 2749943015,
+     "ticker": "600426.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Hua Xia Bank",
+     "sector": "Financials",
+     "shares": 15914928468,
+     "ticker": "600015.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Maxscend Microelectronics",
+     "sector": "Information Technology",
+     "shares": 574986986,
+     "ticker": "300782.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Industrial Securities",
+     "sector": "Financials",
+     "shares": 8635987294,
+     "ticker": "601377.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Railway Construction",
+     "sector": "Industrials",
+     "shares": 13579541500,
+     "ticker": "601186.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Zoomlion Heavy Industry Science & Technology",
+     "sector": "Industrials",
+     "shares": 8648535236,
+     "ticker": "000157.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "GoerTek",
+     "sector": "Information Technology",
+     "shares": 3552271178,
+     "ticker": "002241.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Bank of Hangzhou",
+     "sector": "Financials",
+     "shares": 7249002548,
+     "ticker": "600926.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Shandong Gold-Mining",
+     "sector": "Materials",
+     "shares": 4609929525,
+     "ticker": "600547.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Huaneng Power International",
+     "sector": "Utilities",
+     "shares": 15698093359,
+     "ticker": "600011.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Inspur Electronic Information Industry",
+     "sector": "Information Technology",
+     "shares": 1468476655,
+     "ticker": "000977.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Shanghai RAAS Blood Products",
+     "sector": "Health Care",
+     "shares": 6592672885,
+     "ticker": "002252.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Sichuan Chuantou Energy",
+     "sector": "Utilities",
+     "shares": 4874606828,
+     "ticker": "600674.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "ZHEJIANG HUAYOU COBALT",
+     "sector": "Materials",
+     "shares": 1893527517,
+     "ticker": "603799.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "JCET",
+     "sector": "Information Technology",
+     "shares": 1789414570,
+     "ticker": "600584.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Hundsun Technologies",
+     "sector": "Information Technology",
+     "shares": 1893647942,
+     "ticker": "600570.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Zhejiang Dahua Technology",
+     "sector": "Information Technology",
+     "shares": 3269262074,
+     "ticker": "002236.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "AVIC Jonhon Optronic Technology",
+     "sector": "Information Technology",
+     "shares": 2100246297,
+     "ticker": "002179.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Anhui Gujing Distillery",
+     "sector": "Consumer Staples",
+     "shares": 528600000,
+     "ticker": "000596.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Guangdong Haid Group",
+     "sector": "Consumer Staples",
+     "shares": 1655632413,
+     "ticker": "002311.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Yanzhou Coal Mining",
+     "sector": "Energy",
+     "shares": 10036852020,
+     "ticker": "600188.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "IMEIK TECHNOLOGY DEVELOPMENT",
+     "sector": "Health Care",
+     "shares": 302592061,
+     "ticker": "300896.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Cambricon Technologies",
+     "sector": "Information Technology",
+     "shares": 628292969,
+     "ticker": "688256.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Inner Mongolia Baotou Steel Union",
+     "sector": "Materials",
+     "shares": 45226032948,
+     "ticker": "600010.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Beijing Oriental Yuhong Waterproof Technology",
+     "sector": "Materials",
+     "shares": 2388699866,
+     "ticker": "002271.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Air China",
+     "sector": "Industrials",
+     "shares": 20492561030,
+     "ticker": "601111.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Merchants Shekou Industrial Zone Holdings",
+     "sector": "Real Estate",
+     "shares": 9016032171,
+     "ticker": "001979.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Chaozhou Three-Circle",
+     "sector": "Information Technology",
+     "shares": 1996718571,
+     "ticker": "300408.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Baosight Software",
+     "sector": "Information Technology",
+     "shares": 2857904137,
+     "ticker": "600845.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Jiangsu King's Luck Brewery Joint-Stock",
+     "sector": "Consumer Staples",
+     "shares": 1246800037,
+     "ticker": "603369.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Ningxia Baofeng Energy Group",
+     "sector": "Materials",
+     "shares": 7333360000,
+     "ticker": "600989.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Wingtech",
+     "sector": "Information Technology",
+     "shares": 1273869249,
+     "ticker": "600745.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Everbright Securities",
+     "sector": "Financials",
+     "shares": 4610787639,
+     "ticker": "601788.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Eastern Airlines Corp",
+     "sector": "Industrials",
+     "shares": 22087736670,
+     "ticker": "600115.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Southern Airlines",
+     "sector": "Industrials",
+     "shares": 18120969520,
+     "ticker": "600029.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "LB Group",
+     "sector": "Materials",
+     "shares": 2384248056,
+     "ticker": "002601.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "360 Security Technology",
+     "sector": "Information Technology",
+     "shares": 6999557879,
+     "ticker": "601360.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Founder Securities",
+     "sector": "Financials",
+     "shares": 8232101395,
+     "ticker": "601901.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Rongsheng Petro Chemical",
+     "sector": "Materials",
+     "shares": 9989442254,
+     "ticker": "002493.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Fosun Pharmaceutical",
+     "sector": "Health Care",
+     "shares": 2670429325,
+     "ticker": "600196.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "JA Solar Technology",
+     "sector": "Information Technology",
+     "shares": 3309717712,
+     "ticker": "002459.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Shanxi Lu'an Environmental Energy Development",
+     "sector": "Energy",
+     "shares": 2991409200,
+     "ticker": "601699.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China International Capital Corporation",
+     "sector": "Financials",
+     "shares": 4827256868,
+     "ticker": "601995.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Beijing Tongrentang",
+     "sector": "Health Care",
+     "shares": 1371470262,
+     "ticker": "600085.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Jiangsu Hengli Hydraulic",
+     "sector": "Industrials",
+     "shares": 1340820992,
+     "ticker": "601100.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Communications Construction Company",
+     "sector": "Industrials",
+     "shares": 16213786279,
+     "ticker": "601800.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Henan Shuanghui Investment & Development",
+     "sector": "Consumer Staples",
+     "shares": 3464661213,
+     "ticker": "000895.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "37 Interactive Entertainment Network Technology Group",
+     "sector": "Communication",
+     "shares": 2212237681,
+     "ticker": "002555.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "CGN Power",
+     "sector": "Utilities",
+     "shares": 50498611100,
+     "ticker": "003816.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Zhongjin Gold",
+     "sector": "Materials",
+     "shares": 4847312564,
+     "ticker": "600489.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Securities",
+     "sector": "Financials",
+     "shares": 7756694797,
+     "ticker": "601066.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Huadong Medicine",
+     "sector": "Health Care",
+     "shares": 1753736848,
+     "ticker": "000963.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Walvax Biotechnology",
+     "sector": "Health Care",
+     "shares": 1599348541,
+     "ticker": "300142.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Hithink RoyalFlush Information Network",
+     "sector": "Financials",
+     "shares": 752640000,
+     "ticker": "300033.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "AVIC Aircraft",
+     "sector": "Industrials",
+     "shares": 2780610135,
+     "ticker": "000768.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Great Wall Motor",
+     "sector": "Consumer Discretionary",
+     "shares": 8573970071,
+     "ticker": "601633.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Beijing New Building Materials Public",
+     "sector": "Industrials",
+     "shares": 1702236042,
+     "ticker": "000786.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Huizhou Desay SV Automotive",
+     "sector": "Consumer Discretionary",
+     "shares": 596809294,
+     "ticker": "002920.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Tsingtao Brewery",
+     "sector": "Consumer Staples",
+     "shares": 1364195121,
+     "ticker": "600600.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Energy Engineering Corporation",
+     "sector": "Industrials",
+     "shares": 44240183243,
+     "ticker": "601868.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "SATELLITE CHEMICAL",
+     "sector": "Materials",
+     "shares": 3368645690,
+     "ticker": "002648.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Spring Airlines",
+     "sector": "Industrials",
+     "shares": 978333423,
+     "ticker": "601021.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "BEIJING WANTAI BIOLOGICAL PHARMACY ENTERPRISE",
+     "sector": "Health Care",
+     "shares": 1264392804,
+     "ticker": "603392.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Jiangsu Eastern Shenghong",
+     "sector": "Materials",
+     "shares": 6611232470,
+     "ticker": "000301.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Zhejiang NHU",
+     "sector": "Health Care",
+     "shares": 3073421680,
+     "ticker": "002001.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "HUAYU Automotive Systems Company",
+     "sector": "Consumer Discretionary",
+     "shares": 3152723984,
+     "ticker": "600741.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "New China Life Insurance",
+     "sector": "Financials",
+     "shares": 3119546600,
+     "ticker": "601336.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Ningbo Tuopu Group",
+     "sector": "Consumer Discretionary",
+     "shares": 1737835580,
+     "ticker": "601689.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Trina Solar",
+     "sector": "Information Technology",
+     "shares": 2342567686,
+     "ticker": "688599.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Yunnan Energy New Material",
+     "sector": "Materials",
+     "shares": 981318518,
+     "ticker": "002812.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Hengli Petrochemical",
+     "sector": "Materials",
+     "shares": 7039099786,
+     "ticker": "600346.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Shanxi Coking Coal Energy Group",
+     "sector": "Energy",
+     "shares": 5677101059,
+     "ticker": "000983.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Galaxy Securities",
+     "sector": "Financials",
+     "shares": 10934402256,
+     "ticker": "601881.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Yonyou Network Technology",
+     "sector": "Information Technology",
+     "shares": 3416997409,
+     "ticker": "600588.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Hainan Airport Infrastructure",
+     "sector": "Real Estate",
+     "shares": 11425309603,
+     "ticker": "600515.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China National Chemical Engineering",
+     "sector": "Industrials",
+     "shares": 6105560662,
+     "ticker": "601117.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "BANK OF CHENGDU",
+     "sector": "Financials",
+     "shares": 4238435356,
+     "ticker": "601838.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "National Silicon Industry Group",
+     "sector": "Information Technology",
+     "shares": 3305023393,
+     "ticker": "688126.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "WUXI LEAD INTELLIGENT EQUIPMENT",
+     "sector": "Industrials",
+     "shares": 1674221434,
+     "ticker": "300450.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Guosen Securities",
+     "sector": "Financials",
+     "shares": 10241743060,
+     "ticker": "002736.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Asymchem Laboratories (Tianjin)",
+     "sector": "Health Care",
+     "shares": 360780970,
+     "ticker": "002821.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Zhejiang Jingsheng Mechanical & Electrical",
+     "sector": "Information Technology",
+     "shares": 1309533797,
+     "ticker": "300316.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Lens Technology",
+     "sector": "Information Technology",
+     "shares": 5278740870,
+     "ticker": "300433.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "CHINA JUSHI",
+     "sector": "Materials",
+     "shares": 4003136728,
+     "ticker": "600176.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Guangzhou Tinci Materials Technology",
+     "sector": "Materials",
+     "shares": 2038561744,
+     "ticker": "002709.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Hangzhou Tigermed Consulting",
+     "sector": "Health Care",
+     "shares": 861026050,
+     "ticker": "300347.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Metallurgical Corporation of China",
+     "sector": "Industrials",
+     "shares": 20691619170,
+     "ticker": "601618.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Merchants Energy Shipping",
+     "sector": "Energy",
+     "shares": 8074538502,
+     "ticker": "601872.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "ZANGGE MINING COMPANY",
+     "sector": "Materials",
+     "shares": 1568914754,
+     "ticker": "000408.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Ninestar Corporation",
+     "sector": "Information Technology",
+     "shares": 1421878923,
+     "ticker": "002180.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "SG Micro",
+     "sector": "Information Technology",
+     "shares": 685565355,
+     "ticker": "300661.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Avionics Systems",
+     "sector": "Industrials",
+     "shares": 4838896630,
+     "ticker": "600372.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Coal Energy",
+     "sector": "Energy",
+     "shares": 13258663400,
+     "ticker": "601898.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Resources Microelectronics",
+     "sector": "Information Technology",
+     "shares": 1328210680,
+     "ticker": "688396.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Thunder Software Technology",
+     "sector": "Information Technology",
+     "shares": 461717054,
+     "ticker": "300496.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Zhenhua (Group) Science & Technology",
+     "sector": "Information Technology",
+     "shares": 554169431,
+     "ticker": "000733.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Zhejiang Chint Electrics",
+     "sector": "Industrials",
+     "shares": 2148968976,
+     "ticker": "601877.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "YTO Express Group",
+     "sector": "Industrials",
+     "shares": 3424016438,
+     "ticker": "600233.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Resources Sanjiu Medical & Pharmaceutical",
+     "sector": "Health Care",
+     "shares": 1664217858,
+     "ticker": "000999.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Shandong Nanshan Aluminium",
+     "sector": "Materials",
+     "shares": 11483701559,
+     "ticker": "600219.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Hualan Biological Engineering",
+     "sector": "Health Care",
+     "shares": 1825690986,
+     "ticker": "002007.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Zhejiang Zheneng Electric Power",
+     "sector": "Utilities",
+     "shares": 13408732749,
+     "ticker": "600023.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "GUOXUAN HIGH-TECH",
+     "sector": "Industrials",
+     "shares": 1814725342,
+     "ticker": "002074.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Xinjiang Goldwind Science & Technology",
+     "sector": "Industrials",
+     "shares": 4223788647,
+     "ticker": "002202.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Pharmaron Beijing",
+     "sector": "Health Care",
+     "shares": 1837283628,
+     "ticker": "300759.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Guangzhou Baiyunshan Pharmaceutical Holdings",
+     "sector": "Health Care",
+     "shares": 1625790949,
+     "ticker": "600332.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "HANGZHOU FIRST PV MATERIAL",
+     "sector": "Information Technology",
+     "shares": 2608745702,
+     "ticker": "603806.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Jiangxi Copper",
+     "sector": "Materials",
+     "shares": 3462729405,
+     "ticker": "600362.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "New Hope Liuhe",
+     "sector": "Consumer Staples",
+     "shares": 4502775425,
+     "ticker": "000876.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Shengyi Technology",
+     "sector": "Information Technology",
+     "shares": 2429119230,
+     "ticker": "600183.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Shanghai Pharmaceuticals Holding",
+     "sector": "Health Care",
+     "shares": 3708361809,
+     "ticker": "601607.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Changzhou Xingyu Automotive Lighting Systems",
+     "sector": "Consumer Discretionary",
+     "shares": 285679419,
+     "ticker": "601799.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Empyrean Technology",
+     "sector": "Information Technology",
+     "shares": 547874648,
+     "ticker": "301269.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Guangzhou Automobile Group",
+     "sector": "Consumer Discretionary",
+     "shares": 10197065900,
+     "ticker": "601238.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "ZHESHANG SECURITIES",
+     "sector": "Financials",
+     "shares": 4573796639,
+     "ticker": "601878.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Citic Bank",
+     "sector": "Financials",
+     "shares": 55645162264,
+     "ticker": "601998.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Zhongtai Securities",
+     "sector": "Financials",
+     "shares": 7918340996,
+     "ticker": "600918.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Yihai Kerry",
+     "sector": "Consumer Staples",
+     "shares": 5421591536,
+     "ticker": "300999.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Ingenic Semiconductor",
+     "sector": "Information Technology",
+     "shares": 483664367,
+     "ticker": "300223.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Hoshine Silicon Industry",
+     "sector": "Materials",
+     "shares": 1182206941,
+     "ticker": "603260.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "XinJiang Daqo New Energy",
+     "sector": "Information Technology",
+     "shares": 2132442813,
+     "ticker": "688303.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Mango Excellent Media",
+     "sector": "Communication",
+     "shares": 1870720815,
+     "ticker": "300413.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "MingYangSmartEnergyGroup",
+     "sector": "Industrials",
+     "shares": 2261496706,
+     "ticker": "601615.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Glodon Software",
+     "sector": "Information Technology",
+     "shares": 1651944342,
+     "ticker": "002410.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Dongfang Electric Corporation",
+     "sector": "Industrials",
+     "shares": 3458360326,
+     "ticker": "600875.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Shijiazhuang Yiling Pharmaceutical",
+     "sector": "Health Care",
+     "shares": 1670705376,
+     "ticker": "002603.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "SDIC Essence",
+     "sector": "Financials",
+     "shares": 6394097773,
+     "ticker": "600061.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Jinko Solar",
+     "sector": "Information Technology",
+     "shares": 10269412261,
+     "ticker": "688223.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Hangzhou Silan Microelectronics",
+     "sector": "Information Technology",
+     "shares": 1664071845,
+     "ticker": "600460.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "ENN Ecological Holdings",
+     "sector": "Utilities",
+     "shares": 3095185107,
+     "ticker": "600803.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Suzhou Maxwell Technologies",
+     "sector": "Information Technology",
+     "shares": 278901752,
+     "ticker": "300751.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "HuanengLancang River Hydropower",
+     "sector": "Utilities",
+     "shares": 18631094257,
+     "ticker": "600025.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "People's Insurance Company of China",
+     "sector": "Financials",
+     "shares": 44223990583,
+     "ticker": "601319.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Guangzhou Shiyuan Electronic Technology Company",
+     "sector": "Information Technology",
+     "shares": 699186545,
+     "ticker": "002841.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Shanghai Aiko Solar Energy",
+     "sector": "Information Technology",
+     "shares": 2115194603,
+     "ticker": "600732.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Shanghai Putailai New Energy Technology",
+     "sector": "Materials",
+     "shares": 2144184175,
+     "ticker": "603659.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Sangfor Technologies",
+     "sector": "Information Technology",
+     "shares": 431559055,
+     "ticker": "300454.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "CNGR Advanced Material",
+     "sector": "Materials",
+     "shares": 1044466212,
+     "ticker": "300919.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Chongqing Brewery",
+     "sector": "Consumer Staples",
+     "shares": 483971198,
+     "ticker": "600132.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "CNPC Capital Company",
+     "sector": "Financials",
+     "shares": 12642079079,
+     "ticker": "000617.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Ginlong Technologies",
+     "sector": "Industrials",
+     "shares": 396691774,
+     "ticker": "300763.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Shenzhen Overseas Chinese Town Company",
+     "sector": "Real Estate",
+     "shares": 8037758053,
+     "ticker": "000069.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Shanghai International Port Group",
+     "sector": "Industrials",
+     "shares": 23279960504,
+     "ticker": "600018.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "CITIC Pacific Special Steel Group",
+     "sector": "Materials",
+     "shares": 5047158628,
+     "ticker": "000708.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Yealink Network Technology",
+     "sector": "Information Technology",
+     "shares": 1266918377,
+     "ticker": "300628.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Avary Holding (Shenzhen) Co",
+     "sector": "Information Technology",
+     "shares": 2317536658,
+     "ticker": "002938.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Shennan Circuits",
+     "sector": "Information Technology",
+     "shares": 681166595,
+     "ticker": "002916.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Ningbo Deye Technology",
+     "sector": "Industrials",
+     "shares": 1273231036,
+     "ticker": "605117.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Sichuan Road&Bridge",
+     "sector": "Industrials",
+     "shares": 8695590645,
+     "ticker": "600039.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Eastroc Beverage (Group)",
+     "sector": "Consumer Staples",
+     "shares": 734199310,
+     "ticker": "605499.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "GONGNIU GROUP",
+     "sector": "Industrials",
+     "shares": 1803446009,
+     "ticker": "603195.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Shanghai Jin Jiang International Hotels",
+     "sector": "Consumer Discretionary",
+     "shares": 1064078462,
+     "ticker": "600754.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "SHANGHAI M&G STATIONERY",
+     "sector": "Industrials",
+     "shares": 915795377,
+     "ticker": "603899.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "StarPower Semiconductor",
+     "sector": "Information Technology",
+     "shares": 239473466,
+     "ticker": "603290.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Oppein Home Group",
+     "sector": "Consumer Discretionary",
+     "shares": 609152867,
+     "ticker": "603833.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Flat Glass Group",
+     "sector": "Information Technology",
+     "shares": 2317450026,
+     "ticker": "601865.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Bloomage Biotechnology Corporation",
+     "sector": "Health Care",
+     "shares": 481678242,
+     "ticker": "688363.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Xinjiang Tianshan Cement",
+     "sector": "Materials",
+     "shares": 7110491694,
+     "ticker": "000877.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "Cathay Biotech",
+     "sector": "Materials",
+     "shares": 721289794,
+     "ticker": "688065.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Yunnan Botanee Bio-Technology Group",
+     "sector": "Consumer Staples",
+     "shares": 423600000,
+     "ticker": "300957.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "HONGTA SECURITIES",
+     "sector": "Financials",
+     "shares": 4693233706,
+     "ticker": "601236.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Satellite Communications",
+     "sector": "Communication",
+     "shares": 4224385412,
+     "ticker": "601698.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Zhuzhou CRRC Times Electric",
+     "sector": "Industrials",
+     "shares": 1357664512,
+     "ticker": "688187.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Qi An Xin Technology Group",
+     "sector": "Information Technology",
+     "shares": 682252725,
+     "ticker": "688561.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Future Land Holdings",
+     "sector": "Real Estate",
+     "shares": 2255622856,
+     "ticker": "601155.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Development Holdings",
+     "sector": "Real Estate",
+     "shares": 14054218314,
+     "ticker": "600606.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Huali Industrial Group Company",
+     "sector": "Consumer Discretionary",
+     "shares": 1167000000,
+     "ticker": "300979.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Oilfield Services",
+     "sector": "Energy",
+     "shares": 4771592000,
+     "ticker": "601808.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "Ecovacs Robotics",
+     "sector": "Consumer Discretionary",
+     "shares": 578598310,
+     "ticker": "603486.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "FAW Car",
+     "sector": "Industrials",
+     "shares": 4921280975,
+     "ticker": "000800.SZ"
+    },
+    {
+     "currency": "CNY",
+     "name": "CINDA SECURITIES",
+     "sector": "Financials",
+     "shares": 3243000000,
+     "ticker": "601059.SS"
+    },
+    {
+     "currency": "CNY",
+     "name": "China Longyuan Power Group Limited",
+     "sector": "Utilities",
+     "shares": 8359816164,
+     "ticker": "001289.SZ"
+    }
+   ],
+   "resolved": 298,
+   "scraped": 300,
+   "source": "en.wikipedia.org/wiki/CSI_300_Index",
+   "weighting": "cap"
   },
   "FTSEMIB.MI": {
    "as_of": "2026-08-08",
@@ -8874,10 +11275,1647 @@
    "weighting": "cap"
   },
   "^KS11": {
-   "unavailable": "No free published constituent list for the full KOSPI."
+   "as_of": "2026-08-15",
+   "currency": "KRW",
+   "members": [
+    {
+     "currency": "KRW",
+     "name": "Amorepacific",
+     "sector": "Consumer Staples",
+     "shares": 68926771,
+     "ticker": "090430.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Amorepacific Holdings",
+     "sector": "Consumer Staples",
+     "shares": 89754625,
+     "ticker": "002790.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "APR",
+     "sector": "Consumer Staples",
+     "shares": 37438155,
+     "ticker": "278470.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Asia Holdings",
+     "sector": "Steels & Materials",
+     "shares": 1641464,
+     "ticker": "002030.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "BGF Retail",
+     "sector": "Consumer Staples",
+     "shares": 17275015,
+     "ticker": "282330.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "BNK Financial",
+     "sector": "Financials",
+     "shares": 310327033,
+     "ticker": "138930.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Celltrion",
+     "sector": "Health Care",
+     "shares": 229327192,
+     "ticker": "068270.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Cheil Worldwide",
+     "sector": "Communication Services",
+     "shares": 101278725,
+     "ticker": "030000.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Chong Kun Dang",
+     "sector": "Health Care",
+     "shares": 13176068,
+     "ticker": "185750.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "CJ",
+     "sector": "Consumer Staples",
+     "shares": 33530936,
+     "ticker": "001040.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "CJ CheilJedang",
+     "sector": "Consumer Staples",
+     "shares": 16023183,
+     "ticker": "097950.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "CJ Logistics",
+     "sector": "Industrials",
+     "shares": 19945129,
+     "ticker": "000120.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Cosmax",
+     "sector": "Consumer Staples",
+     "shares": 11345662,
+     "ticker": "192820.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Cosmo Chemical",
+     "sector": "Energy & Chemicals",
+     "shares": 38364359,
+     "ticker": "005420.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Coway",
+     "sector": "Consumer Discretionary",
+     "shares": 70128913,
+     "ticker": "021240.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "CS Wind",
+     "sector": "Heavy Industries",
+     "shares": 41438680,
+     "ticker": "112610.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "d'Alba Global",
+     "sector": "Consumer Staples",
+     "shares": 12421540,
+     "ticker": "483650.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Daesang",
+     "sector": "Consumer Staples",
+     "shares": 36018248,
+     "ticker": "001680.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Daewoo E&C",
+     "sector": "Constructions",
+     "shares": 410885720,
+     "ticker": "047040.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Daewoong",
+     "sector": "Health Care",
+     "shares": 42036875,
+     "ticker": "003090.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Daewoong Pharmaceutical",
+     "sector": "Health Care",
+     "shares": 11506270,
+     "ticker": "069620.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "DB HiTek",
+     "sector": "IT",
+     "shares": 42096532,
+     "ticker": "000990.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "DB Insurance",
+     "sector": "Financials",
+     "shares": 60643469,
+     "ticker": "005830.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "DL",
+     "sector": "Constructions",
+     "shares": 22614803,
+     "ticker": "000210.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "DL E&C",
+     "sector": "Constructions",
+     "shares": 41603175,
+     "ticker": "375500.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "DN Automotive",
+     "sector": "Consumer Discretionary",
+     "shares": 51762270,
+     "ticker": "007340.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Dongsuh",
+     "sector": "Consumer Staples",
+     "shares": 98675920,
+     "ticker": "026960.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Dongwon Industries",
+     "sector": "Consumer Staples",
+     "shares": 44146210,
+     "ticker": "006040.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Dongwon Systems",
+     "sector": "Steels & Materials",
+     "shares": 29255393,
+     "ticker": "014820.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Doosan",
+     "sector": "Heavy Industries",
+     "shares": 17882307,
+     "ticker": "000150.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Doosan Bobcat",
+     "sector": "Heavy Industries",
+     "shares": 95713802,
+     "ticker": "241560.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Doosan Enerbility",
+     "sector": "Heavy Industries",
+     "shares": 639132818,
+     "ticker": "034020.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Doosan Robotics",
+     "sector": "Heavy Industries",
+     "shares": 64819980,
+     "ticker": "454910.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "DoubleU Games",
+     "sector": "Consumer Discretionary",
+     "shares": 19280113,
+     "ticker": "192080.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Ecopro Materials",
+     "sector": "Industrials",
+     "shares": 70558754,
+     "ticker": "450080.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Emart",
+     "sector": "Consumer Staples",
+     "shares": 26788353,
+     "ticker": "139480.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "F&F",
+     "sector": "Consumer Discretionary",
+     "shares": 37481574,
+     "ticker": "383220.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Foosung",
+     "sector": "Energy & Chemicals",
+     "shares": 107255330,
+     "ticker": "093370.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Green Cross",
+     "sector": "Health Care",
+     "shares": 11413127,
+     "ticker": "006280.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "GS",
+     "sector": "Energy & Chemicals",
+     "shares": 94675171,
+     "ticker": "078930.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "GS Retail",
+     "sector": "Consumer Staples",
+     "shares": 83565590,
+     "ticker": "007070.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hana Financial",
+     "sector": "Financials",
+     "shares": 268277251,
+     "ticker": "086790.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hanall Biopharma",
+     "sector": "Health Care",
+     "shares": 50858195,
+     "ticker": "009420.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hanil Cement",
+     "sector": "Constructions",
+     "shares": 73541922,
+     "ticker": "300720.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hanjin KAL",
+     "sector": "Consumer Discretionary",
+     "shares": 67292574,
+     "ticker": "180640.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hankook",
+     "sector": "Consumer Discretionary",
+     "shares": 121988753,
+     "ticker": "161390.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hankook & Company",
+     "sector": "Consumer Discretionary",
+     "shares": 94718144,
+     "ticker": "000240.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hanmi Pharm",
+     "sector": "Health Care",
+     "shares": 12680214,
+     "ticker": "128940.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hanmi Science",
+     "sector": "Health Care",
+     "shares": 67713706,
+     "ticker": "008930.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hanmi Semiconductor",
+     "sector": "IT",
+     "shares": 94853002,
+     "ticker": "042700.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hanon Systems",
+     "sector": "Consumer Discretionary",
+     "shares": 1026251342,
+     "ticker": "018880.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hansol Chemical",
+     "sector": "Energy & Chemicals",
+     "shares": 11269070,
+     "ticker": "014680.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hanssem",
+     "sector": "Consumer Discretionary",
+     "shares": 16600322,
+     "ticker": "009240.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hanwha",
+     "sector": "Energy & Chemicals",
+     "shares": 88822531,
+     "ticker": "000880.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hanwha Aerospace",
+     "sector": "Industrials",
+     "shares": 51448788,
+     "ticker": "012450.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hanwha Engine",
+     "sector": "Heavy Industries",
+     "shares": 83425535,
+     "ticker": "082740.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hanwha Life",
+     "sector": "Financials",
+     "shares": 751390250,
+     "ticker": "088350.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hanwha Ocean",
+     "sector": "Heavy Industries",
+     "shares": 306357807,
+     "ticker": "042660.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hanwha Solutions",
+     "sector": "Energy & Chemicals",
+     "shares": 224999671,
+     "ticker": "009830.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hanwha Systems",
+     "sector": "Industrials",
+     "shares": 186993261,
+     "ticker": "272210.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "HD Construction Equipment",
+     "sector": "Heavy Industries",
+     "shares": 47713685,
+     "ticker": "267270.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "HD Hyundai",
+     "sector": "Energy & Chemicals",
+     "shares": 70668430,
+     "ticker": "267250.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "HD Hyundai Electric",
+     "sector": "Heavy Industries",
+     "shares": 35992704,
+     "ticker": "267260.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "HD Hyundai Heavy Industries",
+     "sector": "Heavy Industries",
+     "shares": 104932774,
+     "ticker": "329180.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "HD Hyundai Marine Engine",
+     "sector": "Heavy Industries",
+     "shares": 33921473,
+     "ticker": "071970.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "HD Hyundai Marine Solution",
+     "sector": "Industrials",
+     "shares": 44831335,
+     "ticker": "443060.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "HD KSOE",
+     "sector": "Heavy Industries",
+     "shares": 70714630,
+     "ticker": "009540.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hankuk Carbon",
+     "sector": "Energy & Chemicals",
+     "shares": 50367746,
+     "ticker": "017960.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "HiteJinro",
+     "sector": "Consumer Staples",
+     "shares": 69782636,
+     "ticker": "000080.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "HL Mando",
+     "sector": "Consumer Discretionary",
+     "shares": 46957120,
+     "ticker": "204320.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "HMM",
+     "sector": "Industrials",
+     "shares": 943237970,
+     "ticker": "011200.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hotel Shilla",
+     "sector": "Consumer Discretionary",
+     "shares": 37853593,
+     "ticker": "008770.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "HS Hyosung Advanced Materials",
+     "sector": "Energy & Chemicals",
+     "shares": 4468022,
+     "ticker": "298050.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hybe",
+     "sector": "Communication Services",
+     "shares": 42563911,
+     "ticker": "352820.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hyosung Heavy Industries",
+     "sector": "Heavy Industries",
+     "shares": 9311741,
+     "ticker": "298040.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hyosung TNC",
+     "sector": "Energy & Chemicals",
+     "shares": 4291867,
+     "ticker": "298020.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hyundai AutoEver",
+     "sector": "IT",
+     "shares": 27423116,
+     "ticker": "307950.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hyundai Department Store",
+     "sector": "Consumer Discretionary",
+     "shares": 21332452,
+     "ticker": "069960.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hyundai E&C",
+     "sector": "Constructions",
+     "shares": 112410458,
+     "ticker": "000720.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hyundai Elevator",
+     "sector": "Heavy Industries",
+     "shares": 36105062,
+     "ticker": "017800.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hyundai Glovis",
+     "sector": "Industrials",
+     "shares": 75000000,
+     "ticker": "086280.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hyundai Marine & Fire",
+     "sector": "Financials",
+     "shares": 79308500,
+     "ticker": "001450.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hyundai Mobis",
+     "sector": "Consumer Discretionary",
+     "shares": 89180583,
+     "ticker": "012330.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hyundai Motor",
+     "sector": "Consumer Discretionary",
+     "shares": 261834076,
+     "ticker": "005380.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hyundai Rotem",
+     "sector": "Heavy Industries",
+     "shares": 109142293,
+     "ticker": "064350.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hyundai Steel",
+     "sector": "Steels & Materials",
+     "shares": 131545739,
+     "ticker": "004020.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Hyundai WIA",
+     "sector": "Consumer Discretionary",
+     "shares": 26597745,
+     "ticker": "011210.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "IM Financial",
+     "sector": "Financials",
+     "shares": 158363408,
+     "ticker": "139130.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Industrial Bank of Korea",
+     "sector": "Financials",
+     "shares": 797425867,
+     "ticker": "024110.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Isu Petasys",
+     "sector": "IT",
+     "shares": 73409219,
+     "ticker": "007660.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Isu Specialty Chemical",
+     "sector": "Energy & Chemicals",
+     "shares": 30218872,
+     "ticker": "457190.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "JB Financial",
+     "sector": "Financials",
+     "shares": 185291444,
+     "ticker": "175330.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Kakao",
+     "sector": "Communication Services",
+     "shares": 440683873,
+     "ticker": "035720.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "KakaoBank",
+     "sector": "Financials",
+     "shares": 476479103,
+     "ticker": "323410.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "KakaoPay",
+     "sector": "Financials",
+     "shares": 135245367,
+     "ticker": "377300.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Kangwon Land",
+     "sector": "Consumer Discretionary",
+     "shares": 198193804,
+     "ticker": "035250.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "KB Financial",
+     "sector": "Financials",
+     "shares": 351106111,
+     "ticker": "105560.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "KCC",
+     "sector": "Constructions",
+     "shares": 7354171,
+     "ticker": "002380.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "KEPCO",
+     "sector": "Consumer Staples",
+     "shares": 641964077,
+     "ticker": "015760.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "KEPCO E&C",
+     "sector": "Constructions",
+     "shares": 38043505,
+     "ticker": "052690.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "KEPCO KPS",
+     "sector": "Constructions",
+     "shares": 45000000,
+     "ticker": "051600.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Kia",
+     "sector": "Consumer Discretionary",
+     "shares": 388656043,
+     "ticker": "000270.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Kiwoom Securities",
+     "sector": "Financials",
+     "shares": 26211690,
+     "ticker": "039490.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Kolmar Korea",
+     "sector": "Consumer Staples",
+     "shares": 23605077,
+     "ticker": "161890.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Kolon Industries",
+     "sector": "Energy & Chemicals",
+     "shares": 34040550,
+     "ticker": "120110.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Korea Aerospace",
+     "sector": "Industrials",
+     "shares": 97475107,
+     "ticker": "047810.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Korea District Heating",
+     "sector": "Consumer Staples",
+     "shares": 11578744,
+     "ticker": "071320.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Korea Gas",
+     "sector": "Consumer Staples",
+     "shares": 87275434,
+     "ticker": "036460.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Korea Investment",
+     "sector": "Financials",
+     "shares": 58396764,
+     "ticker": "071050.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Korea Petrochemical",
+     "sector": "Energy & Chemicals",
+     "shares": 6176100,
+     "ticker": "006650.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Korea Zinc",
+     "sector": "Steels & Materials",
+     "shares": 20393232,
+     "ticker": "010130.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Korean Air",
+     "sector": "Industrials",
+     "shares": 369331401,
+     "ticker": "003490.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Krafton",
+     "sector": "Communication Services",
+     "shares": 45097144,
+     "ticker": "259960.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "KT",
+     "sector": "Communication Services",
+     "shares": 238131808,
+     "ticker": "030200.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "KT&G",
+     "sector": "Consumer Staples",
+     "shares": 103810456,
+     "ticker": "033780.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Kumho Petrochemical",
+     "sector": "Energy & Chemicals",
+     "shares": 25984239,
+     "ticker": "011780.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Kumho Tire",
+     "sector": "Consumer Discretionary",
+     "shares": 287260287,
+     "ticker": "073240.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "L&F",
+     "sector": "Industrials",
+     "shares": 37586474,
+     "ticker": "066970.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "LG",
+     "sector": "IT",
+     "shares": 154203203,
+     "ticker": "003550.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "LG Chem",
+     "sector": "Energy & Chemicals",
+     "shares": 78275100,
+     "ticker": "051910.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "LG CNS",
+     "sector": "IT",
+     "shares": 96885948,
+     "ticker": "064400.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "LG Display",
+     "sector": "IT",
+     "shares": 500000000,
+     "ticker": "034220.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "LG Electronics",
+     "sector": "IT",
+     "shares": 179599216,
+     "ticker": "066570.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "LG Energy Solution",
+     "sector": "Industrials",
+     "shares": 234000000,
+     "ticker": "373220.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "LG H&H",
+     "sector": "Consumer Staples",
+     "shares": 16756043,
+     "ticker": "051900.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "LG Innotek",
+     "sector": "IT",
+     "shares": 23664507,
+     "ticker": "011070.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "LG Uplus",
+     "sector": "Communication Services",
+     "shares": 424427732,
+     "ticker": "032640.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "LIG Nex1",
+     "sector": "Industrials",
+     "shares": 21845250,
+     "ticker": "079550.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Lotte",
+     "sector": "Consumer Staples",
+     "shares": 76777036,
+     "ticker": "004990.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Lotte Chemical",
+     "sector": "Energy & Chemicals",
+     "shares": 42167147,
+     "ticker": "011170.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Lotte Chilsung",
+     "sector": "Consumer Staples",
+     "shares": 10054194,
+     "ticker": "005300.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Lotte Fine Chemical",
+     "sector": "Energy & Chemicals",
+     "shares": 25470000,
+     "ticker": "004000.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Lotte Shopping",
+     "sector": "Consumer Discretionary",
+     "shares": 28270640,
+     "ticker": "023530.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Lotte Wellfood",
+     "sector": "Consumer Staples",
+     "shares": 8841267,
+     "ticker": "280360.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "LS",
+     "sector": "Industrials",
+     "shares": 27734903,
+     "ticker": "006260.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "LS Electric",
+     "sector": "Industrials",
+     "shares": 148785350,
+     "ticker": "010120.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Meritz Financial",
+     "sector": "Financials",
+     "shares": 164774172,
+     "ticker": "138040.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Mirae Asset Securities",
+     "sector": "Financials",
+     "shares": 581793881,
+     "ticker": "006800.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Misto",
+     "sector": "Consumer Discretionary",
+     "shares": 52647852,
+     "ticker": "081660.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Miwon Commercial",
+     "sector": "Energy & Chemicals",
+     "shares": 4577508,
+     "ticker": "002840.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Miwon Specialty Chemical",
+     "sector": "Energy & Chemicals",
+     "shares": 4814431,
+     "ticker": "268280.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Naver",
+     "sector": "Communication Services",
+     "shares": 149579777,
+     "ticker": "035420.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "NC",
+     "sector": "Communication Services",
+     "shares": 19472884,
+     "ticker": "036570.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Netmarble",
+     "sector": "Communication Services",
+     "shares": 81934571,
+     "ticker": "251270.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "NH Investment & Securities",
+     "sector": "Financials",
+     "shares": 374531666,
+     "ticker": "005940.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Nongshim",
+     "sector": "Consumer Staples",
+     "shares": 5834188,
+     "ticker": "004370.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "OCI",
+     "sector": "Energy & Chemicals",
+     "shares": 7398689,
+     "ticker": "456040.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "OCI Holdings",
+     "sector": "Energy & Chemicals",
+     "shares": 8952495,
+     "ticker": "010060.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Orion",
+     "sector": "Consumer Staples",
+     "shares": 39528788,
+     "ticker": "271560.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Orion Holdings",
+     "sector": "Consumer Staples",
+     "shares": 60156652,
+     "ticker": "001800.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Ottogi",
+     "sector": "Consumer Staples",
+     "shares": 3439327,
+     "ticker": "007310.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Pan Ocean",
+     "sector": "Industrials",
+     "shares": 534569512,
+     "ticker": "028670.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Paradise",
+     "sector": "Consumer Discretionary",
+     "shares": 87759214,
+     "ticker": "034230.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Poongsan",
+     "sector": "Steels & Materials",
+     "shares": 27314278,
+     "ticker": "103140.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "POSCO",
+     "sector": "Steels & Materials",
+     "shares": 75620779,
+     "ticker": "005490.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "POSCO DX",
+     "sector": "IT",
+     "shares": 151822519,
+     "ticker": "022100.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "POSCO Future M",
+     "sector": "Industrials",
+     "shares": 88946185,
+     "ticker": "003670.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "POSCO International",
+     "sector": "Industrials",
+     "shares": 170444487,
+     "ticker": "047050.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "S-1",
+     "sector": "Industrials",
+     "shares": 33810239,
+     "ticker": "012750.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Sanil Electric",
+     "sector": "Heavy Industries",
+     "shares": 30555097,
+     "ticker": "062040.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Samsung Biologics",
+     "sector": "Health Care",
+     "shares": 46290951,
+     "ticker": "207940.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Samsung C&T",
+     "sector": "Constructions",
+     "shares": 163635171,
+     "ticker": "028260.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Samsung Card",
+     "sector": "Financials",
+     "shares": 106710695,
+     "ticker": "029780.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Samsung E&A",
+     "sector": "Constructions",
+     "shares": 196000000,
+     "ticker": "028050.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Samsung Electro-Mechanics",
+     "sector": "IT",
+     "shares": 75547250,
+     "ticker": "009150.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Samsung Electronics",
+     "sector": "IT",
+     "shares": 6566563106,
+     "ticker": "005930.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Samsung Epis",
+     "sector": "Health Care",
+     "shares": 24883049,
+     "ticker": "0126Z0.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Samsung Fire & Marine",
+     "sector": "Financials",
+     "shares": 44169516,
+     "ticker": "000810.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Samsung Heavy Industries",
+     "sector": "Heavy Industries",
+     "shares": 854150416,
+     "ticker": "010140.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Samsung Life",
+     "sector": "Financials",
+     "shares": 179574779,
+     "ticker": "032830.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Samsung SDI",
+     "sector": "IT",
+     "shares": 78693635,
+     "ticker": "006400.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Samsung SDS",
+     "sector": "IT",
+     "shares": 77350186,
+     "ticker": "018260.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Samsung Securities",
+     "sector": "Financials",
+     "shares": 89300000,
+     "ticker": "016360.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Samyang Foods",
+     "sector": "Consumer Staples",
+     "shares": 7533015,
+     "ticker": "003230.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "SD Biosensor",
+     "sector": "Health Care",
+     "shares": 119619215,
+     "ticker": "137310.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Seah Besteel",
+     "sector": "Steels & Materials",
+     "shares": 35862119,
+     "ticker": "001430.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Seah Steel Holdings",
+     "sector": "Steels & Materials",
+     "shares": 4040461,
+     "ticker": "003030.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Shinhan Financial",
+     "sector": "Financials",
+     "shares": 469450238,
+     "ticker": "055550.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Shinsegae",
+     "sector": "Consumer Discretionary",
+     "shares": 8767681,
+     "ticker": "004170.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "SK",
+     "sector": "Energy & Chemicals",
+     "shares": 54541888,
+     "ticker": "034730.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "SK Biopharm",
+     "sector": "Health Care",
+     "shares": 78313250,
+     "ticker": "326030.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "SK Bioscience",
+     "sector": "Health Care",
+     "shares": 78456553,
+     "ticker": "302440.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "SK Chemicals",
+     "sector": "Energy & Chemicals",
+     "shares": 19379920,
+     "ticker": "285130.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "SK Hynix",
+     "sector": "IT",
+     "shares": 709854891,
+     "ticker": "000660.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "SK IE Technology",
+     "sector": "Industrials",
+     "shares": 81787100,
+     "ticker": "361610.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "SK Innovation",
+     "sector": "Energy & Chemicals",
+     "shares": 169342905,
+     "ticker": "096770.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "SK Square",
+     "sector": "IT",
+     "shares": 131808487,
+     "ticker": "402340.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "SK Telecom",
+     "sector": "Communication Services",
+     "shares": 213057911,
+     "ticker": "017670.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "SKC",
+     "sector": "Energy & Chemicals",
+     "shares": 49392056,
+     "ticker": "011790.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "SL",
+     "sector": "Consumer Discretionary",
+     "shares": 46055462,
+     "ticker": "005850.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "S-Oil",
+     "sector": "Energy & Chemicals",
+     "shares": 116420639,
+     "ticker": "010950.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Taekwang Industrial",
+     "sector": "Energy & Chemicals",
+     "shares": 841631,
+     "ticker": "003240.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Taihan Cable & Solution",
+     "sector": "Industrials",
+     "shares": 185810354,
+     "ticker": "001440.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "TKG Huchems",
+     "sector": "Energy & Chemicals",
+     "shares": 38370877,
+     "ticker": "069260.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Woori Financial",
+     "sector": "Financials",
+     "shares": 728035737,
+     "ticker": "316140.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Youlchon Chemical",
+     "sector": "Steels & Materials",
+     "shares": 24800000,
+     "ticker": "008730.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Young Poong",
+     "sector": "Steels & Materials",
+     "shares": 18407957,
+     "ticker": "000670.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Youngone",
+     "sector": "Consumer Discretionary",
+     "shares": 42560112,
+     "ticker": "111770.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Youngone Holdings",
+     "sector": "Consumer Discretionary",
+     "shares": 11604898,
+     "ticker": "009970.KS"
+    },
+    {
+     "currency": "KRW",
+     "name": "Yuhan",
+     "sector": "Health Care",
+     "shares": 74764121,
+     "ticker": "000100.KS"
+    }
+   ],
+   "note": "KOSPI 200 members, the large-cap subset. The full KOSPI has roughly 800 members and no published list.",
+   "resolved": 200,
+   "scraped": 200,
+   "source": "en.wikipedia.org/wiki/KOSPI_200",
+   "weighting": "cap"
   },
   "^MXX": {
-   "unavailable": "No reliable free constituent list for the IPC."
+   "as_of": "2026-08-15",
+   "currency": "MXN",
+   "members": [
+    {
+     "currency": "MXN",
+     "name": "Arca Continental",
+     "sector": "Consumer Staples",
+     "shares": 1698192061,
+     "ticker": "AC.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Alsea",
+     "sector": "Consumer Discretionary",
+     "shares": 794050669,
+     "ticker": "ALSEA.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Am\u00e9rica M\u00f3vil",
+     "sector": "Telecommunication Services",
+     "shares": 59993000000,
+     "ticker": "AMXB.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Grupo Aeroportuario del Sureste",
+     "sector": "Industrials",
+     "shares": null,
+     "ticker": "ASURB.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Banco del Baj\u00edo",
+     "shares": 1189931687,
+     "ticker": "BBAJIOO.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Grupo Bimbo",
+     "sector": "Consumer Staples",
+     "shares": 4296284215,
+     "ticker": "BIMBOA.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Bolsa Mexicana de Valores",
+     "sector": "Financials",
+     "shares": 551590637,
+     "ticker": "BOLSAA.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Cemex",
+     "sector": "Materials",
+     "shares": 14429524537,
+     "ticker": "CEMEXCPO.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Becle",
+     "shares": 3591176302,
+     "ticker": "CUERVO.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "FEMSA",
+     "sector": "Consumer Staples",
+     "shares": null,
+     "ticker": "FEMSAUBD.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Grupo Aeroportuario del Pac\u00edfico",
+     "sector": "Industrials",
+     "shares": null,
+     "ticker": "GAPB.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Grupo Carso",
+     "sector": "Industrials",
+     "shares": null,
+     "ticker": "GCARSOA1.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Grupo Cementos de Chihuahua",
+     "sector": "Materials",
+     "shares": null,
+     "ticker": "GCC.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Inbursa",
+     "sector": "Financial",
+     "shares": 5998035415,
+     "ticker": "GFINBURO.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Banorte",
+     "sector": "Financial",
+     "shares": null,
+     "ticker": "GFNORTEO.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Grupo M\u00e9xico",
+     "sector": "Materials",
+     "shares": 7785000000,
+     "ticker": "GMEXICOB.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Gruma",
+     "sector": "Consumer Staples",
+     "shares": 335528889,
+     "ticker": "GRUMAB.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Kimberly-Clark de M\u00e9xico",
+     "sector": "Consumer Staples",
+     "shares": 2986168820,
+     "ticker": "KIMBERA.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Coca-Cola FEMSA",
+     "sector": "Consumer Staples",
+     "shares": 1893509242,
+     "ticker": "KOFUBL.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Genomma Lab Internacional",
+     "sector": "Healthcare",
+     "shares": 977752666,
+     "ticker": "LABB.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "El Puerto de Liverpool",
+     "sector": "Consumer Discretionary",
+     "shares": null,
+     "ticker": "LIVEPOLC-1.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Megacable",
+     "sector": "Consumer Discretionary",
+     "shares": null,
+     "ticker": "MEGACPO.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Grupo Aeroportuario Centro Norte",
+     "sector": "Industrials",
+     "shares": 386169425,
+     "ticker": "OMAB.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Orbia",
+     "sector": "Materials",
+     "shares": 1927212589,
+     "ticker": "ORBIA.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Pe\u00f1oles",
+     "sector": "Materials",
+     "shares": 397475747,
+     "ticker": "PE&OLES.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Pinfra",
+     "sector": "Industrials",
+     "shares": 374770963,
+     "ticker": "PINFRA.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Qu\u00e1litas",
+     "sector": "Financials",
+     "shares": 394386086,
+     "ticker": "Q.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Regional",
+     "sector": "Financial",
+     "shares": 327931333,
+     "ticker": "RA.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Televisa",
+     "sector": "Consumer Discretionary",
+     "shares": 2635300000,
+     "ticker": "TLEVISACPO.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Corporaci\u00f3n Inmobiliaria Vesta",
+     "sector": "Financials",
+     "shares": 927880990,
+     "ticker": "VESTA.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Volaris",
+     "sector": "Industrials",
+     "shares": 1149513695,
+     "ticker": "VOLARA.MX"
+    },
+    {
+     "currency": "MXN",
+     "name": "Walmart de M\u00e9xico y Centroam\u00e9rica",
+     "sector": "Consumer Staples",
+     "shares": 17292211803,
+     "ticker": "WALMEX.MX"
+    }
+   ],
+   "resolved": 32,
+   "scraped": 34,
+   "source": "en.wikipedia.org/wiki/\u00cdndice_de_Precios_y_Cotizaciones",
+   "weighting": "cap"
   },
   "^N225": {
    "as_of": "2026-08-08",
