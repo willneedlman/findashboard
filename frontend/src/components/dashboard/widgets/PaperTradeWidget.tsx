@@ -57,13 +57,13 @@ interface OverlayParams { smaPeriod: number; emaPeriod: number; bbPeriod: number
 const DEFAULT_PARAMS: OverlayParams = { smaPeriod: 20, emaPeriod: 20, bbPeriod: 20, bbMult: 2 }
 const DEFAULT_OVERLAYS: Record<OverlayKey, boolean> = { sma: false, ema: false, bb: false, vwap: false, vol: true }
 
-interface OverlayState { on: Record<OverlayKey, boolean>; params: OverlayParams; windowKey: string; barSpacing: number }
+interface OverlayState { on: Record<OverlayKey, boolean>; params: OverlayParams; windowKey: string }
 function loadOverlayState(id: string): OverlayState {
   try {
     const raw = JSON.parse(localStorage.getItem(`paper-overlays-${id}`) || 'null')
-    if (raw) return { on: { ...DEFAULT_OVERLAYS, ...raw.on }, params: { ...DEFAULT_PARAMS, ...raw.params }, windowKey: raw.windowKey || '1D', barSpacing: raw.barSpacing || 0 }
+    if (raw) return { on: { ...DEFAULT_OVERLAYS, ...raw.on }, params: { ...DEFAULT_PARAMS, ...raw.params }, windowKey: raw.windowKey || '1D' }
   } catch { /* ignore */ }
-  return { on: { ...DEFAULT_OVERLAYS }, params: { ...DEFAULT_PARAMS }, windowKey: '1D', barSpacing: 0 }
+  return { on: { ...DEFAULT_OVERLAYS }, params: { ...DEFAULT_PARAMS }, windowKey: '1D' }
 }
 
 // Intraday timeframes carry pre/after-hours bars and refresh fast; daily+ are
@@ -121,14 +121,13 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
   const [overlays, setOverlays] = useState<Record<OverlayKey, boolean>>(initialOverlays.on)
   const [params, setParams] = useState<OverlayParams>(initialOverlays.params)
   const [windowKey, setWindowKey] = useState(initialOverlays.windowKey)
-  const [barSpacing, setBarSpacing] = useState(initialOverlays.barSpacing)
   const [overlayCfgOpen, setOverlayCfgOpen] = useState(false)
   const [candles, setCandles] = useState<Candle[]>([])
 
   // Persist overlay toggles + params + zoom per widget so a customized chart survives reload.
   useEffect(() => {
-    try { localStorage.setItem(`paper-overlays-${config.id}`, JSON.stringify({ on: overlays, params, windowKey, barSpacing })) } catch { /* ignore */ }
-  }, [overlays, params, windowKey, barSpacing, config.id])
+    try { localStorage.setItem(`paper-overlays-${config.id}`, JSON.stringify({ on: overlays, params, windowKey })) } catch { /* ignore */ }
+  }, [overlays, params, windowKey, config.id])
 
   const containerRef = useRef<HTMLDivElement | null>(null)
   const chartRef = useRef<IChartApi | null>(null)
@@ -137,22 +136,11 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
   const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   const lenRef = useRef(0)
   const windowRef = useRef(windowKey); useEffect(() => { windowRef.current = windowKey }, [windowKey])
-  const barSpacingRef = useRef(barSpacing); useEffect(() => { barSpacingRef.current = barSpacing }, [barSpacing])
   const candlesRef = useRef<Candle[]>([]); useEffect(() => { candlesRef.current = candles }, [candles])
-  const pickWindow = (w: string) => { setWindowKey(w); setBarSpacing(0); applyWindow(chartRef.current?.timeScale(), candlesRef.current, w) }
-  const pickBarSpacing = (n: number) => {
-    setBarSpacing(n)
-    const ts = chartRef.current?.timeScale()
-    if (n > 0) { ts?.applyOptions({ barSpacing: n }); ts?.scrollToRealTime() }
-    else applyWindow(ts, candlesRef.current, windowRef.current)
-  }
+  // The window is the only framing control: candle width follows from the span.
+  const pickWindow = (w: string) => { setWindowKey(w); applyWindow(chartRef.current?.timeScale(), candlesRef.current, w) }
   // Snap the view back to the latest data at the current framing.
-  const snapBack = () => {
-    const ts = chartRef.current?.timeScale()
-    if (!ts) return
-    if (barSpacingRef.current > 0) { ts.applyOptions({ barSpacing: barSpacingRef.current }); ts.scrollToRealTime() }
-    else applyWindow(ts, candlesRef.current, windowRef.current)
-  }
+  const snapBack = () => applyWindow(chartRef.current?.timeScale(), candlesRef.current, windowRef.current)
   const orderLineRef = useRef<IPriceLine | null>(null)
   const pendingLinesRef = useRef<Map<string, IPriceLine>>(new Map())
   const [menu, setMenu] = useState<{ x: number; y: number; price: number; cancelId?: string; cancelLabel?: string } | null>(null)
@@ -284,8 +272,7 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
         // drag turns autoScale off, which would otherwise keep e.g. a $30k futures
         // scale when switching to a $300 stock.
         try { candleRef.current?.priceScale().applyOptions({ autoScale: true }) } catch { /* series gone */ }
-        if (barSpacingRef.current > 0) { ts?.applyOptions({ barSpacing: barSpacingRef.current }); ts?.scrollToRealTime() }
-        else applyWindow(ts, cs, windowRef.current)
+        applyWindow(ts, cs, windowRef.current)
       }
       else if (follow) ts?.scrollToRealTime()
       // Keep the scrolled view across interval switches, but snap to latest if the
@@ -666,9 +653,8 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
             background: overlayCfgOpen ? 'rgba(201,168,76,0.12)' : 'transparent',
             color: overlayCfgOpen ? T.gold : 'var(--theme-secondary, #8099b0)', display: 'flex', alignItems: 'center',
           }}><Sliders size={10} /></button>
-          <select value={barSpacing > 0 ? 'custom' : windowKey} onChange={e => pickWindow(e.target.value)} style={selStyle} title="Graph width (visible span)">
+          <select value={windowKey} onChange={e => pickWindow(e.target.value)} style={selStyle} title="Graph width (visible span)">
             {WINDOWS.map(w => <option key={w.key} value={w.key}>{w.label}</option>)}
-            {barSpacing > 0 && <option value="custom" disabled>Custom</option>}
           </select>
           <select value={tfKey} onChange={e => setTfKey(e.target.value)} style={selStyle} title="Candle interval">
             {TFS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
@@ -690,13 +676,7 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
                     style={{ ...inputStyle, width: 56 }} />
                 </label>
               ))}
-              <span style={{ ...numLbl, color: T.gold, marginTop: 4 }}>Candle width</span>
-              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                <span style={numLbl}>Bar spacing</span>
-                <input type="number" min={0} max={40} step={1} value={barSpacing} onChange={e => pickBarSpacing(Math.max(0, Math.min(40, Number(e.target.value))))} style={{ ...inputStyle, width: 56 }} />
-              </label>
-              <span style={{ fontFamily: T.mono, fontSize: 8, color: T.muted }}>0 = auto (fit to graph width)</span>
-              <button onClick={() => { setParams({ ...DEFAULT_PARAMS }); pickBarSpacing(0); pickWindow('1D') }} style={{ alignSelf: 'flex-end', background: 'transparent', border: `1px solid ${T.border}`, color: T.muted, fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 8px', cursor: 'pointer' }}>Reset</button>
+              <button onClick={() => { setParams({ ...DEFAULT_PARAMS }); pickWindow('1D') }} style={{ alignSelf: 'flex-end', background: 'transparent', border: `1px solid ${T.border}`, color: T.muted, fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 8px', cursor: 'pointer' }}>Reset</button>
             </div>
           )}
         </div>

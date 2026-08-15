@@ -42,13 +42,13 @@ function applyWindow(ts: ReturnType<IChartApi['timeScale']> | undefined, candles
   ts.setVisibleLogicalRange({ from, to: lastIdx + 3 })
 }
 
-interface ChartPrefs { on: Record<OverlayKey, boolean>; params: OverlayParams; windowKey: string; barSpacing: number }
+interface ChartPrefs { on: Record<OverlayKey, boolean>; params: OverlayParams; windowKey: string }
 function loadState(key: string): ChartPrefs {
   try {
     const raw = JSON.parse(localStorage.getItem(`paper-chart-overlays-${key}`) || 'null')
-    if (raw) return { on: { ...DEFAULT_OVERLAYS, ...raw.on }, params: { ...DEFAULT_PARAMS, ...raw.params }, windowKey: raw.windowKey || '1D', barSpacing: raw.barSpacing || 0 }
+    if (raw) return { on: { ...DEFAULT_OVERLAYS, ...raw.on }, params: { ...DEFAULT_PARAMS, ...raw.params }, windowKey: raw.windowKey || '1D' }
   } catch { /* ignore */ }
-  return { on: { ...DEFAULT_OVERLAYS }, params: { ...DEFAULT_PARAMS }, windowKey: '1D', barSpacing: 0 }
+  return { on: { ...DEFAULT_OVERLAYS }, params: { ...DEFAULT_PARAMS }, windowKey: '1D' }
 }
 
 export interface ChartFill { time: number; side: string; symbol?: string; option_symbol?: string }
@@ -71,7 +71,6 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], orders =
   const [overlays, setOverlays] = useState<Record<OverlayKey, boolean>>(init.on)
   const [params, setParams] = useState<OverlayParams>(init.params)
   const [windowKey, setWindowKey] = useState(init.windowKey)
-  const [barSpacing, setBarSpacing] = useState(init.barSpacing)
   const [cfgOpen, setCfgOpen] = useState(false)
   const [candles, setCandles] = useState<Candle[]>([])
   const [spot, setSpot] = useState<number | null>(null)
@@ -93,30 +92,17 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], orders =
   const pendingLinesRef = useRef<Map<string, IPriceLine>>(new Map())
   const [menu, setMenu] = useState<{ x: number; y: number; price: number; cancelId?: string; cancelLabel?: string } | null>(null)
   const windowRef = useRef(windowKey); useEffect(() => { windowRef.current = windowKey }, [windowKey])
-  const barSpacingRef = useRef(barSpacing); useEffect(() => { barSpacingRef.current = barSpacing }, [barSpacing])
   const candlesRef = useRef<Candle[]>([]); useEffect(() => { candlesRef.current = candles }, [candles])
   // Tick the forming candle from a live Tradier quote while the market is live.
   useLiveTick(ticker, !/closed|weekend|overnight/.test(session.key), candleRef, candlesRef, setSpot)
 
-  useEffect(() => { try { localStorage.setItem(`paper-chart-overlays-${storageKey}`, JSON.stringify({ on: overlays, params, windowKey, barSpacing })) } catch { /* ignore */ } }, [overlays, params, windowKey, barSpacing, storageKey])
+  useEffect(() => { try { localStorage.setItem(`paper-chart-overlays-${storageKey}`, JSON.stringify({ on: overlays, params, windowKey })) } catch { /* ignore */ } }, [overlays, params, windowKey, storageKey])
 
-  // Pick a graph width (window) -> auto candle width framed to that span.
-  const pickWindow = (w: string) => { setWindowKey(w); setBarSpacing(0); applyWindow(chartRef.current?.timeScale(), candlesRef.current, w) }
-  // Pick a candle width (bar spacing). 0 reverts to window framing.
-  const pickBarSpacing = (n: number) => {
-    setBarSpacing(n)
-    const ts = chartRef.current?.timeScale()
-    if (n > 0) { ts?.applyOptions({ barSpacing: n }); ts?.scrollToRealTime() }
-    else applyWindow(ts, candlesRef.current, windowRef.current)
-  }
+  // The window is the only framing control: candle width follows from the span.
+  const pickWindow = (w: string) => { setWindowKey(w); applyWindow(chartRef.current?.timeScale(), candlesRef.current, w) }
 
   // Snap the view back to the latest data at the current framing.
-  const snapBack = () => {
-    const ts = chartRef.current?.timeScale()
-    if (!ts) return
-    if (barSpacingRef.current > 0) { ts.applyOptions({ barSpacing: barSpacingRef.current }); ts.scrollToRealTime() }
-    else applyWindow(ts, candlesRef.current, windowRef.current)
-  }
+  const snapBack = () => applyWindow(chartRef.current?.timeScale(), candlesRef.current, windowRef.current)
 
   useEffect(() => {
     const el = containerRef.current
@@ -196,10 +182,7 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], orders =
       // hold the scrolled-back position. Either way the zoom level is preserved.
       const follow = !fit && !!prevRange && prevRange.to >= lenRef.current - 2
       candleRef.current?.setData(cs.map(c => ({ time: c.time as Time, open: c.open, high: c.high, low: c.low, close: c.close })))
-      if (fit) {
-        if (barSpacingRef.current > 0) { ts?.applyOptions({ barSpacing: barSpacingRef.current }); ts?.scrollToRealTime() }
-        else applyWindow(ts, cs, windowRef.current)
-      }
+      if (fit) applyWindow(ts, cs, windowRef.current)
       else if (follow) ts?.scrollToRealTime()
       // Preserve the scrolled view on interval switches, but if the old bar-index
       // range now sits past a much shorter series (e.g. 1m → 1mo), snap to the
@@ -357,9 +340,8 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], orders =
             border: cfgOpen ? '1px solid rgba(201,168,76,0.55)' : `1px solid ${T.border}`,
             background: cfgOpen ? 'rgba(201,168,76,0.12)' : 'transparent', color: cfgOpen ? T.gold : 'rgba(255,255,255,0.3)',
           }}><Sliders size={11} /></button>
-          <select value={barSpacing > 0 ? 'custom' : windowKey} onChange={e => pickWindow(e.target.value)} style={selStyle} title="Graph width (visible span)">
+          <select value={windowKey} onChange={e => pickWindow(e.target.value)} style={selStyle} title="Graph width (visible span)">
             {WINDOWS.map(w => <option key={w.key} value={w.key}>{w.label}</option>)}
-            {barSpacing > 0 && <option value="custom" disabled>Custom</option>}
           </select>
           <select value={tfKey} onChange={e => setTfKey(e.target.value)} style={selStyle} title="Candle interval">
             {TFS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
@@ -378,13 +360,7 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], orders =
                   <input type="number" min={f.min} step={f.step} value={params[f.key]} onChange={e => { const n = Number(e.target.value); if (n >= f.min) setParams(p => ({ ...p, [f.key]: n })) }} style={{ ...inputStyle, width: 60 }} />
                 </label>
               ))}
-              <span style={{ ...numLbl, color: T.gold, marginTop: 4 }}>Candle width</span>
-              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                <span style={numLbl}>Bar spacing</span>
-                <input type="number" min={0} max={40} step={1} value={barSpacing} onChange={e => pickBarSpacing(Math.max(0, Math.min(40, Number(e.target.value))))} style={{ ...inputStyle, width: 60 }} />
-              </label>
-              <span style={{ fontFamily: T.mono, fontSize: 8, color: T.muted }}>0 = auto (fit to graph width)</span>
-              <button onClick={() => { setParams({ ...DEFAULT_PARAMS }); pickBarSpacing(0); pickWindow('1D') }} style={{ alignSelf: 'flex-end', background: 'transparent', border: `1px solid ${T.border}`, color: T.muted, fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 8px', cursor: 'pointer' }}>Reset</button>
+              <button onClick={() => { setParams({ ...DEFAULT_PARAMS }); pickWindow('1D') }} style={{ alignSelf: 'flex-end', background: 'transparent', border: `1px solid ${T.border}`, color: T.muted, fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 8px', cursor: 'pointer' }}>Reset</button>
             </div>
           )}
         </div>

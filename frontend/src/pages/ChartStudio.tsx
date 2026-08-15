@@ -2,7 +2,7 @@ import { useEffect, useMemo, useReducer, useRef, useState, useCallback } from 'r
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import {
-  createChart, ColorType, CrosshairMode, LineStyle,
+  createChart, ColorType, CrosshairMode, LineStyle, TickMarkType,
   type IChartApi, type ISeriesApi, type Time, type SeriesMarker, type IPriceLine,
 } from 'lightweight-charts'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
@@ -53,31 +53,40 @@ const ASSET_CLASSES: { key: AssetClass; label: string }[] = [
   { key: 'fx', label: 'FX' },
 ]
 
-type CandleWidth = 'thin' | 'med' | 'wide'
-const CANDLE_WIDTHS: { key: CandleWidth; spacing: number }[] = [
-  { key: 'thin', spacing: 4 }, { key: 'med', spacing: 9 }, { key: 'wide', spacing: 16 },
-]
-
-// Visible-span presets: pick a window, candles auto-size to fit it. Wheel zoom
-// drops the control to Custom.
+// Range is the primary time control: pick a span and the chart also picks the
+// interval that fills it with a readable number of candles (~130-460 bars), so
+// bar width falls out of the window instead of being a third thing to tune.
+// Changing the interval by hand keeps the span and re-frames it.
 const DAY = 86400
-const SPANS: Record<'intra' | 'daily' | 'weekly', { key: string; label: string; sec: number }[]> = {
-  intra: [
-    { key: '1D', label: '1D', sec: DAY }, { key: '3D', label: '3D', sec: 3 * DAY },
-    { key: '1W', label: '1W', sec: 7 * DAY }, { key: '1M', label: '1M', sec: 31 * DAY },
-    { key: 'all', label: 'ALL', sec: 0 },
-  ],
-  daily: [
-    { key: '1M', label: '1M', sec: 31 * DAY }, { key: '3M', label: '3M', sec: 92 * DAY },
-    { key: '6M', label: '6M', sec: 183 * DAY }, { key: '1Y', label: '1Y', sec: 365 * DAY },
-    { key: 'all', label: 'ALL', sec: 0 },
-  ],
-  weekly: [
-    { key: '1Y', label: '1Y', sec: 365 * DAY }, { key: '3Y', label: '3Y', sec: 3 * 365 * DAY },
-    { key: '5Y', label: '5Y', sec: 5 * 365 * DAY }, { key: 'all', label: 'ALL', sec: 0 },
-  ],
+const YEAR = 365 * DAY
+interface RangeDef { key: string; label: string; sec: number; tf: TF }
+const RANGES: RangeDef[] = [
+  { key: '1D', label: '1D', sec: DAY, tf: '1m' },
+  { key: '1W', label: '1W', sec: 7 * DAY, tf: '5m' },
+  { key: '1M', label: '1M', sec: 31 * DAY, tf: '15m' },
+  { key: '3M', label: '3M', sec: 92 * DAY, tf: '1h' },
+  { key: '6M', label: '6M', sec: 183 * DAY, tf: '1d' },
+  { key: 'YTD', label: 'YTD', sec: 0, tf: '1d' },
+  { key: '1Y', label: '1Y', sec: YEAR, tf: '1d' },
+  { key: '5Y', label: '5Y', sec: 5 * YEAR, tf: '1wk' },
+  { key: 'MAX', label: 'MAX', sec: 0, tf: '1wk' },
+]
+const rangeDef = (key: string) => RANGES.find(r => r.key === key)
+// Left edge of a range, given the last bar. null = fit everything.
+const rangeFrom = (key: string, last: number): number | null => {
+  if (key === 'MAX') return null
+  if (key === 'YTD') return Math.floor(Date.UTC(new Date(last * 1000).getUTCFullYear(), 0, 1) / 1000)
+  // 1D means the session the last bar belongs to, not the trailing 24 hours,
+  // which would drag in half of the prior afternoon.
+  if (key === '1D') { const d = new Date(last * 1000); d.setHours(0, 0, 0, 0); return Math.floor(d.getTime() / 1000) }
+  const def = rangeDef(key)
+  return def ? last - def.sec : null
 }
-const spansFor = (tf: TF) => INTRADAY.has(tf) ? SPANS.intra : tf === '1wk' ? SPANS.weekly : SPANS.daily
+
+const TF_LABEL: Record<TF, string> = { '1m': '1 min', '5m': '5 min', '15m': '15 min', '1h': '1 hour', '4h': '4 hour', '1d': '1 day', '1wk': '1 week' }
+
+const fmtVol = (v: number) =>
+  v >= 1e9 ? `${(v / 1e9).toFixed(2)}B` : v >= 1e6 ? `${(v / 1e6).toFixed(2)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(2)}K` : String(Math.round(v))
 
 // ── Data plumbing ────────────────────────────────────────────────────────────
 const toEpoch = (t: number | string): number =>
@@ -178,7 +187,7 @@ interface State {
   ticker: string
   assetClass: AssetClass
   tf: TF
-  candleWidth: CandleWidth
+  range: string
   ind: { bb: boolean; vwap: boolean; gflip: boolean; gexProfile: boolean }
   lanes: { volume: boolean; rsi: boolean; macd: boolean; iv: boolean }
   laneOrder: IndLaneId[]
@@ -193,7 +202,7 @@ interface State {
 }
 type Action =
   | { type: 'ticker'; v: string } | { type: 'assetClass'; v: AssetClass } | { type: 'tf'; v: TF }
-  | { type: 'candleWidth'; v: CandleWidth }
+  | { type: 'range'; v: string } | { type: 'customRange' }
   | { type: 'ind'; k: keyof State['ind'] } | { type: 'lane'; k: keyof State['lanes'] }
   | { type: 'event'; k: keyof State['events'] }
   | { type: 'overlay'; id: string } | { type: 'addCompare'; sym: string } | { type: 'rmCompare'; sym: string }
@@ -205,7 +214,7 @@ type Action =
 
 // Clean slate by default: candles and volume only, every overlay opt-in.
 const DEFAULT: State = {
-  ticker: 'SPY', assetClass: 'equities', tf: '1d', candleWidth: 'med',
+  ticker: 'SPY', assetClass: 'equities', tf: '1d', range: '6M',
   ind: { bb: false, vwap: false, gflip: false, gexProfile: false },
   lanes: { volume: true, rsi: false, macd: false, iv: false },
   laneOrder: [...LANE_IDS],
@@ -220,8 +229,10 @@ function reducer(s: State, a: Action): State {
   switch (a.type) {
     case 'ticker': return { ...s, ticker: a.v }
     case 'assetClass': return { ...s, assetClass: a.v }
-    case 'tf': return { ...s, tf: a.v }
-    case 'candleWidth': return { ...s, candleWidth: a.v }
+    // A hand-picked interval keeps the span: the window re-frames on the new bars.
+    case 'tf': return s.tf === a.v ? s : { ...s, tf: a.v, range: s.range === 'custom' ? DEFAULT.range : s.range }
+    case 'range': return { ...s, range: a.v, tf: rangeDef(a.v)?.tf ?? s.tf }
+    case 'customRange': return s.range === 'custom' ? s : { ...s, range: 'custom' }
     case 'ind': return { ...s, ind: { ...s.ind, [a.k]: !s.ind[a.k] } }
     case 'lane': return { ...s, lanes: { ...s.lanes, [a.k]: !s.lanes[a.k] } }
     case 'event': return { ...s, events: { ...s.events, [a.k]: !s.events[a.k] } }
@@ -249,15 +260,18 @@ const load = (): State => {
   try {
     // v2 key: earlier keys carried the old default-on overlay set, and the
     // tool now starts clean for everyone.
-    const raw = JSON.parse(localStorage.getItem('unifiedOverlay2') || 'null')
-    if (!raw) return DEFAULT
+    const { candleWidth: _dropped, ...raw } = JSON.parse(localStorage.getItem('unifiedOverlay2') || 'null') ?? {}
+    if (!raw.ticker) return DEFAULT
+    // Range replaced the old free-form window selector; anything unrecognised
+    // (including a stored 'custom') opens on the default span.
+    const range = RANGES.some(r => r.key === raw.range) ? raw.range : DEFAULT.range
     const mas: MA[] = Array.isArray(raw.mas) ? raw.mas.filter((m: any) => (m?.kind === 'sma' || m?.kind === 'ema') && m.period >= 2) : []
     const stored: IndLaneId[] = Array.isArray(raw.laneOrder) ? raw.laneOrder.filter((id: any) => (LANE_IDS as string[]).includes(id)) : []
     const laneOrder = [...stored, ...LANE_IDS.filter(id => !stored.includes(id))]
     // Old shape: rsi/macd/volume lived in `ind`; lanes did not exist.
     const lanes = { ...DEFAULT.lanes, ...(raw.lanes ?? {}), ...(raw.ind?.rsi != null ? { rsi: raw.ind.rsi } : {}), ...(raw.ind?.macd != null ? { macd: raw.ind.macd } : {}), ...(raw.ind?.volume != null ? { volume: raw.ind.volume } : {}) }
     const ind = { ...DEFAULT.ind, ...(raw.ind?.bb != null ? { bb: raw.ind.bb } : {}), ...(raw.ind?.vwap != null ? { vwap: raw.ind.vwap } : {}), ...(raw.ind?.gflip != null ? { gflip: raw.ind.gflip } : {}), ...(raw.ind?.gexProfile != null ? { gexProfile: raw.ind.gexProfile } : {}) }
-    return { ...DEFAULT, ...raw, mas, ind, lanes, laneOrder, events: { ...DEFAULT.events, ...raw.events }, params: { ...DEFAULT.params, ...raw.params } }
+    return { ...DEFAULT, ...raw, range, mas, ind, lanes, laneOrder, events: { ...DEFAULT.events, ...raw.events }, params: { ...DEFAULT.params, ...raw.params } }
   } catch { return DEFAULT }
 }
 
@@ -321,26 +335,66 @@ const LANE_H_KEY = 'cs_lane_heights'
 const LANE_H_MIN = 48
 const LANE_H_MAX = 400
 
-const formatChartTime = (time: Time) => {
-  const date = typeof time === 'number'
-    ? new Date(time * 1000)
-    : typeof time === 'string'
-      ? new Date(`${time}T00:00:00`)
-      : new Date(time.year, time.month - 1, time.day)
-  return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+const dateOfTime = (time: Time): Date =>
+  typeof time === 'number' ? new Date(time * 1000)
+    : typeof time === 'string' ? new Date(`${time}T00:00:00Z`)
+      : new Date(Date.UTC(time.year, time.month - 1, time.day))
+
+// Daily and slower bars arrive as calendar dates stamped at UTC midnight, so
+// reading them with local getters shifts every label a day back for anyone west
+// of UTC — the axis read Aug 13 while the readout read Aug 14. Intraday bars are
+// true instants and stay local.
+const partsOf = (time: Time, utc: boolean) => {
+  const d = dateOfTime(time)
+  return utc
+    ? { y: d.getUTCFullYear(), mo: d.getUTCMonth(), d: d.getUTCDate(), dow: d.getUTCDay(), h: d.getUTCHours(), mi: d.getUTCMinutes() }
+    : { y: d.getFullYear(), mo: d.getMonth(), d: d.getDate(), dow: d.getDay(), h: d.getHours(), mi: d.getMinutes() }
+}
+const clock12 = (h: number, mi: number, long = false) =>
+  `${h % 12 === 0 ? 12 : h % 12}:${String(mi).padStart(2, '0')}${long ? (h < 12 ? ' AM' : ' PM') : (h < 12 ? 'a' : 'p')}`
+
+// The time scale budgets (fontSize + 4) * 5 pixels per label and assumes 8
+// characters, whatever the formatter returns — the old single long format
+// ("Aug 14, 2:40 PM") overran that budget and the labels ran into each other.
+// One short label per tier keeps them sparse and readable.
+const makeTickFormatter = (utcRef: { current: boolean }) => (time: Time, type: TickMarkType) => {
+  const p = partsOf(time, utcRef.current)
+  switch (type) {
+    case TickMarkType.Year: return String(p.y)
+    case TickMarkType.Month: return MONTHS[p.mo]
+    case TickMarkType.DayOfMonth: return `${MONTHS[p.mo]} ${p.d}`
+    default: return clock12(p.h, p.mi)
+  }
+}
+// Crosshair pill under the cursor: the one place the full stamp belongs.
+const makeCrosshairFormatter = (utcRef: { current: boolean }) => (time: Time) => {
+  const p = partsOf(time, utcRef.current)
+  return utcRef.current
+    ? `${DOW[p.dow]} ${MONTHS[p.mo]} ${p.d}, ${p.y}`
+    : `${MONTHS[p.mo]} ${p.d} · ${clock12(p.h, p.mi, true)}`
 }
 
+// One axis width for the price panel and every lane below it, so their plots
+// start and end on the same x — a per-pane width made the lanes drift.
+const PRICE_AXIS = { minimumWidth: 68, entireTextOnly: true, ticksVisible: false }
+const LANE_MARGINS = { top: 0.26, bottom: 0.06 }
+
 const baseOptions = (C: Colors, h: number) => ({
-  layout: { background: { type: ColorType.Solid, color: C.bg }, textColor: C.text, fontFamily: "ui-monospace, monospace", fontSize: 10, attributionLogo: false },
-  localization: { timeFormatter: (time: Time) => formatChartTime(time) },
+  layout: { background: { type: ColorType.Solid, color: C.bg }, textColor: C.text, fontFamily: "ui-monospace, monospace", fontSize: 11, attributionLogo: false },
   grid: { vertLines: { color: C.grid }, horzLines: { color: C.grid } },
   crosshair: {
     mode: CrosshairMode.Normal,
-    vertLine: { color: `${C.gold}66`, labelBackgroundColor: C.surface },
-    horzLine: { color: `${C.gold}66`, labelBackgroundColor: C.surface },
+    // Gold on the time axis, where the pill has the axis to itself; neutral on
+    // the price axis, so the cursor's reading stays distinct from the gold
+    // last-traded badge it sits next to.
+    vertLine: { color: `${C.gold}80`, width: 1 as const, style: LineStyle.Solid, labelBackgroundColor: C.gold },
+    horzLine: { color: `${C.gold}80`, width: 1 as const, style: LineStyle.Solid, labelBackgroundColor: C.surface },
   },
-  rightPriceScale: { borderColor: C.axisBorder },
-  timeScale: { borderColor: C.axisBorder, tickMarkFormatter: (time: Time) => formatChartTime(time) },
+  rightPriceScale: { ...PRICE_AXIS, borderColor: C.axisBorder, scaleMargins: { top: 0.12, bottom: 0.1 } },
+  timeScale: { borderColor: C.axisBorder },
   height: h,
 })
 
@@ -493,7 +547,7 @@ const LANE_DEFS: { id: LaneId; h: number; label: string }[] = [
 // ── Main component ───────────────────────────────────────────────────────────
 export function ChartStudioContent() {
   const [state, dispatch] = useReducer(reducer, undefined, load)
-  const { ticker, assetClass, tf, candleWidth, ind, lanes, laneOrder, layerCfg, railOpen, inspectorOpen, mas, events, overlays, compares, params } = state
+  const { ticker, assetClass, tf, range, ind, lanes, laneOrder, layerCfg, railOpen, inspectorOpen, mas, events, overlays, compares, params } = state
   const cfgOf = (id: string): LayerCfg => ({ size: 'M', place: 'chart', ...layerCfg[id] })
   // Volume defaults to its own lane (unlike other overlays, which default to
   // the chart) so existing layouts don't change until a user opts in.
@@ -501,10 +555,10 @@ export function ChartStudioContent() {
   const [tickerDraft, setTickerDraft] = useState(ticker)
   const [compareDraft, setCompareDraft] = useState('')
   const [maDraft, setMaDraft] = useState<MA>({ kind: 'ema', period: 21 })
-  const [windowKey, setWindowKey] = useState('3M')
   const [crossTime, setCrossTime] = useState<number | null>(null)
   const [scaleTick, setScaleTick] = useState(0)   // bumps when the price scale can have moved
   const applyingSpan = useRef(false)
+  const resetView = useRef<() => void>()
   const addMA = () => {
     if (maDraft.period >= 2 && maDraft.period <= 400) dispatch({ type: 'addMA', ma: { ...maDraft } })
   }
@@ -694,6 +748,12 @@ export function ChartStudioContent() {
   }, [ivHistQ.data])
 
   // ── Chart instances: price + 5 lanes + minimap ──
+  // Axis formatters are installed once and read the live interval through refs;
+  // the tf effect re-applies them so the scale drops its formatted-label cache.
+  const intradayRef = useRef(INTRADAY.has(tf))
+  const barCountRef = useRef(0)
+  const tickFmt = useMemo(() => makeTickFormatter(intradayRef), [])
+  const crossFmt = useMemo(() => makeCrosshairFormatter(intradayRef), [])
   const mainRef = useRef<HTMLDivElement>(null)
   const laneRefs = useRef<Record<LaneId, HTMLDivElement | null>>({ volume: null, rsi: null, macd: null, iv: null, ov0: null, ov1: null, ov2: null, ov3: null, ov4: null })
   const charts = useRef<{ main?: IChartApi } & Partial<Record<LaneId, IChartApi>>>({})
@@ -764,32 +824,68 @@ export function ChartStudioContent() {
     if (!mainRef.current) return
     const main = createChart(mainRef.current, {
       ...baseOptions(C, mainHeight), width: mainRef.current.clientWidth,
-      timeScale: { borderColor: C.axisBorder, timeVisible: true, secondsVisible: false, barSpacing: 9, tickMarkFormatter: (time: Time) => formatChartTime(time) },
-      handleScroll: { mouseWheel: false, pressedMouseMove: true },
+      localization: { timeFormatter: crossFmt },
+      timeScale: {
+        borderColor: C.axisBorder, timeVisible: true, secondsVisible: false, barSpacing: 9,
+        // Breathing room at the right edge so the last candle and its price
+        // bubble are not pinned against the axis, and a floor on bar width so a
+        // wide window never collapses the candles into a solid smear.
+        rightOffset: 4, minBarSpacing: 0.4,
+        lockVisibleTimeRangeOnResize: true, tickMarkMaxCharacterLength: 10,
+        tickMarkFormatter: tickFmt,
+      },
+      handleScroll: { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
       // Native wheel zoom is sluggish: replaced by the amplified cursor-pivot
       // handler below (same pattern as PaperChart, higher coefficient).
-      handleScale: { mouseWheel: false, pinch: true },
+      handleScale: {
+        mouseWheel: false, pinch: true,
+        axisPressedMouseMove: { time: true, price: true },
+        axisDoubleClickReset: { time: true, price: true },
+      },
     })
     const wheelEl = mainRef.current
-    const onWheel = (e: WheelEvent) => {
+    // Wheel deltas arrive far faster than frames; accumulate and apply once per
+    // frame so a fast scroll reads as one smooth glide instead of a stutter.
+    let pending: { zoom: number; pan: number; x: number } | null = null
+    let raf = 0
+    const flush = () => {
+      raf = 0
+      const job = pending
+      pending = null
       const ts = main.timeScale()
-      const range = ts.getVisibleLogicalRange()
-      if (!range) return
-      e.preventDefault()
-      const rect = wheelEl.getBoundingClientRect()
-      const width = range.to - range.from
-      // Trackpad horizontal swipe pans; vertical wheel zooms.
-      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
-        const shift = e.deltaX * (width / rect.width)
-        try { ts.setVisibleLogicalRange({ from: range.from + shift, to: range.to + shift }) } catch { /* no data */ }
-        return
+      const vr = ts.getVisibleLogicalRange()
+      if (!job || !vr) return
+      const width = vr.to - vr.from
+      let from: number = vr.from, to: number = vr.to
+      if (job.pan) {
+        const shift = job.pan * (width / (wheelEl.clientWidth || 1))
+        from += shift; to += shift
       }
-      const pivot = ts.coordinateToLogical(e.clientX - rect.left)
-      const factor = Math.exp(e.deltaY * (e.ctrlKey ? 0.02 : 0.003))
-      const newWidth = Math.min(Math.max(6, width * factor), 60000)
-      const p = pivot == null ? range.from + width / 2 : pivot
-      const newFrom = p - (p - range.from) * (newWidth / width)
-      try { ts.setVisibleLogicalRange({ from: newFrom, to: newFrom + newWidth }) } catch { /* no data yet */ }
+      if (job.zoom) {
+        const pivot = ts.coordinateToLogical(job.x)
+        const next = Math.min(Math.max(8, width * Math.exp(job.zoom)), 60000)
+        const p = pivot == null ? from + width / 2 : pivot
+        from = p - (p - from) * (next / width)
+        to = from + next
+      }
+      // Keep the tape on screen: at least ten bars of real data stay visible,
+      // so a hard fling can never leave an empty pane you have to hunt back from.
+      const n = barCountRef.current
+      if (n > 0) {
+        if (to < 10) { const d = 10 - to; from += d; to += d }
+        if (from > n - 10) { const d = from - (n - 10); from -= d; to -= d }
+      }
+      try { ts.setVisibleLogicalRange({ from, to }) } catch { /* no data yet */ }
+    }
+    const onWheel = (e: WheelEvent) => {
+      if (!main.timeScale().getVisibleLogicalRange()) return
+      e.preventDefault()
+      const x = e.clientX - wheelEl.getBoundingClientRect().left
+      // Trackpad horizontal swipe and shift-wheel pan; vertical wheel zooms.
+      const pan = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.shiftKey ? e.deltaY : 0
+      const zoom = pan ? 0 : e.deltaY * (e.ctrlKey ? 0.02 : 0.003)
+      pending = { zoom: (pending?.zoom ?? 0) + zoom, pan: (pending?.pan ?? 0) + pan, x }
+      if (!raf) raf = requestAnimationFrame(flush)
     }
     wheelEl.addEventListener('wheel', onWheel, { passive: false })
     const laneCharts: Partial<Record<LaneId, IChartApi>> = {}
@@ -798,7 +894,10 @@ export function ChartStudioContent() {
       if (!el) continue
       laneCharts[lane.id] = createChart(el, {
         ...baseOptions(C, laneHeightsRef.current[lane.id] ?? lane.h), width: el.clientWidth,
-        timeScale: { visible: false }, rightPriceScale: { borderColor: C.axisBorder },
+        localization: { timeFormatter: crossFmt },
+        timeScale: { visible: false },
+        // Headroom for the lane's own label, which used to sit on top of the plot.
+        rightPriceScale: { ...PRICE_AXIS, borderColor: C.axisBorder, scaleMargins: LANE_MARGINS },
         // Lanes follow the price panel on TIME (a sparse lane fitting itself must
         // never drag the shared range down to a single day), so all time-scale
         // interaction stays off. The PRICE axis is the lane's own: dragging it
@@ -851,11 +950,13 @@ export function ChartStudioContent() {
       syncing.current = false
     })
 
-    // User range changes flip the window selector to Custom.
+    // Hand-driven pan or zoom drops the range control to Custom.
     main.timeScale().subscribeVisibleTimeRangeChange(() => {
-      if (!applyingSpan.current) setWindowKey('custom')
+      if (!applyingSpan.current) dispatch({ type: 'customRange' })
       setScaleTick(t => t + 1)
     })
+    // Double-click anywhere on the price panel re-frames the active range.
+    main.subscribeDblClick(() => resetView.current?.())
 
     // Crosshair: drive the inspector and echo positions into every lane.
     // Programmatic setCrosshairPosition fires the same subscription as a real
@@ -910,6 +1011,7 @@ export function ChartStudioContent() {
 
     return () => {
       ro.disconnect()
+      if (raf) cancelAnimationFrame(raf)
       wheelEl.removeEventListener('wheel', onWheel)
       main.remove(); laneList.forEach(c => c.remove())
       charts.current = {}; series.current = {}; overlaySeries.current.clear(); maSeries.current.clear(); flipLine.current = null; volOwner.current = null
@@ -944,9 +1046,14 @@ export function ChartStudioContent() {
     const s = series.current
     const main = charts.current.main
     if (!s.candle || !main || !candles.length) return
+    // Writing data nudges the visible range, and that event is what flips the
+    // range control to Custom — a live tick must not look like a user pan.
+    applyingSpan.current = true
+    setTimeout(() => { applyingSpan.current = false }, 200)
     try {
       s.candle.setData(candles.map(c => ({ time: c.time as Time, open: c.open, high: c.high, low: c.low, close: c.close })))
       candleStore.current = new Map(candles.map(c => [c.time, c]))
+      barCountRef.current = candles.length
       store.current.set('close', toSorted(candles.map(c => ({ time: c.time, value: c.close }))))
 
       // Volume rides the price panel (own hidden price scale, bottom band) or
@@ -984,9 +1091,16 @@ export function ChartStudioContent() {
         put('lane:macd', indData.macd, lanes.macd)
         for (const m of mas) put(`ma:${maKey(m)}`, indData.maLines[maKey(m)] ?? [], true)
       }
-      charts.current.main?.timeScale().applyOptions({ timeVisible: INTRADAY.has(tf) })
     } catch (e) { console.warn('candle/indicator render failed', e) }
   }, [candles, indData, ind, lanes.volume, lanes.rsi, lanes.macd, mas, tf, C, volPlace])
+
+  // Interval class decides whether bar stamps are instants (local) or calendar
+  // dates (UTC). Re-applying the formatter drops the scale's label cache.
+  useEffect(() => {
+    intradayRef.current = INTRADAY.has(tf)
+    charts.current.main?.timeScale().applyOptions({ timeVisible: INTRADAY.has(tf), secondsVisible: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tf])
 
   // ── MA series lifecycle ──
   useEffect(() => {
@@ -1056,8 +1170,8 @@ export function ChartStudioContent() {
           overlaySeries.current.set(d.id, meta)
         }
         target.owner.priceScale(target.scaleId).applyOptions(target.scaleId === 'right'
-          ? { scaleMargins: { top: 0.14, bottom: 0.1 } }
-          : { visible: false, scaleMargins: inLane ? { top: 0.14, bottom: 0.1 } : SIZE_MARGINS[cfg.size] })
+          ? { scaleMargins: LANE_MARGINS }
+          : { visible: false, scaleMargins: inLane ? LANE_MARGINS : SIZE_MARGINS[cfg.size] })
         meta.srs.setData(pts.map(p => ({ time: p.time as Time, value: p.value })))
         meta.srs.applyOptions({ pointMarkersVisible: pts.length < 30 } as any)
         // Inspector carries the full history forward (monthly feeds resolve
@@ -1102,9 +1216,11 @@ export function ChartStudioContent() {
     if (!candle) return
     if (flipLine.current) { try { candle.removePriceLine(flipLine.current) } catch { /* gone */ } flipLine.current = null }
     if (ind.gflip && flipLevel != null) {
+      // Short title, no axis pill: the full level is in the legend and the
+      // readout, and the wide "γ-flip 731" badge sat on top of the price axis.
       flipLine.current = candle.createPriceLine({
         price: flipLevel, color: C.violet, lineWidth: 1, lineStyle: LineStyle.Dashed,
-        axisLabelVisible: true, title: `γ-flip ${flipLevel}`,
+        axisLabelVisible: false, title: 'γ-flip',
       })
     }
   }, [flipLevel, ind.gflip, C, candles.length > 0])
@@ -1127,46 +1243,53 @@ export function ChartStudioContent() {
     } catch (e) { console.warn('markers failed', e) }
   }, [eventsQ.data, events, candles, C])
 
-  // ── Window span + candle width ──
+  // ── Framing the visible window ──
+  // Bar width is a consequence of the window, never set independently: the
+  // range fixes how much time is on screen and the candles size themselves to
+  // fill the pane, plus a few bars of margin so the tape is not flush right.
+  const RIGHT_MARGIN_BARS = 3
+  const MIN_VISIBLE_BARS = 12
   const applySpan = useCallback((key: string) => {
     const main = charts.current.main
     const last = candles.length ? candles[candles.length - 1].time : null
     if (!main || last == null) return
-    const def = spansFor(tf).find(s => s.key === key)
-    if (!def) return
+    const ts = main.timeScale()
     applyingSpan.current = true
     try {
-      if (def.sec === 0) main.timeScale().fitContent()
-      else {
-        const from = Math.max(candles[0].time, last - def.sec)
-        main.timeScale().setVisibleRange({ from: from as Time, to: last as Time })
+      const from = rangeFrom(key, last)
+      if (from == null) ts.fitContent()
+      else ts.setVisibleRange({ from: Math.max(candles[0].time, from) as Time, to: last as Time })
+      // Margin at the right edge, and a floor on how few bars a range may
+      // resolve to — 1D on a daily interval would otherwise land on one candle.
+      const lr = ts.getVisibleLogicalRange()
+      if (lr) {
+        const width = Math.max(lr.to - lr.from, MIN_VISIBLE_BARS)
+        ts.setVisibleLogicalRange({ from: lr.to - width, to: lr.to + RIGHT_MARGIN_BARS })
       }
     } catch { /* series not populated yet */ }
     // The range-change event lands async: keep the guard up long enough that
-    // our own programmatic change never flips the selector to Custom.
+    // our own programmatic change never flips the control to Custom.
     setTimeout(() => { applyingSpan.current = false }, 200)
-    setWindowKey(key)
-  }, [candles, tf])
-  const windowKeyRef = useRef(windowKey)
-  useEffect(() => { windowKeyRef.current = windowKey }, [windowKey])
-  // Auto-frame the visible span only on the FIRST candle load for a given
-  // ticker/timeframe. On subsequent ticks (a live refetch of the same series)
-  // keep the user's current zoom/pan — re-applying the span every tick reset it.
+  }, [candles])
+  const rangeRef = useRef(range)
+  useEffect(() => { rangeRef.current = range }, [range])
+  useEffect(() => { resetView.current = () => applySpan(rangeRef.current === 'custom' ? DEFAULT.range : rangeRef.current) }, [applySpan])
+  // Re-frame when the series identity changes (ticker, interval) or when the
+  // user picks a range. On a live refetch of the same series the view is left
+  // alone — re-applying the span every tick used to reset the user's zoom.
   const framedKey = useRef('')
   useEffect(() => {
     if (!candles.length) return
-    const key = `${ticker}|${tf}`
-    if (framedKey.current === key) return   // same series → this is a tick, preserve the view
+    const key = `${ticker}|${tf}|${range}`
+    if (framedKey.current === key) return
+    // 'custom' on the series already framed means the user just panned or
+    // zoomed by hand — that is their view, not a request to re-frame.
+    const sameSeries = framedKey.current.startsWith(`${ticker}|${tf}|`)
     framedKey.current = key
-    const wk = windowKeyRef.current
-    const valid = spansFor(tf).some(s => s.key === wk) ? wk : (INTRADAY.has(tf) ? '1W' : '3M')
-    applySpan(valid)
+    if (range === 'custom' && sameSeries) return
+    applySpan(range === 'custom' ? DEFAULT.range : range)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [candles])
-  useEffect(() => {
-    const sp = CANDLE_WIDTHS.find(w => w.key === candleWidth)?.spacing ?? 9
-    charts.current.main?.timeScale().applyOptions({ barSpacing: sp })
-  }, [candleWidth])
+  }, [candles, range])
 
   const submitTicker = () => {
     const v = tickerDraft.trim().toUpperCase()
@@ -1236,17 +1359,25 @@ export function ChartStudioContent() {
     overlaySeries.current.get(id)?.srs.options().color ?? OVERLAY_PALETTE[i % OVERLAY_PALETTE.length], [])
   const fmtN = (v: number | null, dp = 2, suffix = '') => v == null ? '—' : `${v.toFixed(dp)}${suffix}`
 
-  const activeLegend = [
-    ...mas.map((m, i) => ({ label: `${m.kind.toUpperCase()} ${m.period}`, color: MA_PALETTE[i % MA_PALETTE.length], style: 'line' as GlyphStyle })),
-    ...(ind.bb ? [{ label: `BB ${params.bbP}·${params.bbK}`, color: 'var(--theme-secondary, #8099b0)', style: 'dash' as GlyphStyle }] : []),
-    ...(ind.vwap ? [{ label: 'VWAP', color: '#c084fc', style: 'dash' as GlyphStyle }] : []),
-    ...activeOverlayDefs.map((d, i) => ({ label: d.label, color: overlayColor(d.id, i), style: d.style })),
-    ...(ind.gflip && flipLevel != null ? [{ label: `γ-flip ${flipLevel}`, color: '#c084fc', style: 'dash' as GlyphStyle }] : []),
-    ...(ind.gexProfile ? [{ label: 'GEX by strike', color: '#3fb6a0', style: 'hist' as GlyphStyle }] : []),
+  // Legend doubles as a readout: every layer carries its value at the crosshair,
+  // so the eye never has to travel to the side panel to read a line it can see.
+  const legendVal = (v: number | null) => v == null ? '' : v.toFixed(Math.abs(v) >= 1000 ? 0 : 2)
+  const activeLegend: { label: string; color: string; style: GlyphStyle; value: string }[] = [
+    ...mas.map((m, i) => ({ label: `${m.kind.toUpperCase()} ${m.period}`, color: MA_PALETTE[i % MA_PALETTE.length], style: 'line' as GlyphStyle, value: legendVal(at(`ma:${maKey(m)}`)) })),
+    ...(ind.bb ? [{ label: `BB ${params.bbP}·${params.bbK}`, color: 'var(--theme-secondary, #8099b0)', style: 'dash' as GlyphStyle, value: '' }] : []),
+    ...(ind.vwap ? [{ label: 'VWAP', color: '#c084fc', style: 'dash' as GlyphStyle, value: legendVal(at('vwap')) }] : []),
+    ...activeOverlayDefs.map((d, i) => ({ label: d.label, color: overlayColor(d.id, i), style: d.style, value: legendVal(at(`ov:${d.id}`)) })),
+    ...(ind.gflip && flipLevel != null ? [{ label: 'γ-flip', color: '#c084fc', style: 'dash' as GlyphStyle, value: String(flipLevel) }] : []),
+    ...(ind.gexProfile ? [{ label: 'GEX by strike', color: '#3fb6a0', style: 'hist' as GlyphStyle, value: '' }] : []),
   ]
 
   const pct = inspectC && inspectC.open ? ((inspectC.close - inspectC.open) / inspectC.open) * 100 : 0
-  const dateOf = (t: number | null) => t == null ? '' : new Date(t * 1000).toISOString().slice(0, 10)
+  const barDir = inspectC && inspectC.close < inspectC.open ? C.neg : C.pos
+  const stampOf = (t: number | null) => {
+    if (t == null) return '—'
+    const p = partsOf(t as Time, !INTRADAY.has(tf))
+    return INTRADAY.has(tf) ? `${MONTHS[p.mo]} ${p.d} · ${clock12(p.h, p.mi, true)}` : `${DOW[p.dow]} ${MONTHS[p.mo]} ${p.d}, ${p.y}`
+  }
   const gexW = GEX_WIDTHS[cfgOf('gexprofile').size]
   const lanePlacedIds = activeOverlayDefs.filter(d => cfgOf(d.id).place === 'lane').map(d => d.id)
   const laneOverlayCount = lanePlacedIds.length
@@ -1306,6 +1437,8 @@ export function ChartStudioContent() {
       <style>{`
         .cs-row:hover { background: var(--theme-hover, rgba(255,255,255,0.04)); }
         .cs-chip:hover { border-color: var(--theme-primary, #c9a84c) !important; color: var(--theme-text, #d7e3fc) !important; }
+        .cs-range:hover { color: var(--theme-text, #d7e3fc) !important; border-bottom-color: var(--theme-border, rgba(255,255,255,0.28)) !important; }
+        .cs-range[aria-pressed="true"]:hover { border-bottom-color: var(--theme-primary, #c9a84c) !important; color: var(--theme-primary, #c9a84c) !important; }
       `}</style>
 
       {/* ── Header bar ── */}
@@ -1329,29 +1462,30 @@ export function ChartStudioContent() {
             style={{ width: 96, height: 32, boxSizing: 'border-box', background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))', color: 'var(--theme-primary, #c9a84c)', fontFamily: MONO, fontSize: 15, fontWeight: 400, padding: '0 8px' }} />
           <button className="cs-chip" onClick={submitTicker} style={{ height: 32, boxSizing: 'border-box', fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', padding: '0 10px', cursor: 'pointer', background: 'transparent', color: 'var(--theme-secondary, #8099b0)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))' }}>LOAD TICKER</button>
         </span>
-        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-          <span style={{ display: 'flex', gap: 4 }}>
-            {TFS.map(t => (
-              <button key={t} className="cs-chip" onClick={() => dispatch({ type: 'tf', v: t })} style={{
-                fontFamily: MONO, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 8px', cursor: 'pointer',
-                background: tf === t ? 'var(--theme-primary, #c9a84c)' : 'transparent',
-                color: tf === t ? 'var(--theme-bg, #0a0e16)' : 'var(--theme-secondary, #8099b0)',
-                border: tf === t ? '1px solid var(--theme-primary, #c9a84c)' : '1px solid var(--theme-border, rgba(255,255,255,0.14))',
-              }}>{t.toUpperCase()}</button>
+        {/* Range is the primary control and carries its own interval; the
+            interval picker beside it overrides that without losing the span. */}
+        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span role="group" aria-label="Visible range" style={{ display: 'flex', alignItems: 'center' }}>
+            {RANGES.map(r => (
+              <button key={r.key} className="cs-range" onClick={() => dispatch({ type: 'range', v: r.key })}
+                aria-pressed={range === r.key} title={`${r.label} · ${TF_LABEL[r.tf]} bars`}
+                style={{
+                  fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
+                  padding: '6px 10px 5px', cursor: 'pointer', background: 'transparent', border: 'none',
+                  borderBottom: `2px solid ${range === r.key ? 'var(--theme-primary, #c9a84c)' : 'transparent'}`,
+                  color: range === r.key ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)',
+                }}>{r.label}</button>
             ))}
+            {range === 'custom' && (
+              <button className="cs-range" onClick={() => applySpan(DEFAULT.range)} title="Back to a preset range"
+                style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', padding: '6px 10px 5px', cursor: 'pointer', background: 'transparent', border: 'none', borderBottom: '2px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)' }}>CUSTOM</button>
+            )}
           </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <span style={{ ...eyebrow, fontSize: 8.5 }}>Candle</span>
-            <Seg options={CANDLE_WIDTHS.map(w => ({ key: w.key, label: w.key.toUpperCase() }))} value={candleWidth} onChange={v => dispatch({ type: 'candleWidth', v })} ariaLabel="Candle width" />
-          </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <span style={{ ...eyebrow, fontSize: 8.5 }}>Window</span>
-            <select value={windowKey} onChange={e => applySpan(e.target.value)} aria-label="Visible span"
-              style={{ background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))', color: 'var(--theme-primary, #c9a84c)', fontFamily: MONO, fontSize: 10, padding: '3px 6px', cursor: 'pointer' }}>
-              {spansFor(tf).map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
-              {windowKey === 'custom' && <option value="custom" disabled>CUSTOM</option>}
-            </select>
-          </span>
+          <span style={{ width: 1, height: 18, background: 'var(--theme-border, rgba(255,255,255,0.14))' }} />
+          <select value={tf} onChange={e => dispatch({ type: 'tf', v: e.target.value as TF })} aria-label="Bar interval"
+            style={{ background: 'var(--theme-primary, #c9a84c)', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-bg, #0a0e16)', fontFamily: MONO, fontSize: 11, fontWeight: 700, padding: '4px 6px', cursor: 'pointer' }}>
+            {TFS.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
         </span>
       </div>
 
@@ -1508,20 +1642,43 @@ export function ChartStudioContent() {
 
         {/* Chart column */}
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: '7px 16px', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.06))', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <span style={{ fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--theme-secondary, #8099b0)' }}>ACTIVE OVERLAYS</span>
+          {/* Tape strip: the bar under the crosshair, read left to right at a
+              size you can take in without hunting the side panel. */}
+          <div style={{ padding: '7px 16px 6px', display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}>
+            <span style={{ fontFamily: MONO, fontSize: 14, fontWeight: 700, letterSpacing: '0.04em', color: 'var(--theme-primary, #c9a84c)' }}>{ticker}</span>
+            <span style={{ fontFamily: MONO, fontSize: 10, letterSpacing: '0.1em', color: 'var(--theme-secondary, #8099b0)' }}>{TF_LABEL[tf].toUpperCase()}</span>
+            <span style={{ fontFamily: MONO, fontSize: 11, color: 'var(--theme-text, #d7e3fc)' }}>{stampOf(inspectT)}</span>
+            {inspectC && (
+              <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 10, fontFamily: MONO, fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+                {([['O', inspectC.open], ['H', inspectC.high], ['L', inspectC.low], ['C', inspectC.close]] as [string, number][]).map(([k, v]) => (
+                  <span key={k}>
+                    <span style={{ color: 'var(--theme-secondary, #8099b0)', marginRight: 3 }}>{k}</span>
+                    <span style={{ color: barDir }}>{v.toFixed(2)}</span>
+                  </span>
+                ))}
+                <span>
+                  <span style={{ color: 'var(--theme-secondary, #8099b0)', marginRight: 3 }}>V</span>
+                  <span style={{ color: barDir }}>{fmtVol(inspectC.volume)}</span>
+                </span>
+                <span style={{ color: barDir, fontWeight: 700 }}>{pct >= 0 ? '+' : ''}{pct.toFixed(2)}%</span>
+              </span>
+            )}
+            <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 8.5, letterSpacing: '0.08em', color: 'var(--theme-secondary, #8099b0)', whiteSpace: 'nowrap' }}>
+              {candles.length} BARS · REFRESH {INTRADAY.has(tf) ? '60S' : '5M'}{candlesQ.dataUpdatedAt ? ` · AS OF ${formatLocalTime(candlesQ.dataUpdatedAt)}` : ''}
+            </span>
+          </div>
+
+          <div style={{ padding: '0 16px 7px', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.06))', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
             {activeLegend.length === 0 && (
-              <span style={{ fontFamily: SANS, fontSize: 9.5, color: 'var(--theme-secondary, #8099b0)' }}>None. Toggle layers in the left rail.</span>
+              <span style={{ fontFamily: SANS, fontSize: 9.5, color: 'var(--theme-secondary, #8099b0)' }}>No overlays. Toggle layers in the left rail.</span>
             )}
             {activeLegend.map(l => (
               <span key={l.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                 <Glyph style={l.style} color={l.color} />
-                <span style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--theme-secondary, #a9bacf)' }}>{l.label}</span>
+                <span style={{ fontFamily: MONO, fontSize: 10, color: 'var(--theme-secondary, #a9bacf)' }}>{l.label}</span>
+                {l.value && <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: l.color, fontVariantNumeric: 'tabular-nums' }}>{l.value}</span>}
               </span>
             ))}
-            <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 8.5, letterSpacing: '0.08em', color: 'var(--theme-secondary, #8099b0)', whiteSpace: 'nowrap' }}>
-              BARS · REFRESH {INTRADAY.has(tf) ? '60S' : '5M'}{candlesQ.dataUpdatedAt ? ` · AS OF ${formatLocalTime(candlesQ.dataUpdatedAt)}` : ''}
-            </span>
           </div>
 
           <div style={{ position: 'relative' }}>
@@ -1597,9 +1754,13 @@ export function ChartStudioContent() {
             const header = id === 'iv'
               ? <>{ivLane.kind === 'rank' ? 'IV RANK' : 'ATM IV30'}{ivLane.pts.length < 30 && <span style={{ color: 'var(--theme-secondary, #8099b0)' }}> · {ivLane.pts.length} pt{ivLane.pts.length === 1 ? '' : 's'} · accrues daily</span>}</>
               : id === 'rsi' ? `RSI ${params.rsiP}` : id === 'macd' ? `MACD ${params.macdF}·${params.macdS}·${params.macdSig}` : lane.label
+            const laneVal = id === 'volume' ? (inspectC ? fmtVol(inspectC.volume) : '') : legendVal(at(`lane:${id}`))
             return (
               <div key={id} style={{ display: on ? 'block' : 'none', borderTop: '1px solid var(--theme-border-faint, rgba(255,255,255,0.06))', position: 'relative' }}>
-                <span style={{ position: 'absolute', top: 4, left: 10, zIndex: 5, fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.16em', color: 'var(--theme-secondary, #8099b0)' }}>{header}</span>
+                <span style={{ position: 'absolute', top: 5, left: 10, zIndex: 5, display: 'flex', alignItems: 'baseline', gap: 7, fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--theme-secondary, #8099b0)' }}>
+                  <span>{header}</span>
+                  {laneVal && <span style={{ letterSpacing: 0, fontSize: 10.5, color: 'var(--theme-text, #d7e3fc)', fontVariantNumeric: 'tabular-nums' }}>{laneVal}</span>}
+                </span>
                 <div ref={el => { laneRefs.current[id] = el }} style={{ width: '100%' }} />
                 <ResizeHandle onDown={onLaneDown(id)} onMove={onLaneMove} onUp={onLaneUp} onReset={() => resetLane(id)} title="Drag to resize lane · double-click to reset" />
               </div>
@@ -1611,9 +1772,13 @@ export function ChartStudioContent() {
             const ovId = lanePlacedIds[i]
             const on = i < lanePlacedIds.length
             const header = (ovId && overlayDefs.find(d => d.id === ovId)?.label) || 'Overlay'
+            const laneVal = ovId ? legendVal(at(`ov:${ovId}`)) : ''
             return (
               <div key={slot} style={{ display: on ? 'block' : 'none', borderTop: '1px solid var(--theme-border-faint, rgba(255,255,255,0.06))', position: 'relative' }}>
-                <span style={{ position: 'absolute', top: 4, left: 10, zIndex: 5, fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.16em', color: 'var(--theme-secondary, #8099b0)' }}>{header}</span>
+                <span style={{ position: 'absolute', top: 5, left: 10, zIndex: 5, display: 'flex', alignItems: 'baseline', gap: 7, fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--theme-secondary, #8099b0)' }}>
+                  <span>{header.toUpperCase()}</span>
+                  {laneVal && <span style={{ letterSpacing: 0, fontSize: 10.5, color: 'var(--theme-text, #d7e3fc)', fontVariantNumeric: 'tabular-nums' }}>{laneVal}</span>}
+                </span>
                 <div ref={el => { laneRefs.current[slot] = el }} style={{ width: '100%' }} />
                 <ResizeHandle onDown={onLaneDown(slot)} onMove={onLaneMove} onUp={onLaneUp} onReset={() => resetLane(slot)} title="Drag to resize lane · double-click to reset" />
               </div>
@@ -1639,7 +1804,7 @@ export function ChartStudioContent() {
                 <ChevronRight size={11} color="var(--theme-secondary, #8099b0)" />
               </button>
             </div>
-            <div style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: 'var(--theme-primary, #c9a84c)', marginTop: 3 }}>{dateOf(inspectT) || '—'}</div>
+            <div style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, color: 'var(--theme-primary, #c9a84c)', marginTop: 3 }}>{stampOf(inspectT)}</div>
             {barIdx >= 0 && <div style={{ fontFamily: MONO, fontSize: 9, color: 'var(--theme-secondary, #8099b0)', marginTop: 1 }}>bar {barIdx + 1} / {candles.length}</div>}
           </div>
           {inspectorGroups.map(g => (
