@@ -2427,6 +2427,14 @@ Return ONLY this object, with no surrounding text:
   "keyFigures": [ { "label": "metric", "value": "figure with units" } ]
 }
 
+keyFigures carries measurements only. If a figure is not in the clips, OMIT the entry.
+Never write "Data not provided", "N/A", "unavailable" or any other placeholder as a value,
+and never assert in the analysis a quantity you just declined to put in keyFigures.
+
+Every date you state must appear in the clips. Do not date an event from memory: a launch,
+a rollout or a cycle turn you cannot source to a clip is described without a date, or not
+at all. A catalyst dated before today is not a catalyst.
+
 You are writing this section and nothing else. It must argue: %(argues)s
 
 These sections are being written in parallel by other calls: %(siblings)s
@@ -3056,6 +3064,10 @@ def _clean_figs(raw) -> list:
 
 def _report_title(result: dict, outline: dict | None, req: ReportGenRequest) -> str:
     raw = str(result.get("headline", "")).strip()
+    # A title is not a sentence, so the prose rule of splitting a semicolon into
+    # two sentences would leave a full stop in the middle of a headline. A
+    # comma carries the same contrast and reads as one line.
+    raw = re.sub(r"\s*;\s*", ", ", raw)
     words = raw.rstrip(" .").split()
     return _title_case(" ".join(words[:12]), 96)
 
@@ -4667,25 +4679,35 @@ def _inject_mechanical_charts(sections: list[dict], clips: list[ReportClipIn]) -
                 types.add(sections[j]["chart"]["chartType"])
         return types
 
-    for chart, keywords, _priority in pool:
+    # Score every chart against every section first, then place the strongest
+    # pairs. Taking each chart's own best free section in turn let a weak match
+    # occupy a section that a better chart needed: the peer-multiples chart
+    # landed under "Relative Call", whose paragraph argues Sharpe ratios, and
+    # "Valuation Comparison" was left with no figure at all. A chart belongs to
+    # the section that wants it most, which is only knowable after scoring both
+    # sides.
+    candidates: list[tuple[int, int, int, dict, tuple]] = []
+    for chart, keywords, priority in pool:
         sig = _chart_signature(chart)
-        if sig in used_sigs:
-            continue  # never place the same comparison twice
-        ctype = chart["chartType"]
-        best_i, best_score = -1, 0
         for i, sec in enumerate(sections):
-            if sec.get("chart") is not None:
-                continue
             score = sum(1 for k in keywords if k in _section_haystack(sec))
-            if score <= 0:
-                continue
-            if ctype in neighbor_types(i):
-                score -= 2  # discourage two same-type charts on adjacent sections
-            if score > best_score:
-                best_i, best_score = i, score
-        if best_i >= 0:
-            sections[best_i]["chart"] = chart
-            used_sigs.add(sig)
+            if score > 0:
+                candidates.append((score, -priority, i, chart, sig))
+    # Strongest match first; a distinct chart type breaks a tie, then document
+    # order so the result is stable rather than dependent on dict ordering.
+    candidates.sort(key=lambda c: (-c[0], -c[1], c[2]))
+
+    placed_sections: set[int] = set()
+    for score, _priority, i, chart, sig in candidates:
+        if i in placed_sections or sig in used_sigs:
+            continue
+        if chart["chartType"] in neighbor_types(i) and score <= 2:
+            # Two of the same type side by side is worth avoiding, but not at
+            # the cost of dropping a strong match.
+            continue
+        sections[i]["chart"] = chart
+        placed_sections.add(i)
+        used_sigs.add(sig)
 
 def _build_sections(raw_sections, valid_ids: set[str], contract: dict | None = None) -> list[dict]:
     """Clean model-returned sections and drop a section's chart if an earlier
@@ -5542,14 +5564,49 @@ def _repair_key_figures(sections: list[dict], clips: list[ReportClipIn]) -> None
         section["keyFigures"] = repaired
 
 
+# A key figure is a number on the page. These are the ways the writer says it
+# does not have one, and every one of them shipped as though it were a value:
+# the risk strip rendered "90-DAY DRAWDOWN (MU) — Data not provided in supplied
+# clips" in the same type as a real measurement.
+_NON_FIGURE = re.compile(
+    r"^\s*(?:"
+    r"(?:data|figure|value|number|metric)s?\s+not\s+(?:provided|supplied|available|present|reported|disclosed)"
+    r"|not\s+(?:provided|supplied|available|present|reported|disclosed|quantified|specified|applicable|stated)"
+    r"|no\s+(?:data|figure|value|number)"
+    r"|unavailable|unknown|undisclosed|unquantified|pending|tbd|n/?a|none|null|-{1,3}"
+    r")\b",
+    re.I,
+)
+
+
+def _is_real_figure(value: str) -> bool:
+    """A key figure has to carry a measurement, not an apology for missing one."""
+    value = (value or "").strip()
+    if not value or _NON_FIGURE.match(value):
+        return False
+    # Anything left still has to state a quantity. A bare phrase belongs in the
+    # prose, where it can be qualified, not in a strip of headline numbers.
+    return bool(re.search(r"\d", value))
+
+
 def _filter_unverified_key_figures(sections: list[dict], clips: list[ReportClipIn], slot_ctx) -> None:
     supported = _supported_report_numbers(clips, slot_ctx)
     for section in sections:
-        section["keyFigures"] = [
-            figure
-            for figure in section.get("keyFigures", [])
-            if not _unsupported_numeric_claims(str(figure.get("value", "")), supported)
-        ]
+        kept, dropped = [], []
+        for figure in section.get("keyFigures", []):
+            value = str(figure.get("value", ""))
+            if not _is_real_figure(value):
+                dropped.append(str(figure.get("label", "")).strip())
+                continue
+            if _unsupported_numeric_claims(value, supported):
+                continue
+            kept.append(figure)
+        section["keyFigures"] = kept
+        if dropped:
+            # Remembered so the prose can be held to it: a section that admits
+            # in its strip that a figure is missing must not assert it in its
+            # paragraph, which is exactly what the risks section did.
+            section["_unavailableFigures"] = [d for d in dropped if d]
 
 
 def _table_from_clips(clips: list[ReportClipIn], title_pattern: str):
@@ -6099,6 +6156,67 @@ def _fix_availability_contradictions(text: str, sections: list[dict], clips: lis
     return " ".join(repaired).strip()
 
 
+_SHOWS_RE = re.compile(
+    r"\b(?:shows?|showed|indicates?|indicated|reveals?|revealed|confirms?|confirmed"
+    r"|demonstrates?|reports?|reported|records?|puts?)\b", re.I,
+)
+_STOPWORDS = {"the", "a", "an", "of", "in", "on", "for", "and", "or", "vs", "to", "at", "by"}
+# A quantity, as opposed to a number that is part of a metric's name.
+_MEASUREMENT_RE = re.compile(
+    r"\d+(?:\.\d+)?\s*(?:%|percent|pp|bps?|x\b)|[$€£]\s*\d|\b\d+\.\d+\b", re.I,
+)
+
+
+def _reconcile_unavailable_figures(sections: list[dict]) -> None:
+    """A section cannot assert a quantity its own strip says is missing.
+
+    The risks section printed "90-day drawdown (MU): Data not provided in
+    supplied clips" beside a paragraph reading "the price-history clip shows a
+    recent 90-day drawdown that exceeds historical averages". One of those is
+    wrong, and the strip is the one grounded in the evidence, so the sentence
+    goes. Absence is worth stating once, not asserting against.
+    """
+    for section in sections:
+        labels = section.pop("_unavailableFigures", None)
+        analysis = str(section.get("analysis", "") or "")
+        if not labels or not analysis:
+            continue
+        terms = [
+            {w for w in re.findall(r"[a-z0-9-]{3,}", label.lower()) if w not in _STOPWORDS}
+            for label in labels
+        ]
+        terms = [t for t in terms if t]
+        if not terms:
+            continue
+        kept, removed = [], []
+        for sentence in re.split(r"(?<=[.!?])\s+", analysis):
+            words = set(re.findall(r"[a-z0-9-]{3,}", sentence.lower()))
+            # A digit is not a measurement: "90-day drawdown" names the metric,
+            # it does not report one. Only an actual quantity (a percent, a
+            # dollar figure, a multiple) means the sentence is grounded and
+            # should be left alone.
+            asserts_unmeasured = (
+                _SHOWS_RE.search(sentence)
+                and not _MEASUREMENT_RE.search(sentence)
+                and any(t <= words for t in terms)
+            )
+            (removed if asserts_unmeasured else kept).append(sentence)
+        if not removed:
+            continue
+        note = (
+            f"The supplied clips do not quantify {_join_clause([l.lower() for l in labels])}, "
+            "so this report does not measure it."
+        )
+        section["analysis"] = " ".join([*kept, note]).strip() if kept else note
+
+
+def _join_clause(items: list[str]) -> str:
+    items = [i for i in items if i]
+    if len(items) <= 1:
+        return items[0] if items else ""
+    return ", ".join(items[:-1]) + " or " + items[-1]
+
+
 def _suppress_extreme_dcf_claims(text: str, clips: list[ReportClipIn]) -> str:
     """An intrinsic value an order of magnitude away from the traded price is a
     model failure, not a valuation finding. One report led with "AMZN intrinsic
@@ -6130,6 +6248,78 @@ def _strip_em_dashes(text: str) -> str:
     return re.sub(r"[ \t]{2,}", " ", text).strip()
 
 
+def _split_on_semicolons(text: str) -> str:
+    """House voice carries no semicolons. A semicolon joins two independent
+    clauses, which is exactly what a period is for.
+
+    The em-dash rule had a linter and this one did not, so semicolons shipped in
+    body prose, in the conclusion and in the headline itself. Capitalise the
+    clause that follows so the split reads as the sentence it now is.
+    """
+    if not text or ";" not in text:
+        return text
+
+    def split(match: re.Match) -> str:
+        tail = match.group(1)
+        return ". " + tail[0].upper() + tail[1:]
+
+    # A semicolon inside a bracket is separating list items, not clauses.
+    text = re.sub(r"\s*;\s*(?![^(]*\))([A-Za-z])", split, text)
+    return re.sub(r"\s*;\s*", ", ", text)
+
+
+_FIRST_PERSON = re.compile(
+    r"\b(?:we|our)\b(?:\s+(?:are|is|was|were|have|has|had|believe|think|expect|see|view|find|remain))?",
+    re.I,
+)
+
+
+def _strip_first_person(text: str) -> str:
+    """The report states findings, it does not report a narrator's feelings.
+
+    "We are highly confident that NVDA is the preferred buy" says the same thing
+    as "NVDA is the preferred buy" while sounding like a committee, and the house
+    voice addresses the reader as "you" or states the finding flat. Conviction is
+    already carried in its own field, so a hedge word here is duplication too.
+    """
+    if not text:
+        return text
+    text = re.sub(
+        r"\bWe\s+(?:are|remain)\s+(?:highly\s+|very\s+)?confident\s+that\s+([a-z])",
+        lambda m: m.group(1).upper(), text, flags=re.I,
+    )
+    text = re.sub(
+        r"\bWe\s+(?:believe|think|expect|judge|conclude|see|view)\s+(?:that\s+)?([a-z])",
+        lambda m: m.group(1).upper(), text, flags=re.I,
+    )
+    text = re.sub(r"\bin our (?:view|opinion|judgement|judgment)\b,?\s*", "", text, flags=re.I)
+    text = re.sub(r"\bour\s+(analysis|work|research)\s+(?:shows|suggests|indicates)\s+(?:that\s+)?([a-z])",
+                  lambda m: m.group(2).upper(), text, flags=re.I)
+    return re.sub(r"[ \t]{2,}", " ", text).strip()
+
+
+_ECHOED_COMPOUND = re.compile(r"\b(\w{4,})-(\w{3,})\s+\1\b", re.I)
+_ADJACENT_ECHO = re.compile(r"\b(\w{4,})\b[\s,]+\b\1\b", re.I)
+
+
+def _fix_duplicated_words(text: str) -> str:
+    """Collapse a noun echoed by its own compound modifier.
+
+    The writer produced "indicating upside-limited upside and heightened
+    downside risk". The noun is the head of the compound adjective and then the
+    noun again, which is not a phrase in any register. "upside-limited upside"
+    is "limited upside"; keep the modifier and one copy of the noun.
+    """
+    if not text:
+        return text
+    prev = None
+    while prev != text:
+        prev = text
+        text = _ECHOED_COMPOUND.sub(r"\2 \1", text)
+        text = _ADJACENT_ECHO.sub(r"\1", text)
+    return text
+
+
 def _apply_report_linters(text: str, clips: list[ReportClipIn], slot_ctx) -> str:
     """The full deterministic prose pass: comparative-direction fixes, upside
     vocabulary fixes, slot resolution, then numeric provenance enforcement.
@@ -6158,6 +6348,12 @@ def _apply_report_linters(text: str, clips: list[ReportClipIn], slot_ctx) -> str
         _remove_unsupported_catalyst_claims,
         _remove_unsupported_sector_momentum,
         _strip_em_dashes,
+        # Voice last, after every rewrite above has finished producing prose:
+        # a fix that splices in a clause can introduce the punctuation and the
+        # register these remove.
+        _split_on_semicolons,
+        _strip_first_person,
+        _fix_duplicated_words,
     ):
         takes_clips = step.__code__.co_argcount > 1
         text = step(text, clips) if takes_clips else step(text)
@@ -6393,6 +6589,61 @@ def _remove_unsupported_catalyst_claims(text: str, clips: list[ReportClipIn]) ->
         return text
     text = re.sub(r"\s*(?:and|&)\s+upcoming catalysts?\b", "", text, flags=re.I)
     return re.sub(r"\bupcoming catalysts?\b", "forward evidence", text, flags=re.I)
+
+
+_FORWARD_LANGUAGE = re.compile(
+    r"\b(?:upcoming|expected|anticipated|slated|scheduled|planned|forthcoming|launch|"
+    r"rollout|roll-out|introduc\w*|recovery|guidance|next[- ]gen\w*)\b", re.I,
+)
+_CATALYST_SECTION = re.compile(r"catalyst|event|upcoming|outlook", re.I)
+
+
+def _drop_stale_forward_dates(sections: list[dict], today: datetime) -> None:
+    """A catalyst dated in the past is not a catalyst.
+
+    An August 2026 report listed its upcoming catalysts as "Q3 2024 (Oct)",
+    "Q4 2024 (Nov)" and "Recovery expected Q3-Q4 2024", with prose describing
+    them as slated for October and November. The model wrote dates two years
+    stale and the page presented them as the forward case for the trade, which
+    is the most misleading thing a report can do with a date.
+
+    Only figures the report is offering as forward-looking are checked, so a
+    historical "FY2024 revenue" stays exactly where it belongs.
+    """
+    year = today.year
+    for section in sections:
+        forward_section = bool(_CATALYST_SECTION.search(
+            f"{section.get('templateSection', '')} {section.get('heading', '')}"))
+        kept, dropped = [], []
+        for figure in section.get("keyFigures", []):
+            label, value = str(figure.get("label", "")), str(figure.get("value", ""))
+            years = [int(y) for y in re.findall(r"\b(20\d{2})\b", f"{label} {value}")]
+            forward_claim = forward_section or _FORWARD_LANGUAGE.search(f"{label} {value}")
+            if years and forward_claim and max(years) < year:
+                dropped.append(f"{label}: {value}".strip(": "))
+                continue
+            kept.append(figure)
+        if not dropped:
+            continue
+        section["keyFigures"] = kept
+        logger.warning("dropped %d stale forward-dated figure(s) from %r: %s",
+                       len(dropped), section.get("templateSection"), "; ".join(dropped[:4]))
+
+        # The paragraph asserted the same stale dates, so it cannot stand either.
+        analysis = str(section.get("analysis", "") or "")
+        if not analysis:
+            continue
+        keep_sentences = []
+        for sentence in re.split(r"(?<=[.!?])\s+", analysis):
+            stale = [int(y) for y in re.findall(r"\b(20\d{2})\b", sentence)]
+            if stale and max(stale) < year and _FORWARD_LANGUAGE.search(sentence):
+                continue
+            keep_sentences.append(sentence)
+        rebuilt = " ".join(keep_sentences).strip()
+        section["analysis"] = rebuilt or (
+            "The supplied clips do not date the upcoming events for these names, "
+            "so this report does not put a schedule on them."
+        )
 
 
 def _clarify_direct_sector_weights(text: str, clips: list[ReportClipIn]) -> str:
@@ -6669,6 +6920,11 @@ def generate_report(req: ReportGenRequest):
     # STEP 2 — Draft: write the full report, following the outline when present.
     payload = {
         "projectName": req.projectName,
+        # The writer was never told what day it is, so it dated an August 2026
+        # report's upcoming catalysts to Q3 and Q4 2024 from its own training
+        # data and nothing contradicted it. A model asked what happens next
+        # needs to know when now is.
+        "today": datetime.now(timezone.utc).date().isoformat(),
         "timeframe": req.timeframe,
         "purpose": purpose_text,
         "goal": goal_text,
@@ -6810,6 +7066,10 @@ def generate_report(req: ReportGenRequest):
             s["heading"] = _apply_report_linters(s["heading"], req.clips, slot_ctx)
     _filter_unverified_key_figures(sections, req.clips, slot_ctx)
     _repair_key_figures(sections, req.clips)
+    # Both read the strip and the paragraph together, so they run after the
+    # figures are settled and after the prose linters have finished rewriting.
+    _drop_stale_forward_dates(sections, datetime.now(timezone.utc))
+    _reconcile_unavailable_figures(sections)
 
     headline = _apply_report_linters(_report_title(result, outline, req), req.clips, slot_ctx)
     if key_result.get("value"):
