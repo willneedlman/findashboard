@@ -20,7 +20,7 @@ import {
   useReportCreator, createProject, renameProject, deleteProject, updateScope,
   removeClip, updateClipDescription, moveClip, timeframeLabel, clipTitle, formatCaptured,
   setGenerated, updateGenerated, updateGeneratedSection, updateKeyResult, isGenerationStale, summarizeClipForAI,
-  deleteSnapshot, replaceAlphaTapeClips,
+  deleteSnapshot, replaceAlphaTapeClips, reportStorageUsage,
   getProject,
   type ReportProject, type ReportClip, type ReportSnapshot,
 } from '../lib/reportCreator'
@@ -1192,11 +1192,21 @@ export default function ReportCreator() {
         setResearchResult(result)
         return
       }
-      replaceAlphaTapeClips(projectId, result.clips, {
+      const saved = replaceAlphaTapeClips(projectId, result.clips, {
         sourceIds: result.failed.filter(failure => !failure.researchKey).map(failure => failure.sourceId),
         researchKeys: result.failed.flatMap(failure => failure.researchKey ? [failure.researchKey] : []),
       })
       setResearchResult(result)
+      // A failed save is the one outcome that looks identical to success on
+      // screen: every source reports collected, and then the clips are simply
+      // not there. Without this the wizard sits on Run AlphaTape research
+      // forever and re-running can never help.
+      if (!saved.persisted) {
+        const usage = reportStorageUsage()
+        setResearchError(
+          `The research finished but your browser could not save it: storage is full at ${usage.projects} project${usage.projects === 1 ? '' : 's'} and ${usage.snapshots} saved version${usage.snapshots === 1 ? '' : 's'}. Delete an old project or an old version, then run it again.`,
+        )
+      }
     } catch {
       if (researchOperationRef.current === operation && researchSignatureRef.current === signature) {
         setResearchError('AlphaTape research could not finish. Existing clips were not changed.')

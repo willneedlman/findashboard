@@ -415,9 +415,21 @@ function read(): StoreState {
   }
 }
 
-function write(state: StoreState) {
+/**
+ * Persist, and say whether it actually persisted.
+ *
+ * Returning false matters more than it looks. Every read goes back to
+ * localStorage, so a write that quietly fails does not leave the app holding
+ * newer state in memory — it leaves it showing the OLD state with no error. A
+ * research run that collected ninety clips then looks to the user exactly like
+ * a run that collected none, and the only visible symptom is that the button
+ * never advances and re-running never helps.
+ */
+function write(state: StoreState): boolean {
   try {
     localStorage.setItem(KEY, JSON.stringify(state))
+    emit()
+    return true
   } catch {
     // Quota exceeded — history snapshots (with their cloned clips) are the bulk.
     // Drop the oldest snapshot from whichever project has the most, and retry a
@@ -429,16 +441,29 @@ function write(state: StoreState) {
       }
       if (!target?.history) break
       target.history = target.history.slice(0, -1)
-      try { localStorage.setItem(KEY, JSON.stringify(state)); break } catch { /* keep trimming */ }
+      try { localStorage.setItem(KEY, JSON.stringify(state)); emit(); return true } catch { /* keep trimming */ }
     }
   }
+  // Nothing left to trim and it still will not fit. Resync the UI to what is
+  // actually stored rather than leaving it describing state that was lost.
   emit()
+  return false
 }
 
-function mutate(fn: (state: StoreState) => void) {
+function mutate(fn: (state: StoreState) => void): boolean {
   const state = read()
   fn(state)
-  write(state)
+  return write(state)
+}
+
+/** How close the store is to its quota, for a message that can name the cause. */
+export function reportStorageUsage(): { chars: number; projects: number; snapshots: number } {
+  const state = read()
+  let snapshots = 0
+  for (const p of state.projects) snapshots += p.history?.length ?? 0
+  let chars = 0
+  try { chars = (localStorage.getItem(KEY) ?? '').length } catch { /* unavailable */ }
+  return { chars, projects: state.projects.length, snapshots }
 }
 
 export function getProjects(): ReportProject[] {
@@ -574,16 +599,16 @@ export function replaceAlphaTapeClips(
   projectId: string,
   drafts: ClipDraft[],
   preserve: { sourceIds?: string[]; researchKeys?: string[] } = {},
-): number {
+): { added: number; persisted: boolean } {
   let added = 0
-  mutate(state => {
+  const persisted = mutate(state => {
     const project = state.projects.find(candidate => candidate.id === projectId)
     if (!project) return
     project.clips = mergeAlphaTapeClips(project.clips, projectId, drafts, nowISO(), preserve)
     project.updatedAt = nowISO()
     added = drafts.length
   })
-  return added
+  return { added, persisted }
 }
 
 export function removeClip(projectId: string, clipId: string) {
