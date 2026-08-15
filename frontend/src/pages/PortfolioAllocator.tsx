@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { todayLocal } from '../lib/time'
 import { useMutation, useQueries, useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
@@ -354,7 +355,7 @@ export function PortfolioAllocatorContent() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `rebalance-${new Date().toISOString().split('T')[0]}.csv`
+    a.download = `rebalance-${todayLocal()}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -379,7 +380,7 @@ export function PortfolioAllocatorContent() {
 
   const { mutate, data, isPending, isError, error } = useMutation<OptResult>({
     mutationFn: async () => (await axios.post('/api/portfolio-opt/optimize', {
-      tickers, start: startFor(lookback), end: new Date().toISOString().slice(0, 10),
+      tickers, start: startFor(lookback), end: todayLocal(),
       risk_free_rate: parseFloat(rf) || 0, constraint_mode: constraintMode,
       custom_bounds: constraintMode === 'custom'
         ? Object.fromEntries(tickers.map(t => { const [lo, hi] = customBounds[t] ?? [0, 100]; return [t, [lo / 100, hi / 100]] }))

@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { todayLocal } from '../lib/time'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip, chartClip } from '../lib/reportCaptureRegistry'
@@ -1558,7 +1559,7 @@ export function MonteCarloContent() {
   const [rebalance, setRebalance] = useState<RebalanceFreq>('none')
   const [crspCalibration, setCrspCalibration] = useState(false)
   const [crspStart, setCrspStart] = useState('2015-01-01')
-  const [crspEnd, setCrspEnd] = useState(() => new Date().toISOString().split('T')[0])
+  const [crspEnd, setCrspEnd] = useState(() => todayLocal())
 
   const { mutate: runExactReplay, data: exactReplay, isPending: exactReplayPending, isError: exactReplayError } = useMutation<ExactAlgoReplay>({
     mutationFn: async () => {
@@ -1670,7 +1671,7 @@ export function MonteCarloContent() {
           legs.map(async (leg) => {
             if (leg.strategy === STRATEGIES[0]) return { stratAdj: 0, stratLabel: '', stratDetail: '', stratChartData: [], stratBuyCount: 0, stratSellCount: 0 }
             try {
-              const today = new Date().toISOString().split('T')[0]
+              const today = todayLocal()
               const isCustom = leg.strategy === CUSTOM_STRATEGY_KEY
               const customDef = isCustom && leg.stratParams._custom_def
                 ? JSON.parse(leg.stratParams._custom_def)

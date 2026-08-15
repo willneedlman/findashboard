@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { todayLocal } from '../lib/time'
 import { useMutation } from '@tanstack/react-query'
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line,
@@ -297,7 +298,7 @@ export function GammaScalpingContent() {
     setFetching(true)
     setFetchErr('')
     try {
-      const end = new Date().toISOString().slice(0, 10)
+      const end = todayLocal()
       const res = await axios.get(`/api/market/history`, {
         params: { ticker: ticker.toUpperCase(), start: '2024-01-01', end },
       })

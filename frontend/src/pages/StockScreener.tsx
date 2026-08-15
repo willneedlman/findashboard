@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { todayLocal } from '../lib/time'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import axios from 'axios'
@@ -801,7 +802,7 @@ export default function StockScreener() {
               <div style={{ padding: 24 }}><LoadingState label="Screening" /></div>
             ) : !data ? (
               <div style={{ padding: 24 }}><EmptyState title="Stock Screener" hint="Pick a screen from the library or set filters, then scan the universe."
-                action="SCAN" /></div>
+                action="SCAN" onAction={runScreen} /></div>
             ) : (
               <>
                 {/* summary stats band */}
@@ -980,6 +981,6 @@ function exportCsv(rows: ScreenResult[], cols: { key: keyof ScreenResult; label:
   const blob = new Blob([[header.join(','), ...lines].join('\n')], { type: 'text/csv' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
-  a.href = url; a.download = `screener-${new Date().toISOString().split('T')[0]}.csv`; a.click()
+  a.href = url; a.download = `screener-${todayLocal()}.csv`; a.click()
   URL.revokeObjectURL(url)
 }

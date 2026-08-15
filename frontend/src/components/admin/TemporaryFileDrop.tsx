@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { todayLocal } from '../../lib/time'
 import axios from 'axios'
 import { Clock3, Download, FileIcon, FileUp, RefreshCw, Trash2 } from 'lucide-react'
 import useIsMobile from '../../hooks/useIsMobile'
@@ -168,7 +169,7 @@ export default function TemporaryFileDrop({ secret }: { secret: string }) {
         headers,
         responseType: 'blob',
       })
-      saveBlob(response.data, `alphatape-files-${new Date().toISOString().slice(0, 10)}.zip`)
+      saveBlob(response.data, `alphatape-files-${todayLocal()}.zip`)
     } catch (downloadError) {
       setError(errorMessage(downloadError))
       loadFiles(true)

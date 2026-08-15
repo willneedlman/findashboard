@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { todayLocal } from '../lib/time'
 import { createPortal } from 'react-dom'
 import axios from 'axios'
 import { useMutation } from '@tanstack/react-query'
@@ -145,7 +146,7 @@ const fmtPct = (v: number | null | undefined, d = 1) => v == null || !Number.isF
 const fmtMoney = (v: number) => v >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${(v / 1e3).toFixed(1)}K` : `$${v.toFixed(0)}`
 const modelLabel = (model: MonteCarloModel) => model === 'student_t' ? 'Student-t fat tails' : model === 'bootstrap' ? 'Historical bootstrap' : 'Normal GBM'
 const asDate = (years: number) => { const d = new Date(); d.setFullYear(d.getFullYear() - years); return d.toISOString().slice(0, 10) }
-const endDate = () => new Date().toISOString().slice(0, 10)
+const endDate = () => todayLocal()
 const quotePrice = (q: any) => Number(q?.current_price ?? q?.price ?? q?.regular_market_price ?? 0)
 
 function resolvedSector(ticker: string, profile?: CompanyProfile) {

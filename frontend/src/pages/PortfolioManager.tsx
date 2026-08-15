@@ -1,4 +1,5 @@
 import { T } from '../lib/theme'
+import { todayLocal } from '../lib/time'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
@@ -234,7 +235,7 @@ export function PortfolioManagerContent() {
   const [futEntry, setFutEntry] = useState('')
 
   // Cash entry form state
-  const todayISO = new Date().toISOString().split('T')[0]
+  const todayISO = todayLocal()
   const [cashLabel, setCashLabel] = useState('')
   const [cashAmount, setCashAmount] = useState('')
   const [cashRate, setCashRate] = useState('4.5')
@@ -896,7 +897,7 @@ export function PortfolioManagerContent() {
                 name={portfolioName.trim() || 'Portfolio'}
               />
               <p style={{ fontFamily: T.label, fontSize: 8, color: T.muted, marginTop: 8, lineHeight: 1.5 }}>
-                Exports as <span style={{ fontFamily: T.mono }}>{(portfolioName.trim() || 'Portfolio').replace(/\s+/g, '-')}-{new Date().toISOString().split('T')[0]}</span><br />
+                Exports as <span style={{ fontFamily: T.mono }}>{(portfolioName.trim() || 'Portfolio').replace(/\s+/g, '-')}-{todayLocal()}</span><br />
                 CSV columns: <span style={{ fontFamily: T.mono }}>TICKER,SHARES,AVG_COST</span>
               </p>
               <ScreenshotPortfolioImport onImport={importScreenshot} />

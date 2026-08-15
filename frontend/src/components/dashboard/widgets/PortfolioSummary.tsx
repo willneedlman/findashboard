@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { todayLocal } from '../../../lib/time'
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -80,7 +81,7 @@ export default function PortfolioSummary({ config }: { config: WidgetConfig }) {
   const [legendOpen, setLegendOpen] = useState(true)
   const activeChart = (config.chartMode as 'cumulative' | 'beta') ?? 'cumulative'
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = todayLocal()
   const startDate = PERIODS[periodIdx].start()
 
   const { data, isLoading, isError } = useQuery<BacktestResult>({

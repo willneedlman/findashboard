@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react'
+import { localDateInputValue } from '../lib/time'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip, chartClip, textClip } from '../lib/reportCaptureRegistry'
@@ -960,8 +961,8 @@ export default function SentimentTracker() {
   // Optional SPY price overlay on the trend, to eyeball whether sentiment leads
   // or lags the market. Fetched only when toggled on, over the same window.
   const [overlayPrice, setOverlayPrice] = useState(false)
-  const overlayStart = new Date(Date.now() - tf.hours * 3600 * 1000).toISOString().slice(0, 10)
-  const overlayEnd   = new Date(Date.now() + 86400 * 1000).toISOString().slice(0, 10)
+  const overlayStart = localDateInputValue(new Date(Date.now() - tf.hours * 3600 * 1000))
+  const overlayEnd   = localDateInputValue(new Date(Date.now() + 86400 * 1000))
   const { data: spyResp } = useQuery({
     queryKey: ['sentiment-overlay-spy', overlayStart, overlayEnd],
     queryFn:  () => axios.get(`/api/market/history?ticker=SPY&start=${overlayStart}&end=${overlayEnd}`).then(r => r.data),

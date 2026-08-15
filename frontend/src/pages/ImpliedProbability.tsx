@@ -127,7 +127,7 @@ export function ImpliedProbabilityContent() {
     if (cone) {
       pieces.push(kpiClip(TAB, `Vol Cone · ${ticker}`, [
         { label: 'Spot', value: `$${cone.S0.toLocaleString()}` },
-        { label: 'ATM IV', value: `${(cone.sigma * 100).toFixed(1)}%` },
+        { label: 'Realized Vol (3mo)', value: `${(cone.sigma * 100).toFixed(1)}%` },
         { label: 'Risk-Free Rate', value: `${(cone.r * 100).toFixed(2)}%` },
         { label: 'Days to Expiry', value: dte != null ? `${dte}d` : '—' },
       ]))
@@ -151,7 +151,7 @@ export function ImpliedProbabilityContent() {
         { label: 'P50', value: `$${dist.p50.toLocaleString()}` },
         { label: 'P90', value: `$${dist.p90.toLocaleString()}` },
         { label: 'IV Skew (P−C)', value: `${dist.iv_skew > 0 ? '+' : ''}${dist.iv_skew.toFixed(1)}%` },
-        { label: 'Avg Call IV', value: `${dist.avg_call_iv.toFixed(1)}%` },
+        { label: 'Avg OTM Call IV', value: `${dist.avg_call_iv.toFixed(1)}%` },
       ]))
       pieces.push(kpiClip(TAB, `Explorer @ $${k.toLocaleString()}`, [
         { label: 'Strike', value: `$${k.toLocaleString()}` },
@@ -208,7 +208,16 @@ export function ImpliedProbabilityContent() {
             <>
               <div style={STRIP_GOLD}>
                 <KpiCell grow minWidth={150} label="Current Spot" value={`$${cone.S0.toLocaleString()}`} color="var(--theme-primary, #c9a84c)" valueSize={16} />
-                <KpiCell grow label="ATM Implied Vol" value={`${(cone.sigma * 100).toFixed(1)}%`} color="var(--theme-tertiary, #60a5fa)" />
+                {/* The cone's sigma is realized volatility, computed from three
+                    months of daily log returns. Labelling it "ATM Implied Vol"
+                    put 32.1% above a chain-solved 29.3% in the panel below and
+                    made the page look like it disagreed with itself. */}
+                <KpiCell grow label={cone.sigma_basis === 'realized 3mo' ? 'Realized Vol · 3mo' : 'Cone Vol'}
+                  value={`${(cone.sigma * 100).toFixed(1)}%`} color="var(--theme-tertiary, #60a5fa)" />
+                {dist?.atm_iv != null && (
+                  <KpiCell grow label={dist.iv_basis === 'chain-solved' ? 'ATM Implied Vol' : 'ATM Vol'}
+                    value={`${dist.atm_iv.toFixed(1)}%`} color="var(--theme-tertiary, #60a5fa)" />
+                )}
                 <KpiCell grow label="Risk-Free Rate" value={`${(cone.r * 100).toFixed(2)}%`} />
                 <KpiCell grow label="Days to Expiry" value={dte != null ? `${dte}d` : '—'} />
               </div>
@@ -267,7 +276,7 @@ export function ImpliedProbabilityContent() {
 
               <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', letterSpacing: '0.06em', lineHeight: 1.5 }}>
                 Expiry: <span style={{ color: GOLD }}>{dist.expiry}</span>
-                &nbsp;·&nbsp; Avg Call IV: <span style={{ color: 'var(--theme-text, #d7e3fc)' }}>{dist.avg_call_iv.toFixed(1)}%</span>
+                &nbsp;·&nbsp; Avg OTM Call IV: <span style={{ color: 'var(--theme-text, #d7e3fc)' }}>{dist.avg_call_iv.toFixed(1)}%</span>
                 &nbsp;·&nbsp; P(S_T &gt; K) = N(d2) from the live IV skew. Risk-neutral, not a real-world forecast. For premium selling the skew matters more than the peak.
               </div>
 

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { todayLocal } from '../lib/time'
 import { useMutation } from '@tanstack/react-query'
 import axios from 'axios'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceDot } from 'recharts'
@@ -52,7 +53,7 @@ export function PortfolioCompareContent() {
     { name: 'Portfolio B', legs: [{ ticker: 'QQQ', weight: 60 }, { ticker: 'TLT', weight: 40 }], leverage: '1', borrow: '0' },
   ])
   const [start, setStart] = useState('2020-01-01')
-  const [end, setEnd] = useState(() => new Date().toISOString().split('T')[0])
+  const [end, setEnd] = useState(() => todayLocal())
   const [mode, setMode] = useState<'dollar' | 'pct'>('dollar')   // $100 growth vs % change
 
   const m = useMutation<CompareResult, Error, void>({

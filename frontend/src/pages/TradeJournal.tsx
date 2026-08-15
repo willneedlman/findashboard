@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { todayLocal } from '../lib/time'
 import PageWrapper from '../components/PageWrapper'
 import TickerInput from '../components/TickerInput'
 import type { ClipDraft } from '../lib/reportCreator'
@@ -28,7 +29,7 @@ interface Trade {
 }
 
 const STORAGE_KEY = 'ft-trade-journal'
-const TODAY = new Date().toISOString().slice(0, 10)
+const TODAY = todayLocal()
 const DIRECTIONS: Direction[] = ['Long', 'Short', 'Long Call', 'Long Put', 'Short Call', 'Short Put', 'Spread']
 const STATUSES: Status[] = ['Watching', 'Open', 'Closed', 'Cancelled']
 const ALL_TAGS = ['momentum', 'earnings', 'technical', 'macro', 'squeeze', 'value', 'options']

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { todayLocal } from '../../lib/time'
 import { useMutation } from '@tanstack/react-query'
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, ComposedChart,
@@ -94,7 +95,7 @@ export function PortfolioTab() {
   const [benchmarkSource, setBenchmarkSource] = useState<BenchmarkSource>('ticker')
   const [collapsed, setCollapsed] = useState(false)
   const [start, setStart] = useState('2020-01-01')
-  const [end, setEnd] = useState(() => new Date().toISOString().split('T')[0])
+  const [end, setEnd] = useState(() => todayLocal())
   const [portSignalData, setPortSignalData] = useState<{ ticker: string; data: SignalChartPoint[]; trades: { date: string; action: string; price: number }[] }[]>([])
   const [slPct,    setSlPct]    = useState('')
   const [tpPct,    setTpPct]    = useState('')

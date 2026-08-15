@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { localDateInputValue } from '../../../lib/time'
 import { useQuery } from '@tanstack/react-query'
 import {
   AreaChart,
@@ -73,7 +74,7 @@ export default function MiniChart({ config }: { config: WidgetConfig }) {
   const liveMarks = useLiveMarks(ticker ? [ticker] : [])
   const period = config.period ?? '3mo'
   const days = PERIOD_DAYS[period] ?? 90
-  const periodStart = new Date(Date.now() - days * 86400000).toISOString().split('T')[0]
+  const periodStart = localDateInputValue(new Date(Date.now() - days * 86400000))
   const strokeColor = config.color ?? 'var(--theme-tertiary, #1f5673)'
   const gradId = `mini-grad-${ticker}-${period}`
 

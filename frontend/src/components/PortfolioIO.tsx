@@ -11,6 +11,7 @@
  */
 
 import { useRef } from 'react'
+import { todayLocal } from '../lib/time'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -128,7 +129,7 @@ export default function PortfolioIO({ mode, assets, onImportAssets, tickers, onI
   // ── Export ─────────────────────────────────────────────────────────────────
   function handleExport(format: 'json' | 'csv') {
     const slug = (name ?? 'Portfolio').trim().replace(/\s+/g, '-') || 'Portfolio'
-    const date = new Date().toISOString().split('T')[0]
+    const date = todayLocal()
 
     if (mode === 'portfolio' && assets) {
       if (format === 'json') {

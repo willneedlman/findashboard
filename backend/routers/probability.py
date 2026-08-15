@@ -44,7 +44,15 @@ def _options_chain(sym: str, expiry: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     return chain.calls, chain.puts
 
 
-def _implied_vol(ticker: str) -> float:
+def _realized_vol(ticker: str) -> float:
+    """Annualised realized volatility from three months of daily log returns.
+
+    This was named _implied_vol and is not implied at all. It feeds the cone's
+    sigma and the last-resort atm_iv, so the page could draw an "implied" cone
+    from realized vol while its skew panel used chain-solved IV, with nothing
+    saying which was in play. The name now matches the maths and callers label
+    which sigma they used.
+    """
     try:
         hist = get_history(ticker, period="3mo")
         if not hist.empty:
@@ -76,7 +84,7 @@ def probability_cone(req: ProbRequest):
     except Exception:
         logger.exception("internal error"); raise HTTPException(500, "Internal server error")
 
-    sigma = _implied_vol(req.ticker)
+    sigma = _realized_vol(req.ticker)
     r = 0.045
     try:
         from routers.rates import risk_free_rate
@@ -108,6 +116,9 @@ def probability_cone(req: ProbRequest):
 
     return {
         "S0": round(S0, 2), "sigma": round(sigma, 4), "r": round(r, 4),
+        # The cone is drawn from realized vol, not from the chain. Say so
+        # rather than letting a page headed "implied" imply otherwise.
+        "sigma_basis": "realized 3mo", "sigma_source": "daily log returns, annualised",
         "T": round(T, 4), "prob_above": round(prob_above, 4), "cone": cone,
     }
 
@@ -204,6 +215,22 @@ def chain_distribution(ticker: str, expiry: str = ""):
     avg_put_iv  = float(puts_df["iv"].mean())  if len(puts_df)  > 0 else avg_call_iv
     iv_skew = avg_put_iv - avg_call_iv
 
+    # The KPI strip quotes the ATM smile point and this panel's footnote quotes
+    # the mean across OTM calls. Both are real and they differ whenever the
+    # surface is skewed, but reading 32.1% above 29.3% with neither labelled
+    # looks like the page disagreeing with itself. Ship both off the same chain
+    # load, each named, so the difference is legible instead of suspicious.
+    def _nearest_iv(df) -> "float | None":
+        if len(df) == 0:
+            return None
+        order = (df["strike"] - S0).abs().sort_values().index
+        return float(df.loc[order[0], "iv"])
+
+    atm_iv_solved = _nearest_iv(calls_df)
+    if atm_iv_solved is None:
+        atm_iv_solved = _nearest_iv(puts_df)
+    iv_basis = "chain-solved" if atm_iv_solved is not None else None
+
     combined = pd.concat([
         puts_df[["strike", "delta"]],
         calls_df[["strike", "delta"]],
@@ -227,7 +254,14 @@ def chain_distribution(ticker: str, expiry: str = ""):
             except Exception:
                 pass
         if atm_iv == 0.0:
-            atm_iv = _implied_vol(ticker)
+            # Last resort is realized vol, which is not implied at all. The
+            # basis says so rather than letting the page present it as IV.
+            atm_iv = _realized_vol(ticker)
+            iv_basis = "realized 3mo"
+        elif iv_basis is None:
+            iv_basis = "chain-solved"
+        if atm_iv_solved is None:
+            atm_iv_solved = atm_iv
 
         # Synthetic delta curve via Black-Scholes across ±3.5σ
         n_synth = 80
@@ -324,6 +358,9 @@ def chain_distribution(ticker: str, expiry: str = ""):
         "modal_strike": round(modal_strike, 2),
         "p10": round(p10, 2), "p50": round(p50, 2), "p90": round(p90, 2),
         "iv_skew": round(iv_skew * 100, 2), "avg_call_iv": round(avg_call_iv * 100, 2),
+        "avg_put_iv": round(avg_put_iv * 100, 2),
+        "atm_iv": round(atm_iv_solved * 100, 2) if atm_iv_solved else None,
+        "iv_basis": iv_basis,
         "density": [{"strike": round(float(s), 2), "density": round(float(d), 6)} for s, d in zip(out_mid, out_den)],
         "delta_curve": [{"strike": round(float(s), 2), "delta": round(float(d), 4)} for s, d in zip(out_mid, out_surv)],
     }

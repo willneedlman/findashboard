@@ -1,4 +1,5 @@
 import { T } from '../lib/theme'
+import { todayLocal } from '../lib/time'
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import axios from 'axios'
@@ -520,7 +521,7 @@ const isoDaysAgo = (days: number) => { const d = new Date(); d.setDate(d.getDate
 
 function MarketPerformancePanel({ ticker }: { ticker: string }) {
   const isMobile = useIsMobile()
-  const today = new Date().toISOString().split('T')[0]
+  const today = todayLocal()
   const [range, setRange] = useState('3Y')
   const [start, setStart] = useState(isoDaysAgo(1095))
   const [end, setEnd] = useState(today)

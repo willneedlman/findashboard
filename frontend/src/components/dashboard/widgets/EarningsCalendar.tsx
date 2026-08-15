@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { todayLocal } from '../../../lib/time'
 import { useQuery } from '@tanstack/react-query'
 import { T } from '../../../lib/theme'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
@@ -32,7 +33,7 @@ interface EarningsEntry {
 
 async function loadEarnings(tickers: string[]): Promise<EarningsEntry[]> {
   const symbols = tickers.join(',')
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayLocal()
   const [calendar, enriched, implied] = await Promise.all([
     axios.get(`/api/earnings/calendar?date=${today}&days=14`).then(r => r.data).catch(() => ({ rows: [] })),
     axios.get(`/api/earnings/enrich?symbols=${encodeURIComponent(symbols)}`).then(r => r.data).catch(() => ({ rows: [] })),

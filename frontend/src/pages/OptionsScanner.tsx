@@ -310,7 +310,7 @@ export function OptionsScannerContent() {
       )}
 
       {!scan && !loading && !error && (
-        <EmptyState title="No scan yet" action="SCAN"
+        <EmptyState title="No scan yet" action="SCAN" onAction={runScan}
           hint="Add tickers and press SCAN. The screen finds unusual contracts grouped by name; click any row to open the chain it sits in." />
       )}
       {loading && <EmptyState title="Scanning…" variant="loading" hint="Screening every listed contract in the window…" />}

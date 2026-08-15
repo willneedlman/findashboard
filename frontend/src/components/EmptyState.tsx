@@ -24,6 +24,10 @@ export interface EmptyStateProps {
   variant?: EmptyVariant       // 'empty' (default) | 'loading' | 'unavailable'
   size?: 'default' | 'compact' // compact: no min-height, no panel chrome — fits inside a widget
   action?: string              // primary-button label, e.g. 'Calculate' — renders the CTA cue (empty only)
+  // Pass this and the cue becomes the real button. Without it the cue is
+  // rendered as plain text: it used to carry the same gold border and fill as
+  // the actual button, so it read as clickable and did nothing.
+  onAction?: () => void
   onRetry?: () => void         // optional retry affordance (unavailable only)
   keys?: string[]              // key badges under the message, e.g. ['Enter', '⌘K']
   progress?: number            // 0-100 (loading only) — swaps the indeterminate slide for a
@@ -56,7 +60,7 @@ function KeyBadge({ children }: { children: React.ReactNode }) {
   )
 }
 
-export default function EmptyState({ title, hint, variant = 'empty', size = 'default', action, onRetry, keys, progress }: EmptyStateProps) {
+export default function EmptyState({ title, hint, variant = 'empty', size = 'default', action, onAction, onRetry, keys, progress }: EmptyStateProps) {
   // ── Loading ──────────────────────────────────────────────────────────────
   if (variant === 'loading') {
     const determinate = progress != null
@@ -124,16 +128,24 @@ export default function EmptyState({ title, hint, variant = 'empty', size = 'def
         <div style={HINT_STYLE}>{hint}</div>
         {action && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 4 }}>
-            <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: DIM }}>then press</span>
-            <span style={{
-              fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
-              color: PRIMARY, border: `1px solid ${PRIMARY}`,
-              background: `color-mix(in srgb, ${PRIMARY} 10%, transparent)`, padding: '6px 14px',
-            }}>{action}</span>
+            {onAction ? (
+              <button type="button" onClick={onAction} style={{
+                fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
+                color: PRIMARY, border: `1px solid ${PRIMARY}`, cursor: 'pointer',
+                background: `color-mix(in srgb, ${PRIMARY} 10%, transparent)`, padding: '6px 14px',
+              }}>{action}</button>
+            ) : (
+              <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: DIM }}>
+                then press <span style={{ fontFamily: MONO, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: SEC }}>{action}</span>
+              </span>
+            )}
           </div>
         )}
         {keys && keys.length > 0 && (
-          <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+            {/* An unlabelled badge reading "Enter" under the message looks like a
+                rendering leftover. Say what it is for. */}
+            <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: DIM }}>or press</span>
             {keys.map((k, i) => <KeyBadge key={i}>{k}</KeyBadge>)}
           </div>
         )}

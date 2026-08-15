@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { localDateInputValue } from '../lib/time'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import { Loader2, Inbox } from 'lucide-react'
@@ -51,12 +52,14 @@ function MacroEventHubContent() {
 
   // Default range is today through one month out, not the full span of
   // whatever's loaded — a user edit sets filters.from/.to and takes over.
+  // Today is the local calendar date. Formatting via toISOString rolled the
+  // window forward a day after 7pm Central, so the calendar opened on tomorrow
+  // and hid everything released today.
   const defaultRange = useMemo(() => {
     const from = new Date()
     const to = new Date(from)
     to.setMonth(to.getMonth() + 1)
-    const fmt = (d: Date) => d.toISOString().slice(0, 10)
-    return { from: fmt(from), to: fmt(to) }
+    return { from: localDateInputValue(from), to: localDateInputValue(to) }
   }, [])
   const fromEff = filters.from || defaultRange.from
   const toEff = filters.to || defaultRange.to

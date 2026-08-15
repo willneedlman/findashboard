@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { localDateInputValue } from '../../../lib/time'
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
 import { createChart, ColorType, CrosshairMode } from 'lightweight-charts'
@@ -166,7 +167,7 @@ export default function PriceCard({ config }: { config: WidgetConfig }) {
   const { data, isLoading, isError } = useQuery<PriceData>({
     queryKey: ['price-card', ticker],
     queryFn: async () => {
-      const start = new Date(Date.now() - 90 * 86400000).toISOString().split('T')[0]
+      const start = localDateInputValue(new Date(Date.now() - 90 * 86400000))
       const res = await axios.get(`/api/market/history?ticker=${ticker}&start=${start}`)
       return res.data
     },

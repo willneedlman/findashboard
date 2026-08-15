@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { todayLocal } from '../../../lib/time'
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
@@ -44,7 +45,7 @@ export default function CorrelationMatrix({ config }: { config: WidgetConfig }) 
     return Math.abs(v) > 0.4 ? T.text : T.muted
   }
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = todayLocal()
   const startDate = (() => {
     const d = new Date()
     d.setDate(d.getDate() - periodDays)

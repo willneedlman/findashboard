@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { todayLocal } from '../lib/time'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useQueries, useQuery } from '@tanstack/react-query'
@@ -246,7 +247,7 @@ export default function MorningBrief({
     [positions, watchlistTickers],
   )
 
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const today = useMemo(() => todayLocal(), [])
   // Unfiltered market calendar — held-name filtering happens client-side, so the
   // same fetch also drives overnight cause-tagging for watchlist-only names.
   const earn = useQuery<{ rows: { symbol: string; date: string; hour?: string }[] }>({

@@ -15,7 +15,7 @@ import { HUBS, ALL_TOOLS } from '../lib/hubs'
 import { getRecents } from '../lib/recents'
 import { wordMatch, tickerFromQuery } from '../lib/search'
 import { getRecentTickers, recordRecentTicker } from '../lib/recentTickers'
-import { formatLocalTime, localTimeZone } from '../lib/time'
+import { formatLocalTime, localTimeZone, todayLocal } from '../lib/time'
 import EmptyState from '../components/EmptyState'
 
 const F = {
@@ -965,7 +965,7 @@ const DAY_ABBR = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 // be unavailable; falls back gracefully.
 interface WeekRow { date: string; day: string; time?: string; event: string; tag: 'HELD' | 'MACRO'; prio: number }
 function ThisWeek({ holdings, onOpen }: { holdings: string[]; onOpen: () => void }) {
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const today = useMemo(() => todayLocal(), [])
   const earn = useQuery<{ rows: { symbol: string; date: string; hour?: string }[] }>({
     queryKey: ['home-earn', today],
     queryFn: () => axios.get(`/api/earnings/calendar?date=${today}&days=7`).then(r => r.data),

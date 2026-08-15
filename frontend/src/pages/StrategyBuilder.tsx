@@ -69,6 +69,26 @@ export default function StrategyBuilder() {
   const getSpot    = (tk: string) => spotOverrides[tk] ?? legs.find(l => l.ticker === tk)?.K ?? 100
   const setPrimary = (v: number)  => setSpotOverrides(s => ({ ...s, [primaryTicker]: v }))
 
+  // Presets are written at a $100 scale and scalePreset moves them onto a real
+  // spot, but nothing supplied one until you loaded a chain. So the page opened
+  // reading SPY SPOT $100.00 with a strike of 100 while SPY was $776: a real
+  // ticker priced at a placeholder. Seed it from a quote instead. Preset
+  // switching already rescales from getSpot, so it inherits this.
+  useEffect(() => {
+    const tk = primaryTicker
+    if (!tk || spotOverrides[tk]) return
+    let cancelled = false
+    axios.get(`/api/market/quote/${encodeURIComponent(tk)}`)
+      .then(r => {
+        const spot = Number(r.data?.current_price)
+        if (cancelled || !Number.isFinite(spot) || spot <= 0) return
+        setSpotOverrides(s => (s[tk] ? s : { ...s, [tk]: spot }))
+        setLegs(prev => prev.map(l => l.ticker === tk ? { ...l, K: roundToStrike((l.K / 100) * spot, spot) } : l))
+      })
+      .catch(() => { /* No quote: the preset scale still builds a usable payoff. */ })
+    return () => { cancelled = true }
+  }, [primaryTicker])   // eslint-disable-line react-hooks/exhaustive-deps
+
   const setChain = (i: number, patch: Partial<LegChain>) =>
     setLegChains(c => ({ ...c, [i]: { ...c[i], ...patch } }))
 

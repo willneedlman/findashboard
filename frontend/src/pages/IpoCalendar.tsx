@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { todayLocal } from '../lib/time'
 import axios from 'axios'
 import { Star } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
@@ -58,7 +59,7 @@ function exchangeFamily(ex: string): string {
   return ex ? 'Other' : ''
 }
 
-function today(): string { return new Date().toISOString().slice(0, 10) }
+function today(): string { return todayLocal() }
 
 function fmtMoney(v: number | null | undefined): string {
   if (v == null || v <= 0) return '—'

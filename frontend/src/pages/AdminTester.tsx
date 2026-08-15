@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, lazy, Suspense } from 'react'
+import { todayLocal } from '../lib/time'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import DataAuditTab from '../components/admin/DataAuditTab'
@@ -430,7 +431,7 @@ export default function AdminTester() {
     const blob = new Blob([buildExport()], { type: 'text/markdown' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
-    a.href = url; a.download = `sentiment-reports-${new Date().toISOString().slice(0, 10)}.md`
+    a.href = url; a.download = `sentiment-reports-${todayLocal()}.md`
     a.click(); URL.revokeObjectURL(url)
   }, [buildExport])
 
