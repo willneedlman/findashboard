@@ -1107,7 +1107,7 @@ export default function ReportCreator() {
         })),
       }
       const r = await axios.post('/api/ai/report', payload)
-      setGenerated(active.id, {
+      const stored = setGenerated(active.id, {
         headline: r.data.headline ?? '',
         stance: r.data.stance ?? undefined,
         keyResult: r.data.keyResult ?? undefined,
@@ -1115,7 +1115,20 @@ export default function ReportCreator() {
         sections: Array.isArray(r.data.sections) ? r.data.sections : [],
         conclusion: r.data.conclusion ?? '',
         model: r.data.model,
+        pipeline: r.data.pipeline ?? undefined,
       })
+      if (!stored) {
+        // The report was written and then could not be saved. Every reader goes
+        // back to storage, so staying quiet here shows the previous state and
+        // looks exactly like the run never happened.
+        const usage = reportStorageUsage()
+        setGenError(
+          `The report was generated but your browser could not save it: storage is full at `
+          + `${usage.projects} project${usage.projects === 1 ? '' : 's'} and ${usage.snapshots} saved `
+          + `version${usage.snapshots === 1 ? '' : 's'}. Delete a project or an old version, then generate again.`,
+        )
+        return
+      }
       setGenerationProgress(100)
       setJustDone(true)
       window.setTimeout(() => setJustDone(false), 6000)

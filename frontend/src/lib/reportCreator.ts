@@ -437,14 +437,19 @@ function write(state: StoreState): boolean {
     return true
   } catch {
     // Quota exceeded — history snapshots (with their cloned clips) are the bulk.
-    // Drop the oldest snapshot from whichever project has the most, and retry a
-    // few times, so a fresh report is never silently lost to old history.
-    for (let i = 0; i < 8; i++) {
+    // Drop the oldest snapshot from whichever project has the most, and retry,
+    // so a fresh report is never silently lost to old history.
+    //
+    // This trims history down to nothing rather than stopping at one. A project
+    // whose single snapshot is itself the thing that will not fit could never
+    // recover otherwise, and the live report is worth more than its archive:
+    // history is a convenience, the report the user just waited for is not.
+    for (let i = 0; i < 40; i++) {
       let target: ReportProject | undefined
       for (const p of state.projects) {
-        if ((p.history?.length ?? 0) > 1 && (!target || p.history!.length > target.history!.length)) target = p
+        if ((p.history?.length ?? 0) > 0 && (!target || p.history!.length > target.history!.length)) target = p
       }
-      if (!target?.history) break
+      if (!target?.history?.length) break
       target.history = target.history.slice(0, -1)
       try { localStorage.setItem(KEY, JSON.stringify(state)); emit(); return true } catch { /* keep trimming */ }
     }
@@ -670,20 +675,33 @@ function syncLatestSnapshot(p: ReportProject) {
   }
 }
 
-export function setGenerated(projectId: string, gen: Omit<GeneratedReport, 'generatedAt'> & { generatedAt?: string }) {
+export function setGenerated(
+  projectId: string,
+  gen: Omit<GeneratedReport, 'generatedAt'> & { generatedAt?: string },
+): boolean {
   // Stores the AI report as an OUTPUT — deliberately does not bump updatedAt, so
   // updatedAt > generatedAt reliably signals the inputs changed since generation.
-  mutate(s => {
+  //
+  // Returns whether it persisted. Dropping that answer is what made a finished
+  // report vanish: the write failed on quota, emit() sent every reader back to
+  // localStorage, and they found the state from before the run. The UI said the
+  // report was ready and then rendered nothing.
+  return mutate(s => {
     const p = s.projects.find(p => p.id === projectId)
     if (!p) return
     const generated: GeneratedReport = { ...gen, generatedAt: gen.generatedAt || nowISO() }
     p.generated = generated
+    // Only the clips this report actually cites. A snapshot exists so a past
+    // report still renders after its inputs change, which needs the evidence it
+    // used, not the whole bank — cloning all of it put ninety-odd clips, chart
+    // data and all, into every one of fifteen snapshots and could not fit.
+    const cited = new Set(generated.sections.map(s => s.clipId).filter(Boolean))
     const snapshot: ReportSnapshot = {
       id: uid(),
       generatedAt: generated.generatedAt,
       name: p.name,
       scope: clone(p.scope),
-      clips: clone(p.clips),
+      clips: clone(p.clips.filter(c => cited.has(c.id))),
       generated: clone(generated),
     }
     p.history = [snapshot, ...(p.history ?? [])].slice(0, HISTORY_CAP)
