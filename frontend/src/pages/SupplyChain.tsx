@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { useTickerParam } from '../hooks/useTickerParam'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
 import TickerInput from '../components/TickerInput'
@@ -808,10 +809,11 @@ export function SupplyChainContent() {
     }
   }
 
-  useEffect(() => {
-    const t = searchParams.get('ticker')
-    if (t) doFetch(t)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // This was a mount effect with empty deps, which fired twice under
+  // StrictMode (two 6.7s supply-chain requests for one page view) and could not
+  // resync when a same-route ?ticker= navigation changed only the query string.
+  // The shared hook applies each symbol exactly once and handles both.
+  useTickerParam(doFetch)
 
   const TAB = 'Company Profile'
   useReportCapture(() => {

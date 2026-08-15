@@ -142,14 +142,22 @@ export default function Seasonality() {
               sub: d.worst_month ? `${signed(d.worst_month.mean_pct)} avg · ${d.worst_month.hit_rate_pct}% positive` : undefined },
             { label: 'This month', value: d.current_month?.label ?? '—',
               vc: tone(d.current_month?.mean_pct),
-              sub: d.current_month ? `${signed(d.current_month.mean_pct)} avg over ${d.current_month.n} years` : undefined },
+              // 21 August observations inside 20 years of history is not a
+              // contradiction, but calling them "21 years" next to a SAMPLE tile
+              // reading 20y made it look like one.
+              sub: d.current_month ? `${signed(d.current_month.mean_pct)} avg of ${d.current_month.n} ${d.current_month.label} observations` : undefined },
             { label: 'Turn of month', value: signed(turn?.turn_of_month.mean_pct, 3),
               vc: tone(turn?.turn_of_month.mean_pct),
               sub: turn ? `vs ${signed(turn.rest_of_month.mean_pct, 3)} the rest of the month` : undefined },
             { label: 'Sample', value: `${d.years_covered}y`, sub: `${d.sessions?.toLocaleString()} sessions` },
           ]} />
 
-          <Panel title="Average return by month" meta={`bar height is the mean, ${months[0]?.n ?? 0} observations per month`}>
+          <Panel title="Average return by month" meta={(() => {
+            const ns = months.map(m => m.n).filter(n => n > 0)
+            if (!ns.length) return 'bar height is the mean'
+            const lo = Math.min(...ns), hi = Math.max(...ns)
+            return `bar height is the mean, ${lo === hi ? lo : `${lo} to ${hi}`} observations per month`
+          })()}>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={months} margin={{ top: 6, right: 8, left: 0, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={T.borderFaint} vertical={false} />

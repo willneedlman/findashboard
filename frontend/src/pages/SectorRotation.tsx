@@ -38,6 +38,7 @@ interface SectorData {
 interface RotationResponse {
   sectors:     SectorData[]
   spy_returns: Record<Period, number | null>
+  spy_price:   number | null
   as_of:       string
 }
 
@@ -132,7 +133,7 @@ export function SectorRotationContent() {
       `Sector Heatmap${data.as_of ? ` · as of ${data.as_of}` : ''}`,
       ['Sector', 'Name', 'Price', ...PERIODS, `vs SPY (${per})`, 'Mom', `Rank (${per})`],
       [
-        ['SPY', 'S&P 500 Benchmark', null, ...PERIODS.map(p => pct(data.spy_returns[p])), null, null, null],
+        ['SPY', 'S&P 500 Benchmark', data.spy_price != null ? `$${data.spy_price.toFixed(2)}` : null, ...PERIODS.map(p => pct(data.spy_returns[p])), null, null, null],
         ...sorted.map(s => [
           s.ticker,
           s.name,
@@ -315,7 +316,9 @@ export function SectorRotationContent() {
                       <span style={{ fontFamily: T.label, fontWeight: 700, fontSize: 10, color: T.gold }}>SPY</span>
                       <span style={{ fontFamily: T.label, fontSize: 9, color: T.muted, marginLeft: 6 }}>S&P 500 Benchmark</span>
                     </td>
-                    <td style={{ padding: '7px 10px', textAlign: 'right', color: T.muted }}>—</td>
+                    <td style={{ padding: '7px 10px', textAlign: 'right', color: data.spy_price == null ? T.muted : T.text }}>
+                      {data.spy_price == null ? '—' : `$${data.spy_price.toFixed(2)}`}
+                    </td>
                     {PERIODS.map(p => {
                       const v = data.spy_returns[p]
                       return (

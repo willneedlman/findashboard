@@ -1563,6 +1563,9 @@ def sector_rotation():
     payload = {
         "sectors": results,
         "spy_returns": spy_returns_out,
+        # Every sector row prints a price and the benchmark row printed a dash,
+        # which reads as missing data rather than as a field nobody supplied.
+        "spy_price": round(float(spy.iloc[-1]), 2) if spy is not None and len(spy) else None,
         "as_of": date.today().isoformat(),
     }
 

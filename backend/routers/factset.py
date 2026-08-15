@@ -49,6 +49,17 @@ _GROUPS: list[tuple[str, list[tuple[str, str]]]] = [
 ]
 
 
+@router.get("/status")
+def status():
+    """Whether a FactSet key is configured at all.
+
+    Company Profile fired /financials on every page view and got
+    {available: false, reason: "not_configured"} back every time, once per
+    ticker. One capability check answers that without a per-ticker round trip.
+    """
+    return {"available": factset.available()}
+
+
 @router.get("/financials")
 def financials(ticker: str = Query(...), actual: int = Query(6, ge=1, le=10), estimate: int = Query(2, ge=0, le=4)):
     """Grouped Financial Highlights for a ticker, or {available:false} if uncovered."""

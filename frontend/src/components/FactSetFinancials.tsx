@@ -26,10 +26,19 @@ function fmt(v: number | null, unit: string): string {
 // FactSet Overview financials + forward consensus estimates. Renders only when the
 // key is entitled and the ticker is covered; otherwise nothing (graceful hide).
 export default function FactSetFinancials({ ticker }: { ticker: string }) {
+  // One capability check for the whole session, not a per-ticker round trip
+  // that comes back "not_configured" on every Company Profile load.
+  const cap = useQuery<{ available: boolean }>({
+    queryKey: ['factset-status'],
+    queryFn: () => axios.get('/api/factset/status').then(r => r.data),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    retry: 0,
+  })
   const q = useQuery<Resp>({
     queryKey: ['factset-financials', ticker],
     queryFn: () => axios.get(`/api/factset/financials?ticker=${encodeURIComponent(ticker)}`).then(r => r.data),
-    enabled: !!ticker,
+    enabled: !!ticker && cap.data?.available === true,
     staleTime: 6 * 3600_000,
     retry: 0,
   })

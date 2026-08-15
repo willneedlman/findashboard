@@ -198,6 +198,18 @@ function OddsStrip({ meetings }: { meetings: any[] }) {
             <div style={{ display: 'flex', height: 8, background: 'rgba(255,255,255,0.05)' }}>
               {outcomes.map(([lbl, v, c]) => v > 0 && <div key={lbl} style={{ width: `${v}%`, background: c }} />)}
             </div>
+            {/* Labelling only the modal outcome made every meeting read HOLD
+                while the implied path above climbed 29bps, hiding where that
+                move came from. The runner-up rides along. */}
+            {(() => {
+              const runnerUp = outcomes.filter(o => o[0] !== domLabel).sort((a, b) => b[1] - a[1])[0]
+              if (!runnerUp || runnerUp[1] < 5) return null
+              return (
+                <div style={{ fontFamily: T.mono, fontSize: 8.5, color: runnerUp[2], marginTop: 4, whiteSpace: 'nowrap' }}>
+                  {runnerUp[0]} {Math.round(runnerUp[1])}
+                </div>
+              )
+            })()}
             {hover === i && (
               <div style={{ position: 'absolute', top: -6, left: '50%', transform: 'translate(-50%,-100%)', zIndex: 10, ...TOOLTIP_STYLE, whiteSpace: 'nowrap' }}>
                 {outcomes.map(([lbl, v, c]) => (

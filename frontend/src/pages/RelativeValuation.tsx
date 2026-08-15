@@ -155,11 +155,19 @@ function MetricBars({
   metricKey: string; label: string; lowerBetter: boolean; isPct: boolean
   peers: PeerRow[]; medians: Record<MetricKey, number | null>; targetTicker: string
 }) {
-  const valid = peers.filter(p => (p as any)[metricKey] !== null)
-  if (!valid.length) return <div style={{ fontFamily: T.label, fontSize: 9, color: T.muted, fontStyle: 'italic' }}>No data</div>
+  // Every peer keeps its row. Panels used to filter out the ones with no value,
+  // so P/E charted nine comps and P/S charted six with nothing on screen saying
+  // three had vanished.
+  const rows = peers.map(p => ({ p, val: (p as any)[metricKey] as number | null }))
+  if (rows.every(r => r.val == null)) {
+    return <div style={{ fontFamily: T.label, fontSize: 9, color: T.muted, fontStyle: 'italic' }}>No data</div>
+  }
 
-  const values   = valid.map(p => (p as any)[metricKey] as number)
-  const maxVal   = Math.max(...values)
+  // A negative multiple has no valuation reading and cannot share a bar scale
+  // with positive ones. DELL's -226.9x P/B was drawn against a scale it also
+  // set, flattening every other bar in the panel.
+  const scaleValues = rows.map(r => r.val).filter((v): v is number => v != null && v > 0)
+  const maxVal   = scaleValues.length ? Math.max(...scaleValues) : 0
   const med      = medians[metricKey as MetricKey]
   const medLinePct = (med !== null && maxVal > 0) ? (med / maxVal) * 100 : null
 
@@ -173,11 +181,11 @@ function MetricBars({
           </span>
         )}
       </div>
-      {valid.map(p => {
-        const val       = (p as any)[metricKey] as number
-        const widthPct  = maxVal > 0 ? (val / maxVal) * 100 : 0
+      {rows.map(({ p, val }) => {
+        const onScale   = val != null && val > 0
+        const widthPct  = onScale && maxVal > 0 ? (val / maxVal) * 100 : 0
         const isTarget  = p.ticker === targetTicker
-        const good      = lowerBetter ? val <= (med ?? Infinity) : val >= (med ?? 0)
+        const good      = val != null && (lowerBetter ? val <= (med ?? Infinity) : val >= (med ?? 0))
         const barColor  = isTarget ? 'var(--theme-primary, #c9a84c)' : good ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)'
 
         return (
@@ -186,11 +194,11 @@ function MetricBars({
               {p.ticker}
             </div>
             <div style={{ flex: 1, height: 14, background: 'var(--theme-hover, rgba(255,255,255,0.04))', position: 'relative', overflow: 'visible' }}>
-              <div style={{
+              {onScale && <div style={{
                 width: `${widthPct}%`, height: '100%',
                 background: `color-mix(in srgb, ${barColor} 42%, transparent)`,
                 borderRight: `2px solid ${barColor}`,
-              }} />
+              }} />}
               {medLinePct !== null && (
                 <div style={{
                   position: 'absolute', top: -2, bottom: -2,
@@ -200,8 +208,11 @@ function MetricBars({
                 }} />
               )}
             </div>
-            <div style={{ width: 44, fontFamily: T.mono, fontSize: 9, color: isTarget ? T.gold : T.text, textAlign: 'right', flexShrink: 0, fontWeight: isTarget ? 700 : 400 }}>
-              {isPct ? `${(val * 100).toFixed(1)}%` : `${val.toFixed(1)}x`}
+            {/* A row with no value, or a negative one, still prints its number
+                (or "n/a") next to an empty track. It just does not get a bar,
+                because it has nothing to be a proportion of. */}
+            <div style={{ width: 52, fontFamily: T.mono, fontSize: 9, color: val == null ? T.muted : isTarget ? T.gold : T.text, textAlign: 'right', flexShrink: 0, fontWeight: isTarget ? 700 : 400, fontStyle: val == null ? 'italic' : undefined }}>
+              {val == null ? 'n/a' : isPct ? `${(val * 100).toFixed(1)}%` : `${val.toFixed(1)}x`}
             </div>
           </div>
         )
