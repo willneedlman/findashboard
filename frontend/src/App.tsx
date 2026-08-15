@@ -71,6 +71,7 @@ const Multiples          = lazyWithReload(() => import('./pages/Multiples'))
 const ReverseDCF         = lazyWithReload(() => import('./pages/ReverseDCF'))
 const OptionsScanner     = lazyWithReload(() => import('./pages/OptionsScanner'))
 const OptionsMM2         = lazyWithReload(() => import('./pages/OptionsMM2'))
+const FixedIncomeMM2     = lazyWithReload(() => import('./pages/FixedIncomeMM2'))
 const RegressionAnalysis = lazyWithReload(() => import('./pages/RegressionAnalysis'))
 const CorrelationAnalysis = lazyWithReload(() => import('./pages/CorrelationAnalysis'))
 const PortfolioBacktester = lazyWithReload(() => import('./pages/PortfolioBacktester'))
@@ -308,6 +309,7 @@ export default function App() {
                   existing links and saved tabs keep working. */}
               <Route path="/options-scanner" element={<OptionsScanner />} />
               <Route path="/options-mm-2" element={<OptionsMM2 />} />
+              <Route path="/fixed-income-mm-2" element={<FixedIncomeMM2 />} />
               <Route path="/chain"      element={<RedirectWithSearch to="/options-scanner" />} />
               <Route path="/options-desk-demo" element={<RedirectWithSearch to="/options-scanner" />} />
               <Route path="/options-desk" element={<RedirectWithSearch to="/options-scanner" />} />

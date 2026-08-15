@@ -317,8 +317,8 @@ export default function Layout({ children }: LayoutProps) {
             <div style={{ padding: '10px 12px 0' }}><ReportCaptureToolbar /></div>
             {children}
           </div>
-        ) : location.pathname === '/options-mm-2' ? (
-          // The MM terminal owns the viewport. No capture toolbar and no footer,
+        ) : location.pathname === '/options-mm-2' || location.pathname === '/fixed-income-mm-2' ? (
+          // Either MM terminal owns the viewport. No capture toolbar and no footer,
           // and a thin gutter, so its own fixed vertical budget gets the whole
           // window rather than competing with page chrome for it.
           <div style={{ height: '100vh', padding: 6, boxSizing: 'border-box' }}>{children}</div>
