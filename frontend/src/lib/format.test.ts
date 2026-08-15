@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatScreenerFilterDisplay, parseScaledNumber, screenerFilterToApi } from './format'
+import { fmtTailReturn, formatScreenerFilterDisplay, isTailLoss, parseScaledNumber, screenerFilterToApi } from './format'
 
 describe('parseScaledNumber', () => {
   it('parses plain numbers', () => {
@@ -32,5 +32,32 @@ describe('formatScreenerFilterDisplay', () => {
   it('formats market cap and volume readably', () => {
     expect(formatScreenerFilterDisplay('marketCap', '10')).toBe('$10B')
     expect(formatScreenerFilterDisplay('avgVolume', '300M')).toBe('300M')
+  })
+})
+
+describe('fmtTailReturn', () => {
+  it('renders a loss-positive VaR as a negative return', () => {
+    expect(fmtTailReturn(19.8)).toBe('-19.8%')
+  })
+
+  it('renders a tail that finishes ahead as a gain', () => {
+    expect(fmtTailReturn(-19.8)).toBe('+19.8%')
+  })
+
+  it('never emits a signed zero', () => {
+    expect(fmtTailReturn(0)).toBe('0.0%')
+  })
+
+  it('placeholders missing values', () => {
+    expect(fmtTailReturn(null)).toBe('—')
+    expect(fmtTailReturn(NaN)).toBe('—')
+  })
+})
+
+describe('isTailLoss', () => {
+  it('is true only when the tail actually loses', () => {
+    expect(isTailLoss(19.8)).toBe(true)
+    expect(isTailLoss(-19.8)).toBe(false)
+    expect(isTailLoss(null)).toBe(false)
   })
 })

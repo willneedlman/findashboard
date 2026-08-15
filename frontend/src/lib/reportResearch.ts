@@ -9,6 +9,7 @@ import {
   type MasterValuationFundamentals,
 } from './masterValuationSeed'
 import { normalizeTicker } from './pmImport'
+import { fmtTailReturn } from './format'
 import type { ClipDraft, EvidenceDomain, ReportClip, ReportScope } from './reportCreator'
 
 export type ReportResearchIntent =
@@ -3567,10 +3568,10 @@ async function runSource(
           { label: 'Median outcome', value: asPct(percentiles.p50), sub: '500 paths over 252 sessions' },
           { label: '5th percentile', value: asPct(percentiles.p5), sub: 'One year in twenty is worse than this' },
           { label: '95th percentile', value: asPct(percentiles.p95) },
-          { label: '95% VaR', value: finite(data.var_95) == null ? '—' : `${finite(data.var_95)!.toFixed(1)}%` },
+          { label: '95% VaR', value: fmtTailReturn(finite(data.var_95)), sub: 'Terminal return at the 5th percentile' },
           // CVaR is the average of the tail, so it is always worse than VaR and
           // is the number that describes the loss you actually take when it goes.
-          { label: '95% CVaR', value: finite(data.cvar_95) == null ? '—' : `${finite(data.cvar_95)!.toFixed(1)}%`, sub: 'Mean loss across the worst 5% of paths' },
+          { label: '95% CVaR', value: fmtTailReturn(finite(data.cvar_95)), sub: 'Mean terminal return across the worst 5% of paths' },
           { label: 'Simulated CAGR', value: finite(core.cagr) == null ? '—' : `${finite(core.cagr)!.toFixed(1)}%`, sub: `Volatility drag ${finite(core.volatility_drag)?.toFixed(1) ?? '—'}%` },
           { label: 'Simulated max drawdown', value: finite(core.max_drawdown) == null ? '—' : `${finite(core.max_drawdown)!.toFixed(1)}%` },
           { label: 'Calibration window', value: `${start} to ${end}`, sub: `Drift ${((finite(data.mu) ?? 0) * 100).toFixed(1)}% · vol ${((finite(data.sigma) ?? 0) * 100).toFixed(1)}%` },

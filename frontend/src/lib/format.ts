@@ -83,3 +83,17 @@ export function fmtMarketCap(v: number | null | undefined): string {
 export function fmtNum(v: unknown, digits = 2, suffix = ''): string {
   return typeof v !== 'number' || Number.isNaN(v) ? '—' : `${v.toFixed(digits)}${suffix}`
 }
+
+// VaR and CVaR leave the backend loss-positive: +20 means the tail loses 20%,
+// and a tail that still finishes ahead is legitimately negative. Rendering the
+// raw number printed those gains as losses, so every surface flips them into a
+// signed return here instead of formatting them by hand.
+export function fmtTailReturn(v: number | null | undefined, digits = 1): string {
+  if (v == null || !Number.isFinite(v)) return '—'
+  const ret = -v
+  return `${ret > 0 ? '+' : ''}${ret.toFixed(digits)}%`
+}
+
+export function isTailLoss(v: number | null | undefined): boolean {
+  return typeof v === 'number' && Number.isFinite(v) && v > 0
+}

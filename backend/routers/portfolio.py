@@ -488,6 +488,21 @@ class MonteCarloRequest(BaseModel):
         return self
 
 
+def _tail_metrics(final: np.ndarray) -> tuple[float, float]:
+    """VaR/CVaR of terminal equity multiples, loss-positive.
+
+    Loss-positive matches portfolio_optimizer._tail_risk: +20 means the tail
+    loses 20%. A tail that still finishes ahead therefore comes out negative,
+    which callers must render as a gain rather than as a loss. Because the tail
+    mean can never exceed the 5th percentile, cvar_95 >= var_95 always holds.
+    """
+    p5 = float(np.percentile(final, 5))
+    var_95 = round(float((1.0 - p5) * 100), 2)
+    tail = final[final <= p5]
+    cvar_95 = round(float((1.0 - tail.mean()) * 100), 2) if len(tail) else var_95
+    return var_95, cvar_95
+
+
 @router.post("/montecarlo")
 def monte_carlo(req: MonteCarloRequest):
     """GBM simulation of a (optionally levered) portfolio. Returns terminal equity as a growth
@@ -565,12 +580,9 @@ def monte_carlo(req: MonteCarloRequest):
     core_metrics = _mc_path_metrics(equity.T)
 
     final = equity[-1, :]
-    p5 = float(np.percentile(final, 5))
     percentiles = {k: round(float(np.percentile(final, q)), 3)
                    for k, q in [("p5", 5), ("p25", 25), ("p50", 50), ("p75", 75), ("p95", 95)]}
-    var_95 = round(float((1.0 - p5) * 100), 2)
-    tail = final[final <= p5]
-    cvar_95 = round(float((1.0 - tail.mean()) * 100), 2) if len(tail) else var_95
+    var_95, cvar_95 = _tail_metrics(final)
 
     path_percentiles = np.percentile(equity, [5, 25, 50, 75, 95], axis=1)
     percentile_paths = [
