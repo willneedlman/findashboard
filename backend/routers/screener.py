@@ -12,6 +12,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import fmp
 import industry_ratios
+import market_cap as market_cap_lib
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -1306,6 +1307,11 @@ def run_screen(req: ScreenRequest):
         "results": shown, "total": len(filtered), "changePeriod": display_period or "1D",
         "coverage": _coverage_for_scope(req.universe, req.region),
         "priceAsOf": min(stamps) if stamps else None,
+        # A per-name diluted share count across 250 rows is not affordable here,
+        # so the board stays on the vendor basis and says so. Ranking within the
+        # table is consistent; it is comparison against the valuation tabs, which
+        # use diluted, that needs the caveat.
+        "marketCapBasis": market_cap_lib.BASIS_VENDOR,
         "priceSources": price_sources,
         "fundamentalsSources": fundamentals_sources,
         "bundledAsOf": _US_FUND_BUILT_AT,

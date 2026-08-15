@@ -7,6 +7,7 @@ import yfinance as yf
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from cache import get_history, get_info, cached
 import corporate_db
+import market_cap as market_cap_lib
 try:
     import fmp
 except ImportError:                                   # pragma: no cover
@@ -1362,8 +1363,16 @@ def get_supply_chain(ticker: str):
                     return value
             return None
 
-        price = safe_float(info, ["currentPrice", "previousClose", "navPrice"]) or None
-        mcap  = safe_float(info, ["marketCap", "totalAssets"]) or None
+        # One market cap for the whole app, on a stated basis. This page used to
+        # print yfinance's basic-share figure ($4.46T for AAPL) while Master
+        # Valuation multiplied the same price by diluted shares ($4,590.4B), so
+        # the same name looked 3% cheaper depending on the tab. The price comes
+        # off the same resolution as the cap, so cap divided by price is the
+        # share count actually printed rather than an implied third number.
+        cap = market_cap_lib.market_cap(symbol)
+        price = cap["price"] or safe_float(info, ["currentPrice", "previousClose", "navPrice"]) or None
+        mcap  = cap["value"] or safe_float(info, ["marketCap", "totalAssets"]) or None
+        mcap_basis = cap["basis"] if cap["value"] else (market_cap_lib.BASIS_VENDOR if mcap else None)
         revenue = safe_float(info, ["totalRevenue"]) or safe_float(fmp_profile, ["revenue"]) or None
         emp   = profile_value("fullTimeEmployees", "employees")
         pe      = info.get("trailingPE")
@@ -1435,6 +1444,9 @@ def get_supply_chain(ticker: str):
             "city":             profile_value("city"),
             "price":            float(price) if price else None,
             "market_cap":       float(mcap) if mcap else None,
+            "market_cap_basis": mcap_basis,
+            "market_cap_shares": cap["shares"],
+            "market_cap_source": cap["source"],
             "revenue":          float(revenue) if revenue else None,
             "employees":        int(emp) if emp else None,
             "pe_ratio":         round(float(pe), 1) if _holder_num(pe) and pe > 0 else None,

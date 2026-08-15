@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import fmp
+import market_cap as market_cap_lib
 import sec_segments
 import peer_multiples
 from validation import validate_ticker
@@ -96,6 +97,7 @@ def build_sotp_data(ticker: str, fundamentals_override: dict | None = None):
         "total_revenue":      total_rev,
         "net_debt":           net_debt,
         "shares":             shares,
+        "shares_basis":       f.get("shares_basis"),
         "market_price":       price,
         "market_cap":         round(price * shares, 1) if price and shares else None,
         "suggested_multiple": blended,
@@ -183,8 +185,14 @@ def multiples(ticker: str):
     sym = validate_ticker(ticker)
     from cache import get_info
     info = get_info(sym)
-    price  = float(info.get("currentPrice") or info.get("regularMarketPrice") or 0) or None
-    shares = (info.get("sharesOutstanding") or 0) / 1e6        # M
+    # Price and share count come from the shared resolver, so the EV this tab
+    # prices EV/EBITDA against is the same equity value the rest of the app
+    # quotes. Falling back to yfinance's basic count here made this tab rank on
+    # multiples derived from a different company than Master Valuation priced.
+    cap = market_cap_lib.market_cap(sym)
+    price  = cap["price"] or float(info.get("currentPrice") or info.get("regularMarketPrice") or 0) or None
+    shares = (cap["shares"] or info.get("sharesOutstanding") or 0) / 1e6        # M
+    shares_basis = cap["basis"] if cap["shares"] else market_cap_lib.BASIS_BASIC
     total_debt = (info.get("totalDebt") or 0) / 1e6
     cash       = (info.get("totalCash") or info.get("cashAndCashEquivalents") or 0) / 1e6
     net_debt   = total_debt - cash
@@ -239,6 +247,7 @@ def multiples(ticker: str):
         "ticker":   sym,
         "price":    round(price, 2) if price else None,
         "shares":   round(shares, 1),
+        "shares_basis": shares_basis,
         "net_debt": round(net_debt, 1),
         "metrics":  metrics,
         "source":   src,

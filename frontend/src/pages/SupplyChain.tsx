@@ -100,6 +100,12 @@ interface SupplyChainData {
   description:      string
   price:            number | null
   market_cap:       number | null
+  // Which share count the cap was built on. This page printed $4.46T for AAPL
+  // while Master Valuation printed $4,590.4B, because one was basic and the
+  // other diluted and neither said so.
+  market_cap_basis:  string | null
+  market_cap_shares: number | null
+  market_cap_source: string | null
   employees:        number | null
   pe_ratio?:        number | null
   eps_ttm?:         number | null
@@ -139,6 +145,20 @@ interface PositionChanges {
   net_share_change: number
   biggest_adds: Holder[]
   biggest_trims: Holder[]
+}
+
+// Name the share basis next to the number. Diluted and basic counts differ by
+// enough to make the same company look several percent cheaper on one tab than
+// another, and the reader has no way to tell which they are looking at.
+function capBasisTip(d: { market_cap_basis: string | null; market_cap_shares: number | null }): string | undefined {
+  if (!d.market_cap_basis) return undefined
+  if (d.market_cap_basis === 'vendor') {
+    return 'Vendor market cap. No share count sits behind it, so it does not reconcile against the price shown here.'
+  }
+  const shares = d.market_cap_shares
+    ? `${(d.market_cap_shares / 1e9).toFixed(2)}B ${d.market_cap_basis} shares`
+    : `${d.market_cap_basis} shares`
+  return `Price times ${shares}.`
 }
 
 function fmtCap(v: number | null): string {
@@ -798,7 +818,7 @@ export function SupplyChainContent() {
     const pieces: ClipDraft[] = [
       kpiClip(TAB, `${data.ticker} · Snapshot`, [
         { label: 'Price', value: data.price != null ? `$${data.price.toFixed(2)}` : '—' },
-        { label: 'Market Cap', value: fmtCap(data.market_cap) },
+        { label: 'Market Cap', value: fmtCap(data.market_cap), sub: capBasisTip(data) },
         { label: 'P/E', value: data.pe_ratio != null ? data.pe_ratio.toFixed(1) : '—' },
         { label: 'EPS (TTM)', value: data.eps_ttm != null ? `$${data.eps_ttm.toFixed(2)}` : '—' },
         { label: 'Rev Growth', value: data.rev_growth != null ? `${(data.rev_growth * 100).toFixed(1)}%` : '—' },
@@ -909,7 +929,7 @@ export function SupplyChainContent() {
         {data && (() => {
           const metrics: { label: string; value: string; color?: string; tip?: string }[] = [
             { label: 'Price',      value: data.price != null ? `$${data.price.toFixed(2)}` : '—' },
-            { label: 'Market Cap', value: fmtCap(data.market_cap) },
+            { label: 'Market Cap', value: fmtCap(data.market_cap), tip: capBasisTip(data) },
             { label: 'P/E Ratio',  value: data.pe_ratio != null ? data.pe_ratio.toFixed(1) : '—',
               tip: medianTip(data.sector, 'peRatio', data.pe_ratio) },
             { label: 'EPS (TTM)',  value: data.eps_ttm != null ? `$${data.eps_ttm.toFixed(2)}` : '—' },
@@ -1029,7 +1049,7 @@ export function SupplyChainContent() {
                   <ShortInterestPanel
                     ticker={data.ticker}
                     floatShares={inst?.float_shares}
-                    sharesOutstanding={data.market_cap && data.price ? Math.round(data.market_cap / data.price) : null}
+                    sharesOutstanding={data.market_cap_shares ?? (data.market_cap && data.price ? Math.round(data.market_cap / data.price) : null)}
                   />
                 </div>
                 <InstitutionalPanel inst={inst} loading={instLoading} tab={instTab} onTab={setInstTab} />

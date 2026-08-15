@@ -241,7 +241,11 @@ def _price_members(members: list[dict], currency: str | None) -> tuple[list[dict
             "sector": member.get("sector"),
             "price": round(price, 2),
             "change_pct": _pct(price, prev),
+            # Shares come from the index membership file, which publishes the
+            # count the index itself weights on. That is not the diluted count
+            # the valuation tabs use, so the basis travels with the number.
             "market_cap_usd": round(shares * price * fx) if (shares and fx) else None,
+            "market_cap_basis": "index-published",
         })
     return rows, fx
 

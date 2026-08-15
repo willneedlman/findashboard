@@ -9,6 +9,7 @@ import fmp
 import damodaran
 import factset
 import factor_models as fm
+import market_cap as market_cap_lib
 from cache import get_info
 from validation import validate_ticker
 from routers.rates import risk_free_rate
@@ -68,6 +69,33 @@ def get_fundamentals(ticker: str):
 
 
 def _base_fundamentals(ticker: str):
+    """Model inputs, with share count and market cap on one stated basis.
+
+    Every valuation tab used to resolve its own share count: this module's
+    yfinance path fell back to basic shares outstanding, FMP's profile shipped
+    its own market cap, and Master Valuation multiplied a live price by diluted
+    shares. AAPL came out $4,041.2B, $4.46T and $4,590.4B in three tabs on the
+    same evening. Diluted is the basis a valuation should use, so the shared
+    resolver decides it once here and every caller inherits it.
+    """
+    data = _base_fundamentals_raw(ticker)
+    cap = market_cap_lib.market_cap(ticker)
+    if cap["shares"]:
+        data["shares"] = round(cap["shares"] / 1e6, 1)
+        data["shares_basis"] = cap["basis"]
+    else:
+        data.setdefault("shares_basis", market_cap_lib.BASIS_BASIC)
+    if cap["price"]:
+        data["market_price"] = cap["price"]
+    if cap["value"]:
+        data["market_cap"] = cap["value"]
+    data["market_cap_basis"] = cap["basis"] if cap["value"] else (
+        market_cap_lib.BASIS_VENDOR if data.get("market_cap") else None
+    )
+    return data
+
+
+def _base_fundamentals_raw(ticker: str):
     ticker = validate_ticker(ticker)
     # FMP path — fast (~200ms), real financial statement data
     if fmp.available():
