@@ -142,12 +142,24 @@ function GeneratedEditor({ project }: { project: ReportProject }) {
   )
   const kr = gen.keyResult
   const missingSections = gen.pipeline?.incompleteSections ?? []
+  const shedClips = gen.pipeline?.droppedClips ?? []
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {missingSections.length > 0 && (
-        <div role="alert" style={{ border: `1px solid ${T.warn}`, background: T.goldTint(5), color: T.warn, fontFamily: T.label, fontSize: 10.5, lineHeight: 1.5, padding: '9px 11px' }}>
-          This report came back short. {missingSections.length} planned section{missingSections.length > 1 ? 's' : ''} could
-          not be written because the AI provider was rate-limited: {missingSections.join(', ')}. Regenerate to get the full report.
+      {(missingSections.length > 0 || shedClips.length > 0) && (
+        <div role="alert" style={{ border: `1px solid ${T.warn}`, background: T.goldTint(5), color: T.warn, fontFamily: T.label, fontSize: 10.5, lineHeight: 1.5, padding: '9px 11px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {missingSections.length > 0 && (
+            <div>
+              This report came back short. {missingSections.length} planned section{missingSections.length > 1 ? 's' : ''} could
+              not be written: {missingSections.join(', ')}. Regenerate to get the full report.
+            </div>
+          )}
+          {shedClips.length > 0 && (
+            <div>
+              {shedClips.length} clip{shedClips.length > 1 ? 's were' : ' was'} too large to send with the
+              report and {shedClips.length > 1 ? 'are' : 'is'} not part of the argument: {shedClips.slice(0, 6).join(', ')}
+              {shedClips.length > 6 ? `, and ${shedClips.length - 6} more` : ''}. Use fewer clips for a report that reads all of them.
+            </div>
+          )}
         </div>
       )}
       <ReportRevise project={project} />

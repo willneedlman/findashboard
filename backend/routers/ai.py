@@ -2350,6 +2350,8 @@ def _fit_report_request(
     payload: dict,
     max_tokens: int,
     ceiling: int | None = None,
+    model: str | None = None,
+    min_output: int | None = None,
 ) -> tuple[dict, int, dict]:
     """Shrink a report request until input plus requested output clears the
     provider ceiling. Returns the payload, the output budget, and a report of
@@ -2359,28 +2361,44 @@ def _fit_report_request(
     once the response is at its floor does evidence get shed, lowest-scoring
     first, because `_report_prompt_clips` has already ordered it by decision
     value.
+
+    `model` matters because a reasoning model reserves roughly twice the answer
+    it is asked for. Fitting to the bare answer put every call on the pool over
+    its own per-minute limit, and Groq rejects that as 413 rather than trimming
+    it — which then fails over and surfaces as the next provider's 429. Size
+    against what the call actually reserves, not what it nominally asks for.
     """
+    from ai_client import answer_tokens_within, completion_cost
+
     budget = int((ceiling or _REPORT_TPM_CEILING) * _REPORT_TPM_SAFETY)
+    floor = _REPORT_MIN_OUTPUT_TOKENS if min_output is None else min_output
     fixed = _estimate_tokens(sys_prompt)
     shed: list[str] = []
 
     def input_tokens(current: dict) -> int:
         return fixed + _estimate_tokens(json.dumps(current, ensure_ascii=False))
 
-    if input_tokens(payload) + max_tokens <= budget:
+    def reserved(current: dict, answer: int) -> int:
+        return input_tokens(current) + (completion_cost(model, answer) if model else answer)
+
+    def largest_answer(current: dict) -> int:
+        room = budget - input_tokens(current)
+        return max(floor, answer_tokens_within(model, room) if model else room)
+
+    if reserved(payload, max_tokens) <= budget:
         return payload, max_tokens, {"fitted": False, "droppedClips": [], "outputTokens": max_tokens}
 
-    max_tokens = max(_REPORT_MIN_OUTPUT_TOKENS, budget - input_tokens(payload))
+    max_tokens = min(max_tokens, largest_answer(payload))
 
     evidence = list((payload.get("dataBank") or {}).get("evidence") or [])
-    while evidence and input_tokens(payload) + max_tokens > budget:
+    while evidence and reserved(payload, max_tokens) > budget:
         dropped = evidence.pop()
         shed.append(str(dropped.get("title") or dropped.get("id") or "clip"))
         payload = {
             **payload,
             "dataBank": {**payload["dataBank"], "evidence": evidence},
         }
-        max_tokens = max(_REPORT_MIN_OUTPUT_TOKENS, budget - input_tokens(payload))
+        max_tokens = min(max_tokens, largest_answer(payload))
 
     if shed:
         logger.warning("report request trimmed to fit the token ceiling: dropped %d clip(s): %s",
@@ -2446,8 +2464,14 @@ def _generate_one_section(
         "argues": section.get("argues", "") or "the evidence this section owns",
         "siblings": ", ".join(siblings) or "(none)",
     })
+    # A section may shrink to the section floor, not the whole-report floor: the
+    # latter reserved more answer than one section ever needs and forced the
+    # evidence to be shed instead.
     fitted, tokens, _ = _fit_report_request(
-        sys_prompt, payload, max_tokens, ceiling=MODEL_TPM.get(model, _REPORT_TPM_CEILING),
+        sys_prompt, payload, max_tokens,
+        ceiling=MODEL_TPM.get(model, _REPORT_TPM_CEILING),
+        model=model,
+        min_output=_SECTION_MIN_TOKENS,
     )
     messages = [
         {"role": "system", "content": sys_prompt},
@@ -5045,11 +5069,22 @@ def _generate_outline(payload: dict) -> dict | None:
     """Step 1 — draft a thesis-first section outline. Returns None on any failure
     so the pipeline falls back to a single unplanned draft."""
     try:
+        from ai_client import MODEL_TPM
+
+        # The outline sees the whole evidence bank, which on a large report is
+        # several times a model's per-minute limit. Untrimmed it always 413'd, so
+        # every big report quietly planned itself from the template fallback —
+        # the exact reports that most need a thought-out spine.
+        fitted, tokens, _ = _fit_report_request(
+            _REPORT_OUTLINE_SYSTEM, payload, 900,
+            ceiling=MODEL_TPM.get(MODEL_SMART, _REPORT_TPM_CEILING),
+            model=MODEL_SMART, min_output=600,
+        )
         messages = [
             {"role": "system", "content": _REPORT_OUTLINE_SYSTEM},
-            {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+            {"role": "user", "content": json.dumps(fitted, ensure_ascii=False)},
         ]
-        resp = groq_chat(messages, model=MODEL_SMART, max_tokens=900, temperature=0.2)
+        resp = groq_chat(messages, model=MODEL_SMART, max_tokens=tokens, temperature=0.2)
         out = parse_json((resp.choices[0].message.content or "").strip())
         if not isinstance(out, dict):
             return _template_outline_fallback(payload)
@@ -6683,7 +6718,8 @@ def generate_report(req: ReportGenRequest):
         # The single call writes the report from scratch, so whatever the
         # fan-out gave up on is not missing from what ships here.
         dropped_sections.clear()
-        payload, max_tokens, fit = _fit_report_request(sys_prompt, payload, max_tokens)
+        payload, max_tokens, fit = _fit_report_request(
+            sys_prompt, payload, max_tokens, model=MODEL_SMART)
         if fit["fitted"]:
             messages[1] = {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}
         # Walk the pool rather than pinning MODEL_SMART. This is the largest
@@ -6862,6 +6898,9 @@ def generate_report(req: ReportGenRequest):
         "pipeline": {
             "phase": "incomplete" if dropped_sections else "complete",
             "incompleteSections": dropped_sections,
+            # Evidence the writer could not carry: shed to fit the model's limit,
+            # so the report is arguing from less than was collected.
+            "droppedClips": fit.get("droppedClips") or [],
             "templateId": contract["id"],
             "layoutPreset": (req.layoutPreset or "editorial").strip(),
             "requiredSourceIds": data_bank_meta.get("requiredSourceIds", []),

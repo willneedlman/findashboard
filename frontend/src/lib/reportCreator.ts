@@ -224,6 +224,8 @@ export interface GeneratedReport {
     // Sections the writer planned but could not write, named so the report can
     // admit it came back short instead of looking complete.
     incompleteSections?: string[]
+    // Evidence shed to fit the model limit; the report argues from less than was collected.
+    droppedClips?: string[]
     templateId: string
     layoutPreset: string
     requiredSourceIds: string[]

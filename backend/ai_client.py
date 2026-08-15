@@ -169,6 +169,30 @@ def with_backoff(fn, *, retries: int = 3, base: float = 0.5, cap: float = 8.0,
             attempt += 1
 
 
+_REASONING_SCRATCHPAD = 512
+
+
+def completion_cost(model: str, max_tokens: int) -> int:
+    """Completion tokens a call for `max_tokens` of answer actually reserves.
+
+    Groq counts the requested completion against the model's per-minute limit,
+    so anything sizing a request has to ask this rather than assume it gets what
+    it asked for. A caller that budgets the bare answer and then lands here
+    silently overshoots by the whole scratchpad, which Groq rejects as 413 —
+    and 413 fails over, so the symptom surfaces as the *next* provider's 429.
+    """
+    if model in _GROQ_REASONING:
+        return int(max_tokens * 2) + _REASONING_SCRATCHPAD
+    return max_tokens
+
+
+def answer_tokens_within(model: str, available: int) -> int:
+    """Inverse of completion_cost: the largest answer that fits `available`."""
+    if model in _GROQ_REASONING:
+        return max(0, (available - _REASONING_SCRATCHPAD) // 2)
+    return max(0, available)
+
+
 def _groq_call(model, messages, max_tokens, temperature):
     kwargs: dict = {"model": model, "max_tokens": max_tokens, "messages": messages}
     if temperature is not None:
@@ -180,7 +204,7 @@ def _groq_call(model, messages, max_tokens, temperature):
         # budget one. Measured on a 20-row screenshot: 2.4k completion tokens for a
         # ~1.2k answer, so the scratchpad can match the answer. Scale with the ask
         # rather than adding a constant that only fits small ones.
-        kwargs["max_tokens"] = int(max_tokens * 2) + 512
+        kwargs["max_tokens"] = completion_cost(model, max_tokens)
         if model.startswith("openai/gpt-oss"):
             kwargs["reasoning_effort"] = "low"
     return get_client().chat.completions.create(**kwargs)
@@ -202,14 +226,27 @@ def _cerebras_call(model, messages, max_tokens, temperature):
     return get_cerebras().chat.completions.create(**kwargs)
 
 
-def _exhausted(exc: Exception, provider: str) -> Exception:
+def _exhausted(exc: Exception, provider: str,
+               chain: list[tuple[str, str]] | None = None) -> Exception:
     """Turn a terminal provider failure into something the UI can say out loud.
 
     Every provider being rate-limited is an expected state on a free tier, not a
     bug in the request — but it reached the browser as a bare "Internal server
     error", which is indistinguishable from a crash and sends you reading
     tracebacks for a quota problem.
+
+    `chain` is every provider tried, because the last failure is not always the
+    real one: an oversized request 413s on the first provider and fails over,
+    so the message the user saw named the second provider's 429 and blamed a
+    quota for a request that was simply too big. Diagnose from the whole chain.
     """
+    tried = chain or [(provider, _status_str(exc))]
+    if any(status == "413" for _, status in tried):
+        over = ", ".join(name for name, status in tried if status == "413")
+        return HTTPException(503, (
+            f"The request was larger than {over} accepts in one call, so it could not be "
+            "written. This is a size problem, not a quota: use fewer clips or a shorter report."
+        ))
     status = getattr(exc, "status_code", None)
     if status == 429:
         return HTTPException(503, (
@@ -239,6 +276,7 @@ def groq_chat(messages: list[dict], *, model: str = MODEL_SMART,
 
     import metrics
     last_exc: Exception | None = None
+    tried: list[tuple[str, str]] = []
     deadline = time.monotonic() + _LLM_DEADLINE_SECONDS
     for i, (name, call) in enumerate(providers):
         try:
@@ -250,9 +288,10 @@ def groq_chat(messages: list[dict], *, model: str = MODEL_SMART,
             return resp
         except Exception as exc:  # noqa: BLE001 — re-raised below if chain exhausted
             last_exc = exc
+            tried.append((name, _status_str(exc)))
             metrics.record_ai(name, ok=False, error=_status_str(exc))
             if i == len(providers) - 1 or not _should_failover(exc):
-                raise _exhausted(exc, name)
+                raise _exhausted(exc, name, tried)
             logger.warning("LLM provider %s failed (%s); failing over to %s",
                            name, _status_str(exc), providers[i + 1][0])
     raise last_exc  # unreachable; the loop always returns or raises
