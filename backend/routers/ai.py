@@ -9,6 +9,7 @@ import logging
 import re
 import sys, os
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from statistics import median as _median
@@ -2421,6 +2422,10 @@ whole report. Write only the analysis this section owns, as if the others alread
 # section from being squeezed into a sentence when the fan-out has many sections.
 _SECTION_MIN_TOKENS = 700
 _SECTION_MAX_TOKENS = 1_800
+# Long enough for a per-minute token bucket to give back a useful share, short
+# enough that the request does not look hung. Only ever paid when a section
+# actually failed, and only once per report.
+_FANOUT_RECOVERY_WAIT = float(os.getenv("REPORT_FANOUT_RECOVERY_WAIT", "20"))
 
 
 def _generate_one_section(
@@ -2456,8 +2461,8 @@ def _generate_one_section(
     # On the single-call path one model chose every id at once; here each section
     # is chosen independently by a different model, so one bad id would delete a
     # whole section from the finished report with nothing to signal it. Treat it
-    # as a failed section instead, which retries on the next model and ultimately
-    # falls the whole fan-out back to the single call.
+    # as a failed section instead, which retries on the next model and, if it
+    # keeps failing, is dropped or sinks the fan-out rather than vanishing.
     if str(out.get("clipId", "")) not in valid_ids:
         logger.warning("fanned section %r returned clipId %r, which is not a supplied clip",
                        section.get("templateSection"), out.get("clipId"))
@@ -2485,7 +2490,8 @@ def _generate_sections_fanned(
 
     The outline is what makes this safe: it already fixes the thesis, the section
     order and what each section argues, so the parallel writers share a spine
-    rather than each inventing one. Returns None if anything fails, and the
+    rather than each inventing one. Returns every section it managed to write,
+    or None only when too few survived to be worth shipping, in which case the
     caller falls back to the single call.
     """
     from ai_client import MODEL_POOL
@@ -2525,11 +2531,35 @@ def _generate_sections_fanned(
     with ThreadPoolExecutor(max_workers=len(MODEL_POOL)) as pool:
         written = list(pool.map(write, enumerate(sections)))
 
-    if any(w is None for w in written):
-        logger.warning("section fan-out incomplete (%d/%d); falling back to one call",
-                       sum(w is not None for w in written), len(written))
-        return None
-    return written
+    missing = [i for i, w in enumerate(written) if w is None]
+    # A section fails almost only because both buckets were momentarily out of
+    # tokens, and those refill on a rolling minute. The first sweep spends the
+    # whole allowance at once, so the tail of a long report is what starves.
+    # Waiting out one window and retrying just the gaps is far cheaper than the
+    # alternative below, which throws away every section that did write and asks
+    # one model for the entire report in a single call — the largest request in
+    # the pipeline, aimed at the bucket most likely to still be empty.
+    if missing and len(missing) <= max(1, len(sections) // 3):
+        logger.warning("section fan-out short by %d/%d; waiting %.0fs for the "
+                       "token buckets and retrying the gaps",
+                       len(missing), len(sections), _FANOUT_RECOVERY_WAIT)
+        time.sleep(_FANOUT_RECOVERY_WAIT)
+        for i in missing:
+            written[i] = write((i, sections[i]))
+
+    kept = [w for w in written if w is not None]
+    if len(kept) == len(sections):
+        return written
+    # Below that and the report is too thin to stand as the thing that was asked
+    # for, so it is worth paying for the single call.
+    if len(kept) >= 2 and len(kept) >= (len(sections) * 3 + 3) // 4:
+        logger.warning("section fan-out delivered %d/%d; shipping the written "
+                       "sections rather than sinking the report",
+                       len(kept), len(sections))
+        return kept
+    logger.warning("section fan-out incomplete (%d/%d); falling back to one call",
+                   len(kept), len(sections))
+    return None
 
 
 _REPORT_FRAME_SYSTEM = """You are closing out a report whose sections are already written.
@@ -6643,9 +6673,23 @@ def generate_report(req: ReportGenRequest):
         payload, max_tokens, fit = _fit_report_request(sys_prompt, payload, max_tokens)
         if fit["fitted"]:
             messages[1] = {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}
-        resp = groq_chat(messages, model=MODEL_SMART, max_tokens=max_tokens, temperature=0.3)
-        raw = (resp.choices[0].message.content or "").strip()
-        result = parse_json(raw)
+        # Walk the pool rather than pinning MODEL_SMART. This is the largest
+        # request in the pipeline and it runs precisely when the fan-out has just
+        # spent the buckets, so the model it defaults to is the one least likely
+        # to have room. Only the last bucket's failure is worth reporting.
+        from ai_client import MODEL_POOL
+
+        result, last_exc = None, None
+        for model in MODEL_POOL:
+            try:
+                resp = groq_chat(messages, model=model, max_tokens=max_tokens, temperature=0.3)
+                result = parse_json((resp.choices[0].message.content or "").strip())
+                break
+            except HTTPException as e:
+                last_exc = e
+                logger.warning("single-call report writer failed on %s: %s", model, e.detail)
+        if result is None and last_exc is not None:
+            raise last_exc
         fit["writer"] = "single"
     if (
         not isinstance(result, dict)
