@@ -141,8 +141,15 @@ function GeneratedEditor({ project }: { project: ReportProject }) {
     [clipById, gen.generatedAt, gen.sections, project.clips, project.id, project.scope.goal, project.scope.purpose],
   )
   const kr = gen.keyResult
+  const missingSections = gen.pipeline?.incompleteSections ?? []
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {missingSections.length > 0 && (
+        <div role="alert" style={{ border: `1px solid ${T.warn}`, background: T.goldTint(5), color: T.warn, fontFamily: T.label, fontSize: 10.5, lineHeight: 1.5, padding: '9px 11px' }}>
+          This report came back short. {missingSections.length} planned section{missingSections.length > 1 ? 's' : ''} could
+          not be written because the AI provider was rate-limited: {missingSections.join(', ')}. Regenerate to get the full report.
+        </div>
+      )}
       <ReportRevise project={project} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={subLabel}>AI title</div>

@@ -221,6 +221,9 @@ export interface GeneratedReport {
   model?: string
   pipeline?: {
     phase: string
+    // Sections the writer planned but could not write, named so the report can
+    // admit it came back short instead of looking complete.
+    incompleteSections?: string[]
     templateId: string
     layoutPreset: string
     requiredSourceIds: string[]

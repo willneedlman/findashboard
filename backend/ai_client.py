@@ -23,6 +23,7 @@ _CEREBRAS_KEY = os.getenv("CEREBRAS_API_KEY", "")
 # mapped SMART to the same model all along, so this path is well travelled.
 MODEL_OSS = "openai/gpt-oss-120b"
 MODEL_QWEN = "qwen/qwen3.6-27b"
+MODEL_OSS20 = "openai/gpt-oss-20b"
 MODEL_SMART = MODEL_OSS
 MODEL_FAST  = "llama-3.1-8b-instant"
 
@@ -32,9 +33,16 @@ MODEL_FAST  = "llama-3.1-8b-instant"
 # 2026-08-17 — a fallback that would have failed silently the moment Groq
 # rate-limited a structured-JSON call. Both tiers now land on the production
 # model; losing a little speed on the fallback path is the right trade.
+# Cerebras lists gemma-4-31b and zai-glm-4.7 beside it, but both are preview and
+# zai-glm-4.7 is the one already scheduled for withdrawal, so every Groq model
+# maps to the production one rather than buying a second fallback bucket that
+# disappears without warning. Fail-over is for staying up, not for headroom —
+# the headroom lives in MODEL_POOL, where the buckets are metered separately.
 _CEREBRAS_MODELS = {
-    MODEL_SMART: "gpt-oss-120b",
-    MODEL_FAST:  "gpt-oss-120b",
+    MODEL_SMART:  "gpt-oss-120b",
+    MODEL_QWEN:   "gpt-oss-120b",
+    MODEL_OSS20:  "gpt-oss-120b",
+    MODEL_FAST:   "gpt-oss-120b",
 }
 
 # Groq meters tokens per model, not per organisation: burning a model's budget
@@ -42,12 +50,24 @@ _CEREBRAS_MODELS = {
 # gpt-oss held at 7988 and 7927). So work split across these draws on separate
 # per-minute buckets instead of queueing behind one.
 #
-# Losing llama cost the pool its widest bucket and one of its three lanes: a
-# fan-out now spreads two ways over 16k tokens a minute where it used to spread
-# three ways over 28k. Report sections queue rather than fail, but they queue
-# longer.
-MODEL_TPM = {MODEL_OSS: 8_000, MODEL_QWEN: 8_000, MODEL_FAST: 6_000}
-MODEL_POOL = (MODEL_OSS, MODEL_QWEN)
+# Losing llama-3.3-70b cost the pool a lane, taking a fan-out from three ways
+# over 28k tokens a minute down to two over 16k, and report sections started
+# failing rather than queueing. gpt-oss-20b restores the third lane and then
+# some: measured 2026-08-15, every one of these is metered independently, so the
+# pool is back to 24k across three equal buckets (30k counting overflow) against
+# the 28k it had before.
+MODEL_TPM = {MODEL_OSS: 8_000, MODEL_QWEN: 8_000, MODEL_OSS20: 8_000, MODEL_FAST: 6_000}
+
+# Lanes a fan-out starts on. Same width, close enough in capability that it does
+# not matter which section lands where — the outline fixes the argument before
+# any of them write, so a lane supplies prose, not judgement.
+MODEL_POOL = (MODEL_OSS, MODEL_QWEN, MODEL_OSS20)
+
+# Tried only after every pool lane has failed. llama-3.1-8b is a real bucket but
+# a visibly weaker writer, so it is worth having as the thing that keeps a
+# section from being dropped, and not worth having as a lane that one section in
+# four starts on.
+MODEL_OVERFLOW = (MODEL_FAST,)
 
 # These spend completion tokens thinking before answering, so a caller's budget
 # has to cover the scratchpad as well as the answer or the content comes back

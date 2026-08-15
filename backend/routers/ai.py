@@ -2479,6 +2479,7 @@ def _generate_sections_fanned(
     length_key: str,
     depth: str | None,
     valid_ids: set[str],
+    dropped_out: list[str] | None = None,
 ) -> list[dict] | None:
     """Write every section at once, one per model bucket.
 
@@ -2492,9 +2493,11 @@ def _generate_sections_fanned(
     order and what each section argues, so the parallel writers share a spine
     rather than each inventing one. Returns every section it managed to write,
     or None only when too few survived to be worth shipping, in which case the
-    caller falls back to the single call.
+    caller falls back to the single call. Any section that was written off is
+    named in `dropped_out`, and the caller is expected to say so on the report:
+    a short report and a complete one must not be indistinguishable.
     """
-    from ai_client import MODEL_POOL
+    from ai_client import MODEL_POOL, MODEL_OVERFLOW
 
     sections = [s for s in (outline.get("sections") or []) if isinstance(s, dict)]
     if len(sections) < 2:
@@ -2513,7 +2516,7 @@ def _generate_sections_fanned(
         # single call on MODEL_SMART, which is the bucket most likely to be the
         # exhausted one.
         order = [MODEL_POOL[(index + offset) % len(MODEL_POOL)]
-                 for offset in range(len(MODEL_POOL))]
+                 for offset in range(len(MODEL_POOL))] + list(MODEL_OVERFLOW)
         for attempt, model in enumerate(order):
             try:
                 written = _generate_one_section(
@@ -2556,6 +2559,11 @@ def _generate_sections_fanned(
         logger.warning("section fan-out delivered %d/%d; shipping the written "
                        "sections rather than sinking the report",
                        len(kept), len(sections))
+        if dropped_out is not None:
+            dropped_out.extend(
+                headings[i] or str(sections[i].get("templateSection") or f"section {i + 1}")
+                for i, w in enumerate(written) if w is None
+            )
         return kept
     logger.warning("section fan-out incomplete (%d/%d); falling back to one call",
                    len(kept), len(sections))
@@ -2605,9 +2613,9 @@ def _generate_report_frame(
     # pool rather than giving up: the sections are already written, and losing all
     # of them to a busy bucket on the last step would be the most wasteful failure
     # in the pipeline.
-    from ai_client import MODEL_POOL
+    from ai_client import MODEL_POOL, MODEL_OVERFLOW
 
-    for model in MODEL_POOL:
+    for model in (*MODEL_POOL, *MODEL_OVERFLOW):
         try:
             resp = groq_chat(messages, model=model, max_tokens=1_200, temperature=0.3)
             out = parse_json((resp.choices[0].message.content or "").strip())
@@ -6657,9 +6665,11 @@ def generate_report(req: ReportGenRequest):
     # single-call writer below still plans and writes in one shot.
     result = None
     fit = {"fitted": False, "droppedClips": [], "outputTokens": max_tokens}
+    dropped_sections: list[str] = []
     if outline:
         written = _generate_sections_fanned(
-            sys_prompt, payload, outline, length_key, req.depth, valid_ids)
+            sys_prompt, payload, outline, length_key, req.depth, valid_ids,
+            dropped_out=dropped_sections)
         if written:
             frame = _generate_report_frame(
                 payload, written,
@@ -6670,6 +6680,9 @@ def generate_report(req: ReportGenRequest):
                 fit["writer"] = "fanned"
 
     if result is None:
+        # The single call writes the report from scratch, so whatever the
+        # fan-out gave up on is not missing from what ships here.
+        dropped_sections.clear()
         payload, max_tokens, fit = _fit_report_request(sys_prompt, payload, max_tokens)
         if fit["fitted"]:
             messages[1] = {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}
@@ -6812,6 +6825,19 @@ def generate_report(req: ReportGenRequest):
         for section in sections:
             section["analysis"] = guard_evidence_domain_text(str(section.get("analysis", "")), req.clips)
 
+    # A report that came back short must say so on its own face. It gets printed
+    # and sent on, long after the response JSON is gone, and a missing section
+    # reads as "there was nothing to say here" rather than "this did not write".
+    if dropped_sections:
+        missing = ", ".join(dropped_sections)
+        note = (
+            f"This report is incomplete: {len(dropped_sections)} planned "
+            f"section{'s' if len(dropped_sections) > 1 else ''} ({missing}) could not be "
+            "written because the AI provider was rate-limited. Regenerate to get the full report."
+        )
+        if note not in conclusion:
+            conclusion = f"{conclusion} {note}".strip() if conclusion else note
+
     _apply_section_layout_architecture(sections, req.clips, (req.layoutPreset or "").strip())
     # Close the selection loop: which pulls the finished report actually cited.
     utilisation = _evidence_utilisation(
@@ -6834,7 +6860,8 @@ def generate_report(req: ReportGenRequest):
         "model": MODEL_SMART,
         "valuationContext": valuation_context,
         "pipeline": {
-            "phase": "complete",
+            "phase": "incomplete" if dropped_sections else "complete",
+            "incompleteSections": dropped_sections,
             "templateId": contract["id"],
             "layoutPreset": (req.layoutPreset or "editorial").strip(),
             "requiredSourceIds": data_bank_meta.get("requiredSourceIds", []),
