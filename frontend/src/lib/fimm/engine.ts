@@ -16,8 +16,8 @@
  */
 
 import {
-  convexityPerMM, dv01PerMM, flyBps, modifiedDuration, nsYield, priceFromYield,
-  roundTo32nd, slopeBps, yieldFromPrice, type CurveFactors,
+  convexityPerMM, dv01PerMM, modifiedDuration, nsYield, priceFromYield,
+  roundTo32nd, yieldFromPrice, type CurveFactors,
 } from './bondmath'
 import { gauss, makeRng } from '../mm2/pricing'
 
@@ -84,10 +84,12 @@ export interface Config {
 }
 
 export const DEFAULT_CONFIG: Config = {
-  level0: 0.0452, slope0: -0.0075, curvature0: 0.012, tau: 2.6,
+  // Fitted to the published US Treasury par curve for 14 August 2026. A flat or
+  // arbitrary curve makes every bucket limit and carry number meaningless.
+  level0: 0.055665, slope0: -0.017755, curvature0: 0.0, tau: 5.5554,
   levelVolBp: 5.2, slopeVolBp: 3.4, curveVolBp: 2.6, reversion: 1.4,
   shockPerHour: 0.5, shockSizeBp: 6,
-  repoRate: 0.0528, sofr: 0.0530,
+  repoRate: 0.0360, sofr: 0.0362,
   arrivalRate: 1.9, avgSizeMM: 14, buyBias: 0.5, informedPct: 13, fastPct: 30,
   widthSens: 4.5,
   edgeBp: 0.28, minEdgeBp: 0.05, maxEdgeBp: 4, longEndWiden: 0.012,
@@ -117,6 +119,17 @@ export interface Node {
   unit: 'MM' | 'lots'
   /** Asset-swap spread in basis points. Cash only; a STIR has no ASW. */
   aswBp: number
+  /**
+   * The issue's fixed basis to the fitted curve, in basis points.
+   *
+   * Three Nelson-Siegel factors cannot reproduce a real par curve exactly: the
+   * best weighted fit to 14 August 2026 still misses the 2Y by 10bp and puts
+   * 2s10s at 67 against a published 52. Every real curve model carries a
+   * per-bond residual for the same reason. Holding it here opens each node on
+   * its published yield while the three factors still drive all the dynamics,
+   * so the nodes keep moving together.
+   */
+  baseBp: number
 }
 
 const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -135,15 +148,17 @@ export const HEDGE_FUTURES = [
 ] as const
 export type HedgeCode = typeof HEDGE_FUTURES[number]['code']
 
+// Published levels for 14 August 2026, with 3Y, 7Y and 20Y interpolated between
+// the Treasury's own points. `open` is the yield the node must start on.
 const CASH_TENORS = [
-  { label: '3M',  years: 0.25, asw: -4 },
-  { label: '2Y',  years: 2,    asw: -18.2 },
-  { label: '3Y',  years: 3,    asw: -20.0 },
-  { label: '5Y',  years: 5,    asw: -22.5 },
-  { label: '7Y',  years: 7,    asw: -26.0 },
-  { label: '10Y', years: 10,   asw: -31.0 },
-  { label: '20Y', years: 20,   asw: -40.0 },
-  { label: '30Y', years: 30,   asw: -45.0 },
+  { label: '3M',  years: 0.25, asw: -4,    open: 0.0372 },
+  { label: '2Y',  years: 2,    asw: -18.2, open: 0.0418 },
+  { label: '3Y',  years: 3,    asw: -20.0, open: 0.0425 },
+  { label: '5Y',  years: 5,    asw: -22.5, open: 0.0437 },
+  { label: '7Y',  years: 7,    asw: -26.0, open: 0.0452 },
+  { label: '10Y', years: 10,   asw: -31.0, open: 0.0470 },
+  { label: '20Y', years: 20,   asw: -40.0, open: 0.0510 },
+  { label: '30Y', years: 30,   asw: -45.0, open: 0.0526 },
 ]
 
 export const GROUPS = ['Cash', 'Whites', 'Reds', 'Greens', 'Blues', 'Golds'] as const
@@ -188,6 +203,7 @@ export interface Sample {
   pnl: number
   dv01: number
   level: number
+  tenY: number
   slope: number
   fly: number
   carry: number
@@ -319,6 +335,8 @@ export class FiEngine {
         coupon: 0.04, cusip: `912810${String(30 + id).padStart(2, '0')}`,
         maturity: `${MONTH[mat.getUTCMonth()]}-${mat.getUTCFullYear()}`,
         unit: 'MM', aswBp: t.asw,
+        // Whatever the fitted curve and the ASW spread do not already explain.
+        baseBp: (t.open - nsYield(this.anchor, t.years)) * 10_000 - t.asw,
       })
     }
     // SOFR futures, four to a pack. A pack is how the strip is actually traded:
@@ -335,7 +353,7 @@ export class FiEngine {
           group: packs[p], years, coupon: 0,
           cusip: `SR3${QUARTER_CODE[q]}${mat.getUTCFullYear() % 100}`,
           maturity: `${MONTH[mat.getUTCMonth()]}-${mat.getUTCFullYear()}`,
-          unit: 'lots', aswBp: 0,
+          unit: 'lots', aswBp: 0, baseBp: 0,
         })
       }
     }
@@ -345,7 +363,7 @@ export class FiEngine {
 
   /** Fair yield of a node: the curve, plus its asset-swap spread for cash. */
   fairYield(nd: Node): number {
-    const base = nsYield(this.factors, nd.years)
+    const base = nsYield(this.factors, nd.years) + nd.baseBp / 10_000
     return nd.kind === 'cash' ? base + nd.aswBp / 10_000 : base
   }
 
@@ -870,8 +888,9 @@ export class FiEngine {
     const r = this.risk()
     this.samples.push({
       t: this.clock, pnl: this.totalPnl(), dv01: r.dv01,
-      level: this.factors.level, slope: slopeBps(this.factors, 2, 10),
-      fly: flyBps(this.factors, 2, 5, 10), carry: r.carryPerDay,
+      level: this.factors.level, tenY: this.yieldOf('10Y') ?? this.factors.level,
+      slope: this.slopeOf('2Y', '10Y'),
+      fly: this.flyOf('2Y', '5Y', '10Y'), carry: r.carryPerDay,
       attr: { ...this.attr },
     })
     if (this.samples.length > 900) this.samples.shift()
@@ -942,15 +961,40 @@ export class FiEngine {
       .map(n => this.view(n))
   }
 
+  /** A node's live yield by tenor label, or null when the strip does not carry it. */
+  yieldOf(label: string): number | null {
+    const nd = this.nodes.find(n => n.label === label)
+    return nd ? this.modelYield[nd.id] : null
+  }
+
+  /**
+   * Curve spreads off the issues, not off the raw factors.
+   *
+   * Each node carries a fixed basis to the fitted curve, so the factor-only
+   * slope is not the one the trader reads on screen: it said 67bp where the
+   * 2Y and 10Y rows themselves are 52bp apart.
+   */
+  slopeOf(shortLabel: string, longLabel: string): number {
+    const a = this.yieldOf(shortLabel)
+    const b = this.yieldOf(longLabel)
+    return a == null || b == null ? 0 : (b - a) * 10_000
+  }
+
+  flyOf(shortLabel: string, bellyLabel: string, longLabel: string): number {
+    const a = this.yieldOf(shortLabel)
+    const m = this.yieldOf(bellyLabel)
+    const b = this.yieldOf(longLabel)
+    return a == null || m == null || b == null ? 0 : (2 * m - a - b) * 10_000
+  }
+
   benchmark(): { sofr: number; tenY: number; tenYChgBp: number; slope: number } {
-    const ten = this.nodes.find(n => n.label === '10Y')
-    const y = ten ? this.modelYield[ten.id] : this.factors.level
-    const prior = this.samples.length ? this.samples[0].level : this.anchor.level
+    const y = this.yieldOf('10Y') ?? this.factors.level
+    const prior = this.samples.length ? this.samples[this.samples.length - 1].tenY : y
     return {
       sofr: this.cfg.sofr,
       tenY: y,
-      tenYChgBp: (this.factors.level - prior) * 10_000,
-      slope: slopeBps(this.factors, 2, 10),
+      tenYChgBp: (y - prior) * 10_000,
+      slope: this.slopeOf('2Y', '10Y'),
     }
   }
 

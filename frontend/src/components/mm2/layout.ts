@@ -13,8 +13,13 @@ export const GUTTER = 6
 export const COMMAND_H = 46
 /** Gap between every region. */
 export const GAP = 4
-/** Bottom pane: tab strip plus the tallest tab body and the P&L cell. */
-export const BOTTOM_H = 218
+/**
+ * Bottom pane: tab strip, the tallest tab body, and the pinned chart cell that
+ * absorbed the old separate P&L band. One pane doing the work of two is where
+ * the redesign spends the height it saved folding the market strip into the
+ * instrument header.
+ */
+export const BOTTOM_H = 264
 
 /**
  * What the risk column needs with all three panels whole: the meters, the
@@ -25,8 +30,23 @@ export const BOTTOM_H = 218
 // rather than a visible overflow.
 export const RISK_COL_MIN = 420
 
-/** Smallest window the screen is expected to hold without clipping. */
-export const MIN_VIEWPORT_H = 720
+/** The design frame both desks are authored against: a 1440x900 laptop. */
+export const DESIGN_W = 1220
+export const DESIGN_H = 800
+/** Middle row at the design frame, from the budget in the handoff. */
+export const MIDDLE_H = 450
+/** Rates only: the curve panel pinned under the matrix. */
+export const CURVE_H = 118
+
+/**
+ * Smallest window the screen is expected to hold without clipping.
+ *
+ * Raised from 720 when the bottom pane grew to 264 to absorb the P&L band. The
+ * handoff states the floor as roughly 1180x760 and that below it the risk
+ * column collapses first, its headline numbers already being chips on the
+ * command bar.
+ */
+export const MIN_VIEWPORT_H = 760
 
 /** Height the middle row (rail, chain, risk) receives at a given window height. */
 export const middleHeight = (viewportH: number) =>

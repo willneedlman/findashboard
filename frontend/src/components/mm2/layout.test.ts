@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { BOTTOM_H, COMMAND_H, GAP, GUTTER, MIN_VIEWPORT_H, RISK_COL_MIN, middleHeight } from './layout'
+import {
+  BOTTOM_H, COMMAND_H, CURVE_H, DESIGN_H, GAP, GUTTER, MIDDLE_H, MIN_VIEWPORT_H,
+  RISK_COL_MIN, middleHeight,
+} from './layout'
 
 /**
  * The screen must fit with nothing scrolling but the chain. These numbers drifted
@@ -27,5 +30,20 @@ describe('vertical budget', () => {
   it('keeps the bottom pane tall enough for its tab strip and content', () => {
     // 27px tab strip, and the contract inspector needs ~165 under it.
     expect(BOTTOM_H - 27).toBeGreaterThanOrEqual(165)
+  })
+
+  it('adds up exactly at the design frame, with no reliance on flex shrink', () => {
+    // 768 inner = 46 command + 4 + 450 middle + 4 + 264 bottom. The handoff is
+    // explicit that overflow must not be rescued by shrink, so the arithmetic
+    // is asserted rather than trusted.
+    const inner = DESIGN_H - GUTTER * 2 - 20
+    expect(COMMAND_H + GAP + MIDDLE_H + GAP + BOTTOM_H).toBe(inner)
+  })
+
+  it('leaves the rates matrix room once the curve panel is pinned under it', () => {
+    // Matrix header 46 + scope line 22 + curve panel + its gap must still leave
+    // a body that holds eight 25px rows without scrolling.
+    const matrix = MIDDLE_H - CURVE_H - GAP
+    expect(matrix - 46 - 22).toBeGreaterThanOrEqual(8 * 25)
   })
 })

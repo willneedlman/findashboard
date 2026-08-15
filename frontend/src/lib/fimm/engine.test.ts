@@ -318,3 +318,57 @@ describe('simulation', () => {
     expect(e.samples[0].attr).toHaveProperty('carry')
   })
 })
+
+// The handoff is explicit that the desk opens on the real published curve: a
+// flat or arbitrary one makes every bucket limit and carry figure meaningless.
+describe('seeded curve', () => {
+  const PUBLISHED: Record<string, number> = {
+    '3M': 3.72, '2Y': 4.18, '3Y': 4.25, '5Y': 4.37,
+    '7Y': 4.52, '10Y': 4.70, '20Y': 5.10, '30Y': 5.26,
+  }
+
+  it('opens every issue on its published yield', () => {
+    const e = make()
+    for (const [label, target] of Object.entries(PUBLISHED)) {
+      expect((e.yieldOf(label)! * 100)).toBeCloseTo(target, 6)
+    }
+  })
+
+  it('reproduces the published curve spreads', () => {
+    const e = make()
+    expect(Math.round(e.slopeOf('2Y', '10Y'))).toBe(52)
+    expect(Math.round(e.slopeOf('5Y', '30Y'))).toBe(89)
+  })
+
+  it('reads the spreads off the issues, not the raw factors', () => {
+    // The three fitted factors alone put 2s10s at 67bp. Each issue carries a
+    // basis to that fit, and the trader reads the issues.
+    const e = make()
+    expect(Math.round(e.benchmark().slope)).toBe(52)
+  })
+
+  it('strikes coupons to an eighth so prices sit near par', () => {
+    const e = make()
+    for (const nd of e.nodes.filter(n => n.kind === 'cash')) {
+      expect((nd.coupon * 800) % 1).toBeCloseTo(0, 9)
+      expect(Math.abs(e.modelPrice[nd.id] - 100)).toBeLessThan(1)
+    }
+    expect(e.nodes.find(n => n.label === '10Y')!.coupon).toBeCloseTo(0.04750, 9)
+    expect(e.nodes.find(n => n.label === '30Y')!.coupon).toBeCloseTo(0.05250, 9)
+  })
+
+  it('finances the book near the anchor rate', () => {
+    const e = make()
+    expect(e.cfg.sofr).toBeCloseTo(0.0362, 6)
+    expect(e.cfg.repoRate).toBeCloseTo(0.0360, 6)
+  })
+
+  it('keeps the residuals fixed while the factors move everything together', () => {
+    const e = make()
+    const before = e.nodes.map(n => n.baseBp)
+    e.run(600)
+    expect(e.nodes.map(n => n.baseBp)).toEqual(before)
+    // The whole curve has moved off its open, but still in one piece.
+    expect(e.yieldOf('10Y')).not.toBeCloseTo(0.0470, 6)
+  })
+})
