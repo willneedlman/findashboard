@@ -372,3 +372,69 @@ describe('seeded curve', () => {
     expect(e.yieldOf('10Y')).not.toBeCloseTo(0.0470, 6)
   })
 })
+
+// The mirrored ladder's whole claim is that a row reads outward from fair
+// value. That only works if "inside the market" is right, and in yield space
+// the comparison inverts against price, which is exactly the kind of thing that
+// gets written backwards once and then copied.
+describe('inside the market', () => {
+  it('reads the default quote as inside on both sides', () => {
+    // The desk is meant to be competitive out of the box. If it is not, every
+    // quote cell on the matrix renders dimmed and the mirrored ladder's central
+    // signal is dead on arrival.
+    const e = make()
+    const v = e.view(e.nodes.find(n => n.label === '10Y')!)
+    // A tighter yield spread than the street means a better price on both sides.
+    expect(v.quote.bidYield).toBeLessThan(v.streetBidYield)
+    expect(v.quote.askYield).toBeGreaterThan(v.streetAskYield)
+    expect(v.bidInside).toBe(true)
+    expect(v.askInside).toBe(true)
+  })
+
+  it('is inside on every issue at the default edge', () => {
+    const e = make()
+    for (const v of e.rows('Cash')) {
+      expect(v.bidInside).toBe(true)
+      expect(v.askInside).toBe(true)
+    }
+  })
+
+  it('widens the street where liquidity thins, in yield not ticks', () => {
+    // A quarter of a 32nd is 1.6bp on a bill and 0.1bp on a 30Y, so a street
+    // width expressed in ticks is not one width at all.
+    const e = make()
+    const bill = e.streetHalfBp(e.nodes.find(n => n.label === '3M')!)
+    const belly = e.streetHalfBp(e.nodes.find(n => n.label === '7Y')!)
+    const long = e.streetHalfBp(e.nodes.find(n => n.label === '30Y')!)
+    expect(belly).toBeLessThan(long)
+    expect(belly).toBeLessThan(bill)
+  })
+
+  it('reads a wide quote as outside on both sides', () => {
+    const e = make({ edgeBp: 3, maxEdgeBp: 4 })
+    const v = e.view(e.nodes.find(n => n.label === '10Y')!)
+    expect(v.bidInside).toBe(false)
+    expect(v.askInside).toBe(false)
+  })
+
+  it('is never inside on a side it is not showing', () => {
+    const e = make()
+    e.kill()
+    for (const nd of e.nodes) {
+      const v = e.view(nd)
+      expect(v.bidInside).toBe(false)
+      expect(v.askInside).toBe(false)
+    }
+  })
+
+  it('keeps the street bid at a higher yield than the street ask', () => {
+    // The inversion in one assertion: the bid price is lower, so its yield is
+    // higher. Everything the matrix colours depends on this holding.
+    const e = make()
+    for (const nd of e.nodes) {
+      const v = e.view(nd)
+      expect(v.streetBid).toBeLessThan(v.streetAsk)
+      expect(v.streetBidYield).toBeGreaterThan(v.streetAskYield)
+    }
+  })
+})

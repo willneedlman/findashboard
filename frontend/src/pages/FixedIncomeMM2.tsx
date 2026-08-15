@@ -13,13 +13,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { T } from '../lib/theme'
 import { MONO, Panel, GOOD, BAD, WARN } from '../components/mm2/ui'
-import { BOTTOM_H } from '../components/mm2/layout'
+import { BOTTOM_H, GAP } from '../components/mm2/layout'
 import TopBar from '../components/fimm/TopBar'
 import QuoteRail from '../components/fimm/QuoteRail'
-import Matrix, { TenorStrip } from '../components/fimm/Matrix'
+import Matrix, { MatrixHeader, ScopeLine } from '../components/fimm/Matrix'
+import CurvePanel from '../components/fimm/CurvePanel'
 import RiskColumn from '../components/fimm/RiskColumn'
 import Inspector from '../components/fimm/Inspector'
-import { DEFAULT_CONFIG, FiEngine, STEP_MS, type Config, type Group, type PriceMode } from '../lib/fimm/engine'
+import { SetupOverlay, MetricsOverlay } from '../components/fimm/SetupModal'
+import { DEFAULT_CONFIG, FiEngine, STEP_MS, type Bucket, type Config } from '../lib/fimm/engine'
 
 // The options desk runs its clock a quarter as fast as the labelled speed so a
 // human can read the tape. A rates book moves more slowly still, so the same
@@ -40,9 +42,10 @@ export default function FixedIncomeMM2() {
   const [running, setRunning] = useState(false)
   const [speed, setSpeed] = useState(1)
   const [tick, setTick] = useState(0)
-  const [group, setGroup] = useState<Group | 'All'>('Cash')
   const [sel, setSel] = useState(() => eng.nodes.find(n => n.label === '10Y')?.id ?? 0)
-  const [mode, setMode] = useState<PriceMode>('32nds')
+  const [reviewT, setReviewT] = useState<number | null>(null)
+  const [overlay, setOverlay] = useState<'setup' | 'metrics' | null>(null)
+  const [traced, setTraced] = useState<Bucket | null>(null)
 
   const set = useCallback((patch: Partial<Config>) => {
     setCfg(c => {
@@ -101,14 +104,17 @@ export default function FixedIncomeMM2() {
     setTick(t => t + 1)
   }, [cfg, seed])
 
-  const rows = useMemo(() => eng.rows(group), [eng, group, tick])
+  // The board is the eight on-the-run cash issues. The SOFR strip is still
+  // built by the engine, but a group tab that does not filter reads as stale
+  // data, so the tabs and the filtering come back together or not at all.
+  const rows = useMemo(() => eng.rows('Cash'), [eng, tick])
   const view = useMemo(() => {
     const nd = eng.nodes[sel]
     return nd ? eng.view(nd) : null
   }, [eng, sel, tick])
 
-  // Selecting a group the current issue is not in would leave every panel
-  // describing a row the trader can no longer see.
+  // Every panel describing a row the trader cannot see is the bug this guard
+  // exists to prevent.
   useEffect(() => {
     if (rows.length && !rows.some(r => r.node.id === sel)) setSel(rows[0].node.id)
   }, [rows, sel])
@@ -145,30 +151,34 @@ export default function FixedIncomeMM2() {
 
       <div style={{ display: 'flex', gap: 4, flex: 1, minHeight: 0 }}>
         <div style={{ width: 190, flexShrink: 0, minHeight: 0, display: 'flex' }}>
-          <QuoteRail eng={eng} cfg={cfg} set={set} tick={tick} />
+          <QuoteRail eng={eng} cfg={cfg} set={set} tick={tick}
+            onSetup={() => setOverlay('setup')} onMetrics={() => setOverlay('metrics')} />
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0, minHeight: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: GAP, flex: 1, minWidth: 0, minHeight: 0 }}>
           <Panel style={{ flex: '1 1 auto', minHeight: 0 }}>
-            <TenorStrip
-              group={group} onGroup={setGroup} sel={sel} onSel={setSel}
-              rows={rows} mode={mode} onMode={setMode}
-            />
-            <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-              <Matrix eng={eng} rows={rows} sel={sel} onSel={setSel} mode={mode} />
-            </div>
+            <MatrixHeader eng={eng} tick={tick} reviewT={reviewT} onScrub={setReviewT} />
+            <ScopeLine quoted={rows.filter(r => r.inScope).length} total={rows.length} />
+            <Matrix eng={eng} rows={rows} sel={sel} onSel={setSel} traced={traced} />
           </Panel>
+          <CurvePanel eng={eng} rows={rows} sel={sel} onSel={setSel} tick={tick} />
         </div>
 
         <div style={{ width: 244, flexShrink: 0, minHeight: 0 }}>
           <RiskColumn eng={eng} cfg={cfg} set={set} risk={risk} tick={tick}
-            onTick={() => setTick(t => t + 1)} />
+            onTick={() => setTick(t => t + 1)} traced={traced} onTrace={setTraced} />
         </div>
       </div>
 
       <div style={{ height: BOTTOM_H, flexShrink: 0, minHeight: 0, display: 'flex' }}>
         <Inspector eng={eng} view={view} tick={tick} />
       </div>
+
+      {overlay === 'setup' && (
+        <SetupOverlay eng={eng} cfg={cfg} set={set}
+          onClose={() => setOverlay(null)} onReset={() => reset()} />
+      )}
+      {overlay === 'metrics' && <MetricsOverlay eng={eng} onClose={() => setOverlay(null)} />}
     </div>
   )
 }

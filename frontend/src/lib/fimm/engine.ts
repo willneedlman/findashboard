@@ -235,6 +235,25 @@ export interface NodeView {
   modelPrice: number
   streetBid: number
   streetAsk: number
+  /**
+   * The street's two-sided market in yield.
+   *
+   * Yields invert against prices, so the street's bid price is the higher of
+   * the two yields. Carrying both here keeps every consumer from re-deriving
+   * it and getting the inversion backwards.
+   */
+  streetBidYield: number
+  streetAskYield: number
+  /**
+   * Whether each side of our quote betters the street.
+   *
+   * Yields invert against prices, so bettering the street's bid means quoting a
+   * *lower* yield than it will pay. Derived once here because the matrix and
+   * the inspector both render it, and two copies of an inverted comparison is
+   * how they end up disagreeing.
+   */
+  bidInside: boolean
+  askInside: boolean
   quote: Quote
   posMM: number
   avgYield: number
@@ -386,12 +405,34 @@ export class FiEngine {
     }
   }
 
-  /** Half the inter-dealer spread in price points. */
+  /**
+   * Half the street's width, in basis points of yield.
+   *
+   * Quoted in yield rather than 32nds because a tick is worth wildly different
+   * amounts along the curve: a quarter of a 32nd is 1.6bp on a bill and 0.1bp
+   * on a 30Y. Expressed in ticks the desk's own 0.28bp edge came out wider than
+   * the street on seven of eight issues, which would have left every quote on
+   * the matrix rendered as outside the market.
+   *
+   * Tightest around the benchmark belly and wider at both wings: the bill has
+   * almost no duration, and the long bond is simply less liquid.
+   */
+  streetHalfBp(nd: Node): number {
+    if (nd.kind === 'stir') return 0.25
+    if (nd.years <= 0.5) return 1.6
+    return 0.45 + Math.abs(nd.years - 7) * 0.012
+  }
+
+  /** The same width in price points, for the two street quotes. */
   private streetHalfSpread(nd: Node): number {
-    if (nd.kind === 'stir') return 0.0025
-    // A 30Y screen is wider than a 2Y in price terms because the same yield
-    // width is worth far more price on a long duration.
-    return (0.25 / 32) * (0.5 + nd.years / 18)
+    const perBp = this.dv01(nd) / 1e6 * 100      // price points per basis point
+    return this.streetHalfBp(nd) * perBp
+  }
+
+  /** Invert a price back to a yield, in the node's own convention. */
+  yieldAtPrice(nd: Node, price: number): number {
+    if (nd.kind === 'stir') return (100 - price) / 100
+    return yieldFromPrice(nd.coupon, price, nd.years)
   }
 
   dv01(nd: Node): number {
@@ -940,12 +981,19 @@ export class FiEngine {
   // ── Views ───────────────────────────────────────────────────────────────────
 
   view(nd: Node): NodeView {
+    const q = this.quotes[nd.id]
+    const streetBidYield = this.yieldAtPrice(nd, this.streetBid[nd.id])
+    const streetAskYield = this.yieldAtPrice(nd, this.streetAsk[nd.id])
     return {
       node: nd,
       modelYield: this.modelYield[nd.id],
       modelPrice: this.modelPrice[nd.id],
       streetBid: this.streetBid[nd.id],
       streetAsk: this.streetAsk[nd.id],
+      streetBidYield,
+      streetAskYield,
+      bidInside: q.bidSize > 0 && q.bidYield < streetBidYield,
+      askInside: q.askSize > 0 && q.askYield > streetAskYield,
       quote: this.quotes[nd.id],
       posMM: this.pos[nd.id],
       avgYield: this.avgYield[nd.id],
