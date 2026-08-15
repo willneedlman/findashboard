@@ -11,11 +11,10 @@ import { setLinkedTicker } from '../lib/tickerLink'
 import useIsMobile from '../hooks/useIsMobile'
 import { ArrowRight, ChevronDown } from 'lucide-react'
 import { readPMPortfolios, addHoldingsToPortfolio, normalizeTicker, type PMPortfolio } from '../lib/pmImport'
-import { formatScreenerFilterDisplay, screenerFilterPlaceholder, screenerFilterToApi } from '../lib/format'
+import { formatScreenerFilterDisplay, screenerAsOfLabel, screenerFilterPlaceholder, screenerFilterToApi } from '../lib/format'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip, textClip } from '../lib/reportCaptureRegistry'
-import { formatLocalTime } from '../lib/time'
 
 const C = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', surface: 'var(--theme-surface, #0d1826)',
@@ -70,6 +69,9 @@ interface ScreenResult {
   change52wHiPct: number | null; avgVolume: number | null
   rsi14: number | null; smaDist50: number | null; smaDist200: number | null; vol30: number | null
   priceChange: number | null; region: string | null; country: string | null
+  // Provenance. A row's price is either live, a cached vendor snapshot, or the
+  // bundled July seed, and its fundamentals are sourced independently of that.
+  priceSource: string | null; priceAsOf: string | null; fundamentalsSource: string | null
 }
 
 // Handoff to the Algo Strategy Builder: "Send to Algo Builder" writes the
@@ -336,7 +338,23 @@ export default function StockScreener() {
           if (t && !seen.has(t)) { seen.add(t); results.push(row) }
         }
       }
-      return { results, total: results.length, changePeriod: responses[0]?.changePeriod }
+      // Provenance is recomputed over the merged set rather than taken from the
+      // first response, or a union of a live board and a bundled one would
+      // report whichever universe happened to be screened first.
+      const priceSources: Record<string, number> = {}
+      const fundamentalsSources: Record<string, number> = {}
+      for (const row of results) {
+        const p = row.priceSource ?? 'unknown'
+        priceSources[p] = (priceSources[p] ?? 0) + 1
+        const f = row.fundamentalsSource ?? 'none'
+        fundamentalsSources[f] = (fundamentalsSources[f] ?? 0) + 1
+      }
+      const stamps = results.map(row => row.priceAsOf).filter((s): s is string => !!s)
+      return {
+        results, total: results.length, changePeriod: responses[0]?.changePeriod,
+        priceAsOf: stamps.length ? stamps.reduce((a, b) => a < b ? a : b) : null,
+        priceSources, fundamentalsSources, bundledAsOf: responses[0]?.bundledAsOf ?? null,
+      }
     },
   })
 
@@ -533,7 +551,10 @@ export default function StockScreener() {
   }, { disabled: !data?.results?.length, sourceTab: 'Stock Screener' })
 
   const sortColLabel = sortBy === 'priceChange' ? `${sortParam} price change` : (TABLE_COLS.find(c => c.key === sortBy)?.label ?? sortBy)
-  const renderCols = TABLE_COLS.filter(c => visibleCols.has(c.key as string))
+  // The 1D move exists only when the snapshot or the live overlay supplied it.
+  // A column of dashes should not hold a slot in a dense table.
+  const hasPriceChange = useMemo(() => displayRows.some(r => r.priceChange != null), [displayRows])
+  const renderCols = TABLE_COLS.filter(c => visibleCols.has(c.key as string) && (c.key !== 'priceChange' || hasPriceChange))
   const gridTemplate = `minmax(190px,1.5fr) ${renderCols.map(c => c.w).join(' ')}`
   // Natural width of the table; the scroll container falls back to horizontal
   // scroll below this so columns stay readable instead of being clipped when the
@@ -577,7 +598,7 @@ export default function StockScreener() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', padding: isMobile ? '12px' : '15px 24px', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 22%, transparent)', flex: 'none' }}>
           <span style={{ fontFamily: C.sans, fontSize: 14, fontWeight: 700, letterSpacing: '0.22em', textTransform: 'uppercase', color: C.gold }}>Stock Screener</span>
           <span style={{ fontFamily: C.mono, fontSize: 10, letterSpacing: '0.04em', color: C.dim }}>
-            {universeLabel.toUpperCase()} · {data ? `${data.total} MATCHES` : 'READY'} · {formatLocalTime(new Date())}
+            {universeLabel.toUpperCase()} · {data ? `${data.total} MATCHES · ${screenerAsOfLabel(data.priceAsOf, data.priceSources)}` : 'READY'}
           </span>
         </div>
 
@@ -830,6 +851,16 @@ export default function StockScreener() {
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, minWidth: 0 }}>
                         <span style={{ fontFamily: C.mono, fontWeight: 700, fontSize: 12.5, color: C.gold }}>{r.ticker}</span>
                         <span style={{ fontFamily: C.sans, fontSize: 11, color: C.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.companyName}</span>
+                        {/* Rows in one table can come from different vintages: a
+                            name with live vendor fundamentals sits beside one
+                            running on the bundled file. Unmarked, two share
+                            classes of the same company differed by six P/E
+                            points with nothing on screen to explain it. */}
+                        {r.fundamentalsSource === 'bundled' && (
+                          <Tooltip label={`Fundamentals from the bundled snapshot${data.bundledAsOf ? ` built ${new Date(data.bundledAsOf).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}. Price is current, the ratios are not.`}>
+                            <span style={{ fontFamily: C.sans, fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', color: C.warn, border: `1px solid ${C.warn}`, padding: '1px 4px', flex: 'none', cursor: 'default' }}>SEED</span>
+                          </Tooltip>
+                        )}
                       </div>
                       {/* Actions float over the row's LEFT edge (the ticker) on hover, so
                           they stay on-screen even when the table scrolls horizontally and

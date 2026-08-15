@@ -1,4 +1,5 @@
 import asyncio
+import datetime as _dt
 import logging
 import concurrent.futures
 import re
@@ -55,21 +56,28 @@ def _load_universe() -> "tuple[set, dict]":
 _UNIVERSE, _INDEX_SETS = _load_universe()
 
 
-def _load_us_fundamentals() -> dict:
+def _load_us_fundamentals() -> "tuple[dict, str | None]":
     # Bundled basic stats (sector + ratios + margins + growth) for the US universe,
     # built offline from Finnhub by scripts/build_us_fundamentals.py. Serves as the
     # durable fallback so major US names always show real data when FMP is throttled
     # or a name's deep fundamentals aren't cached yet. Keyed by normalized ticker.
+    # The build date rides along so a row served from here can say how old it is
+    # instead of inheriting the wall clock.
     import json
     try:
         path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "us_fundamentals.json")
         d = json.load(open(path))
-        return {_norm_tk(k): v for k, v in d.items()} if isinstance(d, dict) else {}
+        if not isinstance(d, dict):
+            return {}, None
+        built_at = d.pop("_built_at", None) or _dt.datetime.fromtimestamp(
+            os.path.getmtime(path), _dt.timezone.utc
+        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        return {_norm_tk(k): v for k, v in d.items()}, built_at
     except Exception as e:
         logger.warning("us fundamentals load failed: %s", e)
-        return {}
+        return {}, None
 
-_US_FUND = _load_us_fundamentals()
+_US_FUND, _US_FUND_BUILT_AT = _load_us_fundamentals()
 
 _COMPANY_NAME_STOP = {
     "american", "bank", "capital", "central", "financial", "first", "general",
@@ -532,6 +540,84 @@ def get_percentiles(req: PercentileRequest):
     return {field: industry_ratios.percentile_rank(req.sector, field, value)
             for field, value in req.values.items()}
 
+# ── Row provenance ────────────────────────────────────────────────────────────
+# Every base row carries where its price came from and when. The header used to
+# stamp results with the browser clock while the rows underneath were a bundled
+# July snapshot, and rows of different vintages sat side by side unmarked (GOOG
+# on the seed, GOOGL live, six P/E points apart in one table).
+
+def _now_iso() -> str:
+    return _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _stamp(rows: list, source: str, as_of: "str | None") -> list:
+    for r in rows:
+        r["priceSource"] = source
+        r["priceAsOf"] = as_of
+    return rows
+
+
+def _overlay_live_prices(rows: list) -> None:
+    """Repoint price, market cap and the 1D move at a live batch quote.
+
+    Every price-derived ratio is computed from base price/market cap inside
+    _enrich, so this has to land before enrichment or a live price would sit
+    beside a July P/E. Market cap is rescaled by the price move rather than
+    refetched: the share count has not changed since the snapshot.
+    """
+    symbols = [r["ticker"] for r in rows if r.get("ticker")]
+    if not symbols:
+        return
+    try:
+        import pandas as pd
+        from cache import get_download
+    except Exception:
+        return
+    today = _dt.date.today()
+    start = (today - _dt.timedelta(days=10)).isoformat()
+    end = (today + _dt.timedelta(days=1)).isoformat()
+    quotes: dict = {}
+    for i in range(0, len(symbols), 50):
+        chunk = tuple(symbols[i:i + 50])
+        try:
+            frame = get_download(chunk, start, end, "1d", cache_ttl=300)
+        except Exception as e:
+            logger.warning("screener live overlay chunk failed: %s", e)
+            continue
+        if frame is None or frame.empty:
+            continue
+        closes = frame.get("Close")
+        if closes is None:
+            continue
+        if isinstance(closes, pd.Series):
+            closes = closes.to_frame(name=chunk[0])
+        for sym in chunk:
+            if sym not in closes:
+                continue
+            series = closes[sym].dropna()
+            if series.empty:
+                continue
+            last = float(series.iloc[-1])
+            if last > 0:
+                quotes[sym] = (last, float(series.iloc[-2]) if len(series) > 1 else None)
+    if not quotes:
+        return
+    stamped = _now_iso()
+    for r in rows:
+        quote = quotes.get(r.get("ticker"))
+        if not quote:
+            continue
+        last, prior = quote
+        stale_price = r.get("price")
+        if stale_price and stale_price > 0 and r.get("marketCap"):
+            r["marketCap"] = round(r["marketCap"] * last / stale_price, 2)
+        r["price"] = round(last, 2)
+        if prior and prior > 0:
+            r["change1d"] = round((last / prior - 1) * 100, 2)
+        r["priceSource"] = "live"
+        r["priceAsOf"] = stamped
+
+
 # ── Cached base-data snapshot from the FMP screener ───────────────────────────
 
 def _fmp_snapshot(sector, exchange) -> list:
@@ -575,12 +661,14 @@ def _fmp_snapshot(sector, exchange) -> list:
     except Exception as e:
         logger.warning("FMP snapshot error: %s", e)
     if rows:
+        _stamp(rows, "fmp", _now_iso())
         disk_set(fresh_key, rows, ttl=21600)     # 6h fresh window
         disk_set(sticky_key, rows, ttl=604800)   # 7d sticky fallback when FMP is throttled
         return rows
     # Refresh failed (rate-limited / empty): serve the last good copy so data
-    # never blanks once it has been warmed.
-    return disk_get(sticky_key) or []
+    # never blanks once it has been warmed. It keeps its original as-of and is
+    # relabelled so a week-old sticky copy cannot pass for a live pull.
+    return [{**r, "priceSource": "fmp-stale"} for r in (disk_get(sticky_key) or [])]
 
 
 def _intl_snapshot(full: bool = False) -> list:
@@ -641,10 +729,11 @@ def _intl_snapshot(full: bool = False) -> list:
     with concurrent.futures.ThreadPoolExecutor(max_workers=15) as ex:
         rows = [r for r in ex.map(_q, sorted(_ALL_INTL)) if r and r.get("price")]
     if rows:
+        _stamp(rows, "yfinance", _now_iso())
         disk_set(_INTL_SNAPSHOT_CACHE, rows, ttl=21600)
         disk_set(f"{_INTL_SNAPSHOT_CACHE}:sticky", rows, ttl=604800)
         return rows
-    return disk_get(f"{_INTL_SNAPSHOT_CACHE}:sticky") or []
+    return [{**r, "priceSource": "yfinance-stale"} for r in (disk_get(f"{_INTL_SNAPSHOT_CACHE}:sticky") or [])]
 
 
 # ── Detail enrichment per ticker ──────────────────────────────────────────────
@@ -688,6 +777,7 @@ def _enrich(ticker: str, base: dict, claim, want_fastinfo: bool = False) -> dict
         if fund is None and fmp.available() and claim():
             fund = fmp.get_fundamentals(ticker)
         if fund:
+            detail["fundamentalsSource"] = "fmp"
             try:
                 prof = fund.get("profile") or {}
                 inc  = fund.get("income") or []
@@ -779,6 +869,7 @@ def _enrich(ticker: str, base: dict, claim, want_fastinfo: bool = False) -> dict
             for k in _REF_FIELDS:
                 if detail.get(k) in (None, "") and base.get(k) in (None, "") and ref.get(k) is not None:
                     detail[k] = ref[k]
+                    detail.setdefault("fundamentalsSource", "sec")
 
         # Bundled US fundamentals fallback: fill any basic stat still missing after
         # the FMP path (throttled / not yet cached) so US names never show blank
@@ -788,6 +879,7 @@ def _enrich(ticker: str, base: dict, claim, want_fastinfo: bool = False) -> dict
             for k in _SEED_FIELDS:
                 if detail.get(k) in (None, "") and base.get(k) in (None, "") and seed.get(k) not in (None, ""):
                     detail[k] = seed[k]
+                    detail.setdefault("fundamentalsSource", "bundled")
 
         # Name/sector come from the FMP screener result (base) or the FMP profile
         # above; fall back to the ticker so a row never shows blank.
@@ -943,7 +1035,7 @@ def _compute_history_batch(tickers: list[str]) -> dict:
 def run_screen(req: ScreenRequest):
     import json, hashlib
     # Bump CACHE_VER whenever screener logic changes to invalidate stale disk-cached results
-    CACHE_VER = "v20"
+    CACHE_VER = "v21"
     cache_key = CACHE_VER + hashlib.md5(json.dumps(req.model_dump(), sort_keys=True).encode()).hexdigest()
     with _lock:
         if cache_key in _screen_cache:
@@ -1038,6 +1130,12 @@ def run_screen(req: ScreenRequest):
         if effective_sector:
             fs = effective_sector.lower()
             seeded = [r for r in seeded if (r.get("sector") or "").lower() == fs]
+        # These rows are the bundled file wholesale, so they carry its build date
+        # rather than the clock, and their fundamentals are marked as the seed's
+        # unless _enrich later lands live ones on top.
+        _stamp(seeded, "bundled", _US_FUND_BUILT_AT)
+        for r in seeded:
+            r["fundamentalsSource"] = "bundled"
         candidates += seeded
 
     # yfinance fill — last resort when neither FMP nor the bundled seed covered the
@@ -1074,7 +1172,8 @@ def run_screen(req: ScreenRequest):
                         "change1d":  round((float(price) / prev - 1) * 100, 2) if price and prev else None,
                         "beta": None, "volume": None, "sector": "", "industry": "",
                         "exchange": listing.get("exchange", ""),
-                        "country": listing.get("country", _INTL_COUNTRY.get(str(req.universe).lower(), "")) if is_intl else ""}
+                        "country": listing.get("country", _INTL_COUNTRY.get(str(req.universe).lower(), "")) if is_intl else "",
+                        "priceSource": "yfinance", "priceAsOf": _now_iso()}
             except Exception:
                 return None
 
@@ -1105,6 +1204,13 @@ def run_screen(req: ScreenRequest):
     # cheap now, so a larger cap is fine.
     candidates.sort(key=lambda c: c.get("marketCap") or 0, reverse=True)
     to_enrich = candidates[:250]
+    # Live prices land before enrichment so P/E, P/B, P/S, EV/EBITDA and yield
+    # are all divided by the same fresh price. A live price can also push a name
+    # out of a price or market-cap filter the snapshot let through, so the cheap
+    # filters run once more on the fresh numbers.
+    _overlay_live_prices(to_enrich)
+    if base_filters:
+        to_enrich = [c for c in to_enrich if _passes(c, base_filters)]
     _budget = {"n": _LIVE_ENRICH_BUDGET}
     _budget_lock = threading.Lock()
     def _claim() -> bool:
@@ -1185,9 +1291,24 @@ def run_screen(req: ScreenRequest):
         for k in [k for k in r if k.startswith("chg:")]:
             r.pop(k, None)
 
+    shown = filtered[:req.limit] if req.limit is not None else filtered
+    # The header used to print the browser clock over rows that could be a month
+    # old. Report the oldest price on the board instead, plus how the rows split
+    # by source, so a mixed or bundled board says so.
+    stamps = [r.get("priceAsOf") for r in shown if r.get("priceAsOf")]
+    price_sources: dict = {}
+    fundamentals_sources: dict = {}
+    for r in shown:
+        price_sources[r.get("priceSource") or "unknown"] = price_sources.get(r.get("priceSource") or "unknown", 0) + 1
+        key = r.get("fundamentalsSource") or "none"
+        fundamentals_sources[key] = fundamentals_sources.get(key, 0) + 1
     result = {
-        "results": filtered[:req.limit] if req.limit is not None else filtered, "total": len(filtered), "changePeriod": display_period or "1D",
+        "results": shown, "total": len(filtered), "changePeriod": display_period or "1D",
         "coverage": _coverage_for_scope(req.universe, req.region),
+        "priceAsOf": min(stamps) if stamps else None,
+        "priceSources": price_sources,
+        "fundamentalsSources": fundamentals_sources,
+        "bundledAsOf": _US_FUND_BUILT_AT,
     }
     with _lock:
         _screen_cache[cache_key] = result

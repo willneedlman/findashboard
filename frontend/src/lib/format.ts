@@ -1,5 +1,7 @@
 // Shared number formatters so widgets render the same value identically.
 
+import { formatLocalTime } from './time'
+
 const SCALE_SUFFIX: Record<string, number> = { k: 1e3, m: 1e6, b: 1e9, t: 1e12 }
 
 export function parseScaledNumber(input: string): number | null {
@@ -59,6 +61,28 @@ export function formatScreenerFilterDisplay(field: string, raw: string): string 
     return `${Number.isInteger(n) ? n.toFixed(0) : n}%`
   }
   return String(n)
+}
+
+// Screener price sources that describe the current session. Anything else on the
+// board is a stored copy, and the header has to say how old it is instead of
+// printing the browser clock over a month-old bundled snapshot.
+const CURRENT_PRICE_SOURCES = new Set(['live', 'fmp', 'yfinance'])
+
+export function screenerAsOfLabel(
+  asOf: string | null | undefined,
+  sources: Record<string, number> | undefined,
+  now: Date = new Date(),
+): string {
+  const when = asOf ? new Date(asOf) : null
+  if (!when || Number.isNaN(when.getTime())) return 'AS-OF UNKNOWN'
+  const stored = Object.entries(sources ?? {}).reduce((n, [k, v]) => CURRENT_PRICE_SOURCES.has(k) ? n : n + v, 0)
+  const storedSuffix = stored > 0 ? ` · ${stored} STORED` : ''
+  const ageDays = Math.floor((now.getTime() - when.getTime()) / 86_400_000)
+  if (ageDays >= 1) {
+    const day = when.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase()
+    return `PRICES AS OF ${day} · ${ageDays}D OLD${storedSuffix}`
+  }
+  return `PRICES ${formatLocalTime(when)}${storedSuffix}`
 }
 
 export function screenerFilterPlaceholder(field: string): string {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fmtTailReturn, formatScreenerFilterDisplay, isTailLoss, parseScaledNumber, screenerFilterToApi } from './format'
+import { fmtTailReturn, formatScreenerFilterDisplay, isTailLoss, parseScaledNumber, screenerAsOfLabel, screenerFilterToApi } from './format'
 
 describe('parseScaledNumber', () => {
   it('parses plain numbers', () => {
@@ -32,6 +32,31 @@ describe('formatScreenerFilterDisplay', () => {
   it('formats market cap and volume readably', () => {
     expect(formatScreenerFilterDisplay('marketCap', '10')).toBe('$10B')
     expect(formatScreenerFilterDisplay('avgVolume', '300M')).toBe('300M')
+  })
+})
+
+describe('screenerAsOfLabel', () => {
+  const now = new Date('2026-08-15T04:20:00Z')
+
+  it('reports the age of a bundled board instead of the wall clock', () => {
+    const built = '2026-07-22T03:19:27Z'
+    // The date renders in the viewer's timezone, so derive the expectation the
+    // same way rather than pinning a UTC day the runner may not be in.
+    const day = new Date(built).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase()
+
+    const label = screenerAsOfLabel(built, { bundled: 250 }, now)
+
+    expect(label).toBe(`PRICES AS OF ${day} · 24D OLD · 250 STORED`)
+  })
+
+  it('counts only the rows that are not from the current session', () => {
+    expect(screenerAsOfLabel('2026-08-15T04:00:00Z', { live: 200, bundled: 50 }, now)).toContain('50 STORED')
+    expect(screenerAsOfLabel('2026-08-15T04:00:00Z', { live: 250 }, now)).not.toContain('STORED')
+  })
+
+  it('says so when the board carries no as-of at all', () => {
+    expect(screenerAsOfLabel(null, {}, now)).toBe('AS-OF UNKNOWN')
+    expect(screenerAsOfLabel('not a date', {}, now)).toBe('AS-OF UNKNOWN')
   })
 })
 
