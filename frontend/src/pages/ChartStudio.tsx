@@ -389,6 +389,11 @@ const RIGHT_MARGIN_BARS = 3     // empty bars kept past the last candle
 const MIN_VISIBLE_BARS = 12     // floor on what a range preset may resolve to
 const MAX_ZOOM_STEP = 0.3       // ~1.35x per frame
 const MAX_PAN_PX = 160          // pixels per frame
+// How thin a bar may draw. This is the real ceiling on zoom-out: the widest
+// window the pane can hold is its width divided by this. At 0.4 a 660px pane
+// capped out at ~1650 bars, so a 9,000-bar minute series could never be zoomed
+// out to see whole — pinching past the wall only slid the view into blank space.
+const MIN_BAR_SPACING = 0.05
 
 const baseOptions = (C: Colors, h: number) => ({
   layout: { background: { type: ColorType.Solid, color: C.bg }, textColor: C.text, fontFamily: "ui-monospace, monospace", fontSize: 11, attributionLogo: false },
@@ -838,7 +843,7 @@ export function ChartStudioContent() {
         // Breathing room at the right edge so the last candle and its price
         // bubble are not pinned against the axis, and a floor on bar width so a
         // wide window never collapses the candles into a solid smear.
-        rightOffset: 4, minBarSpacing: 0.4,
+        rightOffset: 4, minBarSpacing: MIN_BAR_SPACING,
         lockVisibleTimeRangeOnResize: true, tickMarkMaxCharacterLength: 10,
         tickMarkFormatter: tickFmt,
       },
@@ -856,6 +861,11 @@ export function ChartStudioContent() {
     // frame so a fast scroll reads as one smooth glide instead of a stutter.
     let pending: { zoom: number; pan: number; x: number } | null = null
     let raf = 0
+    // Plot width, excluding the price axis — the container width overstates how
+    // many bars actually fit.
+    const paneWidth = () => {
+      try { return (main as any).paneSize()?.width || wheelEl.clientWidth || 1 } catch { return wheelEl.clientWidth || 1 }
+    }
     const flush = () => {
       raf = 0
       const job = pending
@@ -864,16 +874,24 @@ export function ChartStudioContent() {
       const vr = ts.getVisibleLogicalRange()
       if (!job || !vr) return
       const width = vr.to - vr.from
+      const n = barCountRef.current
       let from: number = vr.from, to: number = vr.to
       if (job.pan) {
         const px = Math.max(-MAX_PAN_PX, Math.min(MAX_PAN_PX, job.pan))
-        const shift = px * (width / (wheelEl.clientWidth || 1))
+        const shift = px * (width / paneWidth())
         from += shift; to += shift
       }
       if (job.zoom) {
         const z = Math.max(-MAX_ZOOM_STEP, Math.min(MAX_ZOOM_STEP, job.zoom))
         const pivot = ts.coordinateToLogical(job.x)
-        const next = Math.min(Math.max(8, width * Math.exp(z)), 60000)
+        // Two ceilings on how far out a pinch may go. Asking for a window wider
+        // than the pane can draw is not refused, it is honoured on the right
+        // edge only — the view slides into blank space while the zoom looks
+        // frozen. And zooming out past the series itself just buys blank space,
+        // so full zoom-out lands on the whole tape rather than beyond it.
+        const capacity = paneWidth() / MIN_BAR_SPACING
+        const maxW = n > 0 ? Math.min(capacity, n + 2 * RIGHT_MARGIN_BARS) : capacity
+        const next = Math.min(Math.max(8, width * Math.exp(z)), Math.max(maxW, MIN_VISIBLE_BARS))
         const p = pivot == null ? from + width / 2 : pivot
         from = p - (p - from) * (next / width)
         to = from + next
@@ -882,7 +900,6 @@ export function ChartStudioContent() {
       // parked those ten at the far left of an otherwise blank pane, which reads
       // as the chart flying off to the right. Now at least 70% of the pane holds
       // data, and a window wider than the whole series centres on it.
-      const n = barCountRef.current
       if (n > 0) {
         const w = to - from
         const slack = Math.max(RIGHT_MARGIN_BARS, w * 0.3)
