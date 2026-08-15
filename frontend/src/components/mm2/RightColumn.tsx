@@ -1,5 +1,5 @@
 /*
- * Options MM 2 — risk column.
+ * Options MM Simulator — risk column.
  *
  * Three meters that carry the level, the one-minute move and the headroom on one
  * line each, because "how much room is left" is the question a maker actually

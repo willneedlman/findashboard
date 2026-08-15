@@ -1,5 +1,5 @@
 /*
- * Fixed Income MM 2 — a single-screen rates market making terminal.
+ * Fixed Income MM Simulator — a single-screen rates market making terminal.
  *
  * Same layout rule as the options desk: the issue matrix is the tool and takes
  * every pixel left over, while the rail, the risk column and the inspector are

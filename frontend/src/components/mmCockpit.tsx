@@ -1,5 +1,7 @@
-// Shared page chrome for the two market-maker simulators (Options + Fixed
-// Income). Presentational only. Colors route through --theme-* tokens.
+// Shared cockpit chrome: KPI strips, stat cells and the rail controls. Named
+// for the market-maker screens it was extracted from, and since carried across
+// the Options, Portfolio and Macro hubs, so it long outgrew them. Presentational
+// only. Colors route through --theme-* tokens.
 import { useEffect, useRef, useState } from 'react'
 import { Minus, Plus, ChevronUp, ChevronDown } from 'lucide-react'
 import HelpTip from './HelpTip'

@@ -1,5 +1,5 @@
 /*
- * Options MM 2 — the bottom pane.
+ * Options MM Simulator — the bottom pane.
  *
  * One pane where there used to be two: the eight-tab workbench and the separate
  * P&L band. Four tabs now, and the P&L timeline is a fixed cell on the right

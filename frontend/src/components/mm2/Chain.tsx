@@ -1,5 +1,5 @@
 /*
- * Options MM 2 — expiry strip and the options chain.
+ * Options MM Simulator — expiry strip and the options chain.
  *
  * Calls left, puts right, strike down the middle. This is the tool; everything
  * else on the screen supports it, so it gets the space and the fewest columns

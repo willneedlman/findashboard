@@ -1,5 +1,5 @@
 /*
- * Options MM 2 — the metrics overlay.
+ * Options MM Simulator — the metrics overlay.
  *
  * Everything that answers "how did the session go" rather than "what do I do
  * now". It was a workbench tab competing with the chain for permanent space;

@@ -1,5 +1,5 @@
 /*
- * Options MM 2 — simulation engine.
+ * Options MM Simulator — simulation engine.
  *
  * One deterministic event loop wired out of independent modules: market
  * generator, pricing, strategy, risk, matching (with real latency queues and

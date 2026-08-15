@@ -1,5 +1,5 @@
 /*
- * Options MM 2 — shared terminal primitives.
+ * Options MM Simulator — shared terminal primitives.
  *
  * Everything here is built for density: 9-11px type, tabular figures so prices
  * never shift horizontally as they tick, and hairline borders instead of cards.

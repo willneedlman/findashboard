@@ -1,5 +1,5 @@
 /*
- * Options MM 2 — session setup.
+ * Options MM Simulator — session setup.
  *
  * Everything you configure once and then leave alone lives here rather than on
  * the trading screen: the market process, the surface, the flow mix, venue

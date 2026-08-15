@@ -1,5 +1,5 @@
 /*
- * Options MM 2 — a single-screen options market making terminal.
+ * Options MM Simulator — a single-screen options market making terminal.
  *
  * Layout rule: the chain is the tool and takes every pixel left over; the rail,
  * the risk column, the workbench and the P&L band are fixed-height supports.

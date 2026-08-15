@@ -1,5 +1,5 @@
 /**
- * Options MM 2 — the vertical budget, in one place.
+ * Options MM Simulator — the vertical budget, in one place.
  *
  * The screen is authored to fit a laptop with nothing scrolling but the chain,
  * which only holds while these add up. They lived as scattered literals and

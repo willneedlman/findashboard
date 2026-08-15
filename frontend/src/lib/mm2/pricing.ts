@@ -1,5 +1,5 @@
 /*
- * Options MM 2 — pricing engine.
+ * Options MM Simulator — pricing engine.
  *
  * Pure Black-Scholes-Merton with a full greek set (through vanna and volga),
  * plus the parametric volatility surface both the market generator and the

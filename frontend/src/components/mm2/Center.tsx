@@ -1,5 +1,5 @@
 /*
- * Options MM 2 — the chain header and the contract inspector.
+ * Options MM Simulator — the chain header and the contract inspector.
  *
  * Both render without panel chrome; their parents supply the frame. The header
  * folds the old standalone underlying strip into the chain panel, which is where

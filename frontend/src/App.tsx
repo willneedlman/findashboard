@@ -115,7 +115,6 @@ const EconomyMonitor     = lazyWithReload(() => import('./pages/EconomyMonitor')
 const MacroEventHub      = lazyWithReload(() => import('./pages/MacroEventHub'))
 const SectorRotation     = lazyWithReload(() => import('./pages/SectorRotation'))
 const VolatilityScanner  = lazyWithReload(() => import('./pages/VolatilityScanner'))
-const MarketMakerSimulator = lazyWithReload(() => import('./pages/MarketMakerSimulator'))
 const Compare            = lazyWithReload(() => import('./pages/Compare'))
 const ResetPassword      = lazyWithReload(() => import('./pages/ResetPassword'))
 const HubLanding         = lazyWithReload(() => import('./pages/HubLanding'))
@@ -351,12 +350,11 @@ export default function App() {
               <Route path="/macro-hub"          element={<Navigate to="/fed" replace />} />
               <Route path="/research-hub"       element={<Navigate to="/earnings" replace />} />
               <Route path="/iv-tracker"         element={<RedirectWithSearch to="/volatility-scanner" />} />
-              {/* Retired from the hubs by the two MM 2 terminals. The route
-                  stays live: each desk keeps its own durable global
-                  leaderboard, and dropping the route would strand them along
-                  with every bookmark into a scored session. */}
-              <Route path="/market-maker"       element={<MarketMakerSimulator />} />
-              <Route path="/fixed-income-mm"    element={<Navigate to="/market-maker?desk=fixed-income" replace />} />
+              {/* The legacy two-desk simulator is gone, replaced by the two
+                  MM terminals. Its routes redirect to the desk that took over
+                  rather than 404, so an old bookmark still lands somewhere. */}
+              <Route path="/market-maker"       element={<RedirectWithSearch to="/options-mm-2" />} />
+              <Route path="/fixed-income-mm"    element={<RedirectWithSearch to="/fixed-income-mm-2" />} />
               <Route path="/unusual-options"    element={<RedirectWithSearch to="/options-scanner" />} />
               <Route path="/asset-overlay"      element={<Compare />} />
               <Route path="/compare"            element={<RedirectWithSearch to="/asset-overlay" />} />

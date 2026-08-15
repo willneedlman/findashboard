@@ -1,5 +1,5 @@
 /*
- * Options MM 2 — the quoting rail.
+ * Options MM Simulator — the quoting rail.
  *
  * Only the dials a maker actually turns while the session is running. Anything
  * configured once and left alone lives in the setup overlay instead, which is
