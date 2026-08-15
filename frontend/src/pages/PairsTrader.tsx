@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useToolState } from '../hooks/useToolState'
 import { useMutation } from '@tanstack/react-query'
 import { ComposedChart, Line, Scatter, XAxis, YAxis, ReferenceLine, ResponsiveContainer, Tooltip, CartesianGrid, AreaChart, Area, LineChart } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
@@ -41,7 +42,7 @@ const railSection: React.CSSProperties = { padding: '12px 0 13px', borderBottom:
 export default function PairsTrader() {
   const [a, setA] = useState('XOM')
   const [b, setB] = useState('CVX')
-  const [lookback, setLookback] = useState(730)
+  const [lookback, setLookback] = useToolState('pairs.lookback', 730)
   const [entryZ, setEntryZ] = useState('2')
   const [exitZ, setExitZ] = useState('0.5')
   const [zWindow, setZWindow] = useState('60')

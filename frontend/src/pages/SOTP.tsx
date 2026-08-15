@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import axios from 'axios'
+import { useTickerParam } from '../hooks/useTickerParam'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
@@ -103,6 +104,10 @@ function SegmentRow({ r, maxValue, peerGroups, onMult, onPeer }: {
 
 export function SOTPContent() {
   const [ticker, setTicker] = useState('AAPL')
+  // The drawer and palette offer this page for a symbol. It never read the
+  // URL, so a deep link opened on the hardcoded default instead.
+  useTickerParam(setTicker)
+
   const [inputsOpen, setInputsOpen] = useState(true)
   const [data, setData] = useState<SotpData | null>(null)
   const [mult, setMult] = useState<Record<string, number>>({})

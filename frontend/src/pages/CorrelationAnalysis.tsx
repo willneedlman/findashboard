@@ -1,4 +1,5 @@
 import { useState, Fragment } from 'react'
+import { useToolState } from '../hooks/useToolState'
 import { useMutation } from '@tanstack/react-query'
 import axios from 'axios'
 import {
@@ -123,9 +124,9 @@ export default function CorrelationAnalysis() {
   const [tickers,    setTickers]    = useState<string[]>(['SPY', 'QQQ', 'GLD', 'BTC-USD'])
   const [tColors,    setTColors]    = useState<Record<string, string>>({})
   const [tInput,     setTInput]     = useState('')
-  const [period,     setPeriod]     = useState('2y')
+  const [period,     setPeriod]     = useToolState('correlation.period', '2y')
   const [useReturns, setUseReturns] = useState(true)
-  const [benchmark,  setBenchmark]  = useState('SPY')
+  const [benchmark,  setBenchmark]  = useToolState('correlation.benchmark', 'SPY')
   const [rollWindow, setRollWindow] = useState(60)
   const [pairA,      setPairA]      = useState('')
   const [pairB,      setPairB]      = useState('')

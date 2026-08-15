@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
+import { useTickerParam } from '../hooks/useTickerParam'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import { KpiCell } from '../components/mmCockpit'
@@ -62,6 +63,11 @@ export default function NAVTracker() {
     if (!r) return
     setP(x => ({ ...x, target: r.ticker, asset: r.asset, use_live: true }))
   }
+
+  // The drawer and palette offer this page for a symbol. It never read the URL,
+  // so a deep link opened on the hardcoded MSTR preset instead. Only symbols
+  // this tool actually tracks apply, and the registry has to have loaded first.
+  useTickerParam(sym => { if (registry?.some(e => e.ticker === sym)) applyPreset(sym) }, 'ticker', !!registry)
 
   const { mutate, data, isPending } = useMutation({
     mutationFn: () => fetchNAVProxy({

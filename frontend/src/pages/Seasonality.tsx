@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import { useToolState } from '../hooks/useToolState'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
+import { useTickerParam } from '../hooks/useTickerParam'
 import PageWrapper from '../components/PageWrapper'
 import EmptyState from '../components/EmptyState'
 import TickerInput from '../components/TickerInput'
@@ -63,7 +65,11 @@ const td: React.CSSProperties = {
 export default function Seasonality() {
   const [draft, setDraft] = useState('SPY')
   const [ticker, setTicker] = useState('SPY')
-  const [years, setYears] = useState(20)
+
+  // The drawer and palette offer this page for a symbol. It never read the
+  // URL, so a deep link opened on the hardcoded default instead.
+  useTickerParam(sym => { setDraft(sym); setTicker(sym) })
+  const [years, setYears] = useToolState('seasonality.years', 20)
 
   const q = useQuery<Seasonality>({
     queryKey: ['seasonality', ticker, years],

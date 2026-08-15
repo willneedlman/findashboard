@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, Fragment } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import axios from 'axios'
+import { useTickerListParam, useTickerParam } from '../hooks/useTickerParam'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
@@ -73,6 +74,11 @@ export function EtfXrayContent() {
   const [fundFilter, setFundFilter] = useState<string[]>([])
   const [filterMode, setFilterMode] = useState<'shared' | 'union' | 'only'>('shared')
   const [pair, setPair] = useState<[string, string] | null>(null)
+
+  // /etf-xray redirects here and the palette offers this page for a symbol.
+  // Neither carried through: ?ticker=QQQ opened on SPY.
+  useTickerParam(sym => setPicked([sym]))
+  useTickerListParam(setPicked)
   const [hover, setHover] = useState('')
   const [hoverPos, setHoverPos] = useState({ x: 0, y: 0 })
 

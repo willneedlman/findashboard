@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useToolState } from '../hooks/useToolState'
 import { useMutation } from '@tanstack/react-query'
 import axios from 'axios'
 import {
@@ -147,7 +148,7 @@ function AssetOLS({ mode, setMode }: { mode: RegMode; setMode: (m: RegMode) => v
   const [xTickers,   setXTickers]   = useState<string[]>(['QQQ'])
   const [xColors,    setXColors]    = useState<Record<string, string>>({})
   const [xInput,     setXInput]     = useState('')
-  const [period,     setPeriod]     = useState('2y')
+  const [period,     setPeriod]     = useToolState('regression.period', '2y')
   const [modelType,  setModelType]  = useState<'linear' | 'polynomial'>('linear')
   const [degree,     setDegree]     = useState(2)
   const [useReturns, setUseReturns] = useState(true)

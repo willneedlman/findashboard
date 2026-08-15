@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import axios from 'axios'
+import { useTickerParam } from '../hooks/useTickerParam'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
@@ -122,6 +123,10 @@ function RGHeat({ grid, activeR, activeG }:
 
 export function DividendDiscountContent() {
   const [ticker, setTicker] = useState('KO')
+  // The drawer and palette offer this page for a symbol. It never read the
+  // URL, so a deep link opened on the hardcoded default instead.
+  useTickerParam(setTicker)
+
   const [inputsOpen, setInputsOpen] = useState(true)
   const [data, setData] = useState<DDM | null>(null)
   const [loading, setLoading] = useState(false)

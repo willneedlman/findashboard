@@ -21,6 +21,10 @@ export interface HubTool {
   desc: string    // one-line description (hub tiles)
   route: string   // target path (may include ?tab= for in-page tabs)
   icon: LucideIcon
+  // The page reads ?ticker= and actually applies it. lib/tickerLink derives the
+  // hand-off list from this flag, so a tool cannot be offered a symbol it will
+  // silently drop, and the list cannot drift out of step with the hubs again.
+  tickerParam?: boolean
 }
 
 export interface Hub {
@@ -42,13 +46,13 @@ export const HUBS: Hub[] = [
     tools: [
       { title: 'Stock Screener',    chip: 'Stock Screener',  desc: '25+ fundamental and technical filters across the universe', route: '/screener',           icon: Filter },
       { title: 'IPO Scanner',      chip: 'IPO Scanner',    desc: 'Upcoming and recent public offerings with pricing and deal size', route: '/ipo-calendar',    icon: Rocket },
-      { title: 'Mover Radar',       chip: 'Mover Radar',     desc: 'Why a ticker is moving right now — news, filings, and social, or confirmation it’s just noise', route: '/mover-radar', icon: Gauge },
-      { title: 'Company Profile',   chip: 'Company Profile', desc: 'Price history, revenue mix, ownership, and credit for one name', route: '/company-profile',  icon: Globe },
-      { title: 'Peer Comparison',   chip: 'Peer Comparison', desc: 'Trading multiples versus sector peers',                    route: '/relative-valuation', icon: Scale },
-      { title: 'Earnings Scanner',  chip: 'Earnings Scanner', desc: 'One calendar: who reports when, your holdings inline, and an AI filing summary on any row', route: '/earnings', icon: CalendarDays },
+      { title: 'Mover Radar',       chip: 'Mover Radar',     desc: 'Why a ticker is moving right now — news, filings, and social, or confirmation it’s just noise', route: '/mover-radar', tickerParam: true, icon: Gauge },
+      { title: 'Company Profile',   chip: 'Company Profile', desc: 'Price history, revenue mix, ownership, and credit for one name', route: '/company-profile', tickerParam: true,  icon: Globe },
+      { title: 'Peer Comparison',   chip: 'Peer Comparison', desc: 'Trading multiples versus sector peers',                    route: '/relative-valuation', tickerParam: true, icon: Scale },
+      { title: 'Earnings Scanner',  chip: 'Earnings Scanner', desc: 'One calendar: who reports when, your holdings inline, and an AI filing summary on any row', route: '/earnings', tickerParam: true, icon: CalendarDays },
       { title: 'Sentiment Tracker', chip: 'Sentiment Tracker', desc: 'AI-scored news sentiment across 7 sources',              route: '/sentiment',          icon: Brain },
-      { title: 'ETF Analyzer',      chip: 'ETF Analyzer',    desc: 'Look-through holdings, overlap, and concentration',        route: '/etf-analyzer',       icon: Boxes },
-      { title: 'NAV Tracker',       chip: 'NAV Tracker',     desc: 'Premium and discount on asset-backed proxies',             route: '/nav',                icon: Gem },
+      { title: 'ETF Analyzer',      chip: 'ETF Analyzer',    desc: 'Look-through holdings, overlap, and concentration',        route: '/etf-analyzer', tickerParam: true,       icon: Boxes },
+      { title: 'NAV Tracker',       chip: 'NAV Tracker',     desc: 'Premium and discount on asset-backed proxies',             route: '/nav', tickerParam: true,                icon: Gem },
       { title: 'Report Creator',    chip: 'Report Creator',  desc: 'Collect evidence manually or let AlphaTape research across its tools, then build a print-ready report', route: '/report-creator', icon: ClipboardList },
     ],
   },
@@ -59,10 +63,10 @@ export const HUBS: Hub[] = [
     masthead: 'Price, scan, and structure options end to end, from a single contract to a full multi-leg book.',
     icon: Layers,
     tools: [
-      { title: 'Options Scanner',     chip: 'Options Scanner',     desc: 'Unusual flow and the chain it sits in, on one surface', route: '/options-scanner', icon: Activity },
-      { title: 'Volatility Scanner',  chip: 'Volatility Scanner',  desc: 'One IV surface across expiry and strike, with rank, term structure and skew from a single load', route: '/volatility-scanner', icon: Waves },
-      { title: 'Dealer Exposure',          chip: 'Dealer Exposure',          desc: 'Gamma exposure by strike and expiry',               route: '/gex',             icon: Zap },
-      { title: 'Implied Probability', chip: 'Implied Probability', desc: 'Risk-neutral distributions from the chain',         route: '/probability',     icon: Percent },
+      { title: 'Options Scanner',     chip: 'Options Scanner',     desc: 'Unusual flow and the chain it sits in, on one surface', route: '/options-scanner', tickerParam: true, icon: Activity },
+      { title: 'Volatility Scanner',  chip: 'Volatility Scanner',  desc: 'One IV surface across expiry and strike, with rank, term structure and skew from a single load', route: '/volatility-scanner', tickerParam: true, icon: Waves },
+      { title: 'Dealer Exposure',          chip: 'Dealer Exposure',          desc: 'Gamma exposure by strike and expiry',               route: '/gex', tickerParam: true,             icon: Zap },
+      { title: 'Implied Probability', chip: 'Implied Probability', desc: 'Risk-neutral distributions from the chain',         route: '/probability', tickerParam: true,     icon: Percent },
       { title: 'Options Pricer',      chip: 'Options Pricer',      desc: 'Black-Scholes greeks and payoff diagrams',          route: '/options',         icon: LineChart },
       { title: 'Options Strategy',    chip: 'Options Strategy',    desc: 'Multi-leg P&L and risk profiles',                   route: '/strategy',        icon: Shuffle },
       { title: 'Options MM 2',        chip: 'Options MM 2',        desc: 'Quote a chain, carry the inventory, hedge the greeks, on one screen', route: '/options-mm-2', icon: Gauge },
@@ -97,7 +101,7 @@ export const HUBS: Hub[] = [
       { title: 'Global Markets',  chip: 'Global Markets',  desc: 'World indices, FX, commodities, yields, and crypto on one board', route: '/global-markets', icon: Globe },
       { title: 'Market Hours',    chip: 'Market Hours',    desc: 'Live global session clock across futures, US, Europe, Asia', route: '/market-hours',       icon: Clock },
       { title: 'Market Breadth',  chip: 'Market Breadth',  desc: 'Advance/decline, new highs-lows, and how many members are above their moving averages', route: '/breadth', icon: Activity },
-      { title: 'Seasonality',     chip: 'Seasonality',     desc: 'Month, weekday and turn-of-month patterns, each shown with its sample size', route: '/seasonality', icon: CalendarRange },
+      { title: 'Seasonality',     chip: 'Seasonality',     desc: 'Month, weekday and turn-of-month patterns, each shown with its sample size', route: '/seasonality', tickerParam: true, icon: CalendarRange },
       { title: 'Sector Rotation', chip: 'Sector Rotation', desc: 'GICS sector performance heatmap over time',                  route: '/sector-rotation',    icon: PieChart },
       { title: 'Chart Studio',    chip: 'Chart Studio',    desc: 'Every time-series feed in the app on one candlestick chart', route: '/chart-studio', icon: CandlestickChart },
       { title: 'Asset Overlay',   chip: 'Asset Overlay',   desc: 'Overlay any set of assets on a single chart',                route: '/asset-overlay',      icon: GitCompare },
@@ -134,12 +138,12 @@ export const HUBS: Hub[] = [
     masthead: 'Pin down intrinsic value three ways and reverse-engineer exactly what the current price is pricing in.',
     icon: Calculator,
     tools: [
-      { title: 'Master Valuation',  chip: 'Master Valuation', desc: 'One shared forecast connecting DCF, reverse expectations, multiples, dividends, and business parts', route: '/master-valuation', icon: GitMerge },
-      { title: 'DCF Valuation',     chip: 'DCF',         desc: 'Adjustable growth stages and CapEx/D&A/WC glide paths',         route: '/dcf',         icon: Calculator },
-      { title: 'Reverse DCF',       chip: 'Reverse DCF', desc: 'Solve for the growth the current price implies',                route: '/reverse-dcf', icon: RotateCcw },
-      { title: 'Multiples',         chip: 'Multiples',   desc: 'Implied price from target P/E, EV/Sales, and more',             route: '/multiples',   icon: Scale },
-      { title: 'Dividend Discount', chip: 'DDM',         desc: 'Gordon and multi-stage dividend discount models',              route: '/ddm',         icon: Coins },
-      { title: 'Sum of the Parts',  chip: 'SOTP',        desc: 'Value each business segment, then sum the parts',               route: '/sotp',        icon: Boxes },
+      { title: 'Master Valuation',  chip: 'Master Valuation', desc: 'One shared forecast connecting DCF, reverse expectations, multiples, dividends, and business parts', route: '/master-valuation', tickerParam: true, icon: GitMerge },
+      { title: 'DCF Valuation',     chip: 'DCF',         desc: 'Adjustable growth stages and CapEx/D&A/WC glide paths',         route: '/dcf', tickerParam: true,         icon: Calculator },
+      { title: 'Reverse DCF',       chip: 'Reverse DCF', desc: 'Solve for the growth the current price implies',                route: '/reverse-dcf', tickerParam: true, icon: RotateCcw },
+      { title: 'Multiples',         chip: 'Multiples',   desc: 'Implied price from target P/E, EV/Sales, and more',             route: '/multiples', tickerParam: true,   icon: Scale },
+      { title: 'Dividend Discount', chip: 'DDM',         desc: 'Gordon and multi-stage dividend discount models',              route: '/ddm', tickerParam: true,         icon: Coins },
+      { title: 'Sum of the Parts',  chip: 'SOTP',        desc: 'Value each business segment, then sum the parts',               route: '/sotp', tickerParam: true,        icon: Boxes },
     ],
   },
   {
@@ -151,7 +155,7 @@ export const HUBS: Hub[] = [
     tools: [
       { title: 'Freight Map',      chip: 'Freight Map',  desc: 'Air hubs, chokepoints, connectivity ports, live cargo ships, and freight macro on one map', route: '/logistics-map', icon: MapPinned },
       { title: 'Trade Flows',      chip: 'Trade Flows', desc: 'Bilateral trade by commodity and country: top partners, tonnage, and world share', route: '/trade-flows',         icon: ArrowLeftRight },
-      { title: 'Supply Chain Map', chip: 'Supply Chain Map', desc: 'Map a company\'s sourcing and end-market overlap across peer firms', route: '/supply-chain-peers', icon: Waypoints },
+      { title: 'Supply Chain Map', chip: 'Supply Chain Map', desc: 'Map a company\'s sourcing and end-market overlap across peer firms', route: '/supply-chain-peers', tickerParam: true, icon: Waypoints },
       { title: 'Energy Flows',     chip: 'Energy Flows', desc: 'Live AIS tankers, energy pipelines, export terminals, and chokepoints',                       route: '/flows-map',     icon: Fuel },
       { title: 'Chokepoint Exposure', chip: 'Exposure',  desc: 'Live chokepoint stress mapped to the tankers, oil, refiners, and shippers it moves',         route: '/chokepoint-exposure', icon: Waypoints },
     ],

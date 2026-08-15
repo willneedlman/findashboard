@@ -5,6 +5,7 @@ import {
   Area, AreaChart, CartesianGrid, Line, LineChart, ReferenceLine,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
+import { useTickerParam } from '../hooks/useTickerParam'
 import PageWrapper from '../components/PageWrapper'
 import EmptyState from '../components/EmptyState'
 import Provenance from '../components/Provenance'
@@ -250,6 +251,11 @@ export function VolatilityScannerContent() {
   const [strikeValue, setStrikeValue] = useState<number | null>(null)
   const [strikeEditing, setStrikeEditing] = useState(false)
   const [days, setDays] = useState(180)
+
+  // /skew and /iv-tracker both land here. They used to arrive with the symbol
+  // stripped, so a deep link opened on the hardcoded AAPL with nothing on
+  // screen saying the ticker had been dropped.
+  useTickerParam(sym => { setDraft(sym); setTicker(sym) })
 
   // One FETCH loads one chain snapshot; every panel below is a slice of it. The
   // rank query is chained (it needs the front expiry) but is not a per-view load.

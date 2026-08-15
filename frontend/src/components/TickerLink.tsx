@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { PanelRight, UserRound, Users, Calculator, ChevronDown } from 'lucide-react'
 import { T } from '../lib/theme'
-import { setLinkedTicker, TICKER_SYM_RE } from '../lib/tickerLink'
+import { setLinkedTicker, TICKER_SYM_RE, TICKER_TOOLS } from '../lib/tickerLink'
 
 // One clickable ticker for every surface: click the symbol to open a small menu
 // with the four canonical destinations. Three navigate; "Overview" fires the
@@ -30,13 +30,22 @@ const go = (url: string) => (sym: string, nav: ReturnType<typeof useNavigate>) =
   nav(`${url}?ticker=${encodeURIComponent(sym)}`)
 }
 
-// Routes mirror TICKER_TOOLS in lib/tickerLink; "Peers" is the relative-valuation grid.
+// A deliberately short hover menu, not the full hand-off list. The routes are
+// looked up in TICKER_TOOLS rather than written out again: this was a fourth
+// hand-copied list under a comment claiming it mirrored that one, which is
+// exactly how /skew survived here after it stopped existing.
+const routeFor = (route: string) => {
+  const tool = TICKER_TOOLS.find(t => t.route === route)
+  if (!tool) throw new Error(`TickerLink action points at ${route}, which no tool claims a ticker for`)
+  return tool.route
+}
+
 const ACTIONS: Action[] = [
-  { key: 'profile',  label: 'Company Profile', icon: UserRound, run: go('/company-profile') },
-  { key: 'peers',    label: 'Peers',           icon: Users,     run: go('/relative-valuation') },
+  { key: 'profile',  label: 'Company Profile', icon: UserRound, run: go(routeFor('/company-profile')) },
+  { key: 'peers',    label: 'Peers',           icon: Users,     run: go(routeFor('/relative-valuation')) },
   { key: 'overview', label: 'Overview',        icon: PanelRight,
     run: sym => { setLinkedTicker(sym); window.dispatchEvent(new CustomEvent(DRAWER_EVENT, { detail: sym })) } },
-  { key: 'dcf',      label: 'DCF Valuation',   icon: Calculator, run: go('/dcf') },
+  { key: 'dcf',      label: 'DCF Valuation',   icon: Calculator, run: go(routeFor('/dcf')) },
 ]
 
 interface Props {

@@ -11,6 +11,7 @@ import { setLinkedTicker } from '../lib/tickerLink'
 import useIsMobile from '../hooks/useIsMobile'
 import { ArrowRight, ChevronDown } from 'lucide-react'
 import { readPMPortfolios, addHoldingsToPortfolio, normalizeTicker, type PMPortfolio } from '../lib/pmImport'
+import { useToolState } from '../hooks/useToolState'
 import { formatScreenerFilterDisplay, screenerAsOfLabel, screenerFilterPlaceholder, screenerFilterToApi } from '../lib/format'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
@@ -242,14 +243,17 @@ function UniverseMultiSelect({ options, groups, selected, onChange, triggerStyle
 export default function StockScreener() {
   const navigate = useNavigate()
   const isMobile = useIsMobile()
-  const [filters, setFilters]   = useState<FilterRow[]>(() => toRows(DEFAULT_PRESET))
-  const [sector,   setSector]   = useState('')
-  const [exchange, setExchange] = useState('')
-  const [region,   setRegion]   = useState('')
-  const [selectedUniverses, setSelectedUniverses] = useState<string[]>(DEFAULT_PRESET.universes ?? [])
-  const [sortBy,   setSortBy]   = useState(DEFAULT_PRESET.sortBy)
-  const [sortDir,  setSortDir]  = useState<'desc' | 'asc'>(DEFAULT_PRESET.sortDir)
-  const [sortParam, setSortParam] = useState(DEFAULT_PRESET.sortParam ?? '1M')
+  // The working screen survives navigating away. This reset to DEFAULT_PRESET on
+  // every mount, so a 25-filter screen you had not explicitly saved was gone the
+  // moment you opened another tool and came back.
+  const [filters, setFilters]   = useToolState<FilterRow[]>('screener.filters', toRows(DEFAULT_PRESET))
+  const [sector,   setSector]   = useToolState('screener.sector', '')
+  const [exchange, setExchange] = useToolState('screener.exchange', '')
+  const [region,   setRegion]   = useToolState('screener.region', '')
+  const [selectedUniverses, setSelectedUniverses] = useToolState<string[]>('screener.universes', DEFAULT_PRESET.universes ?? [])
+  const [sortBy,   setSortBy]   = useToolState('screener.sortBy', DEFAULT_PRESET.sortBy)
+  const [sortDir,  setSortDir]  = useToolState<'desc' | 'asc'>('screener.sortDir', DEFAULT_PRESET.sortDir)
+  const [sortParam, setSortParam] = useToolState('screener.sortParam', DEFAULT_PRESET.sortParam ?? '1M')
   const [visibleCols, setVisibleCols] = useState<Set<string>>(
     new Set(['sector', 'price', 'priceChange', 'marketCap', 'peRatio', 'pegRatio', 'operatingMargin', 'revenueGrowth'])
   )

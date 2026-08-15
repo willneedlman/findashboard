@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback, Fragment } from 'rea
 import { createPortal } from 'react-dom'
 import axios from 'axios'
 import { Star } from 'lucide-react'
+import { useTickerParam } from '../hooks/useTickerParam'
 import PageWrapper from '../components/PageWrapper'
 import { calendarMismatchDate, hasReportedFigures, sourceHasGapAt } from './earningsCalendarStatus'
 import EmptyState from '../components/EmptyState'
@@ -464,6 +465,12 @@ export function EarningsScannerContent() {
   const [error, setError] = useState<string | null>(null)
 
   const [query, setQuery] = useState('')
+
+  // This page is in TICKER_TOOLS and the drawer offers it, but it read no
+  // ticker at all: arriving with NVDA in hand showed the whole unfiltered
+  // calendar. The symbol seeds the search box the page already has.
+  useTickerParam(setQuery)
+
   const [minCapStr, setMinCapStr] = useState('')   // in $B
   const [hourFilter, setHourFilter] = useState('') // '', bmo, amc, dmh
   const [sort, setSort] = useState<SortState>(null) // a user sort flattens the date grouping

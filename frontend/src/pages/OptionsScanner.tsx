@@ -3,6 +3,8 @@ import {
   Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
 import axios from 'axios'
+import { useTickerListParam, useTickerParam } from '../hooks/useTickerParam'
+import { useToolState } from '../hooks/useToolState'
 import PageWrapper from '../components/PageWrapper'
 import useIsMobile from '../hooks/useIsMobile'
 import EmptyState from '../components/EmptyState'
@@ -63,16 +65,24 @@ const usd = (v: number) => `$${v.toFixed(2)}`
 export function OptionsScannerContent() {
   const cc = useChartColors()
   const isMobile = useIsMobile()
-  const [tickers, setTickers] = useState<string[]>(['SPY', 'QQQ', 'NVDA', 'AAPL', 'TSLA'])
-  const [expiries, setExpiries] = useState(2)
-  const [minVolume, setMinVolume] = useState(300)
-  const [minVolOi, setMinVolOi] = useState(1.5)
+  // The basket and all four scan thresholds survive leaving the page. Retuning
+  // them from scratch every visit is the tax the audit measured.
+  const [tickers, setTickers] = useToolState<string[]>('optionsScanner.tickers', ['SPY', 'QQQ', 'NVDA', 'AAPL', 'TSLA'])
+  const [expiries, setExpiries] = useToolState('optionsScanner.expiries', 2)
+  const [minVolume, setMinVolume] = useToolState('optionsScanner.minVolume', 300)
+  const [minVolOi, setMinVolOi] = useToolState('optionsScanner.minVolOi', 1.5)
 
   const [scan, setScan] = useState<ScanResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'premium', dir: 'desc' })
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+
+  // /chain, /options-desk and /unusual-options all redirect here, and the
+  // drawer offers this page for a symbol. It read neither ?ticker= nor
+  // ?tickers=, so every one of those arrived on the hardcoded basket.
+  useTickerParam(sym => setTickers([sym]))
+  useTickerListParam(setTickers)
 
   const [sel, setSel] = useState<Sel | null>(null)
   const [chain, setChain] = useState<Chain | null>(null)

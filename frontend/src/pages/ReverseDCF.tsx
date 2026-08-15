@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { ComposedChart, Area, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, Cell } from 'recharts'
 import axios from 'axios'
+import { useTickerParam } from '../hooks/useTickerParam'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
@@ -107,6 +108,10 @@ type Reverse = {
 export function ReverseDCFContent() {
   const cc = useChartColors()
   const [ticker, setTicker] = useState('AAPL')
+  // The drawer and palette offer this page for a symbol. It never read the
+  // URL, so a deep link opened on the hardcoded default instead.
+  useTickerParam(setTicker)
+
   const [inputsOpen, setInputsOpen] = useState(true)
   const [marketPrice, setMarketPrice] = useState<number | ''>('')
   const [opMargin, setOpMargin] = useState(20)

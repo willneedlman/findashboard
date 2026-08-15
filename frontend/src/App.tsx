@@ -290,7 +290,7 @@ export default function App() {
               {/* Valuation tools — now standalone (legacy /valuation hub dismantled) */}
               <Route path="/master-valuation" element={<MasterValuation />} />
               <Route path="/dcf"         element={<DCFValuation />} />
-              <Route path="/dcf-pro"     element={<Navigate to="/dcf" replace />} />
+              <Route path="/dcf-pro"     element={<RedirectWithSearch to="/dcf" />} />
               <Route path="/ddm"         element={<DividendDiscount />} />
               <Route path="/sotp"        element={<SOTP />} />
               <Route path="/multiples"   element={<Multiples />} />
@@ -299,8 +299,8 @@ export default function App() {
               <Route path="/probability" element={<ImpliedProbability />} />
               <Route path="/volatility-scanner" element={<VolatilityScanner />} />
               {/* IV Rank and Vol Skew are fused into the scanner; every old route redirects. */}
-              <Route path="/volatility"  element={<Navigate to="/volatility-scanner" replace />} />
-              <Route path="/skew"       element={<Navigate to="/volatility-scanner" replace />} />
+              <Route path="/volatility"  element={<RedirectWithSearch to="/volatility-scanner" />} />
+              <Route path="/skew"       element={<RedirectWithSearch to="/volatility-scanner" />} />
               <Route path="/fed"        element={<FedRates />} />
               {/* Portfolio Earnings is now the book scope of the fused Earnings tool. */}
               <Route path="/corporate"  element={<RedirectWithSearch to="/earnings" />} />
@@ -308,9 +308,9 @@ export default function App() {
                   existing links and saved tabs keep working. */}
               <Route path="/options-scanner" element={<OptionsScanner />} />
               <Route path="/options-mm-2" element={<OptionsMM2 />} />
-              <Route path="/chain"      element={<Navigate to="/options-scanner" replace />} />
-              <Route path="/options-desk-demo" element={<Navigate to="/options-scanner" replace />} />
-              <Route path="/options-desk" element={<Navigate to="/options-scanner" replace />} />
+              <Route path="/chain"      element={<RedirectWithSearch to="/options-scanner" />} />
+              <Route path="/options-desk-demo" element={<RedirectWithSearch to="/options-scanner" />} />
+              <Route path="/options-desk" element={<RedirectWithSearch to="/options-scanner" />} />
               <Route path="/correlation" element={<CorrelationAnalysis />} />
               <Route path="/strategy"   element={<StrategyBuilder />} />
               <Route path="/algo-strategy" element={<AlgoStrategyBuilder />} />
@@ -348,10 +348,10 @@ export default function App() {
               <Route path="/options-hub"        element={<Navigate to="/options" replace />} />
               <Route path="/macro-hub"          element={<Navigate to="/fed" replace />} />
               <Route path="/research-hub"       element={<Navigate to="/earnings" replace />} />
-              <Route path="/iv-tracker"         element={<Navigate to="/volatility-scanner" replace />} />
+              <Route path="/iv-tracker"         element={<RedirectWithSearch to="/volatility-scanner" />} />
               <Route path="/market-maker"       element={<MarketMakerSimulator />} />
               <Route path="/fixed-income-mm"    element={<Navigate to="/market-maker?desk=fixed-income" replace />} />
-              <Route path="/unusual-options"    element={<Navigate to="/options-scanner" replace />} />
+              <Route path="/unusual-options"    element={<RedirectWithSearch to="/options-scanner" />} />
               <Route path="/asset-overlay"      element={<Compare />} />
               <Route path="/compare"            element={<RedirectWithSearch to="/asset-overlay" />} />
               <Route path="/etf-analyzer"       element={<EtfXray />} />
@@ -362,7 +362,7 @@ export default function App() {
               <Route path="/maritime-freight"   element={<Navigate to="/logistics-map" replace />} />
               <Route path="/air-cargo"          element={<Navigate to="/logistics-map" replace />} />
               <Route path="/freight-macro"      element={<Navigate to="/logistics-map" replace />} />
-              <Route path="/etf-xray"           element={<Navigate to="/etf-analyzer" replace />} />
+              <Route path="/etf-xray"           element={<RedirectWithSearch to="/etf-analyzer" />} />
             </Route>
 
             {/* Anything unrouted: a real 404 in marketing chrome, not a silent

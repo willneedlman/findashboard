@@ -5,6 +5,7 @@
 // it is session context, not saved data.
 
 import { useEffect, useState } from 'react'
+import { HUBS } from './hubs'
 
 const SYM_KEY = 'ft_linked_ticker'
 const ON_KEY  = 'ft_link_on'
@@ -14,22 +15,19 @@ export const TICKER_SYM_RE = /^[A-Z][A-Z0-9.\-]{0,9}$/
 
 // Single source for every surface that deep-links a symbol into a tool: the
 // palette's "open SYMBOL in <tool>" commands, the drawer's Open In grid, and
-// linked-route injection. `param` marks pages that read ?tickers= (comma list)
-// instead of ?ticker= — those take deep links but are excluded from injection.
-// /alerts reads ?ticker= too but only prefills the create-alert form, so it is
-// deliberately absent.
+// linked-route injection.
+//
+// Derived from HUBS rather than hand-copied. The hand-copied version listed
+// /skew, which no longer exists in HUBS at all, and omitted fifteen tools that
+// do take a symbol. A fourth copy lived in components/TickerLink under a
+// comment claiming it mirrored this one. Tag `tickerParam: true` on the hub
+// entry and every surface picks it up.
 export interface TickerTool { label: string; short: string; route: string; param?: 'tickers' }
-export const TICKER_TOOLS: TickerTool[] = [
-  { label: 'Company Profile',     short: 'Profile',  route: '/company-profile' },
-  { label: 'Options Scanner',     short: 'Options', route: '/options-scanner' },
-  { label: 'Volatility Skew',     short: 'Skew',     route: '/skew' },
-  { label: 'Dealer Exposure',          short: 'GEX',      route: '/gex' },
-  { label: 'Implied Probability', short: 'Prob',     route: '/probability' },
-  { label: 'DCF Valuation',       short: 'DCF',      route: '/dcf' },
-  { label: 'Master Valuation',    short: 'Master',   route: '/master-valuation' },
-  { label: 'Relative Valuation',  short: 'Rel Val',  route: '/relative-valuation' },
-  { label: 'Earnings Scanner',    short: 'Earnings', route: '/earnings' },
-]
+export const TICKER_TOOLS: TickerTool[] = HUBS.flatMap(hub =>
+  hub.tools
+    .filter(tool => tool.tickerParam)
+    .map(tool => ({ label: tool.title, short: tool.chip, route: tool.route })),
+)
 
 export const tickerToolUrl = (t: TickerTool, sym: string) =>
   `${t.route}?${t.param ?? 'ticker'}=${sym}`
