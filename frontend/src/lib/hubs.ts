@@ -125,7 +125,6 @@ export const HUBS: Hub[] = [
       { title: 'Algo Builder',             chip: 'Algo Builder', desc: 'Compose entry/exit rules and risk, then save and run', route: '/algo-strategy', icon: Workflow },
       { title: 'Pairs Trader',             chip: 'Pairs Trader',  desc: 'Cointegration, mean-reversion half-life, and a z-score spread backtest', route: '/pairs-trader',        icon: Shuffle },
       { title: 'Paper Trading',            chip: 'Paper Trading', desc: 'Simulated live execution across asset classes', route: '/paper-trading', icon: Terminal },
-      { title: 'Market Maker',             chip: 'Market Maker',  desc: 'Quote two-sided markets and hedge on the options and Treasury desks', route: '/market-maker', icon: Gauge },
       { title: 'Options MM 2',        chip: 'Options MM 2',        desc: 'Quote a chain, carry the inventory, hedge the greeks, on one screen', route: '/options-mm-2', icon: Gauge },
       { title: 'Fixed Income MM 2',   chip: 'Fixed Income MM 2',   desc: 'Quote the curve, carry the DV01, hedge with futures, on one screen', route: '/fixed-income-mm-2', icon: Landmark },
       { title: 'Trade Journal',            chip: 'Trade Journal', desc: 'Entry/exit, P&L, and win-rate analytics',       route: '/trade-journal',     icon: BookOpen },

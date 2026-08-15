@@ -351,6 +351,10 @@ export default function App() {
               <Route path="/macro-hub"          element={<Navigate to="/fed" replace />} />
               <Route path="/research-hub"       element={<Navigate to="/earnings" replace />} />
               <Route path="/iv-tracker"         element={<RedirectWithSearch to="/volatility-scanner" />} />
+              {/* Retired from the hubs by the two MM 2 terminals. The route
+                  stays live: each desk keeps its own durable global
+                  leaderboard, and dropping the route would strand them along
+                  with every bookmark into a scored session. */}
               <Route path="/market-maker"       element={<MarketMakerSimulator />} />
               <Route path="/fixed-income-mm"    element={<Navigate to="/market-maker?desk=fixed-income" replace />} />
               <Route path="/unusual-options"    element={<RedirectWithSearch to="/options-scanner" />} />
