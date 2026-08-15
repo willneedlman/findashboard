@@ -278,7 +278,7 @@ HISTORY_PATH_ENV: str = "SENTIMENT_HISTORY_PATH"
 HISTORY_DEFAULT_PATH: str = ".cache/sentiment_history.json"
 
 # ── Enrichment (enrich.py) ────────────────────────────────────────────────────
-ENRICH_MODEL: str = "llama-3.3-70b-versatile"
+ENRICH_MODEL: str = "openai/gpt-oss-120b"   # llama-3.3-70b decommissioned 2026-08-16
 ENRICH_MAX_TOKENS: int = 4500
 ENRICH_TEMPERATURE: float = 0.0     # deterministic-as-possible; never feeds the score
 

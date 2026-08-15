@@ -51,7 +51,16 @@ _VISION_MAX_EDGE = 1_600
 
 # Model tiers. SMART = deep reasoning (100K TPD free); FAST = structured JSON (500K TPD).
 # The constants are the Groq model ids; each fallback provider maps them to its own.
-MODEL_SMART = "llama-3.3-70b-versatile"
+#
+# Groq decommissioned llama-3.3-70b-versatile on 2026-08-16 and named gpt-oss-120b
+# and qwen3.6-27b as the replacements — both of which we already ran beside it, so
+# SMART simply becomes the larger of the two. That makes SMART a reasoning model:
+# every caller now spends completion tokens thinking before answering, which
+# _groq_call already budgets for (see _GROQ_REASONING). The Cerebras fail-over has
+# mapped SMART to the same model all along, so this path is well travelled.
+MODEL_OSS = "openai/gpt-oss-120b"
+MODEL_QWEN = "qwen/qwen3.6-27b"
+MODEL_SMART = MODEL_OSS
 MODEL_FAST  = "llama-3.1-8b-instant"
 
 # Cerebras fallback models. gpt-oss-120b is the only model Cerebras lists as
@@ -67,14 +76,15 @@ _CEREBRAS_MODELS = {
 
 # Groq meters tokens per model, not per organisation: burning a model's budget
 # leaves the others untouched (measured — llama fell 11963→9845 while qwen and
-# gpt-oss held at 7988 and 7927). So work split across these three draws on three
-# separate per-minute buckets instead of queueing behind one.
-MODEL_OSS = "openai/gpt-oss-120b"
-MODEL_QWEN = "qwen/qwen3.6-27b"
-MODEL_TPM = {MODEL_SMART: 12_000, MODEL_OSS: 8_000, MODEL_QWEN: 8_000, MODEL_FAST: 6_000}
-# Ordered by bucket size, so the widest model takes the first and usually largest
-# unit of work when a fan-out has fewer items than models.
-MODEL_POOL = (MODEL_SMART, MODEL_OSS, MODEL_QWEN)
+# gpt-oss held at 7988 and 7927). So work split across these draws on separate
+# per-minute buckets instead of queueing behind one.
+#
+# Losing llama cost the pool its widest bucket and one of its three lanes: a
+# fan-out now spreads two ways over 16k tokens a minute where it used to spread
+# three ways over 28k. Report sections queue rather than fail, but they queue
+# longer.
+MODEL_TPM = {MODEL_OSS: 8_000, MODEL_QWEN: 8_000, MODEL_FAST: 6_000}
+MODEL_POOL = (MODEL_OSS, MODEL_QWEN)
 
 # These spend completion tokens thinking before answering, so a caller's budget
 # has to cover the scratchpad as well as the answer or the content comes back
