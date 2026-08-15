@@ -8,7 +8,7 @@ import { useLiveMarks } from '../../../hooks/useLiveMarks'
 
 const DEFAULT_TICKERS = ['SPY', 'QQQ', 'DIA', 'IWM', '^VIX', 'BTC-USD']
 
-interface Quote { current_price: number | null; pct_change_1d: number | null }
+interface Quote { current_price: number | null; pct_change_1d: number | null; prior_close: number | null }
 
 // Strip Yahoo decorations for a clean tape label: ^VIX -> VIX, BTC-USD -> BTC.
 function tapeLabel(sym: string): string {
@@ -34,8 +34,14 @@ export default function IndexTapeWidget({ config }: { config: WidgetConfig }) {
 
   const segments = tickers.map((t, i) => {
     const q = results[i]?.data
-    const price = liveMarks[t.toUpperCase()] ?? q?.current_price ?? null
-    const pct = q?.pct_change_1d ?? null
+    const live = liveMarks[t.toUpperCase()]
+    // The price and the percentage have to describe the same move. Taking the
+    // price from the live tick while the percentage stayed on /quote's baseline
+    // let a tile show a risen price next to a red percentage.
+    const price = live ?? q?.current_price ?? null
+    const pct = live != null && q?.prior_close
+      ? (live / q.prior_close - 1) * 100
+      : q?.pct_change_1d ?? null
     return { sym: tapeLabel(t), price, pct }
   })
 

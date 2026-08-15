@@ -239,6 +239,36 @@ def global_board(date: str | None = None, window: str = "1d"):
     }
 
 
+def _session_closes(closes) -> "tuple[float | None, float | None, bool]":
+    """Latest daily close, the close before it, and whether today's bar exists.
+
+    One rule for every surface that reports a 1-day move. /quote and /quotes
+    each guarded on has_today while overnight-moves took closes.iloc[-1]
+    unguarded, so once today's bar landed it measured the last print against
+    today's own close and called that an overnight gap. Three surfaces then
+    printed three different 1-day changes for the same name at the same instant.
+    """
+    if closes is None or len(closes) == 0:
+        return None, None, False
+    regular_close = float(closes.iloc[-1])
+    prior = float(closes.iloc[-2]) if len(closes) >= 2 else None
+    try:
+        has_today = closes.index[-1].date() == now_et().date()
+    except Exception:
+        has_today = False
+    return regular_close, prior, has_today
+
+
+def _prior_session_close(closes) -> "float | None":
+    """The close a 1-day move is measured from.
+
+    Today's bar, once it exists, is the current session, so the baseline is the
+    bar before it. Before it exists the last bar IS the prior close.
+    """
+    regular_close, prior, has_today = _session_closes(closes)
+    return prior if (has_today and prior is not None) else regular_close
+
+
 def _try_history_quote(sym: str) -> dict | None:
     """Last known price and the move that produced it.
 
@@ -256,17 +286,12 @@ def _try_history_quote(sym: str) -> dict | None:
         if closes is None or closes.empty:
             return None
 
-        regular_close = float(closes.iloc[-1])
         label = session_label()
-
-        try:
-            has_today = closes.index[-1].date() == now_et().date()
-        except Exception:
-            has_today = False
+        regular_close, _prior, _has_today = _session_closes(closes)
         # After the close today's bar exists, so the day's move runs from the
         # prior close and any after-hours move stacks on top. Pre-market it does
         # not, so the last bar IS the prior close.
-        baseline = float(closes.iloc[-2]) if (has_today and len(closes) >= 2) else regular_close
+        baseline = _prior_session_close(closes)
 
         price = regular_close
         extended = None
@@ -284,6 +309,11 @@ def _try_history_quote(sym: str) -> dict | None:
             "current_price": round(price, 2),
             "pct_change_1d": round(pct_1d, 3) if pct_1d is not None else None,
             "session": label,
+            # The basis and the baseline travel with the number. A surface that
+            # renders this price beside a percentage from a different endpoint
+            # can now tell that it is mixing two answers.
+            "basis": "extended" if extended is not None else "regular_close",
+            "prior_close": round(baseline, 4) if baseline else None,
         }
         if extended is not None:
             out["regular_close"] = round(regular_close, 2)
@@ -420,13 +450,7 @@ def get_quotes(tickers: str):
         if series.empty:
             quotes[symbol] = {"current_price": None, "pct_change_1d": None, "source": "unavailable"}
             continue
-        regular_close = float(series.iloc[-1])
-        prior = float(series.iloc[-2]) if len(series) >= 2 else None
-        has_today = False
-        try:
-            has_today = series.index[-1].date() == now_et().date()
-        except Exception:
-            pass
+        regular_close, prior, has_today = _session_closes(series)
         extended = extended_by_symbol.get(symbol, {})
         overnight = overnight_by_symbol.get(symbol, {})
         live_price = live_by_symbol.get(symbol)
@@ -449,6 +473,11 @@ def get_quotes(tickers: str):
         quote = {
             "current_price": round(price, 2),
             "pct_change_1d": round((price / baseline - 1) * 100, 3) if baseline else None,
+            # Same contract as /quote: the basis and the baseline ride with the
+            # number so a caller cannot pair this price with another endpoint's
+            # percentage without noticing.
+            "basis": "live" if regular_live else ("extended" if extended_price else "regular_close"),
+            "prior_close": round(baseline, 4) if baseline else None,
             "source": (
                 ("crypto_realtime" if symbol in crypto_live_symbols else "alpaca_realtime") if regular_live else
                 "alpaca_overnight_indicative" if overnight else
@@ -1330,7 +1359,20 @@ def get_live_quote(ticker: str):
     last = quotes.live_price(ticker)
     if not last:   # None or 0 (halted / no-trade) — don't tick the chart to zero
         raise HTTPException(404, "No live quote")
-    return {"ticker": ticker, "last": last}
+    # The baseline ships with the price. Callers used to take the price from
+    # here and the percentage from /quote, which meant a tile could show a price
+    # that had moved up next to a red percentage anchored to a different source.
+    prior_close = None
+    try:
+        hist = _cached_history(ticker, period="5d")
+        prior_close = _prior_session_close(hist["Close"].dropna() if not hist.empty else None)
+    except Exception:
+        pass
+    return {
+        "ticker": ticker, "last": last, "basis": "live",
+        "prior_close": round(prior_close, 4) if prior_close else None,
+        "pct_change_1d": round((last / prior_close - 1) * 100, 3) if prior_close else None,
+    }
 
 
 @router.get("/overnight-moves")
@@ -1352,8 +1394,12 @@ def overnight_moves(tickers: str):
         try:
             hist = _cached_history(sym, period="5d")
             closes = hist["Close"].dropna() if not hist.empty else None
-            if closes is not None and not closes.empty:
-                prior_close = float(closes.iloc[-1])
+            # An overnight gap runs from the last completed session's close.
+            # This used to take closes.iloc[-1] unguarded, so once today's daily
+            # bar existed it measured the last print against today's own close
+            # and reported that as an overnight move, disagreeing with /quote
+            # and /quotes on the same name at the same instant.
+            prior_close = _prior_session_close(closes)
         except Exception:
             pass
         last = quotes.live_price(sym)
@@ -1361,6 +1407,7 @@ def overnight_moves(tickers: str):
             "ticker": sym,
             "prior_close": round(prior_close, 4) if prior_close is not None else None,
             "last": round(last, 4) if last else None,
+            "basis": "live" if last else "regular_close",
             "change_abs": None,
             "change_pct": None,
         }

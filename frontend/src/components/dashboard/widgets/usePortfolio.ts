@@ -1,7 +1,7 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { useTheme } from '../../../contexts/ThemeContext'
-import { useLiveMarks } from '../../../hooks/useLiveMarks'
+import { useLiveQuotes } from '../../../hooks/useLiveMarks'
 
 // Shared formatters used across the portfolio/flow widgets.
 export const money = (v: number) => `${v < 0 ? '-' : ''}$${Math.abs(Math.round(v)).toLocaleString()}`
@@ -38,7 +38,7 @@ export function usePaperAccount(enabled = true) {
 // plus public quotes.
 
 export interface Holding { ticker: string; shares: number; avgCost: number }
-export interface Quote { current_price: number; pct_change_1d: number | null }
+export interface Quote { current_price: number; pct_change_1d: number | null; prior_close?: number | null }
 
 interface CashPos { amount: number; rate: number; since: string }
 interface Portfolio { id: string; name: string; holdings?: Holding[]; cash?: CashPos[] }
@@ -108,22 +108,19 @@ export function listPortfolios(): { portfolios: { id: string; name: string }[]; 
 }
 
 export function useQuotes(tickers: string[]): Record<string, Quote | undefined> {
-  const liveMarks = useLiveMarks(tickers)
-  const results = useQueries({
-    queries: tickers.map(t => ({
-      queryKey: ['pm-widget-quote', t],
-      queryFn: () => axios.get(`/api/market/quote/${encodeURIComponent(t)}`).then(r => r.data as Quote),
-      staleTime: 60_000,
-      enabled: !!t,
-    })),
-  })
+  // One batched call for the whole book. This used to fire /quote per ticker on
+  // top of the per-ticker live tick, so Home issued 24 requests for 12 names and
+  // then paired a price from one with a percentage from the other.
+  const live = useLiveQuotes(tickers)
   const out: Record<string, Quote | undefined> = {}
-  tickers.forEach((t, i) => {
-    const fallback = results[i]?.data
-    const live = liveMarks[t.toUpperCase()]
-    out[t] = live != null
-      ? { current_price: live, pct_change_1d: fallback?.pct_change_1d ?? null }
-      : fallback
+  tickers.forEach(t => {
+    const quote = live[t.toUpperCase()]
+    if (!quote || quote.last == null) return
+    out[t] = {
+      current_price: quote.last,
+      pct_change_1d: quote.pct_change_1d,
+      prior_close: quote.prior_close,
+    }
   })
   return out
 }
