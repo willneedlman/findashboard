@@ -19,12 +19,18 @@ export type Highlight = 'none' | 'delta' | 'gamma' | 'vega' | 'theta'
  * Percentages, never pixels: this is the single thing that makes horizontal
  * scrolling impossible at laptop width, which is why the total is asserted in
  * Chain.test.ts rather than left to arithmetic in a review.
- * Order is calls (pos, iv, theo, your bid/ask, market bid/ask), strike, then
- * puts mirrored.
+ *
+ * The order is the mirrored ladder shared with the rates matrix. Each wing fans
+ * outward from theoretical: market outermost, our own quote just inside it, and
+ * theo as the spine. Before this, model sat outside the quotes and left the
+ * trader comparing two numbers three columns apart.
+ *
+ * Calls, reading toward the strike:
+ *   pos · iv · market bid · your bid · theo · your ask · market ask
  */
-export const CALL_COLS = [5, 5.4, 6.4, 7, 6.2, 6.2, 7]
-export const STRIKE_COLS = [8, 5.6]
-export const PUT_COLS = [7, 6.2, 6.2, 7, 6.4, 5.4, 5]
+export const CALL_COLS = [4.5, 5.5, 7, 7, 7, 7, 7]
+export const STRIKE_COLS = [6, 4]
+export const PUT_COLS = [7, 7, 7, 7, 7, 5.5, 4.5]
 
 // ── Expiry strip ──────────────────────────────────────────────────────────────
 
@@ -99,33 +105,39 @@ export function Chain({ eng, rows, sel, onSel, expIdx, highlight, live, spot, ti
         </colgroup>
         <thead>
           <tr>
-            <th colSpan={7} style={{ ...BAND, textAlign: 'left', background: CALLS_BAND, color: T.blue }}>Calls</th>
-            <th colSpan={2} style={{ ...BAND, textAlign: 'center', background: STRIKE_BAND, color: T.text }}>Strike</th>
-            <th colSpan={7} style={{ ...BAND, textAlign: 'right', background: PUTS_BAND, color: VIOLET }}>Puts</th>
+            <th colSpan={7} style={{ ...BAND, background: CALLS_BAND, color: T.blue }}>Calls</th>
+            <th colSpan={2} style={{ ...BAND, background: STRIKE_BAND, color: T.text }}>Strike</th>
+            <th colSpan={7} style={{ ...BAND, background: PUTS_BAND, color: VIOLET }}>Puts</th>
           </tr>
           <tr>
-            <th style={{ ...GROUP }}>pos</th>
-            <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}` }}>Model</th>
-            <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}`, background: quoteTint(T.blue), color: T.blue }}>Your quote</th>
-            <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}` }}>Market</th>
-            <th colSpan={2} style={{ ...GROUP, background: STRIKE_BAND, borderLeft: `1px solid ${T.border}` }} />
-            <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}` }}>Market</th>
-            <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}`, background: quoteTint(VIOLET), color: VIOLET }}>Your quote</th>
-            <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}` }}>Model</th>
-            <th style={{ ...GROUP, borderLeft: `1px solid ${T.border}` }}>pos</th>
+            <th style={{ ...GROUP }}>Pos</th>
+            <th style={{ ...GROUP, borderLeft: `1px solid ${T.border}` }}>Vol</th>
+            <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}` }}>Bid</th>
+            <th style={{ ...GROUP, borderLeft: `1px solid ${T.border}`, background: MODEL_BAND, color: T.gold }}>Theo</th>
+            <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}` }}>Ask</th>
+            <th colSpan={2} style={{ ...GROUP, background: STRIKE_BAND, borderLeft: `1px solid ${T.border}` }}>K</th>
+            <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}` }}>Bid</th>
+            <th style={{ ...GROUP, borderLeft: `1px solid ${T.border}`, background: MODEL_BAND, color: T.gold }}>Theo</th>
+            <th colSpan={2} style={{ ...GROUP, borderLeft: `1px solid ${T.border}` }}>Ask</th>
+            <th style={{ ...GROUP, borderLeft: `1px solid ${T.border}` }}>Vol</th>
+            <th style={{ ...GROUP, borderLeft: `1px solid ${T.border}` }}>Pos</th>
           </tr>
           <tr>
             <th style={{ ...COL }} />
-            <th style={{ ...COL }}>iv</th><th style={{ ...COL }}>theo</th>
-            <th style={{ ...COL, background: quoteTint(T.blue), color: T.blue }}>bid</th>
-            <th style={{ ...COL, background: quoteTint(T.blue), color: T.blue }}>ask</th>
-            <th style={{ ...COL }}>bid</th><th style={{ ...COL }}>ask</th>
-            <th style={{ ...COL, background: STRIKE_BAND, textAlign: 'center' }}>K</th>
+            <th style={{ ...COL }}>iv</th>
+            <th style={{ ...COL }}>market</th>
+            <th style={{ ...COL, background: quoteTint(T.blue), color: T.blue }}>yours</th>
+            <th style={{ ...COL, background: MODEL_BAND, color: alpha(T.gold, 80) }}>value</th>
+            <th style={{ ...COL, background: quoteTint(T.blue), color: T.blue }}>yours</th>
+            <th style={{ ...COL }}>market</th>
+            <th style={{ ...COL, background: STRIKE_BAND, textAlign: 'center' }}>strike</th>
             <th style={{ ...COL, background: STRIKE_BAND }}>%</th>
-            <th style={{ ...COL }}>bid</th><th style={{ ...COL }}>ask</th>
-            <th style={{ ...COL, background: quoteTint(VIOLET), color: VIOLET }}>bid</th>
-            <th style={{ ...COL, background: quoteTint(VIOLET), color: VIOLET }}>ask</th>
-            <th style={{ ...COL }}>theo</th><th style={{ ...COL }}>iv</th>
+            <th style={{ ...COL }}>market</th>
+            <th style={{ ...COL, background: quoteTint(VIOLET), color: VIOLET }}>yours</th>
+            <th style={{ ...COL, background: MODEL_BAND, color: alpha(T.gold, 80) }}>value</th>
+            <th style={{ ...COL, background: quoteTint(VIOLET), color: VIOLET }}>yours</th>
+            <th style={{ ...COL }}>market</th>
+            <th style={{ ...COL }}>iv</th>
             <th style={{ ...COL }} />
           </tr>
         </thead>
@@ -180,8 +192,10 @@ export const COL_TOP = BAND_H + GROUP_H         // 37
 /** What the three sticky rows cover; must equal the thead's own height. */
 export const HEADER_H = COL_TOP + GROUP_H       // 54
 
+const MODEL_BAND = '#1a1f2e'
+
 const BAND: React.CSSProperties = {
-  ...LABEL, fontSize: 9, letterSpacing: '0.18em', padding: '0 8px',
+  ...LABEL, fontSize: 9, letterSpacing: '0.18em', padding: '0 8px', textAlign: 'center',
   height: BAND_H, boxSizing: 'border-box', lineHeight: `${BAND_H}px`,
   position: 'sticky', top: 0, zIndex: 6,
 }
@@ -191,7 +205,7 @@ const GROUP: React.CSSProperties = {
   background: T.surface, position: 'sticky', top: GROUP_TOP, zIndex: 5,
 }
 const COL: React.CSSProperties = {
-  ...MONO, fontSize: 9, fontWeight: 600, color: T.muted, padding: '0 6px', textAlign: 'right',
+  ...MONO, fontSize: 9, fontWeight: 600, color: T.muted, padding: '0 6px', textAlign: 'center',
   height: GROUP_H, boxSizing: 'border-box', lineHeight: `${GROUP_H}px`,
   background: T.surface, position: 'sticky', top: COL_TOP, zIndex: 5,
   borderBottom: `1px solid ${T.border}`,
@@ -233,7 +247,10 @@ function legCells(
   )
   const model = [
     <td key={`${kp}iv`} onClick={click} style={{ ...base, color: alpha(T.text, 78) }}>{dash ?? (leg.iv * 100).toFixed(1)}</td>,
-    <td key={`${kp}th`} onClick={click} style={{ ...base, color: T.gold, fontWeight: 600 }}>{dash ?? leg.theo.toFixed(2)}</td>,
+    <td key={`${kp}th`} onClick={click} style={{
+      ...base, color: T.gold, fontWeight: 600,
+      background: base.background ?? alpha(T.gold, 6),
+    }}>{dash ?? leg.theo.toFixed(2)}</td>,
   ]
   const ours = [
     <QuoteCell key={`${kp}ob`} leg={leg} side="B" hue={hue} onClick={click} live={live} ring={ring} />,
@@ -245,9 +262,15 @@ function legCells(
     <td key={`${kp}mb`} onClick={click} style={{ ...base, color: alpha(T.text, 58), background: base.background ?? T.surface }}>{dash ?? leg.mktBid.toFixed(2)}</td>,
     <td key={`${kp}ma`} onClick={click} style={{ ...base, color: alpha(T.text, 58), background: base.background ?? T.surface }}>{dash ?? leg.mktAsk.toFixed(2)}</td>,
   ]
+  // Each wing fans outward from theo: market outermost, ours inside it, theo in
+  // the middle. So a call row reads pos, iv, mktBid, ourBid, theo, ourAsk,
+  // mktAsk, and the put row is that mirrored.
+  const [iv, theo] = model
+  const [ourBid, ourAsk] = ours
+  const [mktBid, mktAsk] = market
   return kind === 'C'
-    ? [pos, ...model, ...ours, ...market]
-    : [...market, ...ours, ...model.reverse(), pos]
+    ? [pos, iv, mktBid, ourBid, theo, ourAsk, mktAsk]
+    : [mktBid, ourBid, theo, ourAsk, mktAsk, iv, pos]
 }
 
 /** Your quote: hue by side, and inside-versus-outside the market is the loudest signal. */

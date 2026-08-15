@@ -62,3 +62,27 @@ describe('sticky header geometry', () => {
     expect(COL_TOP).toBeGreaterThan(GROUP_TOP)
   })
 })
+
+/**
+ * The mirrored ladder is a shared column system, not a rates-only decision, so
+ * the chain has to fan outward from theoretical the same way the matrix does:
+ * market outermost, our own quote just inside it, theo as each wing's spine.
+ */
+describe('mirrored ladder', () => {
+  it('gives both quote columns and both market columns the same width', () => {
+    // pos, iv, mktBid, ourBid, theo, ourAsk, mktAsk
+    const [, , mktBid, ourBid, theo, ourAsk, mktAsk] = CALL_COLS
+    expect(mktBid).toBe(mktAsk)
+    expect(ourBid).toBe(ourAsk)
+    expect(theo).toBe(ourBid)
+  })
+
+  it('keeps position the narrowest column on the row', () => {
+    const [pos] = CALL_COLS
+    expect(Math.min(...CALL_COLS)).toBe(pos)
+  })
+
+  it('still mirrors, so a maker reads both wings as one sentence', () => {
+    expect(CALL_COLS).toEqual([...PUT_COLS].reverse())
+  })
+})
