@@ -382,6 +382,14 @@ const makeCrosshairFormatter = (utcRef: { current: boolean }) => (time: Time) =>
 const PRICE_AXIS = { minimumWidth: 68, entireTextOnly: true, ticksVisible: false }
 const LANE_MARGINS = { top: 0.26, bottom: 0.06 }
 
+// Framing constants. The per-frame ceilings matter: a flick or an inertial
+// trackpad scroll piles hundreds of pixels into a single frame, and applying
+// that raw teleports the view instead of moving it.
+const RIGHT_MARGIN_BARS = 3     // empty bars kept past the last candle
+const MIN_VISIBLE_BARS = 12     // floor on what a range preset may resolve to
+const MAX_ZOOM_STEP = 0.3       // ~1.35x per frame
+const MAX_PAN_PX = 160          // pixels per frame
+
 const baseOptions = (C: Colors, h: number) => ({
   layout: { background: { type: ColorType.Solid, color: C.bg }, textColor: C.text, fontFamily: "ui-monospace, monospace", fontSize: 11, attributionLogo: false },
   grid: { vertLines: { color: C.grid }, horzLines: { color: C.grid } },
@@ -858,22 +866,33 @@ export function ChartStudioContent() {
       const width = vr.to - vr.from
       let from: number = vr.from, to: number = vr.to
       if (job.pan) {
-        const shift = job.pan * (width / (wheelEl.clientWidth || 1))
+        const px = Math.max(-MAX_PAN_PX, Math.min(MAX_PAN_PX, job.pan))
+        const shift = px * (width / (wheelEl.clientWidth || 1))
         from += shift; to += shift
       }
       if (job.zoom) {
+        const z = Math.max(-MAX_ZOOM_STEP, Math.min(MAX_ZOOM_STEP, job.zoom))
         const pivot = ts.coordinateToLogical(job.x)
-        const next = Math.min(Math.max(8, width * Math.exp(job.zoom)), 60000)
+        const next = Math.min(Math.max(8, width * Math.exp(z)), 60000)
         const p = pivot == null ? from + width / 2 : pivot
         from = p - (p - from) * (next / width)
         to = from + next
       }
-      // Keep the tape on screen: at least ten bars of real data stay visible,
-      // so a hard fling can never leave an empty pane you have to hunt back from.
+      // Bound the empty space, not the bar count. Clamping to "ten bars visible"
+      // parked those ten at the far left of an otherwise blank pane, which reads
+      // as the chart flying off to the right. Now at least 70% of the pane holds
+      // data, and a window wider than the whole series centres on it.
       const n = barCountRef.current
       if (n > 0) {
-        if (to < 10) { const d = 10 - to; from += d; to += d }
-        if (from > n - 10) { const d = from - (n - 10); from -= d; to -= d }
+        const w = to - from
+        const slack = Math.max(RIGHT_MARGIN_BARS, w * 0.3)
+        if (w >= n + 2 * slack) {
+          from = (n - 1) / 2 - w / 2
+          to = from + w
+        } else {
+          if (to > n - 1 + slack) { const d = to - (n - 1 + slack); from -= d; to -= d }
+          if (from < -slack) { const d = -slack - from; from += d; to += d }
+        }
       }
       try { ts.setVisibleLogicalRange({ from, to }) } catch { /* no data yet */ }
     }
@@ -881,8 +900,10 @@ export function ChartStudioContent() {
       if (!main.timeScale().getVisibleLogicalRange()) return
       e.preventDefault()
       const x = e.clientX - wheelEl.getBoundingClientRect().left
-      // Trackpad horizontal swipe and shift-wheel pan; vertical wheel zooms.
-      const pan = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.shiftKey ? e.deltaY : 0
+      // Horizontal intent has to be unambiguous: an inertial vertical flick
+      // jitters a few pixels sideways, and reading that as a pan threw the view
+      // clean off the data. Shift-wheel pans outright.
+      const pan = Math.abs(e.deltaX) > Math.abs(e.deltaY) * 1.5 ? e.deltaX : e.shiftKey ? e.deltaY : 0
       const zoom = pan ? 0 : e.deltaY * (e.ctrlKey ? 0.02 : 0.003)
       pending = { zoom: (pending?.zoom ?? 0) + zoom, pan: (pending?.pan ?? 0) + pan, x }
       if (!raf) raf = requestAnimationFrame(flush)
@@ -1247,8 +1268,6 @@ export function ChartStudioContent() {
   // Bar width is a consequence of the window, never set independently: the
   // range fixes how much time is on screen and the candles size themselves to
   // fill the pane, plus a few bars of margin so the tape is not flush right.
-  const RIGHT_MARGIN_BARS = 3
-  const MIN_VISIBLE_BARS = 12
   const applySpan = useCallback((key: string) => {
     const main = charts.current.main
     const last = candles.length ? candles[candles.length - 1].time : null
