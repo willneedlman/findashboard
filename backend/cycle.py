@@ -148,14 +148,25 @@ def cycle(schema: int = 1) -> dict:
         return {"available": False, "reason": "No FRED series resolved. Check FRED_API_KEY."}
 
     composite = sum(p["score"] for p in parts) / len(parts)
+    # The blurb used to claim agreement the composite never checked. A mean above
+    # 0.35 printed "the indicators are pointing the same way" while payroll
+    # growth sat below it flagged slow in red and only two of five were green.
+    # Count them, and only claim agreement when they actually agree.
+    up = sum(1 for p in parts if p["score"] > 0)
+    total = len(parts)
+    tally = f"{up} of {total} components point up."
     if composite >= 0.35:
-        phase, blurb = "Expansion", "The indicators are pointing the same way, and that way is up."
+        phase = "Expansion"
+        blurb = ("The indicators are pointing the same way, and that way is up." if up == total
+                 else f"The composite reads expansion, but only {tally}")
     elif composite >= 0.05:
-        phase, blurb = "Late expansion", "Still expanding, but at least one component has rolled over."
+        phase, blurb = "Late expansion", f"Still expanding. {tally}"
     elif composite >= -0.35:
-        phase, blurb = "Slowdown", "The signals are mixed and the labour and credit components are softening."
+        phase, blurb = "Slowdown", f"The signals are mixed. {tally}"
     else:
-        phase, blurb = "Contraction", "Most components are at levels that have historically accompanied a recession."
+        phase = "Contraction"
+        blurb = ("Every component sits at a level that has historically accompanied a recession." if up == 0
+                 else f"Most components sit at recessionary levels. {tally}")
 
     weakest = min(parts, key=lambda p: p["score"])
     strongest = max(parts, key=lambda p: p["score"])
@@ -166,6 +177,7 @@ def cycle(schema: int = 1) -> dict:
         "phase": phase,
         "blurb": blurb,
         "components": parts,
+        "components_up": up,
         "resolved": len(parts),
         "expected": 5,
         "weakest": weakest["key"],

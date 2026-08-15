@@ -73,7 +73,10 @@ function Row({ e, zebra, expanded, onToggle, alerted, onAlert }: {
   expanded: boolean; onToggle: () => void; alerted: boolean; onAlert: () => void
 }) {
   const [hover, setHover] = useState(false)
-  const released = e.status === 'released'
+  // Gated on the clock, not the status flag alone. A value in the actual column
+  // for a release that has not happened is the one thing this table must never
+  // print, and it should not depend on an upstream field being right.
+  const released = e.status === 'released' && new Date(e.datetime).getTime() <= Date.now()
   const rail = expanded ? T.gold : IMPACT_RAIL[e.impact]
   const time = e.datetime.slice(11, 16)
   const surprise = deriveSurprise(e)
@@ -104,8 +107,16 @@ function Row({ e, zebra, expanded, onToggle, alerted, onAlert }: {
           {released ? e.actual : countdownShort(e.datetime)}
         </span>
         {/* CONSENSUS */}
+        {/* A nowcast rendered bare at full weight, one column over from ACTUAL,
+            reads as a print that has already happened. GDPNow tracking Q3 at
+            4.3% eleven days before the release is exactly that case, so the
+            label always rides with the number. */}
         {e.expected
-          ? <span style={{ ...cell, textAlign: 'right', fontSize: 12, color: e.status === 'upcoming' ? T.text : T.muted }}>{e.expected}</span>
+          ? <span style={{ ...cell, textAlign: 'right', fontSize: 12, color: e.status === 'upcoming' ? T.text : T.muted }}>
+              {e.expected}
+              {e.expectedLabel && e.expectedLabel.toLowerCase() !== 'consensus' &&
+                <span style={{ fontFamily: T.label, fontSize: 8.5, fontWeight: 700, letterSpacing: '.06em', color: T.muted }}> {e.expectedLabel.toUpperCase()}</span>}
+            </span>
           : <span style={{ textAlign: 'right', fontFamily: T.label, fontSize: 9.5, fontStyle: 'italic', color: T.muted, whiteSpace: 'nowrap' }}>{e.status === 'upcoming' ? 'Not released' : '—'}</span>}
         {/* PREVIOUS */}
         <span style={{ ...cell, textAlign: 'right', fontSize: 12, color: T.muted }}>{e.previous}</span>

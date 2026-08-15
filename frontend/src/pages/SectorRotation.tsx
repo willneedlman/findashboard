@@ -7,10 +7,20 @@ import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
 import RotationGraph from '../components/RotationGraph'
 import { TICK, TOOLTIP_STYLE, TOOLTIP_CURSOR } from './valuationShared'
+import { sectorLeadership, type LeadershipTone } from '../lib/sectorRotation'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip, chartClip } from '../lib/reportCaptureRegistry'
 
+
+// Cyclical leadership is the risk-on read, defensive the risk-off one, and a
+// spread too small to call gets the neutral treatment rather than a coin flip.
+const leadershipColor = (tone: LeadershipTone) =>
+  tone === 'cyclical' ? T.pos : tone === 'defensive' ? T.neg : T.muted
+const leadershipBorder = (tone: LeadershipTone) =>
+  tone === 'cyclical' ? 'color-mix(in srgb, var(--theme-positive, #22c55e) 52%, transparent)'
+    : tone === 'defensive' ? 'color-mix(in srgb, var(--theme-negative, #ef4444) 52%, transparent)'
+    : 'var(--theme-border, rgba(255,255,255,0.1))'
 
 const PERIODS = ['1W', '1M', '3M', '6M', 'YTD', '1Y'] as const
 type Period = typeof PERIODS[number]
@@ -88,6 +98,9 @@ export function SectorRotationContent() {
     const ranked = [...valid].sort((a, b) => (b.returns[activePeriod] as number) - (a.returns[activePeriod] as number))
     return {
       broad: valid.length > 0 && beating >= valid.length / 2,
+      // Breadth and leadership are two different questions. The chip used to
+      // answer the first and label it as the second.
+      leadership: sectorLeadership(valid.map(s => ({ ticker: s.ticker, value: s.returns[activePeriod] }))),
       beating,
       total: valid.length,
       spyRet,
@@ -107,7 +120,8 @@ export function SectorRotationContent() {
     const top = byRet[0], bottom = byRet[byRet.length - 1]
     const fmtP = (v: number | null) => v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`
     pieces.push(kpiClip('Sector Rotation', `Sector Breadth · ${per}`, [
-      { label: `Breadth · ${per}`, value: `${beating}/${valid.length}`, sub: valid.length && beating >= valid.length / 2 ? 'risk-on' : 'defensive' },
+      { label: `Breadth · ${per}`, value: `${beating}/${valid.length}`, sub: valid.length && beating >= valid.length / 2 ? 'broad' : 'narrow' },
+      { label: `Leadership · ${per}`, value: sectorLeadership(valid.map(s => ({ ticker: s.ticker, value: s.returns[per] }))).label },
       { label: `SPY ${per}`, value: fmtP(spyRet) },
       ...(top ? [{ label: 'Leader', value: `${top.ticker} ${fmtP(top.returns[per])}` }] : []),
       ...(bottom ? [{ label: 'Laggard', value: `${bottom.ticker} ${fmtP(bottom.returns[per])}` }] : []),
@@ -165,9 +179,11 @@ export function SectorRotationContent() {
           title="Sector Rotation"
           actions={rotationSignal && (
             <div aria-label="Sector rotation summary" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', fontFamily: T.mono, fontSize: 9, fontVariantNumeric: 'tabular-nums' }}>
-              <span style={{ padding: '4px 7px', border: `1px solid ${rotationSignal.broad ? 'color-mix(in srgb, var(--theme-positive, #22c55e) 52%, transparent)' : 'color-mix(in srgb, var(--theme-negative, #ef4444) 52%, transparent)'}`, color: rotationSignal.broad ? T.pos : T.neg, fontFamily: T.label, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                {rotationSignal.broad ? 'Broad leadership' : 'Defensive rotation'}
+              <span style={{ padding: '4px 7px', border: `1px solid ${leadershipBorder(rotationSignal.leadership.tone)}`, color: leadershipColor(rotationSignal.leadership.tone), fontFamily: T.label, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                {rotationSignal.leadership.label}
               </span>
+              {rotationSignal.leadership.spread != null &&
+                <span style={{ color: T.muted }}>defensives {pct(rotationSignal.leadership.spread)} vs cyclicals</span>}
               <span style={{ color: T.muted }}>{rotationSignal.beating}/{rotationSignal.total} beat SPY</span>
               <span style={{ paddingLeft: 7, borderLeft: `1px solid ${T.border}`, color: T.muted }}>SPY <strong style={{ color: rotationSignal.spyRet == null ? T.muted : rotationSignal.spyRet >= 0 ? T.pos : T.neg, fontWeight: 700 }}>{pct(rotationSignal.spyRet)}</strong></span>
               {rotationSignal.leader && <span style={{ padding: '4px 7px', border: `1px solid color-mix(in srgb, var(--theme-positive, #22c55e) 40%, transparent)`, color: T.pos }}>Leader <strong>{rotationSignal.leader.ticker} {pct(rotationSignal.leader.returns[activePeriod])}</strong></span>}

@@ -100,3 +100,39 @@ def test_every_component_carries_the_rule_it_is_judged_by(monkeypatch):
         assert component["rule"], component["key"]
         assert -1.0 <= component["score"] <= 1.0
         assert component["as_of"]
+
+
+def test_expansion_blurb_does_not_claim_agreement_it_has_not_got(monkeypatch):
+    """A composite above the expansion line said "the indicators are pointing the
+    same way" while payroll growth sat below it flagged slow in red. The header
+    is the part people read, so it has to survive a look at its own table."""
+    # Curve, claims, Sahm and credit positive, payrolls shrinking. The composite
+    # still clears the expansion line, which is exactly the case that used to
+    # print agreement over a red component.
+    _patch(monkeypatch, {
+        "T10Y2Y": _obs([2.0]),
+        "ICSA": _obs([200_000.0] * 30),
+        "UNRATE": _obs([4.0] * 15),
+        "PAYEMS": _obs([1000.0, 1000.0, 1000.0, 990.0]),
+        "BAMLH0A0HYM2": _obs([4.6]),
+    })
+    out = cycle.cycle.__wrapped__()
+
+    assert out["phase"] == "Expansion"
+    assert out["components_up"] < out["resolved"]
+    assert "pointing the same way" not in out["blurb"]
+    assert f"{out['components_up']} of {out['resolved']}" in out["blurb"]
+
+
+def test_agreement_is_still_claimed_when_every_component_agrees(monkeypatch):
+    _patch(monkeypatch, {
+        "T10Y2Y": _obs([2.0]),
+        "ICSA": _obs([200_000.0] * 30),
+        "UNRATE": _obs([4.0] * 15),
+        "PAYEMS": _obs([1000.0, 1150.0, 1300.0, 1450.0]),
+        "BAMLH0A0HYM2": _obs([2.5]),
+    })
+    out = cycle.cycle.__wrapped__()
+
+    assert out["components_up"] == out["resolved"]
+    assert out["blurb"] == "The indicators are pointing the same way, and that way is up."
