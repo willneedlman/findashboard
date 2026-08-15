@@ -146,7 +146,7 @@ export function ScopeLine({ quoted, total }: { quoted: number; total: number }) 
  * its box. A colgroup is fragile here, and table-layout: fixed distributes
  * wrongly when the band row above carries colspans.
  */
-const NAMES: { label: string; w: string; kind?: 'yours' | 'model' }[] = [
+export const NAMES: { label: string; w: string; kind?: 'yours' | 'model' }[] = [
   { label: 'asset', w: '7%' },
   { label: 'market', w: '8%' },
   { label: 'yours', w: '8.5%', kind: 'yours' },
@@ -160,6 +160,17 @@ const NAMES: { label: string; w: string; kind?: 'yours' | 'model' }[] = [
   { label: 'cusip · coupon', w: '13.5%' },
   { label: 'maturity', w: '7.5%' },
 ]
+
+/**
+ * The two header rows are pinned, not inferred.
+ *
+ * Row 2 sticks at exactly row 1's height. Leaving that to the natural line box
+ * meant the offset was a guess, and a pixel of drift shows body rows scrolling
+ * through the seam between them.
+ */
+export const BAND_H = 22
+export const NAME_H = 22
+export const HEADER_H = BAND_H + NAME_H
 
 const BANDS: { label: string; span: number; bg: string; color: string }[] = [
   { label: 'Issue', span: 1, bg: SURFACE_BAND, color: T.text },
@@ -181,7 +192,13 @@ export default function Matrix({ eng, rows, sel, onSel, traced }: {
 }) {
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      {/*
+        height 100% is a minimum for a table, not a cap: with eight issues it
+        shares the panel's leftover height across the rows so the book fills its
+        box, and with more than fit it simply overflows and the wrapper scrolls.
+        The header rows are pinned, so only the body stretches.
+      */}
+      <table style={{ width: '100%', height: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr>
             {BANDS.map((b, i) => (
@@ -190,7 +207,7 @@ export default function Matrix({ eng, rows, sel, onSel, traced }: {
                 background: b.bg, color: b.color,
                 fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700,
                 letterSpacing: '0.18em', textTransform: 'uppercase', textAlign: 'center',
-                padding: '4px 6px', whiteSpace: 'nowrap',
+                height: BAND_H, boxSizing: 'border-box', padding: '0 6px', whiteSpace: 'nowrap',
                 borderLeft: i === 0 ? undefined : `1px solid ${T.border}`,
               }}>{b.label}</th>
             ))}
@@ -198,7 +215,7 @@ export default function Matrix({ eng, rows, sel, onSel, traced }: {
           <tr>
             {NAMES.map((n, i) => (
               <th key={`${n.label}-${i}`} style={{
-                position: 'sticky', top: 22, zIndex: 3, width: n.w,
+                position: 'sticky', top: BAND_H, zIndex: 3, width: n.w,
                 background: n.kind === 'model' ? MODEL_BAND
                   : n.kind === 'yours' ? `color-mix(in srgb, ${T.blue} 10%, ${T.surface})`
                   : T.surface,
@@ -206,7 +223,7 @@ export default function Matrix({ eng, rows, sel, onSel, traced }: {
                   : n.kind === 'yours' ? T.blue
                   : alpha(T.muted, 72),
                 ...MONO, fontSize: 9, fontWeight: 600, textAlign: 'center',
-                padding: '3px 6px', whiteSpace: 'nowrap',
+                height: NAME_H, boxSizing: 'border-box', padding: '0 6px', whiteSpace: 'nowrap',
               }}>{n.label}</th>
             ))}
           </tr>
@@ -267,6 +284,9 @@ function Row({ eng, v, on, onSel, dim }: {
 
 const TD_BASE: React.CSSProperties = {
   ...MONO, fontSize: 11, padding: '4px 6px', textAlign: 'right', whiteSpace: 'nowrap',
+  // Rows stretch to fill the panel, so the figures have to sit on the row's
+  // centre line rather than its top edge.
+  verticalAlign: 'middle',
 }
 
 function Cell({ children, style, align }: {
