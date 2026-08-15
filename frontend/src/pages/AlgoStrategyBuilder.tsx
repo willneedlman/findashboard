@@ -2249,7 +2249,7 @@ export function AlgoStrategyBuilderContent() {
                     { value: 'Entry (click for detail)', type: 'triangle', id: 'buy', color: 'var(--theme-positive)' },
                     { value: 'Exit (click for detail)', type: 'triangle', id: 'sell', color: 'var(--theme-negative)' },
                   ]} />
-                  <Area type="monotone" dataKey="strategy" stroke={cc.primary} strokeWidth={2} fill="url(#algoEq)" name="strategy" dot={false} />
+                  <Area isAnimationActive={false} type="monotone" dataKey="strategy" stroke={cc.primary} strokeWidth={2} fill="url(#algoEq)" name="strategy" dot={false} />
                   <Line dataKey="buyMarker" stroke="transparent" dot={<EqBuyDot onSelect={setPinnedTrade} />} activeDot={false} isAnimationActive={false} legendType="none" />
                   <Line dataKey="sellMarker" stroke="transparent" dot={<EqSellDot onSelect={setPinnedTrade} />} activeDot={false} isAnimationActive={false} legendType="none" />
                   {zoomAnchor && zoomCursor && zoomAnchor !== zoomCursor && (

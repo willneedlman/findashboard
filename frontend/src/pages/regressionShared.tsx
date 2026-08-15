@@ -276,8 +276,8 @@ export function ReturnsScatter({ x, y, line, xLabel, yLabel = 'strategy daily re
         <YAxis dataKey="y" type="number" stroke={C.muted} tick={{ fill: C.muted, fontSize: 10 }} tickFormatter={rp} width={64}
           label={{ value: yLabel, fill: C.muted, fontSize: 11, angle: -90, position: 'center', dx: -28 }} />
         <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ ...TOOLTIP_STYLE }} formatter={(v: number) => `${(v * 100).toFixed(3)}%`} />
-        <Scatter data={pts} fill={C.blue} opacity={0.22} />
-        <Scatter data={line} line={{ stroke: C.gold, strokeWidth: 2 }} fill={C.gold} shape={() => null as any} />
+        <Scatter isAnimationActive={false} data={pts} fill={C.blue} opacity={0.22} />
+        <Scatter isAnimationActive={false} data={line} line={{ stroke: C.gold, strokeWidth: 2 }} fill={C.gold} shape={() => null as any} />
       </ScatterChart>
     </ResponsiveContainer>
   )
@@ -301,7 +301,7 @@ export function RollingBetaChart({ data, xKey, xLabel, refValue, refLabel, heigh
           label={{ value: refLabel, fill: C.gold, fontSize: 10, position: 'right' }} />
         <Tooltip contentStyle={{ ...TOOLTIP_STYLE }}
           formatter={(v: unknown) => (v == null ? 'n/a' : Number(v).toFixed(3))} />
-        <Line type="monotone" dataKey="beta" stroke={C.blue} strokeWidth={1.6} dot={false} />
+        <Line isAnimationActive={false} type="monotone" dataKey="beta" stroke={C.blue} strokeWidth={1.6} dot={false} />
       </LineChart>
     </ResponsiveContainer>
   )

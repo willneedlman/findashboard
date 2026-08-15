@@ -171,9 +171,9 @@ export default function MarketBreadth() {
                 <YAxis yAxisId="px" orientation="right" domain={['auto', 'auto']} stroke={T.muted} tick={{ fill: T.muted, fontSize: 9 }} width={60} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL} itemStyle={TOOLTIP_ITEM} labelFormatter={shortDate} />
                 <Legend wrapperStyle={{ fontFamily: SANS, fontSize: 10 }} />
-                <Area yAxisId="ad" type="monotone" dataKey="ad_line" name="A/D line" stroke={T.gold}
+                <Area isAnimationActive={false} yAxisId="ad" type="monotone" dataKey="ad_line" name="A/D line" stroke={T.gold}
                   fill={mix(T.gold, 12)} strokeWidth={1.7} dot={false} />
-                <Line yAxisId="px" type="monotone" dataKey="index" name={label} stroke={T.blue} strokeWidth={1.4} dot={false} />
+                <Line isAnimationActive={false} yAxisId="px" type="monotone" dataKey="index" name={label} stroke={T.blue} strokeWidth={1.4} dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
           </Panel>
@@ -190,8 +190,8 @@ export default function MarketBreadth() {
                 {/* Half the index above its own average is the line between a
                     broad market and a thin one. */}
                 <ReferenceLine y={50} stroke={T.muted} strokeDasharray="4 3" />
-                <Line type="monotone" dataKey="pct_above_50" name="above 50-day" stroke={T.gold} strokeWidth={1.6} dot={false} />
-                <Line type="monotone" dataKey="pct_above_200" name="above 200-day" stroke={T.blue} strokeWidth={1.6} dot={false} />
+                <Line isAnimationActive={false} type="monotone" dataKey="pct_above_50" name="above 50-day" stroke={T.gold} strokeWidth={1.6} dot={false} />
+                <Line isAnimationActive={false} type="monotone" dataKey="pct_above_200" name="above 200-day" stroke={T.blue} strokeWidth={1.6} dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
           </Panel>
@@ -204,8 +204,8 @@ export default function MarketBreadth() {
                 <YAxis stroke={T.muted} tick={{ fill: T.muted, fontSize: 9 }} width={44} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL} itemStyle={TOOLTIP_ITEM} labelFormatter={shortDate} />
                 <Legend wrapperStyle={{ fontFamily: SANS, fontSize: 10 }} />
-                <Area type="monotone" dataKey="new_highs" name="new highs" stroke={T.pos} fill={mix(T.pos, 18)} strokeWidth={1.4} dot={false} />
-                <Area type="monotone" dataKey="new_lows" name="new lows" stroke={T.neg} fill={mix(T.neg, 18)} strokeWidth={1.4} dot={false} />
+                <Area isAnimationActive={false} type="monotone" dataKey="new_highs" name="new highs" stroke={T.pos} fill={mix(T.pos, 18)} strokeWidth={1.4} dot={false} />
+                <Area isAnimationActive={false} type="monotone" dataKey="new_lows" name="new lows" stroke={T.neg} fill={mix(T.neg, 18)} strokeWidth={1.4} dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
           </Panel>

@@ -203,7 +203,7 @@ function MultiResults({ data, view, setView }: { data: MultiData; view: '2d' | '
               {data.breakevens.map((b, i) => (
                 <ReferenceLine key={i} x={String(b.toFixed(1))} stroke="var(--theme-tertiary, #60a5fa)" strokeDasharray="2 4" />
               ))}
-              <Line type="monotone" dataKey="pnl" stroke="var(--theme-primary, #c9a84c)" strokeWidth={2} dot={false} />
+              <Line isAnimationActive={false} type="monotone" dataKey="pnl" stroke="var(--theme-primary, #c9a84c)" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </ChartPanel>
@@ -220,7 +220,7 @@ function MultiResults({ data, view, setView }: { data: MultiData; view: '2d' | '
                   <YAxis tick={TICK} orientation="right" />
                   <Tooltip contentStyle={TOOLTIP_STYLE} />
                   <ReferenceLine x={String(data.current_spot.toFixed(0))} stroke="color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)" strokeDasharray="3 3" />
-                  <Line type="monotone" dataKey="value" stroke={GREEK_COLOR[greek]} strokeWidth={2} dot={false} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="value" stroke={GREEK_COLOR[greek]} strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </ChartPanel>
@@ -602,7 +602,7 @@ export function OptionsPricerContent() {
                   <ReferenceLine y={0} stroke="var(--theme-text-faint, rgba(255,255,255,0.15))" strokeDasharray="4 4" />
                   <ReferenceLine x={String(params.K.toFixed(1))} stroke="var(--theme-warn, #d97736)" strokeDasharray="4 4"
                     label={{ value: 'Strike', fill: 'var(--theme-warn, #d97736)', fontSize: 9 }} />
-                  <Line type="monotone" dataKey="pnl" stroke="var(--theme-positive)" strokeWidth={2} dot={false} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="pnl" stroke="var(--theme-positive)" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </ChartPanel>
@@ -620,7 +620,7 @@ export function OptionsPricerContent() {
                       <YAxis tick={TICK} orientation="right" />
                       <Tooltip contentStyle={TOOLTIP_STYLE} />
                       <ReferenceLine x={String(params.S.toFixed(0))} stroke="color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)" strokeDasharray="3 3" />
-                      <Line type="monotone" dataKey="value" stroke={GREEK_COLOR[greek]} strokeWidth={2} dot={false} />
+                      <Line isAnimationActive={false} type="monotone" dataKey="value" stroke={GREEK_COLOR[greek]} strokeWidth={2} dot={false} />
                     </LineChart>
                   </ResponsiveContainer>
                 </ChartPanel>

@@ -324,13 +324,13 @@ export default function StressTester() {
                         contentStyle={{ ...TOOLTIP_STYLE, fontSize: 10 }}
                         labelStyle={{ color: 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-sans)', fontWeight: 700, marginBottom: 4 }}
                       />
-                      <Bar dataKey="portfolio" name="portfolio" radius={[2, 2, 0, 0]}>
+                      <Bar isAnimationActive={false} dataKey="portfolio" name="portfolio" radius={[2, 2, 0, 0]}>
                         {chartData.map((d, i) => (
                           <Cell key={i} fill={(d.portfolio ?? 0) >= 0 ? T.pos : T.neg} opacity={activeScenario === d.key ? 1 : 0.6}
                             onClick={() => setActiveScenario(d.key)} style={{ cursor: 'pointer' }} />
                         ))}
                       </Bar>
-                      <Bar dataKey="spy" name="spy" radius={[2, 2, 0, 0]}>
+                      <Bar isAnimationActive={false} dataKey="spy" name="spy" radius={[2, 2, 0, 0]}>
                         {chartData.map((d, i) => (
                           <Cell key={i} fill="var(--theme-chart-neutral, #4a7fa5)" opacity={0.45} />
                         ))}

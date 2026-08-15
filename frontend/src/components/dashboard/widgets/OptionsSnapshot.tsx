@@ -251,13 +251,13 @@ function VolCone({ spot, atmIv, hv30, expiry }: {
             <YAxis tick={{ fontSize: 8, fill: T.muted, fontFamily: T.mono }} tickLine={false} axisLine={false}
               tickFormatter={priceFmt} width={38} domain={yDomain} tickCount={4} />
             <Tooltip content={<CT />} />
-            <Area type="monotone" dataKey="iv1up" stroke="color-mix(in srgb, var(--theme-primary) 55%, transparent)" strokeWidth={1.5} fill="color-mix(in srgb, var(--theme-primary, #c9a84c) 20%, transparent)" dot={false} legendType="none" />
-            <Area type="monotone" dataKey="iv1dn" stroke="color-mix(in srgb, var(--theme-primary) 55%, transparent)" strokeWidth={1.5} fill={T.bg} dot={false} legendType="none" />
+            <Area isAnimationActive={false} type="monotone" dataKey="iv1up" stroke="color-mix(in srgb, var(--theme-primary) 55%, transparent)" strokeWidth={1.5} fill="color-mix(in srgb, var(--theme-primary, #c9a84c) 20%, transparent)" dot={false} legendType="none" />
+            <Area isAnimationActive={false} type="monotone" dataKey="iv1dn" stroke="color-mix(in srgb, var(--theme-primary) 55%, transparent)" strokeWidth={1.5} fill={T.bg} dot={false} legendType="none" />
             {hv30 != null && <>
-              <Area type="monotone" dataKey="hv1up" stroke="rgba(96,165,250,0.4)" strokeWidth={1} strokeDasharray="3 2" fill="rgba(96,165,250,0.07)" dot={false} legendType="none" />
-              <Area type="monotone" dataKey="hv1dn" stroke="rgba(96,165,250,0.4)" strokeWidth={1} strokeDasharray="3 2" fill={T.bg} dot={false} legendType="none" />
+              <Area isAnimationActive={false} type="monotone" dataKey="hv1up" stroke="rgba(96,165,250,0.4)" strokeWidth={1} strokeDasharray="3 2" fill="rgba(96,165,250,0.07)" dot={false} legendType="none" />
+              <Area isAnimationActive={false} type="monotone" dataKey="hv1dn" stroke="rgba(96,165,250,0.4)" strokeWidth={1} strokeDasharray="3 2" fill={T.bg} dot={false} legendType="none" />
             </>}
-            <Line type="monotone" dataKey="expected" stroke={T.gold} strokeWidth={1} strokeDasharray="4 3" dot={false} legendType="none" />
+            <Line isAnimationActive={false} type="monotone" dataKey="expected" stroke={T.gold} strokeWidth={1} strokeDasharray="4 3" dot={false} legendType="none" />
             <ReferenceLine y={spot} stroke="var(--theme-text-subtle, rgba(215,227,252,0.2))" strokeWidth={1} strokeDasharray="2 4" />
             {expiryLabel && (
               <ReferenceLine x={expiryLabel} stroke="color-mix(in srgb, var(--theme-primary, #c9a84c) 28%, transparent)" strokeWidth={1} />
@@ -316,8 +316,8 @@ function ImpliedProb({ spot, atmIv, expiry }: { spot: number; atmIv: number; exp
               labelFormatter={v => `$${Number(v).toFixed(2)}`}
             />
             {/* ±1σ shaded region */}
-            <Area type="monotone" dataKey="sd1" stroke="none" fill="color-mix(in srgb, var(--theme-positive) 13%, transparent)" />
-            <Area type="monotone" dataKey="prob" stroke={T.blue} strokeWidth={1.5} fill="rgba(96,165,250,0.07)" dot={false} />
+            <Area isAnimationActive={false} type="monotone" dataKey="sd1" stroke="none" fill="color-mix(in srgb, var(--theme-positive) 13%, transparent)" />
+            <Area isAnimationActive={false} type="monotone" dataKey="prob" stroke={T.blue} strokeWidth={1.5} fill="rgba(96,165,250,0.07)" dot={false} />
             {/* Spot */}
             <ReferenceLine x={spot} stroke={T.gold} strokeWidth={1.5}
               label={{ value: `$${spot.toFixed(0)}`, position: 'insideTopRight', fontSize: 8, fill: T.gold, fontFamily: T.mono }} />

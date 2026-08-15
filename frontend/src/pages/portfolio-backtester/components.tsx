@@ -524,10 +524,10 @@ export function PortfolioTab() {
                   <YAxis tick={PORT_TICK} orientation="right" />
                   <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} />
                   <Legend wrapperStyle={{ fontSize: 10 }} />
-                  <Line type="monotone" dataKey="portfolio" name="Portfolio" stroke={cc.c2} strokeWidth={2.5} dot={false} />
-                  <Line type="monotone" dataKey="benchmark" name={benchmarkLabel} stroke={cc.primary} strokeWidth={2} strokeDasharray="5 3" dot={false} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="portfolio" name="Portfolio" stroke={cc.c2} strokeWidth={2.5} dot={false} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="benchmark" name={benchmarkLabel} stroke={cc.primary} strokeWidth={2} strokeDasharray="5 3" dot={false} />
                   {data.strategyResult && (
-                    <Line type="monotone" dataKey="strategy" name="Strategy Overlay"
+                    <Line isAnimationActive={false} type="monotone" dataKey="strategy" name="Strategy Overlay"
                       stroke={cc.gain} strokeWidth={2} strokeDasharray="4 2" dot={false} />
                   )}
                 </LineChart>
@@ -541,7 +541,7 @@ export function PortfolioTab() {
                     <XAxis dataKey="date" tick={false} />
                     <YAxis tick={PORT_TICK} tickFormatter={v => `${v}%`} />
                     <Tooltip contentStyle={TOOLTIP_STYLE} cursor={BAR_CURSOR} />
-                    <Bar dataKey="value" fill={cc.c2Muted} opacity={0.7} />
+                    <Bar isAnimationActive={false} dataKey="value" fill={cc.c2Muted} opacity={0.7} />
                   </BarChart>
                 </ResponsiveContainer>
               </PortChartPanel>
@@ -553,7 +553,7 @@ export function PortfolioTab() {
                     <YAxis tick={PORT_TICK} orientation="right" />
                     <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} />
                     <ReferenceLine y={1} stroke="rgba(128,128,128,0.4)" strokeDasharray="4 4" />
-                    <Line type="monotone" dataKey="value" stroke={cc.gain} strokeWidth={1.5} dot={false} />
+                    <Line isAnimationActive={false} type="monotone" dataKey="value" stroke={cc.gain} strokeWidth={1.5} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </PortChartPanel>
@@ -675,7 +675,7 @@ function BacktestSignalChart({ data, ticker, trades }: {
                 contentStyle={TOOLTIP_STYLE}
                 cursor={CROSSHAIR_CURSOR}
               />
-              <Line
+              <Line isAnimationActive={false}
                 type="monotone"
                 dataKey="price"
                 name="Price"
@@ -1228,7 +1228,7 @@ export function StrategyTab() {
                 />
                 <ReferenceLine y={100} stroke="var(--theme-text-subtle, rgba(255,255,255,0.12))" strokeDasharray="4 2" />
                 {oos?.splitDate && <ReferenceLine x={oos.splitDate} stroke={cc.primary} strokeOpacity={0.6} strokeDasharray="3 4" label={{ value: 'OOS →', fill: cc.primary, fontSize: 9, position: 'insideTopRight' }} />}
-                <Area
+                <Area isAnimationActive={false}
                   type="monotone"
                   dataKey="strategy"
                   name="Strategy"
@@ -1238,7 +1238,7 @@ export function StrategyTab() {
                   dot={false}
                   activeDot={{ r: 3, fill: cc.c2 }}
                 />
-                <Line
+                <Line isAnimationActive={false}
                   type="monotone"
                   dataKey="benchmark"
                   name="Buy & Hold"
@@ -1287,7 +1287,7 @@ export function StrategyTab() {
                   cursor={BAR_CURSOR}
                 />
                 <ReferenceLine y={0} stroke="var(--theme-secondary, var(--theme-text-faint, rgba(255,255,255,0.15)))" strokeOpacity={0.4} />
-                <Bar
+                <Bar isAnimationActive={false}
                   dataKey="return"
                   name="Monthly Return"
                   radius={[2, 2, 0, 0]}

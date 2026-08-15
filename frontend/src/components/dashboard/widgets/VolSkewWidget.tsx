@@ -87,7 +87,7 @@ export default function VolSkewWidget({ config }: { config: WidgetConfig }) {
                   labelFormatter={(m) => `${Number(m) > 0 ? '+' : ''}${m}% moneyness`}
                 />
                 <ReferenceLine x={0} stroke="color-mix(in srgb, var(--theme-primary) 45%, transparent)" strokeDasharray="4 4" />
-                <Line type="monotone" dataKey="iv" stroke={T.gold} strokeWidth={1.6} dot={{ r: 1.6, fill: T.gold, strokeWidth: 0 }} />
+                <Line isAnimationActive={false} type="monotone" dataKey="iv" stroke={T.gold} strokeWidth={1.6} dot={{ r: 1.6, fill: T.gold, strokeWidth: 0 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>

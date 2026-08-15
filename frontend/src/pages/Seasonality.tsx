@@ -152,7 +152,7 @@ export default function Seasonality() {
                 <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL} itemStyle={TOOLTIP_ITEM} cursor={{ fill: mix(T.text, 4) }}
                   formatter={(v: number, _n, item) => [`${signed(v)} mean · ${item.payload.hit_rate_pct}% positive · n=${item.payload.n}`, 'Return']} />
                 <ReferenceLine y={0} stroke={T.muted} />
-                <Bar dataKey="mean_pct" name="mean">
+                <Bar isAnimationActive={false} dataKey="mean_pct" name="mean">
                   {months.map(m => <Cell key={m.label} fill={(m.mean_pct ?? 0) >= 0 ? T.pos : T.neg} />)}
                 </Bar>
               </BarChart>

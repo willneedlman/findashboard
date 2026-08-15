@@ -231,9 +231,9 @@ export function ImpliedProbabilityContent() {
                     <YAxis tick={TICK} tickFormatter={v => `$${v.toFixed(0)}`} orientation="right" domain={['auto','auto']} />
                     <Tooltip contentStyle={TOOLTIP_STYLE} />
                     <Legend wrapperStyle={{ fontSize: 10 }} />
-                    <Area type="monotone" dataKey="upper"  stroke={cc.gain} strokeWidth={1.5} fill="url(#upperGrad)" name="~85th Pct" />
-                    <Area type="monotone" dataKey="median" stroke={cc.c2}   strokeWidth={2}   fill="transparent" strokeDasharray="4 2" name="Median" />
-                    <Area type="monotone" dataKey="lower"  stroke={cc.loss} strokeWidth={1.5} fill="url(#lowerGrad)" name="~15th Pct" />
+                    <Area isAnimationActive={false} type="monotone" dataKey="upper"  stroke={cc.gain} strokeWidth={1.5} fill="url(#upperGrad)" name="~85th Pct" />
+                    <Area isAnimationActive={false} type="monotone" dataKey="median" stroke={cc.c2}   strokeWidth={2}   fill="transparent" strokeDasharray="4 2" name="Median" />
+                    <Area isAnimationActive={false} type="monotone" dataKey="lower"  stroke={cc.loss} strokeWidth={1.5} fill="url(#lowerGrad)" name="~15th Pct" />
                   </AreaChart>
                 </ResponsiveContainer>
               </ChartPanel>
@@ -303,7 +303,7 @@ export function ImpliedProbabilityContent() {
                         <YAxis type="category" dataKey="strike" tick={TICK} width={52} tickFormatter={v => `$${v}`} reversed />
                         <Tooltip formatter={(v: number) => [`${(v * 100).toFixed(2)}%`, 'Probability density']} labelFormatter={(s: number) => `Strike $${s}`} contentStyle={TOOLTIP_STYLE} />
                         <ReferenceLine y={dist.modal_strike} stroke={SEC} strokeDasharray="4 4" strokeOpacity={0.5} label={{ value: 'Modal', fill: SEC, fontSize: 9 }} />
-                        <Area type="monotone" dataKey="density" stroke={cc.c2} fill={cc.c2Dim} strokeWidth={2} name="Market Density" />
+                        <Area isAnimationActive={false} type="monotone" dataKey="density" stroke={cc.c2} fill={cc.c2Dim} strokeWidth={2} name="Market Density" />
                         {dPoint && <ReferenceLine y={dPoint.strike} stroke={GOLD} strokeDasharray="5 3" />}
                         {dPoint && <ReferenceDot x={dPoint.density} y={dPoint.strike} r={4} fill={GOLD} stroke="#0a1320" strokeWidth={1.5} />}
                       </AreaChart>
@@ -322,7 +322,7 @@ export function ImpliedProbabilityContent() {
                         <ReferenceLine x={dist.p50} stroke="color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)" strokeDasharray="4 4" label={{ value: 'P50', fill: GOLD, fontSize: 9, position: 'top' }} />
                         <ReferenceLine x={dist.p10} stroke={cc.gainMuted} strokeDasharray="3 5" label={{ value: 'P10', fill: cc.gain, fontSize: 9, position: 'top' }} />
                         <ReferenceLine x={dist.p90} stroke={cc.lossMuted} strokeDasharray="3 5" label={{ value: 'P90', fill: cc.loss, fontSize: 9, position: 'top' }} />
-                        <Line type="monotone" dataKey="delta" stroke={cc.c2} strokeWidth={2.2} dot={false} name="P(S_T > K)" />
+                        <Line isAnimationActive={false} type="monotone" dataKey="delta" stroke={cc.c2} strokeWidth={2.2} dot={false} name="P(S_T > K)" />
                         <ReferenceLine x={k} stroke={GOLD} strokeDasharray="5 3" />
                         {pAbove != null && <ReferenceDot x={k} y={pAbove} r={4} fill={GOLD} stroke="#0a1320" strokeWidth={1.5} />}
                       </LineChart>

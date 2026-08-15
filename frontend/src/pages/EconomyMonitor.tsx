@@ -237,9 +237,9 @@ export function EconomyMonitorContent() {
             <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} formatter={(v: number, n: string) => [v != null ? `${v.toFixed(1)}%` : '—', n]} />
             <Legend wrapperStyle={{ fontFamily: T.mono, fontSize: 10 }} />
             <ReferenceLine y={FED_TARGET} stroke={T.muted} strokeDasharray="5 4" />
-            <Line type="monotone" dataKey="cpi"  name="CPI"      stroke={T.gold} strokeWidth={2} dot={false} />
-            <Line type="monotone" dataKey="core" name="Core CPI" stroke={T.blue} strokeWidth={2} dot={false} />
-            <Line type="monotone" dataKey="pce"  name="PCE"      stroke={T.pos}  strokeWidth={2} dot={false} />
+            <Line isAnimationActive={false} type="monotone" dataKey="cpi"  name="CPI"      stroke={T.gold} strokeWidth={2} dot={false} />
+            <Line isAnimationActive={false} type="monotone" dataKey="core" name="Core CPI" stroke={T.blue} strokeWidth={2} dot={false} />
+            <Line isAnimationActive={false} type="monotone" dataKey="pce"  name="PCE"      stroke={T.pos}  strokeWidth={2} dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </Panel>
@@ -259,7 +259,7 @@ export function EconomyMonitorContent() {
               <XAxis dataKey="d" tick={TICK} minTickGap={28} />
               <YAxis tick={TICK} width={38} domain={['auto', 'auto']} tickFormatter={(v) => `${v}%`} />
               <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} formatter={(v: number) => [`${v.toFixed(1)}%`, 'Unemployment']} />
-              <Area type="monotone" dataKey="v" stroke={T.gold} strokeWidth={2} fill="url(#unFill)" />
+              <Area isAnimationActive={false} type="monotone" dataKey="v" stroke={T.gold} strokeWidth={2} fill="url(#unFill)" />
             </AreaChart>
           </ResponsiveContainer>
         </Panel>
@@ -272,7 +272,7 @@ export function EconomyMonitorContent() {
               <YAxis tick={TICK} width={38} tickFormatter={(v) => `${v}K`} />
               <Tooltip contentStyle={TOOLTIP_STYLE} cursor={BAR_CURSOR} formatter={(v: number) => [`${v >= 0 ? '+' : ''}${Math.round(v)}K`, 'Payrolls']} />
               <ReferenceLine y={0} stroke={T.muted} />
-              <Bar dataKey="v" radius={[2, 2, 0, 0]}>
+              <Bar isAnimationActive={false} dataKey="v" radius={[2, 2, 0, 0]}>
                 {p.trend.map((pt, i) => <Cell key={i} fill={pt.v >= 0 ? T.pos : T.neg} />)}
               </Bar>
             </BarChart>

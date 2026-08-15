@@ -81,8 +81,8 @@ function ExpectationGapChart({ rev0, impliedG, currentG, years }: { rev0: number
           { value: `Price demands · ${impliedG.toFixed(1)}%`, type: 'line', id: 'implied', color: NEG },
           { value: `Current run-rate · ${currentG.toFixed(1)}%`, type: 'line', id: 'current', color: TER },
         ]} />
-        <Area type="monotone" dataKey="implied" name="implied" stroke={NEG} strokeWidth={2} fill="url(#revGapImplied)" />
-        <Area type="monotone" dataKey="current" name="current" stroke={TER} strokeWidth={2} fill="url(#revGapCurrent)" />
+        <Area isAnimationActive={false} type="monotone" dataKey="implied" name="implied" stroke={NEG} strokeWidth={2} fill="url(#revGapImplied)" />
+        <Area isAnimationActive={false} type="monotone" dataKey="current" name="current" stroke={TER} strokeWidth={2} fill="url(#revGapCurrent)" />
       </ComposedChart>
     </ResponsiveContainer>
   )
@@ -307,7 +307,7 @@ export function ReverseDCFContent() {
                       <XAxis dataKey="year" tick={TICK} tickFormatter={(y) => `Y${y}`} />
                       <YAxis tick={TICK} tickFormatter={(v) => fmtM(v)} width={56} />
                       <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL} itemStyle={TOOLTIP_ITEM} cursor={TOOLTIP_CURSOR} formatter={(v: number) => fmtM(v)} labelFormatter={(y) => `Year ${y}`} />
-                      <Bar dataKey="fcf" name="FCF" radius={[2, 2, 0, 0]}>
+                      <Bar isAnimationActive={false} dataKey="fcf" name="FCF" radius={[2, 2, 0, 0]}>
                         {data.fcfs.map((_, i) => <Cell key={i} fill={cc.c1} />)}
                       </Bar>
                     </ComposedChart>

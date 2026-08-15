@@ -192,7 +192,7 @@ export default function CreditSpreadsWidget({ config }: { config: WidgetConfig }
                     }}
                   />
                   {creditSeries.map(key => (
-                    <Line
+                    <Line isAnimationActive={false}
                       key={key}
                       yAxisId="left"
                       type="monotone"
@@ -203,7 +203,7 @@ export default function CreditSpreadsWidget({ config }: { config: WidgetConfig }
                     />
                   ))}
                   {hasVix && (
-                    <Line
+                    <Line isAnimationActive={false}
                       yAxisId="right"
                       type="monotone"
                       dataKey="_vix"

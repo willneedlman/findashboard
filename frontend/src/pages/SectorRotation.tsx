@@ -425,7 +425,7 @@ export function SectorRotationContent() {
                   }}
                   labelStyle={{ color: T.gold, fontFamily: T.label, fontWeight: 700 }}
                 />
-                <Bar dataKey="value" name="value" radius={[2, 2, 0, 0]}>
+                <Bar isAnimationActive={false} dataKey="value" name="value" radius={[2, 2, 0, 0]}>
                   {chartData.map((d, i) => (
                     <Cell key={i} fill={(d.value ?? 0) >= 0 ? T.pos : T.neg} opacity={0.85} />
                   ))}

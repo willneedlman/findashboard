@@ -510,7 +510,7 @@ function PerfChart({ data, stroke, id, fmt, height, tickFmt }: {
         <XAxis dataKey="date" tick={TICK_STYLE} tickFormatter={fmtAxis} interval="preserveStartEnd" />
         <YAxis tick={TICK_STYLE} tickFormatter={fmt} orientation="right" domain={['auto', 'auto']} width={58} />
         <Tooltip formatter={(v: number) => [fmt(Number(v)), '']} labelFormatter={fmtAxis} contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} />
-        <Area type="monotone" dataKey="value" stroke={stroke} fill={`url(#${id})`} strokeWidth={1.5} />
+        <Area isAnimationActive={false} type="monotone" dataKey="value" stroke={stroke} fill={`url(#${id})`} strokeWidth={1.5} />
       </AreaChart>
     </ResponsiveContainer>
   )

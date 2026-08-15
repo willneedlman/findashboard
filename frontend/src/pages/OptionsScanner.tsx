@@ -526,8 +526,8 @@ export function OptionsScannerContent() {
                         <YAxis tick={TICK} width={42} tickFormatter={v => Math.abs(v).toLocaleString()} />
                         <Tooltip formatter={(v: number) => [Math.abs(v).toLocaleString(), '']}
                           contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'var(--theme-hover, rgba(255,255,255,0.04))' }} />
-                        <Bar dataKey="callOI" name="Call OI" fill={cc.gainMuted} />
-                        <Bar dataKey="putOI" name="Put OI" fill={cc.lossMuted} />
+                        <Bar isAnimationActive={false} dataKey="callOI" name="Call OI" fill={cc.gainMuted} />
+                        <Bar isAnimationActive={false} dataKey="putOI" name="Put OI" fill={cc.lossMuted} />
                         <ReferenceLine x={sel.strike} stroke={T.gold} strokeDasharray="3 3" />
                       </BarChart>
                     </ResponsiveContainer>

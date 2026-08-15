@@ -114,7 +114,7 @@ function TickerChartModal({ ticker, onClose }: { ticker: string; onClose: () => 
                   cursor={CROSSHAIR_CURSOR}
                   formatter={(v: number) => [fmt$(v), 'Close']}
                 />
-                <Area
+                <Area isAnimationActive={false}
                   type="monotone" dataKey="close"
                   stroke={up ? 'var(--theme-positive)' : 'var(--theme-negative)'} strokeWidth={1.5}
                   fill="url(#chartGrad)" dot={false}

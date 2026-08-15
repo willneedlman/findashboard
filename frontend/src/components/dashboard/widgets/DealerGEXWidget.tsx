@@ -101,7 +101,7 @@ export default function DealerGEXWidget({ config }: { config: WidgetConfig }) {
                   formatter={(v: number) => [`${v.toFixed(0)}M`, 'Net GEX']}
                 />
                 {spot && <ReferenceLine x={band.reduce((p, c) => Math.abs(c.strike - spot) < Math.abs(p - spot) ? c.strike : p, band[0]?.strike ?? spot)} stroke="color-mix(in srgb, var(--theme-primary) 60%, transparent)" strokeDasharray="3 3" />}
-                <Bar dataKey="net_gex" radius={[1, 1, 0, 0]}>
+                <Bar isAnimationActive={false} dataKey="net_gex" radius={[1, 1, 0, 0]}>
                   {band.map((d, i) => <Cell key={i} fill={d.net_gex >= 0 ? T.pos : T.neg} fillOpacity={0.85} />)}
                 </Bar>
               </BarChart>

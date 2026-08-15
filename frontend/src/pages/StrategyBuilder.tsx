@@ -917,9 +917,9 @@ export default function StrategyBuilder() {
                   />
 
                   {/* Green profit zone */}
-                  <Area type="monotone" dataKey="profit" fill="rgba(47,107,75,0.25)" stroke="none" />
+                  <Area isAnimationActive={false} type="monotone" dataKey="profit" fill="rgba(47,107,75,0.25)" stroke="none" />
                   {/* Red loss zone */}
-                  <Area type="monotone" dataKey="loss"   fill="rgba(140,46,54,0.25)"  stroke="none" />
+                  <Area isAnimationActive={false} type="monotone" dataKey="loss"   fill="rgba(140,46,54,0.25)"  stroke="none" />
 
                   {/* Breakeven line */}
                   <ReferenceLine y={0} stroke="var(--theme-text-faint, rgba(255,255,255,0.2))" strokeWidth={1} strokeDasharray="4 4" />
@@ -948,18 +948,18 @@ export default function StrategyBuilder() {
 
                   {/* Per-leg dashed contributions (dimmed once the leg has expired). */}
                   {primaryLegs.map((leg, idx) => (
-                    <Line key={idx} type="monotone" dataKey={`leg${idx}`} stroke={LEG_COLORS[idx % LEG_COLORS.length]}
+                    <Line isAnimationActive={false} key={idx} type="monotone" dataKey={`leg${idx}`} stroke={LEG_COLORS[idx % LEG_COLORS.length]}
                       strokeWidth={1} strokeDasharray="5 3" dot={false} name={`Leg ${idx + 1}`} legendType="none"
                       strokeOpacity={daysFromNow > dte(leg.expiry) ? 0.25 : 1} />
                   ))}
 
                   {/* Before-expiry P&L (Black-Scholes at the chosen day) */}
                   {chartData.showT && (
-                    <Line type="monotone" dataKey="tval" stroke="var(--theme-tertiary, #60a5fa)" strokeWidth={1.75} strokeDasharray="5 3" dot={false} name="tval" legendType="none" />
+                    <Line isAnimationActive={false} type="monotone" dataKey="tval" stroke="var(--theme-tertiary, #60a5fa)" strokeWidth={1.75} strokeDasharray="5 3" dot={false} name="tval" legendType="none" />
                   )}
 
                   {/* Total P&L at expiry — main gold line */}
-                  <Line type="monotone" dataKey="total" stroke="var(--theme-primary, #c9a84c)" strokeWidth={2.5} dot={false} name="total" legendType="none" />
+                  <Line isAnimationActive={false} type="monotone" dataKey="total" stroke="var(--theme-primary, #c9a84c)" strokeWidth={2.5} dot={false} name="total" legendType="none" />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>

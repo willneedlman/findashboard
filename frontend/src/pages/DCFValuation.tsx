@@ -803,13 +803,13 @@ export function DCFValuationContent() {
                     { value: 'PV of FCF', type: 'line', id: 'pv', color: cc.primary },
                   ]} />
                   <ReferenceLine yAxisId="fcf" y={0} stroke="var(--theme-text-faint, rgba(255,255,255,0.15))" />
-                  <Bar yAxisId="rev" dataKey="revenue" name="Revenue / Terminal Value" fill={cc.c2}>
+                  <Bar isAnimationActive={false} yAxisId="rev" dataKey="revenue" name="Revenue / Terminal Value" fill={cc.c2}>
                     {[...data.fcfs, { year: 'TV' }].map((d: { year: number | string }, i: number) => (
                       <Cell key={i} fill={d.year === 'TV' ? cc.primary : cc.c2} fillOpacity={d.year === 'TV' ? 0.85 : 0.55} />
                     ))}
                   </Bar>
-                  <Line yAxisId="fcf" type="monotone" dataKey="fcf" name="Free Cash Flow" stroke={cc.gain} strokeWidth={2} dot={{ r: 3, fill: cc.gain }} activeDot={{ r: 5 }} />
-                  <Line yAxisId="fcf" type="monotone" dataKey="pv_fcf" name="PV of FCF" stroke={cc.primary} strokeWidth={2} dot={{ r: 3, fill: cc.primary }} activeDot={{ r: 5 }} strokeDasharray="4 2" />
+                  <Line isAnimationActive={false} yAxisId="fcf" type="monotone" dataKey="fcf" name="Free Cash Flow" stroke={cc.gain} strokeWidth={2} dot={{ r: 3, fill: cc.gain }} activeDot={{ r: 5 }} />
+                  <Line isAnimationActive={false} yAxisId="fcf" type="monotone" dataKey="pv_fcf" name="PV of FCF" stroke={cc.primary} strokeWidth={2} dot={{ r: 3, fill: cc.primary }} activeDot={{ r: 5 }} strokeDasharray="4 2" />
                 </ComposedChart>
               </ResponsiveContainer>
             </ChartPanel>

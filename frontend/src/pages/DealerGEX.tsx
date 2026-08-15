@@ -774,9 +774,9 @@ export function DealerGEXContent() {
                       <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL} itemStyle={TOOLTIP_ITEM}
                         formatter={(v: number, n: string) => [n === 'Net GEX' ? fmtM(v) : `$${v.toFixed(2)}`, n]} />
                       <Legend wrapperStyle={{ fontSize: 10 }} />
-                      <Bar yAxisId="g" dataKey="net" name="Net GEX" fill={T.chartNeutral} />
-                      <Line yAxisId="p" dataKey="spot" name="Spot" stroke={T.text} dot={false} strokeWidth={1.5} />
-                      <Line yAxisId="p" dataKey="flip" name="Flip" stroke={T.warn} dot={false} strokeWidth={1.5}
+                      <Bar isAnimationActive={false} yAxisId="g" dataKey="net" name="Net GEX" fill={T.chartNeutral} />
+                      <Line isAnimationActive={false} yAxisId="p" dataKey="spot" name="Spot" stroke={T.text} dot={false} strokeWidth={1.5} />
+                      <Line isAnimationActive={false} yAxisId="p" dataKey="flip" name="Flip" stroke={T.warn} dot={false} strokeWidth={1.5}
                         strokeDasharray="4 3" />
                     </ComposedChart>
                   </ResponsiveContainer>

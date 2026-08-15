@@ -91,7 +91,7 @@ function RollingChart({ result }: { result: CorrelationResult }) {
           label={{ value: `${window}-day corr`, fill: C.muted, fontSize: 11, angle: -90, position: 'insideLeft' }} />
         <ReferenceLine y={0} stroke={C.muted} strokeDasharray="4 2" />
         <Tooltip contentStyle={{ ...TOOLTIP_STYLE, color: C.text }} formatter={(v: number) => v.toFixed(3)} />
-        <Line type="monotone" dataKey="corr" name={`${pair[0]} ↔ ${pair[1]}`} stroke={C.gold} strokeWidth={2} dot={false} />
+        <Line isAnimationActive={false} type="monotone" dataKey="corr" name={`${pair[0]} ↔ ${pair[1]}`} stroke={C.gold} strokeWidth={2} dot={false} />
         <Legend wrapperStyle={{ color: C.muted, fontSize: 11 }} />
       </LineChart>
     </ResponsiveContainer>
@@ -111,7 +111,7 @@ function CorrScatter({ result }: { result: CorrelationResult }) {
         <YAxis dataKey="y" type="number" name={pair[1]} stroke={C.muted} tick={{ fill: C.muted, fontSize: 10 }}
           label={{ value: pair[1], fill: C.muted, fontSize: 11, angle: -90, position: 'insideLeft' }} />
         <Tooltip cursor={CROSSHAIR_CURSOR} contentStyle={{ ...TOOLTIP_STYLE, color: C.text }} formatter={(v: number) => v.toFixed(4)} />
-        <Scatter name={`${pair[0]} vs ${pair[1]}`} data={data} fill={C.blue} opacity={0.5} r={3} />
+        <Scatter isAnimationActive={false} name={`${pair[0]} vs ${pair[1]}`} data={data} fill={C.blue} opacity={0.5} r={3} />
       </ScatterChart>
     </ResponsiveContainer>
   )

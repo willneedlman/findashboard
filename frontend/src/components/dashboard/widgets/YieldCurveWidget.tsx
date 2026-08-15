@@ -166,7 +166,7 @@ export default function YieldCurveWidget({ config: _config }: { config: WidgetCo
                     return [`${(v as number).toFixed(3)}%`, labels[key] ?? key]
                   }}
                 />
-                <Area
+                <Area isAnimationActive={false}
                   type="monotoneX" dataKey="current"
                   stroke={T.gold} strokeWidth={2}
                   fill="color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)"
@@ -175,7 +175,7 @@ export default function YieldCurveWidget({ config: _config }: { config: WidgetCo
                   connectNulls
                 />
                 {COMPARISONS.map(({ key, color, dash }) => (
-                  <Line
+                  <Line isAnimationActive={false}
                     key={key} type="monotoneX" dataKey={key}
                     stroke={color} strokeWidth={1} strokeDasharray={dash}
                     dot={false} connectNulls

@@ -248,7 +248,7 @@ export function PortfolioCompareContent() {
                     formatter={(v: number) => (mode === 'pct' ? `${v >= 0 ? '+' : ''}${v.toFixed(2)}%` : `$${v.toFixed(2)}`)} />
                   <Legend wrapperStyle={{ color: C.muted, fontSize: 11 }} />
                   {r.series.map((s, i) => (
-                    <Line key={s.name} type="monotone" dataKey={s.name} name={s.name} stroke={LINE_COLORS[i]} strokeWidth={2} dot={false} />
+                    <Line isAnimationActive={false} key={s.name} type="monotone" dataKey={s.name} name={s.name} stroke={LINE_COLORS[i]} strokeWidth={2} dot={false} />
                   ))}
                   {liquidations.map(liq => (
                     <ReferenceDot key={liq.name} x={liq.date} y={floorY} r={5} isFront

@@ -273,7 +273,7 @@ export function BondAnalyticsContent() {
                       <Tooltip formatter={(v: number) => [`$${v.toFixed(2)}`, 'Price']} contentStyle={TOOLTIP_STYLE} />
                       <ReferenceLine x={shift} stroke="var(--theme-tertiary, #60a5fa)" strokeDasharray="4 4" />
                       <ReferenceLine y={p.market_price} stroke="var(--theme-border, rgba(255,255,255,0.1))" strokeDasharray="4 4" />
-                      <Line type="monotone" dataKey="price" stroke="var(--theme-primary, #c9a84c)" strokeWidth={2} dot={false} />
+                      <Line isAnimationActive={false} type="monotone" dataKey="price" stroke="var(--theme-primary, #c9a84c)" strokeWidth={2} dot={false} />
                     </LineChart>
                   </ResponsiveContainer>
                 </ChartPanel>
@@ -287,8 +287,8 @@ export function BondAnalyticsContent() {
                     <YAxis tick={TICK} tickFormatter={v => `$${v.toFixed(0)}`} orientation="right" />
                     <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'var(--theme-hover, rgba(255,255,255,0.04))' }} />
                     <Legend wrapperStyle={{ fontSize: 10 }} />
-                    <Bar dataKey="nominal" name="Nominal CF" fill="var(--theme-primary, #c9a84c)" opacity={0.85} />
-                    <Bar dataKey="pv"      name="Present Value" fill="var(--theme-tertiary, #60a5fa)" opacity={0.85} />
+                    <Bar isAnimationActive={false} dataKey="nominal" name="Nominal CF" fill="var(--theme-primary, #c9a84c)" opacity={0.85} />
+                    <Bar isAnimationActive={false} dataKey="pv"      name="Present Value" fill="var(--theme-tertiary, #60a5fa)" opacity={0.85} />
                   </BarChart>
                 </ResponsiveContainer>
               </ChartPanel>

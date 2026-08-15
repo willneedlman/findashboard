@@ -107,8 +107,8 @@ function ScatterPlot({ result }: { result: RegressionResult }) {
         <YAxis dataKey="y" type="number" name={result.y_ticker} stroke={C.muted} tick={{ fill: C.muted, fontSize: 10 }}
           label={{ value: result.y_ticker, fill: C.muted, fontSize: 11, angle: -90, position: 'insideLeft' }} />
         <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ ...TOOLTIP_STYLE }} formatter={(v: number) => v.toFixed(4)} />
-        <Scatter name="Data" data={scatterData} fill={C.blue} opacity={0.5} r={3} />
-        <Scatter name="Fit" data={lineData} fill={C.gold} opacity={0.9} r={2} line={{ stroke: C.gold, strokeWidth: 2 }} shape={() => null as any} />
+        <Scatter isAnimationActive={false} name="Data" data={scatterData} fill={C.blue} opacity={0.5} r={3} />
+        <Scatter isAnimationActive={false} name="Fit" data={lineData} fill={C.gold} opacity={0.9} r={2} line={{ stroke: C.gold, strokeWidth: 2 }} shape={() => null as any} />
         <Legend verticalAlign="top" align="center" wrapperStyle={{ color: C.muted, fontSize: 11, paddingBottom: 10 }} />
       </ScatterChart>
     </ResponsiveContainer>
@@ -127,7 +127,7 @@ function ResidualPlot({ result }: { result: RegressionResult }) {
           label={{ value: 'Residuals', fill: C.muted, fontSize: 11, angle: -90, position: 'insideLeft' }} />
         <ReferenceLine y={0} stroke={C.gold} strokeDasharray="4 2" />
         <Tooltip contentStyle={{ ...TOOLTIP_STYLE }} formatter={(v: number) => v.toFixed(4)} />
-        <Scatter name="Residuals" data={data} fill={C.purple} opacity={0.5} r={3} />
+        <Scatter isAnimationActive={false} name="Residuals" data={data} fill={C.purple} opacity={0.5} r={3} />
       </ScatterChart>
     </ResponsiveContainer>
   )

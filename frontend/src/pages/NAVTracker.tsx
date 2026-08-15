@@ -292,8 +292,8 @@ export default function NAVTracker() {
                     <YAxis tick={TICK} tickFormatter={v => `$${v.toFixed(0)}`} orientation="right" />
                     <Tooltip contentStyle={TOOLTIP_STYLE} />
                     <Legend wrapperStyle={{ fontSize: 10 }} />
-                    <Line type="monotone" dataKey="target" stroke="var(--theme-primary, #c9a84c)" strokeWidth={2.5} dot={false} name={p.target} />
-                    <Line type="monotone" dataKey="nav" stroke={BLUE} strokeWidth={2} strokeDasharray="5 3" dot={false} name="Net NAV Floor" />
+                    <Line isAnimationActive={false} type="monotone" dataKey="target" stroke="var(--theme-primary, #c9a84c)" strokeWidth={2.5} dot={false} name={p.target} />
+                    <Line isAnimationActive={false} type="monotone" dataKey="nav" stroke={BLUE} strokeWidth={2} strokeDasharray="5 3" dot={false} name="Net NAV Floor" />
                   </LineChart>
                 </ResponsiveContainer>
               </ChartPanel>
@@ -311,7 +311,7 @@ export default function NAVTracker() {
                     <XAxis dataKey="date" tick={TICK} tickFormatter={d => d.slice(0, 7)} interval="preserveStartEnd" />
                     <YAxis tick={TICK} tickFormatter={v => `${v}%`} orientation="right" />
                     <Tooltip contentStyle={TOOLTIP_STYLE} />
-                    <Area type="monotone" dataKey="premium" stroke="#2f6b4b" fill="url(#premGrad)" strokeWidth={1.5} name="Premium %" />
+                    <Area isAnimationActive={false} type="monotone" dataKey="premium" stroke="#2f6b4b" fill="url(#premGrad)" strokeWidth={1.5} name="Premium %" />
                   </AreaChart>
                 </ResponsiveContainer>
               </ChartPanel>

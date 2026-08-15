@@ -205,9 +205,9 @@ export function CreditSpreadsContent() {
                 {showVix && <YAxis yAxisId="vix" orientation="right" tickFormatter={v => `${v}`} tick={{ fontFamily: T.mono, fontSize: 8, fill: T.gold }} tickLine={false} axisLine={false} />}
                 <Tooltip cursor={CROSSHAIR_CURSOR} contentStyle={{ ...TOOLTIP_STYLE }} labelStyle={{ color: T.gold, fontFamily: T.label, fontWeight: 700 }} formatter={(v: number, name: string) => [`${v.toFixed(2)}${name === 'vix' ? '' : ' bps'}`, name.toUpperCase()]} />
                 {OVERLAY_KEYS.filter(k => activeKeys.has(k)).map(k => (
-                  <Line key={k} yAxisId="spread" type="monotone" dataKey={k} stroke={SERIES_COLORS[k]} strokeWidth={1.5} dot={false} name={k} />
+                  <Line isAnimationActive={false} key={k} yAxisId="spread" type="monotone" dataKey={k} stroke={SERIES_COLORS[k]} strokeWidth={1.5} dot={false} name={k} />
                 ))}
-                {showVix && <Line yAxisId="vix" type="monotone" dataKey="vix" stroke={SERIES_COLORS.vix} strokeWidth={1} dot={false} strokeDasharray="4 3" name="vix" />}
+                {showVix && <Line isAnimationActive={false} yAxisId="vix" type="monotone" dataKey="vix" stroke={SERIES_COLORS.vix} strokeWidth={1} dot={false} strokeDasharray="4 3" name="vix" />}
               </LineChart>
             </ResponsiveContainer>
           )}
