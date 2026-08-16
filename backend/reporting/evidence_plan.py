@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import re
+from functools import lru_cache
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -290,6 +291,31 @@ def record_selection(template_id: str, tool_ids: list[str]) -> None:
     disk_set(key, history[-_NOVELTY_DEPTH:], ttl=_NOVELTY_TTL_SECONDS)
 
 
+@lru_cache(maxsize=1)
+def _yields_index() -> tuple[dict[str, frozenset[str]], dict[str, int]]:
+    """Every tool's yield vocabulary, and how many tools claim each word."""
+    per_tool: dict[str, frozenset[str]] = {}
+    counts: dict[str, int] = {}
+    for tool in REPORT_TOOL_REGISTRY:
+        words = frozenset(re.findall(r"[a-z][a-z0-9/&.-]{2,}", " ".join(tool.yields).lower()))
+        per_tool[tool.id] = words
+        for word in words:
+            counts[word] = counts.get(word, 0) + 1
+    return per_tool, counts
+
+
+def _yield_words(tool_id: str) -> frozenset[str]:
+    return _yields_index()[0].get(tool_id, frozenset())
+
+
+def _term_weight(term: str) -> float:
+    """A word claimed by one tool is a signal. One claimed by twenty is not."""
+    claims = _yields_index()[1].get(term, 0)
+    if claims <= 0:
+        return 0.0
+    return 6.0 / claims
+
+
 def shortlist(
     question: Question,
     availability: Availability,
@@ -298,6 +324,7 @@ def shortlist(
     class_counts: dict[str, int] | None = None,
     novelty: dict[str, int] | None = None,
     size: int = SHORTLIST_SIZE,
+    required_terms: frozenset[str] = frozenset(),
 ) -> list[ReportToolSpec]:
     """Candidate tools for one question, best first.
 
@@ -320,6 +347,21 @@ def shortlist(
         # Favour an evidence class the plan does not have yet.
         score += 1.5 / (1 + class_counts.get(tool.evidence_class, 0))
         score -= _NOVELTY_PENALTY * novelty.get(tool.id, 0)
+        # What the tool actually returns, matched against what the user asked
+        # for in their own words. Tags alone cannot separate two tools that
+        # share one: "options" and "volatility-skew" are both volatility_regime,
+        # but only "options" yields realised vol and the IV minus RV spread. A
+        # request for exactly that got the skew tool, whose clip then had to
+        # report that it did not contain the figures.
+        #
+        # Rare words decide it. "volatility" is in a dozen tools and separates
+        # nothing, while "realised" is in two. Weighting by how many tools claim
+        # a term stops a generic match from ranking as highly as an exact one.
+        if required_terms:
+            score += sum(
+                _term_weight(term) for term in required_terms
+                if term in _yield_words(tool.id)
+            )
         if tool.cost == "slow":
             score -= 0.4
         if tool.produces_visuals:

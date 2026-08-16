@@ -2097,6 +2097,12 @@ def plan_report_research(req: ReportResearchPlanRequest):
     # Everything the objective asked about, so a deterministic floor-fill can
     # prefer a tool that is relevant over one that merely supplies the class.
     asked_tags = frozenset(tag for question in questions for tag in question.tags)
+    # The user's requirements, as words, so a tool whose output literally
+    # contains what they asked for outranks one that merely shares a tag.
+    required_terms = frozenset(
+        term for line in _requirement_lines(req.mustInclude)
+        for term in requirement_terms(line)
+    )
     shortlists: dict[int, set[str]] = {}
     prompt_questions: list[dict] = []
     for index, question in enumerate(questions, start=1):
@@ -2104,6 +2110,7 @@ def plan_report_research(req: ReportResearchPlanRequest):
             question, availability,
             already_selected=frozenset(selected_so_far),
             class_counts=class_counts,
+            required_terms=required_terms,
         )
         if not candidates:
             continue
