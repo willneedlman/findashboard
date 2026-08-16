@@ -2547,10 +2547,10 @@ def _section_payload(payload: dict, section: dict) -> dict:
     # in the system prompt. Sending both again cost thousands of tokens that the
     # shed loop could never reclaim, because it only ever drops evidence — so a
     # section could be refused outright with its evidence already at zero.
+    # coverage and unresolvedGaps stay: the prompt tells the writer to state
+    # decision-relevant gaps from them, and they are a few dozen tokens now that
+    # the research record is no longer sent whole.
     payload = {k: v for k, v in payload.items() if k not in ("templateContract", "outline")}
-    bank = {k: v for k, v in bank.items()
-            if k not in ("coverage", "unresolvedGaps", "requiredSourceIds")}
-    payload["dataBank"] = bank
 
     if len(evidence) < 2:
         return payload
@@ -7215,7 +7215,22 @@ def generate_report(req: ReportGenRequest):
     user_requirements = _auditable_requirements(req.mustInclude)
     # Selection has to know the requirements before it decides what to keep.
     clip_payload = _report_prompt_clips(req.clips, length_key, book_level, requirement_lines)
-    data_bank = {**data_bank_meta, "evidence": clip_payload, "valuationContext": valuation_context}
+    # Only what the writer reads. `data_bank_meta` is the client's whole research
+    # record: one entry per run with its targets, clip ids and missing targets,
+    # plus the objective plan and the source id lists. The prompt refers to
+    # dataBank.coverage and dataBank.unresolvedGaps and to nothing else, yet the
+    # entire record was serialised into every call — measured at 3,445 tokens
+    # with the evidence already shed to zero, on a 7,040 budget. It is the
+    # single largest thing in the request and none of it is read.
+    #
+    # data_bank_meta itself is untouched: evidence utilisation and the pipeline
+    # response still report against the full record.
+    data_bank = {
+        "evidence": clip_payload,
+        "valuationContext": valuation_context,
+        "coverage": data_bank_meta.get("coverage", {}),
+        "unresolvedGaps": data_bank_meta.get("unresolvedGaps", []),
+    }
     goal_text = req.goal or "(not specified)"
     purpose_text = req.purpose or "(not specified)"
 

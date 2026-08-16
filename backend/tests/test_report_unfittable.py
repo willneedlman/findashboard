@@ -72,8 +72,11 @@ class TestSectionPayloadIsTrimmed:
         # prompt, so repeating every section's contract just costs evidence.
         assert "templateContract" not in out
         assert "outline" not in out
-        for key in ("coverage", "unresolvedGaps", "requiredSourceIds"):
-            assert key not in out["dataBank"]
+        # coverage and unresolvedGaps stay. The prompt tells the writer to state
+        # decision-relevant gaps from them, and they cost a few dozen tokens now
+        # that the research record is no longer sent whole.
+        assert out["dataBank"]["coverage"] == {"x": 1}
+        assert out["dataBank"]["unresolvedGaps"] == ["g"]
 
     def test_what_the_writer_reads_survives(self):
         out = ai._section_payload(self._payload(), {
@@ -88,3 +91,53 @@ class TestSectionPayloadIsTrimmed:
             "heading": "Valuation", "argues": "multiples", "templateSection": "valuation"})
         size = lambda o: len(json.dumps(o, ensure_ascii=False))
         assert size(out) < size(raw)
+
+
+class TestWriterBankCarriesOnlyWhatIsRead:
+    """Measured in production: the dataBank sent to the model was 3,445 tokens
+    with the evidence already shed to zero, on a 7,040 budget. It was the whole
+    client research record, one entry per run with its targets, clip ids and
+    missing targets, plus the objective plan and the source id lists. The prompt
+    refers to dataBank.coverage and dataBank.unresolvedGaps and nothing else."""
+
+    def _meta(self):
+        return {
+            "phase": "ready",
+            "requiredSourceIds": [f"src-{i}" for i in range(32)],
+            "criticalSourceIds": [f"src-{i}" for i in range(5)],
+            "runs": [{"sourceId": f"src-{i}", "status": "complete",
+                      "targets": ["NVDA", "AMD"], "clipIds": [f"c{i}"],
+                      "missingTargets": [], "error": ""} for i in range(32)],
+            "objectivePlan": {"thesis": "t" * 400, "requiredDataPoints": ["d" * 60] * 20},
+            "coverage": {"requestedTargets": 4, "coveredTargets": 4},
+            "unresolvedGaps": ["gap one"],
+        }
+
+    def _writer_bank(self, meta):
+        # The shape routers.ai builds for the prompt.
+        return {
+            "evidence": [],
+            "valuationContext": {"note": "n"},
+            "coverage": meta.get("coverage", {}),
+            "unresolvedGaps": meta.get("unresolvedGaps", []),
+        }
+
+    def test_the_research_record_is_not_sent_to_the_writer(self):
+        bank = self._writer_bank(self._meta())
+        for key in ("runs", "objectivePlan", "criticalSourceIds", "requiredSourceIds", "phase"):
+            assert key not in bank
+
+    def test_what_the_prompt_names_is_still_there(self):
+        bank = self._writer_bank(self._meta())
+        assert bank["coverage"] == {"requestedTargets": 4, "coveredTargets": 4}
+        assert bank["unresolvedGaps"] == ["gap one"]
+        assert "evidence" in bank and "valuationContext" in bank
+
+    def test_it_is_an_order_of_magnitude_smaller(self):
+        meta = self._meta()
+        full = {**meta, "evidence": [], "valuationContext": {"note": "n"}}
+        slim = self._writer_bank(meta)
+        size = lambda o: ai._estimate_tokens(json.dumps(o, ensure_ascii=False))
+        assert size(slim) * 5 < size(full), (
+            f"slim={size(slim)} full={size(full)}; the whole point is the difference"
+        )
