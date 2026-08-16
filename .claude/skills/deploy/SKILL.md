@@ -11,6 +11,34 @@ Run this only when the user asks to deploy. It encodes the project's shipping ri
 - Confirm the working tree is what the user wants shipped (`git status`). If there are unrelated changes, ask before bundling them.
 - If any `frontend/src` files changed since the last `dist` build, the dist is stale — always rebuild in step 1.
 
+### 0b. Compile the backend on PRODUCTION's Python — not the local one
+The image is `python:3.11-slim`. The local venv is 3.13, and newer syntax it
+accepts is a `SyntaxError` under 3.11: on 2026-08-16 a PEP 701 f-string (a call
+spanning newlines inside an `f"..."` expression) passed every one of 1185 tests,
+built clean, and then made `main.py` unable to import `routers.ai` at all —
+uvicorn exited, the machine hit its restart limit, and the site went down.
+
+`ast.parse(..., feature_version=(3, 11))` does NOT catch this; it was tried and
+it accepted the broken code, because `feature_version` does not downgrade the
+tokenizer. Compile with a real 3.11 interpreter:
+
+```bash
+cd /Users/willneedlman/finance_dashboard/backend && uv run --python 3.11 --no-project python - <<'PY'
+import pathlib, py_compile, tempfile
+bad = []
+for p in sorted(pathlib.Path('.').rglob('*.py')):
+    if any(x in p.parts for x in ('venv', '__pycache__', 'node_modules')):
+        continue
+    try:
+        py_compile.compile(str(p), cfile=tempfile.mktemp(), doraise=True)
+    except py_compile.PyCompileError as e:
+        bad.append(str(e).strip().splitlines()[-1])
+print("\n".join(bad) if bad else "every file compiles on Python 3.11")
+PY
+```
+
+Stop if anything fails. `uv python install 3.11` if the interpreter is missing.
+
 ## 1. Verify the frontend builds
 The Dockerfile builds the bundle inside the image (`RUN npm run build`, then
 `COPY --from=frontend-build /frontend/dist`), and `frontend/dist/` is gitignored

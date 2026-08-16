@@ -2443,11 +2443,36 @@ def _fit_report_request(
             max_tokens = squeezed
         else:
             # The instructions do not leave room for an answer at all. Nothing
-            # here can fix that, so name it rather than send a doomed request.
+            # here can fix that, so say so and let the caller skip the call.
+            #
+            # Sending it anyway is what turned one impossible request into a
+            # timeout: every section tried four models, each retried three times
+            # on Groq and three on Cerebras, and the browser lost the connection
+            # long before the pipeline gave up. A request that cannot fit is
+            # known to be doomed before any of that.
+            # Break it down. "Instructions take 9572" says the request is
+            # impossible without saying which part made it so, and the parts
+            # vary by report type, length and how many requirements were set.
+            parts = ", ".join(
+                f"{key}={_estimate_tokens(json.dumps(value, ensure_ascii=False))}"
+                for key, value in sorted(
+                    payload.items(),
+                    key=lambda kv: -_estimate_tokens(json.dumps(kv[1], ensure_ascii=False)),
+                )[:6]
+            )
             logger.error(
                 "report request cannot fit: instructions take %d of a %d budget, "
-                "leaving %d for an answer",
-                input_tokens(payload), budget, room)
+                "leaving %d for an answer. system prompt=%d, payload=%d (%s)",
+                input_tokens(payload), budget, room, fixed,
+                input_tokens(payload) - fixed, parts)
+            return payload, max_tokens, {
+                "fitted": True,
+                "droppedClips": shed,
+                "outputTokens": max_tokens,
+                "unfittable": True,
+                "instructionTokens": input_tokens(payload),
+                "budget": budget,
+            }
 
     return payload, max_tokens, {
         "fitted": True,
@@ -2514,6 +2539,19 @@ def _section_payload(payload: dict, section: dict) -> dict:
     """
     bank = payload.get("dataBank") or {}
     evidence = list(bank.get("evidence") or [])
+
+    # Everything a section call does not read, removed before it is priced.
+    #
+    # The whole-report contract and the outline describe every section; this
+    # call writes one, and its own brief and its siblings' headings are already
+    # in the system prompt. Sending both again cost thousands of tokens that the
+    # shed loop could never reclaim, because it only ever drops evidence — so a
+    # section could be refused outright with its evidence already at zero.
+    payload = {k: v for k, v in payload.items() if k not in ("templateContract", "outline")}
+    bank = {k: v for k, v in bank.items()
+            if k not in ("coverage", "unresolvedGaps", "requiredSourceIds")}
+    payload["dataBank"] = bank
+
     if len(evidence) < 2:
         return payload
     wanted = requirement_terms(
@@ -2556,12 +2594,21 @@ def _generate_one_section(
     # A section may shrink to the section floor, not the whole-report floor: the
     # latter reserved more answer than one section ever needs and forced the
     # evidence to be shed instead.
-    fitted, tokens, _ = _fit_report_request(
+    fitted, tokens, fit = _fit_report_request(
         sys_prompt, _section_payload(payload, section), max_tokens,
         ceiling=MODEL_TPM.get(model, _REPORT_TPM_CEILING),
         model=model,
         min_output=_SECTION_MIN_TOKENS,
     )
+    if fit.get("unfittable"):
+        # Refused before it is sent. The provider would answer 413, which fails
+        # over to a second provider, which is rate-limited and retried, and the
+        # whole fan-out does that once per section per model.
+        raise HTTPException(503, (
+            f"The report instructions are larger than one model call allows: "
+            f"{fit['instructionTokens']} tokens against a {fit['budget']} limit, before any "
+            "evidence. Shorten the must-include list or choose a shorter report."
+        ))
     messages = [
         {"role": "system", "content": sys_prompt},
         {"role": "user", "content": json.dumps(fitted, ensure_ascii=False)},
@@ -7254,6 +7301,18 @@ def generate_report(req: ReportGenRequest):
             sys_prompt, payload, max_tokens,
             ceiling=min([_TPM[m] for m in _POOL if m in _TPM] or [_REPORT_TPM_CEILING]),
             model=MODEL_SMART)
+        if fit.get("unfittable"):
+            # Say what is actually wrong. Sending it produces a 413 on every
+            # model, each failing over to a rate-limited second provider, and
+            # the request dies at the proxy long before the pipeline does — the
+            # user sees "the origin returned an invalid response", which points
+            # at the server rather than at a report that asks for too much.
+            raise HTTPException(503, (
+                f"The report instructions are larger than one model call allows: "
+                f"{fit['instructionTokens']} tokens against a {fit['budget']} limit, before any "
+                "evidence is added. Shorten the must-include list, pick a shorter report, "
+                "or use fewer clips."
+            ))
         if fit["fitted"]:
             messages[1] = {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}
         # Walk the pool rather than pinning MODEL_SMART. This is the largest
