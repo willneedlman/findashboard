@@ -4057,6 +4057,39 @@ def _requirement_lines(raw: str | None, extra: list[str] | None = None) -> list[
     return lines
 
 
+# A rule about how to write is not a thing the report can be checked for having.
+# "Do not describe an options-implied move as fair value" is satisfied by silence,
+# so a coverage check reports it as missing every single time.
+_PROHIBITION = re.compile(r"^\s*(?:do\s*n[o']?t|don't|never|avoid|no\b|refrain)\b", re.I)
+
+
+def _requirement_label(line: str) -> str:
+    """A few words naming a requirement, for a sentence on the printed page.
+
+    The full text belongs in the workspace, where there is room for it.
+    """
+    text = re.sub(r"^\s*(?:state|give|show|include|write|provide|add)\s+", "", line.strip(), flags=re.I)
+    text = re.split(r"[,.;:]| with | for each | across | naming | over ", text, maxsplit=1)[0]
+    words = text.split()[:6]
+    # A label that ends on a preposition or an article reads as a sentence that
+    # was cut off, which is what it is.
+    while words and words[-1].lower() in {
+        "a", "an", "the", "and", "or", "of", "to", "for", "in", "on", "its", "each", "one",
+    }:
+        words.pop()
+    return " ".join(words).rstrip(".").lower() or line[:40].lower()
+
+
+def _auditable_requirements(raw: str | None) -> list[str]:
+    """The user's requirements that a finished report can be checked against.
+
+    Only their own text, and only the lines that ask for something. A negative
+    instruction has no evidence to find, and reporting it as uncovered turns a
+    report that obeyed it into a report that failed.
+    """
+    return [line for line in _requirement_lines(raw) if not _PROHIBITION.match(line)]
+
+
 def _report_prompt_clips(
     clips: list[ReportClipIn],
     length: str,
@@ -7124,7 +7157,15 @@ def generate_report(req: ReportGenRequest):
         )
 
     coverage_requirements = _auto_must_include(req.clips)
+    # Everything the writer is told to cover, used to protect the evidence that
+    # can answer it. The site's own directives belong here: they name sections
+    # the report has to write, so the clips behind them are worth keeping.
     requirement_lines = _requirement_lines(req.mustInclude, coverage_requirements)
+    # What the user actually asked for, which is the only thing worth reporting
+    # back to them as uncovered. The site's directives are instructions about
+    # how to write, not content the user is owed, and listing them under "your
+    # must-include requirements" blamed the user for the site's own plan.
+    user_requirements = _auditable_requirements(req.mustInclude)
     # Selection has to know the requirements before it decides what to keep.
     clip_payload = _report_prompt_clips(req.clips, length_key, book_level, requirement_lines)
     data_bank = {**data_bank_meta, "evidence": clip_payload, "valuationContext": valuation_context}
@@ -7361,7 +7402,7 @@ def generate_report(req: ReportGenRequest):
     # Did the report actually answer what was required of it? Checked against the
     # finished text, including the figures and chart titles, because a
     # requirement is as well satisfied by a labelled figure as by a sentence.
-    unmet_requirements = audit_requirements(requirement_lines, "\n".join([
+    unmet_requirements = audit_requirements(user_requirements, "\n".join([
         headline, executive_summary, conclusion,
         str(key_result.get("value", "")), str(key_result.get("context", "")),
         *[str(s.get("heading", "")) for s in sections],
@@ -7377,10 +7418,17 @@ def generate_report(req: ReportGenRequest):
     if unmet_requirements:
         logger.warning("report did not cover %d requirement(s): %s",
                        len(unmet_requirements), " | ".join(unmet_requirements[:4]))
-        listed = " ".join(f"({i + 1}) {r.rstrip('.')}." for i, r in enumerate(unmet_requirements))
+        # Named, not quoted. Restating each requirement verbatim put seven full
+        # sentences of instructions into the printed conclusion and buried the
+        # finding the block exists to state. The workspace lists them in full;
+        # the page needs to say only that something is missing and what.
+        count = len(unmet_requirements)
         note = (
-            f"This report does not cover {len(unmet_requirements)} of your stated "
-            f"requirements: {listed} The supplied evidence did not carry them."
+            f"This report does not cover {count} stated "
+            f"requirement{'s' if count > 1 else ''} ({_join_clause(
+                [_requirement_label(r) for r in unmet_requirements[:4]])}"
+            f"{f', and {count - 4} more' if count > 4 else ''}), "
+            "because the supplied evidence did not carry them."
         )
         conclusion = f"{conclusion} {note}".strip() if conclusion else note
 

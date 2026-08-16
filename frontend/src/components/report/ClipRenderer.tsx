@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, AreaChart, Area,
   PieChart, Pie, Cell, ScatterChart, Scatter,
@@ -79,7 +80,26 @@ function buildColorMap(pal: Palette, keys: string[]): Map<string, string> {
   return map
 }
 
-function TableClip({ p, pal, maxRows, print }: { p: TablePayload; pal: Palette; maxRows?: number; print: boolean }) {
+/** Strip columns whose every cell is blank, keeping at least the first two. */
+function dropEmptyColumns(p: TablePayload): TablePayload {
+  const filled = (index: number) => p.rows.some(row => {
+    const cell = row[index]
+    return cell != null && String(cell).trim() !== '' && String(cell).trim() !== '-'
+  })
+  const keep = p.columns.map((_, index) => index < 1 || filled(index))
+  if (keep.every(Boolean) || keep.filter(Boolean).length < 2) return p
+  return {
+    ...p,
+    columns: p.columns.filter((_, index) => keep[index]),
+    rows: p.rows.map(row => row.filter((_, index) => keep[index])),
+  }
+}
+
+function TableClip({ p: raw, pal, maxRows, print }: { p: TablePayload; pal: Palette; maxRows?: number; print: boolean }) {
+  // A column no row has a value for is not data. The segment table carried an
+  // empty "YoY %" whose every cell rendered as a placeholder, which reads as a
+  // broken table rather than as an absent measure.
+  const p = useMemo(() => dropEmptyColumns(raw), [raw])
   const rows = maxRows != null && maxRows > 0 ? p.rows.slice(0, maxRows) : p.rows
   const truncated = rows.length < p.rows.length
   // Right-aligned prose sets a ragged left edge on every wrapped line, which is

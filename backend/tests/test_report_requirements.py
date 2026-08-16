@@ -156,3 +156,39 @@ class TestChartsCountAsCoverage:
     def test_a_missing_chart_contributes_nothing_and_does_not_crash(self):
         assert ai._chart_audit_text(None) == ""
         assert ai._chart_audit_text({}) == " ."
+
+
+class TestOnlyTheUsersOwnRequirementsAreAudited:
+    def test_site_directives_are_not_reported_as_the_users_requirements(self):
+        """The banner listed "Write a dedicated valuation section..." and
+        "Do not describe an options-implied move as fair value" under "your
+        must-include requirements are not covered". Neither is the user's text:
+        both come from _auto_must_include, which tells the writer which sections
+        to build so the site's charts have somewhere to live."""
+        user_text = "State the market cap for each name"
+        site_directives = [
+            "Write a dedicated valuation section. State the subject's relevant multiple.",
+            "Do not describe an options-implied move as fair value.",
+        ]
+        auditable = ai._auditable_requirements(user_text)
+        assert auditable == [user_text]
+        for directive in site_directives:
+            assert directive not in auditable
+
+    def test_a_prohibition_is_never_audited(self):
+        # Satisfied by silence, so a coverage check flags it every time.
+        for line in ("Do not describe an options-implied move as fair value",
+                     "Don't invent price targets",
+                     "Never state a falsification trigger",
+                     "Avoid dollar-denominated swings"):
+            assert ai._auditable_requirements(line) == []
+
+    def test_a_positive_requirement_survives(self):
+        line = "State the market cap for each name and which share basis it is on"
+        assert ai._auditable_requirements(line) == [line]
+
+    def test_selection_still_sees_everything(self):
+        # Evidence protection keeps using the site's directives, because the
+        # clips behind them are worth surviving the trim.
+        both = ai._requirement_lines("user line", ["site directive"])
+        assert both == ["user line", "site directive"]

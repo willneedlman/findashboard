@@ -12,6 +12,10 @@ const DECIMALS: [RegExp, number][] = [
   [/\bsharpe\b|\bsortino\b/i, 2],
   [/\b(?:weight|share|allocation|exposure|upside|return|drawdown|volatility|margin|yield|growth)\b|%/i, 1],
   [/\bprice\b|\bvalue\b|\bintrinsic\b|\btarget\b|\$/i, 2],
+  // Magnitude columns. Listed last so "Share %" still resolves as a percent.
+  // Without these a market cap fell through unformatted and printed every one
+  // of its digits.
+  [/\b(?:cap|revenue|sales|volume|shares|assets)\b/i, 2],
 ]
 
 /** Column-driven decimal precision, so one quantity reads the same everywhere. */
@@ -36,7 +40,10 @@ export function formatReportCell(
   column: string,
   allColumns: string[] = [],
 ): string {
-  if (value == null) return '—'
+  // An absent cell is a hyphen, not an em dash. The house voice carries no em
+  // dashes, and a column of them reads as a rendering fault rather than as
+  // missing data.
+  if (value == null) return '-'
   const decimals = columnDecimals(column, allColumns)
   const raw = String(value).trim()
   if (decimals == null || !raw) return raw
@@ -48,8 +55,31 @@ export function formatReportCell(
   const parsed = Number(digits.replace(/,/g, ''))
   if (!Number.isFinite(parsed)) return raw
   const negative = sign === '-' || sign === '−'
-  const body = parsed.toFixed(decimals)
-  return `${negative ? '−' : sign === '+' ? '+' : ''}${currency}${body}${unit ?? ''}`
+  const prefix = `${negative ? '−' : sign === '+' ? '+' : ''}${currency}`
+  // A magnitude gets a magnitude suffix. Applying the column's decimals to a
+  // raw figure printed revenue as "162361000000.00", which is unreadable and
+  // wider than the column. Percentages, ratios, betas and correlations are
+  // never this large, so nothing that should stay literal is caught: the floor
+  // is a million, which is also above any year or plain count.
+  if (!unit && Math.abs(parsed) >= 1e6) {
+    return `${prefix}${compactMagnitude(parsed)}`
+  }
+  return `${prefix}${parsed.toFixed(decimals)}${unit ?? ''}`
+}
+
+/** 162361000000 -> "162.4B". Two significant decimals, trailing zeros trimmed. */
+export function compactMagnitude(value: number): string {
+  const abs = Math.abs(value)
+  const [divisor, suffix] = abs >= 1e12 ? [1e12, 'T']
+    : abs >= 1e9 ? [1e9, 'B']
+      : abs >= 1e6 ? [1e6, 'M']
+        : [1e3, 'K']
+  const scaled = value / divisor
+  // One decimal once past ten, two below it, and Number() drops a trailing
+  // zero so 619.0M reads as 619M. Rounding 162.361B to a bare 162B throws away
+  // precision the column beside it is showing to one decimal.
+  const decimals = Math.abs(scaled) >= 10 ? 1 : 2
+  return `${Number(scaled.toFixed(decimals))}${suffix}`
 }
 
 /** Trim false precision out of prose and definition cells ("3.740%" → "3.74%"). */
