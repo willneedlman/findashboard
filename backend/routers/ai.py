@@ -7423,12 +7423,15 @@ def generate_report(req: ReportGenRequest):
         # finding the block exists to state. The workspace lists them in full;
         # the page needs to say only that something is missing and what.
         count = len(unmet_requirements)
+        # Built in plain statements rather than nested inside the f-string.
+        # A call spanning newlines inside an f-string expression is a 3.12
+        # feature; production runs 3.11 and refused to import the module at all.
+        named = _join_clause([_requirement_label(r) for r in unmet_requirements[:4]])
+        plural = "s" if count > 1 else ""
+        overflow = f", and {count - 4} more" if count > 4 else ""
         note = (
-            f"This report does not cover {count} stated "
-            f"requirement{'s' if count > 1 else ''} ({_join_clause(
-                [_requirement_label(r) for r in unmet_requirements[:4]])}"
-            f"{f', and {count - 4} more' if count > 4 else ''}), "
-            "because the supplied evidence did not carry them."
+            f"This report does not cover {count} stated requirement{plural} "
+            f"({named}{overflow}), because the supplied evidence did not carry them."
         )
         conclusion = f"{conclusion} {note}".strip() if conclusion else note
 
