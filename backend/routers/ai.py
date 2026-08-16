@@ -2678,6 +2678,104 @@ def _length_key(length: str | None) -> str:
         return "custom"
     return v if v in _LENGTH_SPEC else "medium"
 
+# Words that carry no signal about whether a requirement was answered, because
+# a finance report says them constantly regardless.
+_AMBIENT_TERMS = {
+    "market", "price", "prices", "report", "data", "value", "values", "stock", "stocks",
+    "equity", "company", "companies", "figure", "figures", "number", "numbers", "window",
+    "lookback", "period", "quarter", "quarters", "analysis", "evidence", "clip", "clips",
+}
+# A requirement asking for a measurement has to be answered with one.
+_QUANTITATIVE_REQUEST = re.compile(
+    r"\b(?:ratio|multiple|margin|growth|volatility|vol|drawdown|correlation|cap|"
+    r"median|percent|%|basis|return|beta|yield|price|figure|number|value)\b", re.I,
+)
+
+
+_EVERY_SUBJECT = re.compile(
+    r"\b(?:each|every|all\s+(?:four|three|five|of)?\s*(?:names?|tickers?)?|per\s+name|"
+    r"across\s+(?:all\s+)?(?:the\s+)?(?:four|three|five)?\s*names?|both)\b", re.I,
+)
+
+
+def _chart_audit_text(chart) -> str:
+    """What a chart puts in front of the reader, as one sentence per row.
+
+    Row-wise rather than one blob so the per-name check sees a name beside its
+    own number, which is how the chart reads.
+    """
+    if not isinstance(chart, dict):
+        return ""
+    x_key = chart.get("xKey", "")
+    labels = {s.get("key"): s.get("label", "") for s in (chart.get("series") or [])}
+    lines = [f"{chart.get('title', '')} {' '.join(str(v) for v in labels.values())}."]
+    for row in (chart.get("data") or [])[:24]:
+        if not isinstance(row, dict):
+            continue
+        parts = [str(row.get(x_key, ""))]
+        for key, label in labels.items():
+            value = row.get(key)
+            if isinstance(value, (list, tuple)) and len(value) == 2:
+                parts.append(f"{label} {value[0]} to {value[1]}")
+            elif isinstance(value, (int, float)) and not isinstance(value, bool):
+                parts.append(f"{label} {value}")
+        if len(parts) > 1:
+            lines.append(" ".join(parts) + ".")
+    return "\n".join(lines)
+
+
+def audit_requirements(requirements: list[str], report_text: str,
+                       subjects: list[str] | None = None) -> list[str]:
+    """Which of the user's must-include items the finished report does not cover.
+
+    The prompt tells the writer to satisfy every requirement and to say so
+    explicitly when it cannot. Nothing checked. A delivered report silently
+    omitted the market cap and share basis for all four names, never gave a
+    realised or implied volatility figure, and the reader had no way to know a
+    requirement had been dropped rather than answered.
+
+    This is a coverage check, not a proof of correctness: it asks whether the
+    report talks about the thing, with a measurement, anywhere. It is tuned to
+    stay quiet unless a requirement is clearly missing, because a false alarm
+    on a delivered report costs more than it saves.
+    """
+    if not requirements or not report_text:
+        return []
+    text = report_text.lower()
+    words = set(re.findall(r"[a-z][a-z0-9/&.-]{2,}", text))
+    sentences = re.split(r"(?<=[.!?])\s+|\n+", text)
+    unmet: list[str] = []
+    for line in requirements:
+        terms = {t for t in requirement_terms(line) if t not in _AMBIENT_TERMS}
+        if not terms:
+            continue
+        present = {t for t in terms if t in words or t in text}
+        if len(present) < len(terms) * 0.5:
+            unmet.append(line)
+            continue
+        if not _QUANTITATIVE_REQUEST.search(line):
+            continue
+        # It is discussed. Is it measured? A digit inside a metric's name
+        # ("90-day") is not an answer, so look for a real quantity.
+        measured = [
+            sentence for sentence in sentences
+            if _MEASUREMENT_RE.search(sentence)
+            and (present & set(re.findall(r"[a-z][a-z0-9/&.-]{2,}", sentence)))
+        ]
+        if not measured:
+            unmet.append(line)
+            continue
+        # "for each" and "across all four names" are part of the requirement, not
+        # decoration. The delivered report gave a drawdown for two of the four
+        # names and read as though it had answered.
+        if subjects and _EVERY_SUBJECT.search(line):
+            covered_here = " ".join(measured)
+            missing = [s for s in subjects if s and s.lower() not in covered_here]
+            if missing:
+                unmet.append(line)
+    return unmet
+
+
 def _must_include_section(raw: str | None, extra: list[str] | None = None) -> str:
     """Build the MUST INCLUDE prompt block from the user's own text plus any
     auto-detected directives (see _auto_must_include), or '' if both are empty."""
@@ -3847,10 +3945,38 @@ def _clip_signal_digest(clips: list[ReportClipIn]) -> dict:
     return dig
 
 
+_REQUIREMENT_STOPWORDS = {
+    "the", "and", "for", "with", "each", "its", "one", "all", "across", "over", "that",
+    "this", "from", "into", "state", "stated", "which", "what", "name", "names", "call",
+    "out", "their", "them", "have", "has", "been", "are", "was", "were", "will", "would",
+    "say", "said", "give", "given", "show", "shown", "include", "including", "well",
+    "most", "recent", "before", "current", "single", "explicit", "your", "you", "own",
+    "avoid", "better", "best", "judged", "next", "two", "four", "per", "and/or",
+}
+
+
+def requirement_terms(line: str) -> set[str]:
+    """Distinctive words in one must-include requirement.
+
+    Used both to protect the evidence that can satisfy it and to check afterwards
+    whether it actually appeared. Keeps metric vocabulary ("ev/ebitda", "implied",
+    "drawdown", "correlation") and drops the scaffolding a request is phrased in.
+    """
+    words = re.findall(r"[a-z][a-z0-9/&.-]{2,}", (line or "").lower())
+    return {w.strip(".") for w in words if w.strip(".") not in _REQUIREMENT_STOPWORDS}
+
+
+def _requirement_lines(raw: str | None, extra: list[str] | None = None) -> list[str]:
+    lines = [line.strip() for line in (raw or "").splitlines() if line.strip()]
+    lines.extend(extra or [])
+    return lines
+
+
 def _report_prompt_clips(
     clips: list[ReportClipIn],
     length: str,
     book_level: bool,
+    requirements: list[str] | None = None,
 ) -> list[dict]:
     """Select a compact, diverse evidence set for the LLM writer.
 
@@ -3878,6 +4004,23 @@ def _report_prompt_clips(
         (r"sector allocation|correlation matrix|global market|credit|yield curve", 740),
     ]
 
+    # The user's own requirements outrank every editorial rule below. Scoring
+    # only against fixed topic patterns meant a clip carrying market cap or ATM
+    # implied vol scored a generic 500, sat at the back of the ordering, and was
+    # among the first shed when the payload was fitted — so the report could not
+    # satisfy a requirement whose evidence had already been thrown away.
+    required_terms = [requirement_terms(line) for line in (requirements or [])]
+    required_terms = [t for t in required_terms if t]
+
+    def requirement_bonus(text: str) -> int:
+        words = set(re.findall(r"[a-z][a-z0-9/&.-]{2,}", text.lower()))
+        best = 0
+        for terms in required_terms:
+            overlap = len(terms & words)
+            if overlap:
+                best = max(best, int(1_200 * overlap / len(terms)))
+        return best
+
     def score(clip: ReportClipIn) -> int:
         text = f"{clip.sourceTab} {clip.title}"
         best = 500
@@ -3888,7 +4031,7 @@ def _report_prompt_clips(
             best += 240
         if clip.dataType.lower() in {"chart", "kpi"}:
             best += 20
-        return best
+        return best + requirement_bonus(f"{text} {clip.dataSummary[:400]}")
 
     selected: list[ReportClipIn] = []
     source_counts: dict[str, int] = {}
@@ -6895,11 +7038,13 @@ def generate_report(req: ReportGenRequest):
             "are not comparable across differently-priced names."
         )
 
-    clip_payload = _report_prompt_clips(req.clips, length_key, book_level)
+    coverage_requirements = _auto_must_include(req.clips)
+    requirement_lines = _requirement_lines(req.mustInclude, coverage_requirements)
+    # Selection has to know the requirements before it decides what to keep.
+    clip_payload = _report_prompt_clips(req.clips, length_key, book_level, requirement_lines)
     data_bank = {**data_bank_meta, "evidence": clip_payload, "valuationContext": valuation_context}
     goal_text = req.goal or "(not specified)"
     purpose_text = req.purpose or "(not specified)"
-    coverage_requirements = _auto_must_include(req.clips)
 
     # STEP 1 — Analytical structure: draft a thesis-first outline before writing.
     outline = _generate_outline({
@@ -7121,6 +7266,32 @@ def generate_report(req: ReportGenRequest):
         for section in sections:
             section["analysis"] = guard_evidence_domain_text(str(section.get("analysis", "")), req.clips)
 
+    # Did the report actually answer what was required of it? Checked against the
+    # finished text, including the figures and chart titles, because a
+    # requirement is as well satisfied by a labelled figure as by a sentence.
+    unmet_requirements = audit_requirements(requirement_lines, "\n".join([
+        headline, executive_summary, conclusion,
+        str(key_result.get("value", "")), str(key_result.get("context", "")),
+        *[str(s.get("heading", "")) for s in sections],
+        *[str(s.get("analysis", "")) for s in sections],
+        *[f"{f.get('label','')} {f.get('value','')}"
+          for s in sections for f in (s.get("keyFigures") or [])],
+        # Charts answer requirements too. A figure plotting all four names
+        # against a peer median satisfies "across all four names" as well as a
+        # sentence does, so the audit reads the chart's labels and values rather
+        # than only its title and calling the requirement missing.
+        *[_chart_audit_text(s.get("chart")) for s in sections],
+    ]), subjects_ranked)
+    if unmet_requirements:
+        logger.warning("report did not cover %d requirement(s): %s",
+                       len(unmet_requirements), " | ".join(unmet_requirements[:4]))
+        listed = " ".join(f"({i + 1}) {r.rstrip('.')}." for i, r in enumerate(unmet_requirements))
+        note = (
+            f"This report does not cover {len(unmet_requirements)} of your stated "
+            f"requirements: {listed} The supplied evidence did not carry them."
+        )
+        conclusion = f"{conclusion} {note}".strip() if conclusion else note
+
     # A report that came back short must say so on its own face. It gets printed
     # and sent on, long after the response JSON is gone, and a missing section
     # reads as "there was nothing to say here" rather than "this did not write".
@@ -7161,6 +7332,8 @@ def generate_report(req: ReportGenRequest):
             # Evidence the writer could not carry: shed to fit the model's limit,
             # so the report is arguing from less than was collected.
             "droppedClips": fit.get("droppedClips") or [],
+            # Must-include items the finished report does not cover.
+            "unmetRequirements": unmet_requirements,
             "templateId": contract["id"],
             "layoutPreset": (req.layoutPreset or "editorial").strip(),
             "requiredSourceIds": data_bank_meta.get("requiredSourceIds", []),

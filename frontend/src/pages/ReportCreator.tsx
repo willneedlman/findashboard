@@ -143,8 +143,19 @@ function GeneratedEditor({ project }: { project: ReportProject }) {
   const kr = gen.keyResult
   const missingSections = gen.pipeline?.incompleteSections ?? []
   const shedClips = gen.pipeline?.droppedClips ?? []
+  const unmet = gen.pipeline?.unmetRequirements ?? []
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {unmet.length > 0 && (
+        <div role="alert" style={{ border: `1px solid ${T.warn}`, background: T.goldTint(5), color: T.warn, fontFamily: T.label, fontSize: 10.5, lineHeight: 1.55, padding: '9px 11px' }}>
+          <div style={{ fontWeight: 700, marginBottom: 5 }}>
+            {unmet.length} of your must-include requirement{unmet.length > 1 ? 's are' : ' is'} not covered
+          </div>
+          <ul style={{ margin: 0, paddingLeft: 16 }}>
+            {unmet.map(r => <li key={r}>{r}</li>)}
+          </ul>
+        </div>
+      )}
       {(missingSections.length > 0 || shedClips.length > 0) && (
         <div role="alert" style={{ border: `1px solid ${T.warn}`, background: T.goldTint(5), color: T.warn, fontFamily: T.label, fontSize: 10.5, lineHeight: 1.5, padding: '9px 11px', display: 'flex', flexDirection: 'column', gap: 5 }}>
           {missingSections.length > 0 && (

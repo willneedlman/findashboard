@@ -226,6 +226,8 @@ export interface GeneratedReport {
     incompleteSections?: string[]
     // Evidence shed to fit the model limit; the report argues from less than was collected.
     droppedClips?: string[]
+    // Must-include items the finished report does not cover.
+    unmetRequirements?: string[]
     templateId: string
     layoutPreset: string
     requiredSourceIds: string[]
