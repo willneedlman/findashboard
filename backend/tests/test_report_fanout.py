@@ -77,11 +77,21 @@ def test_a_dropped_section_is_named_never_silently_missing(monkeypatch):
 
 
 def test_a_gutted_fan_out_still_falls_back(monkeypatch):
-    # Half the sections gone is not the report that was asked for; the single
-    # call is worth paying for.
-    out, _, dropped, _ = _run(monkeypatch, 12, set(range(6)), wait_heals=False)
+    # Most of the sections gone is not the report that was asked for.
+    #
+    # The bar was three quarters and is now half: the single call is not the
+    # better report it was assumed to be, because on an 8k bucket the
+    # instructions take over half the budget and it writes from no evidence at
+    # all. Nine of twelve missing still falls back; six of twelve now ships.
+    out, _, dropped, _ = _run(monkeypatch, 12, set(range(9)), wait_heals=False)
     assert out is None
     assert dropped == [], "the caller rewrites from scratch, so nothing is missing yet"
+
+
+def test_half_the_sections_ship_rather_than_falling_back(monkeypatch):
+    out, _, dropped, _ = _run(monkeypatch, 12, set(range(6)), wait_heals=False)
+    assert out is not None and len(out) == 6
+    assert len(dropped) == 6, "and every missing section is named"
 
 
 def test_a_wide_failure_does_not_wait_before_giving_up(monkeypatch):

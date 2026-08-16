@@ -354,13 +354,19 @@ class TestRequestFitsProviderCeiling:
 
     def test_output_is_traded_before_evidence(self):
         """A slightly shorter report beats no report, so the response budget
-        gives way first and the evidence stays whole."""
+        gives way first and the evidence stays whole.
+
+        Sized against the real ceiling. This used to pass twelve clips, which
+        only fitted because the default ceiling was 12000 — a leftover from a
+        model that no longer exists, while every model a report can land on is
+        metered at 8000. The test was green while production was refused.
+        """
         system = "s" * 14_000          # ~4.1k tokens
-        payload, out, fit = _fit_report_request(system, self._payload(12, 800), 6500)
+        payload, out, fit = _fit_report_request(system, self._payload(3, 800), 6500)
         assert fit["fitted"] is True
         assert out < 6500
         assert fit["droppedClips"] == []
-        assert len(payload["dataBank"]["evidence"]) == 12
+        assert len(payload["dataBank"]["evidence"]) == 3
 
     def test_evidence_sheds_only_once_output_is_at_its_floor(self):
         system = "s" * 14_000

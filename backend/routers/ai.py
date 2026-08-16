@@ -2336,10 +2336,25 @@ def _length_guidance(length_key: str, section_count: int, depth: str | None) -> 
 # reports were the ones that never worked, and why a medium one failed only
 # sometimes. Everything here exists to make that failure impossible rather than
 # unlikely.
-_REPORT_TPM_CEILING = int(os.getenv("REPORT_TPM_CEILING", "12000"))
+#
+# Default it to the smallest bucket any writer model actually has, rather than a
+# fixed number. It was 12000, left over from llama-3.3-70b's wider allowance, and
+# every model that replaced it is metered at 8000. Any path that fitted without
+# naming a model therefore built a request half again as large as the model would
+# accept and was refused, which is the "larger than groq accepts" the user saw.
+def _default_report_ceiling() -> int:
+    from ai_client import MODEL_POOL, MODEL_TPM
+    limits = [MODEL_TPM[m] for m in MODEL_POOL if m in MODEL_TPM]
+    return min(limits) if limits else 8_000
+
+
+_REPORT_TPM_CEILING = int(os.getenv("REPORT_TPM_CEILING", "0")) or _default_report_ceiling()
 # The estimate below is approximate, and a request that overshoots is refused
 # outright, so the headroom is deliberately generous.
 _REPORT_TPM_SAFETY = 0.88
+# Under this an answer cannot carry a report at all, so the request is named as
+# unfittable rather than sent to be refused.
+_ABSOLUTE_MIN_OUTPUT = 320
 # Below this the writer cannot produce a whole report, so evidence is shed
 # instead of squeezing the response any further.
 _REPORT_MIN_OUTPUT_TOKENS = 1_800
@@ -2410,6 +2425,30 @@ def _fit_report_request(
     if shed:
         logger.warning("report request trimmed to fit the token ceiling: dropped %d clip(s): %s",
                        len(shed), ", ".join(shed[:6]))
+
+    # The floor is a quality preference, not something the provider honours. With
+    # every clip shed the whole-report call still asked for 7,812 tokens against a
+    # 7,040 budget, because the floor stopped the answer shrinking any further —
+    # so it was refused outright, every time, no matter how little evidence it
+    # carried. Below the floor the report is poor. Above the budget there is no
+    # report at all, so take the poor one and say what it cost.
+    if reserved(payload, max_tokens) > budget:
+        room = budget - input_tokens(payload)
+        squeezed = answer_tokens_within(model, room) if model else room
+        if squeezed >= _ABSOLUTE_MIN_OUTPUT:
+            logger.warning(
+                "report answer squeezed below the %d floor to %d tokens to fit %d; "
+                "the instructions alone take %d",
+                floor, squeezed, budget, input_tokens(payload))
+            max_tokens = squeezed
+        else:
+            # The instructions do not leave room for an answer at all. Nothing
+            # here can fix that, so name it rather than send a doomed request.
+            logger.error(
+                "report request cannot fit: instructions take %d of a %d budget, "
+                "leaving %d for an answer",
+                input_tokens(payload), budget, room)
+
     return payload, max_tokens, {
         "fitted": True,
         "droppedClips": shed,
@@ -2461,6 +2500,41 @@ _SECTION_MAX_TOKENS = 1_800
 _FANOUT_RECOVERY_WAIT = float(os.getenv("REPORT_FANOUT_RECOVERY_WAIT", "20"))
 
 
+def _section_payload(payload: dict, section: dict) -> dict:
+    """The same evidence, ordered for the section about to be written.
+
+    A section call can afford roughly a thousand tokens of evidence once the
+    instructions are paid for, and the fit sheds from the end of the list. Every
+    section was handed the same globally-ranked evidence, so every section kept
+    the same two clips and the rest of the bank was never read by anyone: six
+    sections arguing from one pair of panels, and requirements whose evidence
+    was collected but never seen.
+
+    Ordering per section changes which two survive, not how many.
+    """
+    bank = payload.get("dataBank") or {}
+    evidence = list(bank.get("evidence") or [])
+    if len(evidence) < 2:
+        return payload
+    wanted = requirement_terms(
+        f"{section.get('heading', '')} {section.get('argues', '')} "
+        f"{str(section.get('templateSection', '')).replace('-', ' ')}"
+    )
+    if not wanted:
+        return payload
+
+    def affinity(index_and_clip):
+        index, clip = index_and_clip
+        text = " ".join(str(clip.get(k, "")) for k in ("title", "sourceTab", "dataSummary"))
+        hits = len(wanted & requirement_terms(text))
+        # Ties keep the original decision-value order, which already ranks the
+        # user's requirements first.
+        return (-hits, index)
+
+    ordered = [clip for _, clip in sorted(enumerate(evidence), key=affinity)]
+    return {**payload, "dataBank": {**bank, "evidence": ordered}}
+
+
 def _generate_one_section(
     base_sys_prompt: str,
     payload: dict,
@@ -2483,7 +2557,7 @@ def _generate_one_section(
     # latter reserved more answer than one section ever needs and forced the
     # evidence to be shed instead.
     fitted, tokens, _ = _fit_report_request(
-        sys_prompt, payload, max_tokens,
+        sys_prompt, _section_payload(payload, section), max_tokens,
         ceiling=MODEL_TPM.get(model, _REPORT_TPM_CEILING),
         model=model,
         min_output=_SECTION_MIN_TOKENS,
@@ -2592,9 +2666,13 @@ def _generate_sections_fanned(
     kept = [w for w in written if w is not None]
     if len(kept) == len(sections):
         return written
-    # Below that and the report is too thin to stand as the thing that was asked
-    # for, so it is worth paying for the single call.
-    if len(kept) >= 2 and len(kept) >= (len(sections) * 3 + 3) // 4:
+    # Below that the report is too thin to stand as the thing that was asked for.
+    # The bar used to be three quarters, on the assumption that the single call
+    # was a better report. It is not: on an 8k bucket the instructions alone take
+    # over half the budget, so that path sheds every clip and writes from no
+    # evidence at all. Half the sections written from real evidence beats a whole
+    # report written from none.
+    if len(kept) >= 2 and len(kept) * 2 >= len(sections):
         logger.warning("section fan-out delivered %d/%d; shipping the written "
                        "sections rather than sinking the report",
                        len(kept), len(sections))
@@ -7126,8 +7204,15 @@ def generate_report(req: ReportGenRequest):
         # The single call writes the report from scratch, so whatever the
         # fan-out gave up on is not missing from what ships here.
         dropped_sections.clear()
+        # Fit to the tightest bucket in the pool, because the call below walks
+        # all of them: a request sized for the roomiest model is refused by the
+        # others, and a 413 is refused outright rather than trimmed.
+        from ai_client import MODEL_POOL as _POOL, MODEL_TPM as _TPM
+
         payload, max_tokens, fit = _fit_report_request(
-            sys_prompt, payload, max_tokens, model=MODEL_SMART)
+            sys_prompt, payload, max_tokens,
+            ceiling=min([_TPM[m] for m in _POOL if m in _TPM] or [_REPORT_TPM_CEILING]),
+            model=MODEL_SMART)
         if fit["fitted"]:
             messages[1] = {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}
         # Walk the pool rather than pinning MODEL_SMART. This is the largest
