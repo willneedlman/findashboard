@@ -399,19 +399,34 @@ describe('assignBodyVisuals', () => {
     })
   })
 
-  it('promotes unused same-unit key figures into a labeled comparison bar', () => {
+  it('does not plot different measures of one subject as a comparison', () => {
+    // Changed deliberately. Sharing a unit is not sharing a quantity: a DCF
+    // upside beside a consensus upside, or a P/E beside an EV/EBITDA, are two
+    // different measures drawn as two bars on one axis, comparing nothing. A
+    // delivered report carried three such charts, each one its own section's
+    // KPI strip redrawn.
     const promoted = promoteKeyFiguresToChart([
       { label: 'WEN DCF upside', value: '106%' },
       { label: 'WEN consensus upside', value: '+1.3%' },
       { label: 'WEN P/E vs median', value: '9.9x vs 36.1x' },
+    ], 'Valuation Discount')
+    expect(promoted).toBeUndefined()
+  })
+
+  it('promotes one measure across several subjects into a comparison bar', () => {
+    const promoted = promoteKeyFiguresToChart([
+      { label: 'DCF upside (WEN)', value: '106%' },
+      { label: 'DCF upside (MCD)', value: '12.4%' },
+      { label: 'DCF upside (YUM)', value: '31.7%' },
     ], 'Valuation Discount')
     expect(promoted?.chartType).toBe('bar')
     expect(promoted?.barOrientation).toBe('horizontal')
     expect(promoted?.series[0].label).toBe('Percent (%)')
     expect(promoted?.series[0].unit).toBe('percent')
     expect(promoted?.data).toEqual([
-      { metric: 'WEN DCF Upside', value: 106 },
-      { metric: 'WEN Consensus Upside', value: 1.3 },
+      { metric: 'WEN', value: 106 },
+      { metric: 'MCD', value: 12.4 },
+      { metric: 'YUM', value: 31.7 },
     ])
   })
 
@@ -530,13 +545,17 @@ describe('assignBodyVisuals', () => {
         clipId: 'shared',
         heading: 'Valuation Upside',
         analysis: 'Valuation comparison.',
-        keyFigures: [{ label: 'DCF upside', value: '106%' }, { label: 'Consensus upside', value: '1.3%' }],
+        keyFigures: [{ label: 'DCF upside (WEN)', value: '106%' },
+                     { label: 'DCF upside (MCD)', value: '12.4%' },
+                     { label: 'DCF upside (YUM)', value: '31.7%' }],
       },
       {
         clipId: 'shared',
         heading: 'Revenue Growth',
         analysis: 'Growth comparison.',
-        keyFigures: [{ label: 'WEN growth', value: '3.3%' }, { label: 'Peer growth', value: '4.3%' }],
+        keyFigures: [{ label: 'Revenue growth (WEN)', value: '3.3%' },
+                     { label: 'Revenue growth (MCD)', value: '4.3%' },
+                     { label: 'Revenue growth (YUM)', value: '5.1%' }],
       },
     ]
     const assigned = assignReportBodyVisuals(
@@ -548,7 +567,9 @@ describe('assignBodyVisuals', () => {
     const firstKey = reportSectionAssignmentKey(sections, 0)
     const secondKey = reportSectionAssignmentKey(sections, 1)
     expect(firstKey).not.toBe(secondKey)
-    expect(assigned.get(firstKey)?.visual?.payload.title).toContain('Valuation Upside')
+    // Titles now name the measure rather than the section, which is what the
+    // reader needs and what keeps two charts from sharing one title.
+    expect(assigned.get(firstKey)?.visual?.payload.title).toContain('DCF Upside')
     expect(assigned.get(secondKey)?.visual?.payload.title).toContain('Revenue Growth')
   })
 

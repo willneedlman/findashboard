@@ -585,6 +585,20 @@ function figureUnitLabel(unit: ChartUnit): string {
   return 'Value'
 }
 
+/** Split "Revenue growth (NVDA)" or "NVDA P/E" into what is measured and who it
+ *  is measured on. Returns no subject when the label names only a metric. */
+export function splitFigureLabel(label: string): { metric: string; subject?: string } {
+  const parenthesised = /^(.*?)\s*\(([^)]+)\)\s*$/.exec(label.trim())
+  if (parenthesised) {
+    return { metric: parenthesised[1].trim(), subject: parenthesised[2].trim() }
+  }
+  const leadingTicker = /^([A-Z][A-Z0-9.\-]{0,5}|Peer median|Sector median|Median)\s+(.{2,})$/.exec(label.trim())
+  if (leadingTicker) {
+    return { metric: leadingTicker[2].trim(), subject: leadingTicker[1].trim() }
+  }
+  return { metric: label.trim() }
+}
+
 export function promoteKeyFiguresToChart(
   figures: KeyFigure[] | undefined,
   heading: string,
@@ -593,28 +607,47 @@ export function promoteKeyFiguresToChart(
     if (!figure.label || !figure.value || /\bvs\.?\b|[–—]\s*\$?\d/i.test(figure.value)) return []
     const value = tableNumber(figure.value)
     if (value == null) return []
-    return [{ metric: humanLabel(figure.label), value, unit: figureUnit(figure.value) }]
+    const { metric, subject } = splitFigureLabel(figure.label)
+    return [{ metric: humanLabel(metric), subject, value, unit: figureUnit(figure.value) }]
   })
+  // Group by what is measured, not by the unit it happens to share. Grouping on
+  // unit put a P/E of 34.5x and an EV/EBITDA of 32.7x side by side as two bars
+  // on one axis, which compares nothing: they are different quantities that
+  // both end in "x". A chart earns its place by putting ONE measure across
+  // several subjects.
   const groups = new Map<string, typeof candidates>()
   for (const candidate of candidates) {
-    groups.set(candidate.unit, [...(groups.get(candidate.unit) ?? []), candidate])
+    if (!candidate.subject) continue
+    const key = candidate.metric.toLowerCase()
+    groups.set(key, [...(groups.get(key) ?? []), candidate])
   }
-  const best = [...groups.values()].sort((a, b) => b.length - a.length)[0]
-  if (!best || best.length < 2) return undefined
-  const selected = best.slice(0, 6)
+  const best = [...groups.values()]
+    .map(group => group.filter((item, i, all) =>
+      all.findIndex(other => other.subject === item.subject) === i))
+    .sort((a, b) => b.length - a.length)[0]
+  // Two bars restate the strip printed beside them. Three or more is a spread
+  // the reader can see at a glance and cannot get from the numbers alone.
+  if (!best || best.length < 3) return undefined
+  const measure = best[0].metric
+  const selected = best.slice(0, 6).map(item => ({ ...item, metric: item.subject as string }))
   const unit = selected[0].unit
   const sum = selected.reduce((total, item) => total + item.value, 0)
+  // The composition test reads the MEASURE, not the subject names the axis now
+  // carries: whether these percentages are shares of one whole is a fact about
+  // what is being measured.
   const composition = unit === 'percent'
     && selected.length <= 8
     && selected.every(item => item.value >= 0)
     && sum >= 85
     && sum <= 115
-    && selected.some(item => /\b(share|weight|allocation|mix|composition)\b/i.test(item.metric))
+    && /\b(share|weight|allocation|mix|composition)\b/i.test(measure)
   return {
     kind: 'chart',
     chartType: composition ? 'pie' : 'bar',
     barOrientation: composition ? 'vertical' : 'horizontal',
-    title: `${heading} · Key Figures`,
+    // Name the comparison. "Relative Call · Key Figures" described where the
+    // chart sat, not what it showed, and the same title appeared three times.
+    title: `${measure} by name`,
     xKey: 'metric',
     data: selected.map(item => ({ metric: item.metric, value: item.value })),
     series: [{ key: 'value', label: figureUnitLabel(unit), unit }],
@@ -784,8 +817,10 @@ function assignPortfolioVisuals(
 /** A chart the pipeline built out of a section's own key figures. Plotting it
  * beside a rail of the same three numbers prints each one twice. */
 function isOwnKeyFigureChart(clip: ReportClip): boolean {
+  // Identified by how it was made, not by how it is titled. The title now
+  // names the comparison ("P/E by name"), which is what the reader needs and
+  // what a title-sniffing test cannot rely on.
   return clip.id.startsWith('key-figure-chart:')
-    || (clip.payload.kind === 'chart' && / · Key Figures$/i.test(clip.payload.title || ''))
 }
 
 function researchTarget(clip: ReportClip): string {
@@ -1022,7 +1057,11 @@ export function assignReportBodyVisuals(
     const chart = section.chart ?? tableChart ?? figureChart
     if (!chart) continue
     const generatedVisual: ReportClip = {
-      id: `site-chart:${assignmentKey}`,
+      // Tagged so the rail beside it knows the chart came from those very
+      // figures. Only the other promotion site set this prefix, so a chart
+      // promoted here printed every number twice, once as a bar and once as a
+      // cell in the strip next to it.
+      id: chart === figureChart ? `key-figure-chart:${assignmentKey}` : `site-chart:${assignmentKey}`,
       sourceTab: 'AlphaTape',
       capturedAt: meta.generatedAt,
       dataType: 'chart',
