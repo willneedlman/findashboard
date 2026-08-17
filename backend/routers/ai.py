@@ -3501,6 +3501,24 @@ def _chart_unit(explicit=None) -> str:
     unit = str(explicit or "").strip().lower()
     return unit if unit in _CHART_UNITS else "number"
 
+def _slices_are_uniform(data: list[dict], series: list[dict]) -> bool:
+    """Whether every slice of a pie is the same size, to within rounding.
+
+    Only series[0] is plotted for a pie (see the ChartPayload conventions), so
+    that is the series to read.
+    """
+    if not series or len(data) < 2:
+        return False
+    key = series[0].get("key")
+    values = [row.get(key) for row in data]
+    values = [v for v in values if isinstance(v, (int, float)) and not isinstance(v, bool)]
+    if len(values) < 2:
+        return False
+    spread = max(values) - min(values)
+    largest = max(abs(v) for v in values) or 1.0
+    return spread <= largest * 0.02
+
+
 def _clean_chart(raw) -> dict | None:
     """Validate/sanitize a model-synthesized chart (ClipPayload 'chart' shape).
     Drops it entirely rather than guessing at malformed structure — a missing
@@ -3580,6 +3598,11 @@ def _clean_chart(raw) -> dict | None:
             data.append(clean_row)
 
     if len(data) < 2:
+        return None
+    if chart_type == "pie" and _slices_are_uniform(data, series):
+        # A pie of four identical 25% slices is a circle cut in four. The report
+        # drew one for an equal-weight book and it said nothing the sentence
+        # beside it did not, while taking a third of the page.
         return None
 
     title = _title_case(str(raw.get("title", "")).strip(), 60)
@@ -4911,26 +4934,26 @@ def _mechanical_chart_pool(clips: list[ReportClipIn]) -> list[tuple[dict, tuple[
     sens_priority = 0 if len(by_ticker) <= 1 else (0 if _has_critical_sensitivity_insight(clips) else 3)
     candidates: list[tuple[dict | None, tuple[str, ...], int]] = [
         (_peer_distribution_box(clips),
-         ("peer", "distribution", "sector", "median", "relative", "cheap", "discount", "premium", "multiple"), 0),
+         ("valuation", "peer", "distribution", "sector", "median", "relative", "cheap", "discount", "premium", "multiple"), 0),
         (_mechanical_sensitivity_chart(clips),
          ("sensitiv", "wacc", "swing", "driver", "downside", "one-way", "uncertain"), sens_priority),
         (next((pie for c in clips if (pie := _mechanical_segments_pie(c))), None),
-         ("segment", "mix", "composition", "geograph", "revenue by", "product line", "diversif", "concentrat"), 0),
+         ("composition", "segment", "mix", "geograph", "revenue by", "product line", "diversif", "concentrat"), 0),
         (_revenue_overlay_chart(clips),
          ("revenue", "trajectory", "top-line", "top line", "expansion", "future cash", "projection"), 1),
         (_price_performance_overlay(clips),
-         ("price", "performance", "momentum", "return", "trend", "market", "rally", "trading"), 1),
+         ("market context", "relative call", "price", "performance", "momentum", "return", "trend", "market", "rally", "trading"), 1),
         (_analyst_upside_chart(clips),
          ("analyst", "upside", "consensus", "rating", "target", "sentiment"), 1),
         (_valuation_gap_chart(by_ticker),
-         ("valuation gap", "intrinsic", "dcf", "premium", "fair value", "overvalu", "undervalu"), 2),
+         ("valuation", "valuation gap", "intrinsic", "dcf", "premium", "fair value", "overvalu", "undervalu"), 2),
         (_peg_comparison_chart(clips),
          ("peg", "growth-adjusted", "growth adjusted", "cheap", "value"), 2),
         (_grouped_kpi_chart(by_ticker, [
             ("Rev Growth", "Rev Growth"), ("Gross Margin", "Gross Margin"),
             ("Operating Margin", "Op Margin"), ("Net Margin", "Net Margin"),
         ], "Growth & Margin Comparison", "percent"),
-         ("growth", "margin", "profitab", "edge", "momentum"), 2),
+         ("operating", "growth", "margin", "profitab", "edge"), 2),
         (_peer_pe_median_chart(clips),
          ("multiple", "p/e", "peer", "relative", "premium", "discount"), 2),
         (_grouped_kpi_chart(by_ticker, [
@@ -4949,6 +4972,33 @@ def _section_haystack(section: dict) -> str:
     parts = [section.get("heading", ""), section.get("analysis", "")]
     parts += [f.get("label", "") for f in (section.get("keyFigures") or [])]
     return " ".join(parts).lower()
+
+
+def _section_match_score(section: dict, keywords) -> int:
+    """How well a chart's vocabulary fits a section, by where the words land.
+
+    Flattening the heading, the figure labels and the whole paragraph into one
+    string made every hit worth the same, so a chart matching one incidental
+    word in a long analysis beat one matching the section's own title. The
+    operating-comparison chart went under "Market Context" because that
+    paragraph happens to say "momentum", and the options chart took Operating
+    Comparison's place. Every figure in the report sat under the wrong heading.
+
+    What a section is *about* is its heading and its template key. What its
+    prose mentions in passing is worth something, but not the same thing.
+    """
+    title = f"{section.get('heading', '')} {str(section.get('templateSection', '')).replace('-', ' ')}".lower()
+    labels = " ".join(f.get("label", "") for f in (section.get("keyFigures") or [])).lower()
+    prose = str(section.get("analysis", "")).lower()
+    score = 0
+    for keyword in keywords:
+        if keyword in title:
+            score += 4
+        elif keyword in labels:
+            score += 2
+        elif keyword in prose:
+            score += 1
+    return score
 
 def _auto_must_include(clips: list[ReportClipIn]) -> list[str]:
     """Directives the site forces into the report plan: it tells the writing
@@ -5039,7 +5089,7 @@ def _inject_mechanical_charts(sections: list[dict], clips: list[ReportClipIn]) -
     for chart, keywords, priority in pool:
         sig = _chart_signature(chart)
         for i, sec in enumerate(sections):
-            score = sum(1 for k in keywords if k in _section_haystack(sec))
+            score = _section_match_score(sec, keywords)
             if score > 0:
                 candidates.append((score, -priority, i, chart, sig))
     # Strongest match first; a distinct chart type breaks a tie, then document
@@ -5999,6 +6049,37 @@ def _holding_beta_maps(clips: list[ReportClipIn]) -> list[tuple[str, dict[str, f
             beta = _first_number(row[beta_index])
             if re.fullmatch(r"[A-Z][A-Z0-9.\-]{0,5}", ticker) and beta is not None:
                 values[ticker] = beta
+        if len(values) >= 2:
+            maps.append((clip.title, values))
+    maps.extend(_kpi_beta_maps(clips))
+    return maps
+
+
+def _kpi_beta_maps(clips: list[ReportClipIn]) -> list[tuple[str, dict[str, float]]]:
+    """Per-ticker betas stated as KPI cells rather than table rows.
+
+    Only tables were read, so a panel labelling its cells "AMD beta 3.89" was
+    invisible to the conflict check. A report then carried a factor table giving
+    AMD 4.30 and a strip giving AMD 3.89 one page apart, both presented as the
+    name's beta, and nothing noticed. The estimate is real in each panel; what
+    is wrong is reading across them.
+    """
+    maps: list[tuple[str, dict[str, float]]] = []
+    for clip in clips:
+        if _parse_table_summary(clip.dataSummary):
+            continue  # already covered as a table
+        values: dict[str, float] = {}
+        for label, raw in _parse_kpi_summary(clip.dataSummary).items():
+            match = re.match(r"^\s*([A-Z][A-Z0-9.\-]{0,5})\b.*\bbeta\b", label.strip(), re.I)
+            if not match:
+                continue
+            # "Portfolio beta" and "market beta" name an estimator, not a holding.
+            ticker = match.group(1).upper()
+            if ticker in {"PORTFOLIO", "MARKET", "BOOK", "TOTAL", "STATIC"}:
+                continue
+            number = _first_number(raw)
+            if number is not None:
+                values[ticker] = number
         if len(values) >= 2:
             maps.append((clip.title, values))
     return maps
