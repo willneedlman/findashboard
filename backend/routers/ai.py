@@ -4201,6 +4201,44 @@ def _auditable_requirements(raw: str | None) -> list[str]:
     return [line for line in _requirement_lines(raw) if not _PROHIBITION.match(line)]
 
 
+# Quantities that only exist once you have chosen a basket. They describe the
+# basket, not the names in it, so in a report picking between names they are
+# artifacts of a weighting nobody chose.
+#
+# No trailing \b: several of these end in "%", and a word boundary cannot match
+# between "%" and the end of a label, so "NVDA weight %" slipped through.
+_BOOK_CONSTRUCTION = re.compile(
+    r"\b(?:weight\s*%|weight percent|portfolio weight|book weight|allocation\s*%|"
+    r"variance share|book variance|risk contribution|contribution to (?:portfolio )?risk|"
+    r"idiosyncratic share|active weight|portfolio risk metrics|current allocation)",
+    re.I,
+)
+
+
+def _is_book_construction(clip: ReportClipIn) -> bool:
+    """Whether a clip is about how a book is put together rather than about the
+    names it holds."""
+    if str(getattr(clip, "evidenceDomain", "") or "") == "portfolio":
+        return True
+    return bool(_BOOK_CONSTRUCTION.search(f"{clip.title} {clip.dataSummary[:600]}"))
+
+
+def _drop_book_construction_figures(sections: list[dict]) -> None:
+    """Strip weights and risk-contribution shares from a report about names.
+
+    A holding at 25% of an equal-weight basket the tool built is not a fact
+    about the holding, and printing it beside a real measurement invites it to
+    be read as one.
+    """
+    for section in sections:
+        kept = [
+            figure for figure in (section.get("keyFigures") or [])
+            if not _BOOK_CONSTRUCTION.search(f"{figure.get('label', '')} {figure.get('value', '')}")
+        ]
+        if len(kept) != len(section.get("keyFigures") or []):
+            section["keyFigures"] = kept
+
+
 def _report_prompt_clips(
     clips: list[ReportClipIn],
     length: str,
@@ -4260,6 +4298,15 @@ def _report_prompt_clips(
             best += 240
         if clip.dataType.lower() in {"chart", "kpi"}:
             best += 20
+        # A report choosing between candidate names is not a book. Panels that
+        # decompose a portfolio answer a question nobody asked here, and the
+        # basket they decompose is one the tool invented: a report comparing
+        # four tickers led with a table of holdings at 25% each, with book
+        # variance shares and factor loadings printed as the names' market
+        # betas. Ranked below real evidence rather than removed, so the export
+        # still carries them.
+        if not book_level and _is_book_construction(clip):
+            best -= 600
         return best + requirement_bonus(f"{text} {clip.dataSummary[:400]}")
 
     selected: list[ReportClipIn] = []
@@ -7548,6 +7595,8 @@ def generate_report(req: ReportGenRequest):
     # Both read the strip and the paragraph together, so they run after the
     # figures are settled and after the prose linters have finished rewriting.
     _drop_stale_forward_dates(sections, datetime.now(timezone.utc))
+    if not book_level:
+        _drop_book_construction_figures(sections)
     _reconcile_unavailable_figures(sections)
 
     headline = _apply_report_linters(_report_title(result, outline, req), req.clips, slot_ctx)

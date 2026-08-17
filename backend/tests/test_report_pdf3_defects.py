@@ -103,3 +103,54 @@ class TestAnEmptyPieIsNotDrawn:
                "series": [{"key": "w", "label": "Weight %"}],
                "data": [{"name": n, "w": 25.0} for n in ("AMD", "AVGO", "MU", "NVDA")]}
         assert ai._clean_chart(bar) is not None
+
+
+class TestBookConstructionStaysOutOfANameComparison:
+    """The report led with "Holding-level beta and portfolio risk contribution":
+    four holdings at 25.0% each, book variance shares, idiosyncratic shares, and
+    factor loadings printed as the names' market betas. The basket was one the
+    factor tool built from the four tickers, not a book anyone chose, and the
+    report was about which name to own."""
+
+    FACTOR = ReportClipIn(
+        id="factor", sourceTab="Factor Decomposition",
+        title="Holding-level beta and portfolio risk contribution",
+        dataType="table", userDescription="", evidenceDomain="portfolio",
+        dataSummary=("Columns: Holding | Weight % | Market beta | Book variance share %\n"
+                     "AMD | 25.0 | 4.30 | 29.4\nNVDA | 25.0 | 2.46 | 11.0"))
+    PEERS = ReportClipIn(
+        id="peers", sourceTab="Peer Comparison", title="Peer valuation multiples",
+        dataType="table", userDescription="", evidenceDomain="issuer",
+        dataSummary="Columns: Ticker | P/E\nNVDA | 34.5\nAMD | 50.1")
+
+    def test_it_is_recognised_as_book_construction(self):
+        assert ai._is_book_construction(self.FACTOR)
+        assert not ai._is_book_construction(self.PEERS)
+
+    def test_a_name_comparison_ranks_it_below_real_evidence(self):
+        picked = ai._report_prompt_clips([self.FACTOR, self.PEERS], "short", False)
+        titles = [c.get("title") for c in picked]
+        assert titles.index("Peer valuation multiples") < titles.index(
+            "Holding-level beta and portfolio risk contribution")
+
+    def test_a_portfolio_report_still_gets_it_first(self):
+        # Same panel, different question. Here the basket IS the subject.
+        picked = ai._report_prompt_clips([self.PEERS, self.FACTOR], "short", True)
+        titles = [c.get("title") for c in picked]
+        assert "Holding-level beta and portfolio risk contribution" in titles
+
+    def test_weights_and_variance_shares_are_not_key_figures(self):
+        sections = [{
+            "heading": "Relative Call",
+            "keyFigures": [
+                {"label": "NVDA weight %", "value": "25.0"},
+                {"label": "NVDA book variance share %", "value": "11.0"},
+                {"label": "NVDA idiosyncratic share %", "value": "47.0"},
+                {"label": "NVDA P/E", "value": "34.5x"},
+                {"label": "NVDA beta", "value": "2.46"},
+            ],
+        }]
+        ai._drop_book_construction_figures(sections)
+        kept = [f["label"] for f in sections[0]["keyFigures"]]
+        assert kept == ["NVDA P/E", "NVDA beta"], (
+            "a 25% slice of a basket the tool invented is not a fact about NVDA")
