@@ -42,13 +42,16 @@ def test_a_fittable_request_carries_no_such_flag():
 def test_the_section_writer_refuses_before_calling_the_provider(monkeypatch):
     called = []
     monkeypatch.setattr(ai, "groq_chat", lambda *a, **k: called.append(1))
+    # A section builds its own instructions now, so the only way to make one
+    # impossible is to require more than a call can hold.
+    huge_requirements = ai._must_include_section("\n".join(["R" * 400] * 70))
     with pytest.raises(HTTPException) as excinfo:
         ai._generate_one_section(
-            _huge_prompt(), {"dataBank": {"evidence": []}},
+            {"dataBank": {"evidence": []}},
             {"templateSection": "valuation", "heading": "Valuation", "argues": "x"},
-            ["Risks"], MODEL_OSS, 700, {"c1"})
+            ["Risks"], MODEL_OSS, 700, {"c1"}, huge_requirements, {"multiples"})
     assert not called, "no provider call may be made for a doomed request"
-    assert "larger than one model call allows" in excinfo.value.detail
+    assert "leave no room for an answer" in excinfo.value.detail
 
 
 class TestSectionPayloadIsTrimmed:
@@ -141,3 +144,58 @@ class TestWriterBankCarriesOnlyWhatIsRead:
         assert size(slim) * 5 < size(full), (
             f"slim={size(slim)} full={size(full)}; the whole point is the difference"
         )
+
+
+class TestSectionPromptIsBuiltForOneSection:
+    """Measured in production: the section prompt was 5,283 tokens of a 7,040
+    budget, because a section was handed the whole report's instructions and
+    then 458 more tokens telling it to ignore the parts that did not apply.
+    With the payload it left nothing at all for evidence."""
+
+    SECTION = {"templateSection": "valuation-comparison",
+               "heading": "Valuation Comparison", "argues": "peer multiples"}
+    SIBLINGS = ["Relative Call", "Risks"]
+    FLAGS = {"multiples", "options"}
+
+    def _prompt(self, must=""):
+        return ai._section_system_prompt(must, self.SECTION, self.SIBLINGS, self.FLAGS)
+
+    def test_the_house_voice_and_accuracy_guards_survive(self):
+        p = self._prompt()
+        assert "EQUITY-RESEARCH EDITORIAL STANDARD" in p, "the voice is not negotiable"
+        assert "Never invent prices" in p, "the guards are what stop invented figures"
+
+    def test_the_section_gets_its_own_brief_and_schema(self):
+        p = self._prompt()
+        assert "valuation-comparison" in p and "Valuation Comparison" in p
+        assert "Relative Call" in p, "siblings tell it what not to write"
+        assert '"keyFigures"' in p
+
+    def test_the_users_requirements_are_carried(self):
+        p = self._prompt(ai._must_include_section("State the market cap for each name"))
+        assert "market cap" in p
+
+    def test_what_a_section_cannot_use_is_gone(self):
+        p = self._prompt()
+        # The whole-report schema: this call returns one section.
+        assert '"executiveSummary"' not in p
+        assert '"stance"' not in p
+        # The outline and the report-wide contract are not sent in a section
+        # payload any more, so instructions about them would point at nothing.
+        assert "outline.thesis" not in p
+        assert "SELECTED TEMPLATE" not in p
+
+    def test_it_is_far_smaller_than_the_whole_report_prompt(self):
+        from reporting.pipeline import template_contract
+        whole = ai._report_system_prompt(
+            "open", "medium", "", "comparison", False,
+            template_contract("comparison", "medium"), "standard", self.FLAGS)
+        assert ai._estimate_tokens(self._prompt()) < ai._estimate_tokens(whole) * 0.75
+
+    def test_a_section_call_now_leaves_room_for_evidence(self):
+        from ai_client import MODEL_OSS, MODEL_TPM, completion_cost
+        budget = int(MODEL_TPM[MODEL_OSS] * ai._REPORT_TPM_SAFETY)
+        payload_skeleton = 1133          # measured in production
+        answer = completion_cost(MODEL_OSS, ai._SECTION_MIN_TOKENS)
+        room = budget - ai._estimate_tokens(self._prompt()) - payload_skeleton - answer
+        assert room > 800, f"only {room} tokens left for the evidence the section argues from"

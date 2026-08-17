@@ -31,7 +31,7 @@ def _run(monkeypatch, n, fail_for, *, wait_heals=True):
     tries: dict[str, int] = {}
     models_used: list[str] = []
 
-    def one(sys_prompt, payload, section, siblings, model, per_section, valid_ids):
+    def one(payload, section, siblings, model, per_section, valid_ids, must_include="", rule_flags=None):
         key = section["templateSection"]
         idx = int(key[1:])
         tries[key] = tries.get(key, 0) + 1
@@ -43,7 +43,7 @@ def _run(monkeypatch, n, fail_for, *, wait_heals=True):
     monkeypatch.setattr(ai, "_generate_one_section", one)
     dropped: list[str] = []
     out = ai._generate_sections_fanned(
-        "sys", {}, _outline(n), "medium", None, {"c1"}, dropped_out=dropped)
+        {}, _outline(n), "medium", None, {"c1"}, dropped_out=dropped)
     return out, slept, dropped, models_used
 
 
@@ -111,7 +111,7 @@ def test_every_pool_lane_starts_a_section_and_overflow_starts_none(monkeypatch):
 def test_overflow_rescues_a_section_the_pool_could_not_write(monkeypatch):
     seen: list[str] = []
 
-    def one(sys_prompt, payload, section, siblings, model, per_section, valid_ids):
+    def one(payload, section, siblings, model, per_section, valid_ids, must_include="", rule_flags=None):
         seen.append(model)
         if model in MODEL_POOL:
             raise RuntimeError("429 rate limited")
@@ -120,6 +120,6 @@ def test_overflow_rescues_a_section_the_pool_could_not_write(monkeypatch):
 
     monkeypatch.setattr(ai, "_FANOUT_RECOVERY_WAIT", 0)
     monkeypatch.setattr(ai, "_generate_one_section", one)
-    out = ai._generate_sections_fanned("sys", {}, _outline(4), "medium", None, {"c1"})
+    out = ai._generate_sections_fanned({}, _outline(4), "medium", None, {"c1"})
     assert out is not None and len(out) == 4, "overflow should have caught every section"
     assert set(seen) & set(MODEL_OVERFLOW)

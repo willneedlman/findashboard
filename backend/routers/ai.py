@@ -2573,24 +2573,63 @@ def _section_payload(payload: dict, section: dict) -> dict:
     return {**payload, "dataBank": {**bank, "evidence": ordered}}
 
 
+_SECTION_WRITER_PREAMBLE = """You are a senior investment analyst writing ONE section of a research note for a professional desk. Other sections are being written at the same time by other calls. Write directly, support every claim with the supplied evidence, and answer the part of the Goal this section owns.
+
+You receive: Purpose, Goal, Timeframe, and a `dataBank` holding the DATA CLIPS chosen for this section plus valuationContext (live spot, optional day change, optional DCF). There is no outline and no report-wide contract in this call: your section's brief is below, and it is the whole of your assignment.
+"""
+
+
+def _section_system_prompt(
+    must_include: str,
+    section: dict,
+    siblings: list[str],
+    rule_flags: set[str] | None,
+) -> str:
+    """Instructions for writing one section, and nothing else.
+
+    A section used to be handed the entire report prompt and then 458 more
+    tokens telling it to ignore the parts that did not apply. Measured in
+    production at 5,283 tokens against a 7,040 budget, which left nothing for
+    the evidence the section was supposed to argue from.
+
+    Dropped because a section call cannot use them: the whole-report JSON
+    schema (it returns one section), the outline instructions and the template
+    contract listing every section (neither is sent in a section payload any
+    more), the report-length guidance (this call has its own token budget) and
+    the stance/keyResult/headline guidance (the frame call writes those).
+
+    Kept in full: the editorial standard, because the house voice is not
+    negotiable, and the hard rules, because they are what stop the writer
+    inventing figures and dates.
+    """
+    return "".join([
+        _SECTION_WRITER_PREAMBLE,
+        _RESEARCH_NOTE_EDITORIAL_STANDARD,
+        _hard_rules_block(rule_flags if rule_flags is not None else set()),
+        must_include,
+        _SECTION_ONLY_OVERRIDE % {
+            "key": section.get("templateSection", ""),
+            "label": section.get("heading", ""),
+            "argues": section.get("argues", "") or "the evidence this section owns",
+            "siblings": ", ".join(siblings) or "(none)",
+        },
+    ])
+
+
 def _generate_one_section(
-    base_sys_prompt: str,
     payload: dict,
     section: dict,
     siblings: list[str],
     model: str,
     max_tokens: int,
     valid_ids: set[str],
+    must_include: str = "",
+    rule_flags: set[str] | None = None,
 ) -> dict | None:
     """Write a single template section on a named model."""
     from ai_client import MODEL_TPM
 
-    sys_prompt = base_sys_prompt + (_SECTION_ONLY_OVERRIDE % {
-        "key": section.get("templateSection", ""),
-        "label": section.get("heading", ""),
-        "argues": section.get("argues", "") or "the evidence this section owns",
-        "siblings": ", ".join(siblings) or "(none)",
-    })
+    sys_prompt = _section_system_prompt(must_include, section, siblings, rule_flags)
     # A section may shrink to the section floor, not the whole-report floor: the
     # latter reserved more answer than one section ever needs and forced the
     # evidence to be shed instead.
@@ -2605,9 +2644,9 @@ def _generate_one_section(
         # over to a second provider, which is rate-limited and retried, and the
         # whole fan-out does that once per section per model.
         raise HTTPException(503, (
-            f"The report instructions are larger than one model call allows: "
-            f"{fit['instructionTokens']} tokens against a {fit['budget']} limit, before any "
-            "evidence. Shorten the must-include list or choose a shorter report."
+            f"The report instructions leave no room for an answer: they take "
+            f"{fit['instructionTokens']} of the {fit['budget']} tokens one model call allows. "
+            "Shorten the must-include list or choose a shorter report."
         ))
     messages = [
         {"role": "system", "content": sys_prompt},
@@ -2633,13 +2672,14 @@ def _generate_one_section(
 
 
 def _generate_sections_fanned(
-    base_sys_prompt: str,
     payload: dict,
     outline: dict,
     length_key: str,
     depth: str | None,
     valid_ids: set[str],
     dropped_out: list[str] | None = None,
+    must_include: str = "",
+    rule_flags: set[str] | None = None,
 ) -> list[dict] | None:
     """Write every section at once, one per model bucket.
 
@@ -2680,7 +2720,8 @@ def _generate_sections_fanned(
         for attempt, model in enumerate(order):
             try:
                 written = _generate_one_section(
-                    base_sys_prompt, payload, section, siblings, model, per_section, valid_ids)
+                    payload, section, siblings, model, per_section,
+                    valid_ids, must_include, rule_flags)
                 if written:
                     return written
                 logger.warning("fanned section %r returned nothing on %s",
@@ -7292,8 +7333,13 @@ def generate_report(req: ReportGenRequest):
     dropped_sections: list[str] = []
     if outline:
         written = _generate_sections_fanned(
-            sys_prompt, payload, outline, length_key, req.depth, valid_ids,
-            dropped_out=dropped_sections)
+            payload, outline, length_key, req.depth, valid_ids,
+            dropped_out=dropped_sections,
+            # The section writer builds its own instructions from these rather
+            # than inheriting the whole-report prompt and being told to ignore
+            # most of it. See _section_system_prompt.
+            must_include=_must_include_section(req.mustInclude, coverage_requirements),
+            rule_flags=_report_evidence_flags(req.clips, book_level, req.timeframe))
         if written:
             frame = _generate_report_frame(
                 payload, written,
@@ -7323,10 +7369,10 @@ def generate_report(req: ReportGenRequest):
             # user sees "the origin returned an invalid response", which points
             # at the server rather than at a report that asks for too much.
             raise HTTPException(503, (
-                f"The report instructions are larger than one model call allows: "
-                f"{fit['instructionTokens']} tokens against a {fit['budget']} limit, before any "
-                "evidence is added. Shorten the must-include list, pick a shorter report, "
-                "or use fewer clips."
+                f"The report instructions leave no room for an answer: they take "
+                f"{fit['instructionTokens']} of the {fit['budget']} tokens one model call allows, "
+                "before any evidence is added. Shorten the must-include list, pick a shorter "
+                "report, or use fewer clips."
             ))
         if fit["fitted"]:
             messages[1] = {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}
