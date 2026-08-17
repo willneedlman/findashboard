@@ -199,3 +199,32 @@ class TestSectionPromptIsBuiltForOneSection:
         answer = completion_cost(MODEL_OSS, ai._SECTION_MIN_TOKENS)
         room = budget - ai._estimate_tokens(self._prompt()) - payload_skeleton - answer
         assert room > 800, f"only {room} tokens left for the evidence the section argues from"
+
+
+class TestASqueezedAnswerStaysBigEnoughToBeOne:
+    """A whole report squeezed into a few hundred tokens comes back as a
+    truncated JSON object. It fails to parse, and the endpoint answered a bare
+    502, which the edge replaced with "the origin web server returned an invalid
+    or incomplete response" — so the user saw a server fault instead of a
+    rate-limited writer."""
+
+    def _fit(self, prompt_tokens, min_output):
+        return ai._fit_report_request(
+            "S" * int(prompt_tokens * 3.4), {"dataBank": {"evidence": []}}, 4000,
+            ceiling=MODEL_TPM[MODEL_OSS], model=MODEL_OSS, min_output=min_output)
+
+    def test_a_report_is_not_squeezed_into_a_fragment(self):
+        # Room for a few hundred tokens only: not a report, so say so.
+        _, _, fit = self._fit(5_400, ai._REPORT_MIN_OUTPUT_TOKENS)
+        assert fit.get("unfittable") is True
+
+    def test_a_report_with_real_room_is_squeezed_rather_than_refused(self):
+        _, tokens, fit = self._fit(3_700, ai._REPORT_MIN_OUTPUT_TOKENS)
+        assert not fit.get("unfittable")
+        assert tokens >= ai._REPORT_MIN_OUTPUT_TOKENS // 2
+
+    def test_a_section_may_go_smaller_than_a_report(self):
+        # A section object is far smaller, so its viable floor is lower.
+        _, tokens, fit = self._fit(5_400, ai._SECTION_MIN_TOKENS)
+        assert not fit.get("unfittable")
+        assert tokens >= max(ai._ABSOLUTE_MIN_OUTPUT, ai._SECTION_MIN_TOKENS // 2)

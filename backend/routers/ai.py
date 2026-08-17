@@ -2435,7 +2435,14 @@ def _fit_report_request(
     if reserved(payload, max_tokens) > budget:
         room = budget - input_tokens(payload)
         squeezed = answer_tokens_within(model, room) if model else room
-        if squeezed >= _ABSOLUTE_MIN_OUTPUT:
+        # How small the answer may get before it stops being one. A whole report
+        # is a JSON object carrying a headline, a stance, a key result, a summary,
+        # every section and a conclusion; asked for it in a few hundred tokens the
+        # writer emits a truncated object, which fails to parse and surfaced as a
+        # bare 502. Half the caller's own floor, so a section and a report each
+        # get a limit that means something for what they are writing.
+        viable = max(_ABSOLUTE_MIN_OUTPUT, floor // 2)
+        if squeezed >= viable:
             logger.warning(
                 "report answer squeezed below the %d floor to %d tokens to fit %d; "
                 "the instructions alone take %d",
@@ -7529,7 +7536,15 @@ def generate_report(req: ReportGenRequest):
         or not isinstance(result.get("keyResult"), dict)
         or "executiveSummary" not in result
     ):
-        raise HTTPException(502, "AI returned an unexpected report shape")
+        # 503, not 502. The edge replaces a 502 body with its own "the origin
+        # web server returned an invalid or incomplete response" page, so the
+        # reason never reaches the user and the app looks broken instead of the
+        # writer looking rate-limited. Every other AI failure here answers 503
+        # and those messages do arrive.
+        raise HTTPException(503, (
+            "The AI did not return a usable report. This usually means the providers were "
+            "rate-limited mid-run and the answer came back truncated. Wait a minute and retry."
+        ))
 
     sections = _build_sections(result.get("sections"), valid_ids, contract)
     # STEP 3 — Intentional chart mapping: the site builds and assigns every chart.
@@ -7565,7 +7580,10 @@ def generate_report(req: ReportGenRequest):
         force_range=(mode == "range"),
     )
     if stance is None or key_result is None:
-        raise HTTPException(502, "AI omitted a required evidence-backed stance or key result")
+        raise HTTPException(503, (
+            "The AI returned a report without a verdict or a key result. Retry, and if it "
+            "repeats, reduce the number of clips so the writer has room to finish."
+        ))
 
     # STEP 4 — Verification gate: proofread the summary and conclusion against the
     # exact numbers the charts show, and tighten the tone.
@@ -7708,7 +7726,7 @@ def generate_report(req: ReportGenRequest):
     template_errors = validate_template_sections(sections, contract)
     if template_errors:
         logger.error("report template validation failed: %s", template_errors)
-        raise HTTPException(502, {"message": "Generated report did not satisfy the selected template", "errors": template_errors})
+        raise HTTPException(503, {"message": "Generated report did not satisfy the selected template", "errors": template_errors})
 
     return {
         "headline": headline,
