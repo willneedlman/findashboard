@@ -1,6 +1,7 @@
 import logging
 logger = logging.getLogger(__name__)
 
+import math
 import numpy as np
 import pandas as pd
 import requests
@@ -470,6 +471,20 @@ class MonteCarloRequest(BaseModel):
     model: Literal["gbm", "student_t", "bootstrap"] = "gbm"
     t_degrees_freedom: float = Field(default=5.0, ge=2.1, le=30.0)
     bootstrap_block_days: int = Field(default=5, ge=1, le=63)
+    # Expected return cannot be estimated from a short sample the way volatility
+    # can: the standard error of a mean return is sigma/sqrt(n), which over three
+    # years of a 30%-vol book is about 17 percentage points a year. Extrapolating
+    # a trailing run therefore projects it forward as if it were a fact, which is
+    # how a portfolio came to show a 5th percentile of +260% over three years.
+    drift_mode: Literal["shrunk", "historical", "risk_free"] = "shrunk"
+    drift_cap_annual: float = Field(default=0.25, ge=0.0, le=2.0)
+    # In a sell-off correlations converge and diversification stops working. The
+    # portfolio's historical volatility already contains its usual diversification
+    # benefit, so stress is modelled by moving its volatility toward the weighted
+    # average of the holdings' own volatilities, which is what the book would do
+    # at a correlation of one.
+    correlation_breakdown: bool = True
+    stress_threshold_z: float = Field(default=1.5, ge=0.5, le=4.0)
     # Internal CRSP benchmark/calibration request. The UI keeps the user's
     # holdings as the subject and consumes this simulation as comparison context.
     crsp_mode: bool = False
@@ -486,6 +501,91 @@ class MonteCarloRequest(BaseModel):
         if not self.weights or len(self.weights) != len(self.tickers):
             self.weights = [1.0] * len(self.tickers)
         return self
+
+
+
+def _simulation_drift(mu_log: float, sigma_log: float, n_obs: int,
+                      mode: str, cap_annual: float) -> tuple[float, dict]:
+    """The daily log drift to simulate with, and how it was arrived at.
+
+    A sample mean return is a terrible estimate of an expected one. Its standard
+    error is sigma/sqrt(n): three years of a 30%-vol book leaves about 17
+    percentage points a year of uncertainty around it, which is wider than any
+    plausible expected return. Volatility, estimated from squared deviations,
+    converges far faster. So the honest thing is to keep the measured volatility
+    and refuse to take the measured drift at face value.
+
+    "shrunk" pulls the sample drift toward a market-like prior with a weight of
+    n/(n + k). k is five years of trading days, so a three-year sample lands
+    close to even and a one-year sample is dominated by the prior.
+    """
+    rf = _get_risk_free_rate()
+    prior_annual = rf + 0.05                     # a market-ish equity return
+    prior_daily = math.log1p(prior_annual) / 252
+    sample_annual = math.expm1(mu_log * 252)
+
+    if mode == "historical":
+        used = mu_log
+    elif mode == "risk_free":
+        used = math.log1p(rf) / 252
+    else:
+        k = 252 * 5
+        weight = n_obs / (n_obs + k) if n_obs > 0 else 0.0
+        used = weight * mu_log + (1 - weight) * prior_daily
+
+    cap_daily = math.log1p(cap_annual) / 252
+    capped = min(used, cap_daily)
+    return capped, {
+        "mode": mode,
+        "sample_annual_pct": round(sample_annual * 100, 2),
+        "prior_annual_pct": round(prior_annual * 100, 2),
+        "used_annual_pct": round(math.expm1(capped * 252) * 100, 2),
+        "capped": bool(capped < used - 1e-12),
+        "cap_annual_pct": round(cap_annual * 100, 2),
+        "observations": int(n_obs),
+    }
+
+
+def _breakdown_factor(price_ret, weights) -> float:
+    """How much wider the book gets when its correlations go to one.
+
+    The weighted average of the holdings' own volatilities is what the portfolio
+    would do with no diversification at all. Divided by the volatility it
+    actually had, that ratio is the diversification the book normally enjoys,
+    and the multiple by which a stressed day should be scaled once it stops
+    working.
+    """
+    try:
+        asset_vol = np.log1p(price_ret).std().to_numpy(dtype=float)
+        undiversified = float(np.dot(np.asarray(weights, dtype=float), asset_vol))
+        realised = float(np.log1p((price_ret * weights).sum(axis=1)).std())
+        if not np.isfinite(undiversified) or not np.isfinite(realised) or realised <= 0:
+            return 1.0
+        return float(min(max(undiversified / realised, 1.0), 3.0))
+    except Exception:                            # noqa: BLE001 — a single asset, or one column
+        return 1.0
+
+
+def _apply_correlation_breakdown(shocks: np.ndarray, mu: float, sigma: float,
+                                 factor: float, threshold_z: float) -> np.ndarray:
+    """Widen the down-tail: the days diversification fails are the bad ones.
+
+    Correlations do not drift up symmetrically. They converge in sell-offs, so
+    the amplification is applied only where the shock is already a large move
+    against the book, which deepens drawdowns without inflating the upside.
+    """
+    if factor <= 1.0:
+        return shocks
+    deviation = shocks - mu
+    stressed = deviation < -threshold_z * sigma
+    widened = np.where(stressed, mu + deviation * factor, shocks)
+    # Re-centre. Scaling one tail also drags the mean: on a 1.55 factor it cost
+    # about 21 points of annual drift, which quietly overrode the drift the
+    # caller chose and turned a believable projection into a different kind of
+    # wrong. Drift is a parameter and correlation behaviour is a shape, so the
+    # shape is applied and the drift is put back. The risk then shows up where
+    # it belongs, in the left tail and the drawdown, rather than in the median.
+    return widened - (widened.mean() - shocks.mean())
 
 
 def _tail_metrics(final: np.ndarray) -> tuple[float, float]:
@@ -509,6 +609,7 @@ def monte_carlo(req: MonteCarloRequest):
     multiple of starting capital (1.0 = breakeven)."""
     delistings, constituent_count = [], 0
     dividend_yield_annual: float | None = None
+    price_ret = None; w = None
     if req.crsp_mode:
         port_ret, delistings, constituent_count = _crsp_pit_returns(req.start, req.end)
     else:
@@ -534,7 +635,14 @@ def monte_carlo(req: MonteCarloRequest):
         dividend_yield_annual = max(0.0, float((dividend_ret * w).sum(axis=1).mean() * 252))
 
     log_ret = np.log1p(port_ret)
-    mu = float(log_ret.mean()); sigma = float(log_ret.std())
+    mu_sample = float(log_ret.mean()); sigma = float(log_ret.std())
+    # mu is already a LOG-return mean, so subtracting sigma^2/2 again applied the
+    # arithmetic-to-log correction twice. The bootstrap path never applied it,
+    # which left the three models disagreeing about their own drift.
+    mu, drift_meta = _simulation_drift(
+        mu_sample, sigma, int(len(log_ret)), req.drift_mode, req.drift_cap_annual)
+    breakdown = _breakdown_factor(price_ret, w) if (
+        req.correlation_breakdown and not req.crsp_mode) else 1.0
     n_sims = min(req.n_sims, 1000); T = req.horizon_days
     L = req.leverage
 
@@ -542,7 +650,7 @@ def monte_carlo(req: MonteCarloRequest):
     if req.model == "student_t":
         standardized = rng.standard_t(req.t_degrees_freedom, size=(T, n_sims))
         standardized *= np.sqrt((req.t_degrees_freedom - 2.0) / req.t_degrees_freedom)
-        shocks = (mu - 0.5 * sigma ** 2) + sigma * standardized
+        shocks = mu + sigma * standardized
     elif req.model == "bootstrap":
         history = log_ret.dropna().to_numpy(dtype=float)
         if not len(history):
@@ -555,7 +663,12 @@ def monte_carlo(req: MonteCarloRequest):
             offsets = np.arange(width).reshape(-1, 1)
             shocks[start_day:start_day + width] = history[starts.reshape(1, -1) + offsets]
     else:
-        shocks = (mu - 0.5 * sigma ** 2) + sigma * rng.standard_normal((T, n_sims))
+        shocks = mu + sigma * rng.standard_normal((T, n_sims))
+    if req.model != "bootstrap":
+        # The bootstrap replays real days, whose correlation behaviour is already
+        # in them; only the parametric models need this imposed.
+        shocks = _apply_correlation_breakdown(
+            shocks, mu, sigma, breakdown, req.stress_threshold_z)
     price_gross = np.vstack([np.ones((1, n_sims)), np.exp(np.cumsum(shocks, axis=0))])
     dividend_income = np.zeros_like(price_gross)
     if req.crsp_mode:
@@ -610,6 +723,13 @@ def monte_carlo(req: MonteCarloRequest):
         "short_maintenance_margin": req.short_maintenance_margin,
         "model": req.model,
         "t_degrees_freedom": req.t_degrees_freedom if req.model == "student_t" else None,
+        # What drift was simulated and why, so a projection can be argued with.
+        "drift": drift_meta,
+        "correlation_breakdown": {
+            "applied": bool(breakdown > 1.0 and req.model != "bootstrap"),
+            "factor": round(float(breakdown), 3),
+            "threshold_z": req.stress_threshold_z,
+        },
         "bootstrap_block_days": req.bootstrap_block_days if req.model == "bootstrap" else None,
         "percentiles": percentiles,
         "var_95": var_95,
