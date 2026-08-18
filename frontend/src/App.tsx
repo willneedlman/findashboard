@@ -94,6 +94,7 @@ const SettingsPage       = lazyWithReload(() => import('./pages/Settings'))
 const StockScreener      = lazyWithReload(() => import('./pages/StockScreener'))
 const PortfolioWorkspace = lazyWithReload(() => import('./pages/PortfolioWorkspace'))
 const PortfolioAnalysis  = lazyWithReload(() => import('./pages/PortfolioAnalysis'))
+const TradeHistoryAnalyzer = lazyWithReload(() => import('./pages/TradeHistoryAnalyzer'))
 const AdminTester        = lazyWithReload(() => import('./pages/AdminTester'))
 const CreditSpreads      = lazyWithReload(() => import('./pages/CreditSpreads'))
 const CreditDelinquencies = lazyWithReload(() => import('./pages/CreditDelinquencies'))
@@ -275,6 +276,7 @@ export default function App() {
               {/* Merged into the workspace's Live tab; old route keeps working. */}
               <Route path="/portfolio-live" element={<Navigate to="/portfolio-manager?view=live" replace />} />
               <Route path="/portfolio-analysis" element={<PortfolioAnalysis />} />
+              <Route path="/trade-history" element={<TradeHistoryAnalyzer />} />
               {/* Portfolio tools — now standalone (legacy /portfolio-skills hub dismantled) */}
               <Route path="/backtest"         element={<PortfolioBacktester />} />
               <Route path="/montecarlo"       element={<MonteCarlo />} />

@@ -127,6 +127,7 @@ export const HUBS: Hub[] = [
       { title: 'Paper Trading',            chip: 'Paper Trading', desc: 'Simulated live execution across asset classes', route: '/paper-trading', icon: Terminal },
       { title: 'Options MM Simulator', chip: 'Options MM',          desc: 'Quote a chain, carry the inventory, hedge the greeks, on one screen', route: '/options-mm-2', icon: Gauge },
       { title: 'Fixed Income MM Simulator', chip: 'Fixed Income MM', desc: 'Quote the curve, carry the DV01, hedge with futures, on one screen', route: '/fixed-income-mm-2', icon: Landmark },
+      { title: 'Trade History Analyzer', chip: 'Trade History', desc: 'Import a Fidelity or Robinhood export and measure the account: drawdown, Sharpe, Sortino, alpha and beta', route: '/trade-history', icon: ClipboardList },
       { title: 'Trade Journal',            chip: 'Trade Journal', desc: 'Entry/exit, P&L, and win-rate analytics',       route: '/trade-journal',     icon: BookOpen },
       { title: 'Price Alerts',             chip: 'Price Alerts',  desc: 'Price and percent-change notifications',        route: '/alerts',            icon: Bell },
     ],

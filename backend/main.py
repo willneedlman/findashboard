@@ -29,7 +29,7 @@ from routers import (
     maritime, snapshots, credit, housing,
     portfolio_optimizer, macro_events,
     logistics, factset, comtrade, bcc, official,
-    social, movers, data_audit, admin_files,
+    social, movers, data_audit, admin_files, trade_history,
     observatory_boards,
 )
 
@@ -260,6 +260,7 @@ app.include_router(earnings.router,          prefix="/api/earnings",          ta
 app.include_router(ipo.router,               prefix="/api/ipo",               tags=["ipo"])
 app.include_router(leaderboard.router,       prefix="/api/leaderboard",       tags=["leaderboard"])
 app.include_router(data_audit.router,        prefix="/api/data-audit",        tags=["data-audit"])
+app.include_router(trade_history.router,     prefix="/api/trade-history",     tags=["trade-history"])
 app.include_router(maritime.router,          prefix="/api/maritime",          tags=["maritime"])
 app.include_router(observatory_boards.router, prefix="/api/observatory",       tags=["observatory"])
 app.include_router(logistics.router,         prefix="/api/logistics",         tags=["logistics"])
