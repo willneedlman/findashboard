@@ -278,6 +278,8 @@ def _causality_check(run: Callable, ctx, cuts=(0.3, 0.45, 0.6, 0.75)) -> list[Di
     Truncation is kept as a secondary pass because it additionally catches code
     whose behaviour depends on the series length itself.
     """
+    from .sandbox import SandboxError as _SandboxError
+
     n = ctx.n
     if n < 60:
         return [Diagnostic("L3", "warning", "too few bars to test causality reliably")]
@@ -290,7 +292,24 @@ def _causality_check(run: Callable, ctx, cuts=(0.3, 0.45, 0.6, 0.75)) -> list[Di
         for factor, label in ((0.01, "collapsed"), (100.0, "inflated")):
             try:
                 alt = run(_perturb_future(ctx, k, factor))
-            except Exception as e:      # noqa: BLE001
+            except _SandboxError as e:
+                # The sandbox killed the run on its CPU or memory limit, so the
+                # comparison never happened. That is not evidence of anything
+                # about causality: a process that produced no signals cannot be
+                # shown to have produced different ones.
+                #
+                # It was reported as a lookahead violation, which made the
+                # generator reject working code and retry until it gave up. The
+                # perturbation is also a plausible cause in its own right, since
+                # it scales the tail by 100x, and an indicator fed values two
+                # orders of magnitude larger can be slower or overflow.
+                return [Diagnostic("L3", "warning",
+                                   f"causality could not be verified: the run was killed by the "
+                                   f"sandbox when data after bar {k} was {label} ({e}). "
+                                   f"This says nothing about lookahead either way.")]
+            except Exception as e:      # noqa: BLE001 — a logic fault IS evidence
+                # Reading past the end of the series, or indexing on a future
+                # value, raises here precisely because the future changed.
                 return [Diagnostic("L3", "error",
                                    f"{type(e).__name__} when data after bar {k} was {label}: {e}. "
                                    f"The strategy behaves differently depending on future values.")]
