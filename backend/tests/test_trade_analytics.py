@@ -112,16 +112,19 @@ class TestCaveatsAreStated:
         out = A.analyze(txns)
         assert any("not reliable at this length" in c for c in out["caveats"])
 
-    def test_options_are_declared_as_realised_cash_only(self, monkeypatch):
+    def test_options_are_priced_now_rather_than_declared_uncovered(self, monkeypatch):
         start = date(2026, 1, 1)
         monkeypatch.setattr(A, "_price_frame",
                             lambda syms, s, e: _flat_prices(syms, start, 200, rate=0.001))
         txns = [Txn(date=start, kind="deposit", amount=10_000.0),
                 Txn(date=start, kind="buy", symbol="SPY", quantity=100.0, amount=-10_000.0),
                 Txn(date=start + timedelta(days=5), kind="sell", symbol="NVDA260807C200",
-                    quantity=1, amount=892.32, is_option=True)]
+                    quantity=1, price=8.93, amount=892.32, is_option=True)]
         out = A.analyze(txns)
-        assert any("Option trades are carried at realised cash" in c for c in out["caveats"])
+        # Changed deliberately: contracts are marked with Black-Scholes against
+        # the underlying, at the volatility solved out of their own fill, so the
+        # old "realised cash only" caveat is no longer true.
+        assert not any("realised cash only" in c for c in out["caveats"])
         assert out["account"]["optionRealised"] == pytest.approx(892.32)
 
 
@@ -147,3 +150,95 @@ class TestRealisedPnl:
     def test_dividends_count_as_realised(self):
         txns = [Txn(date=date(2026, 1, 1), kind="dividend", symbol="BND", amount=0.75)]
         assert A._realised_pnl(txns) == pytest.approx(0.75)
+
+
+class TestMarketRegression:
+    """Two alphas, because they answer different questions. Jensen's applies
+    CAPM to the compounded returns; the regression intercept carries a standard
+    error and so can be tested against zero."""
+
+    def _series(self, n=500, beta=1.2, alpha_daily=0.0002, noise=0.0005, seed=7):
+        # Enough days and little enough idiosyncratic noise that the injected
+        # alpha is resolvable. At n=250 with 0.002 daily noise the standard
+        # error is about a third of the signal, and the estimate legitimately
+        # lands nowhere near the input — which is the whole reason the t-stat
+        # is reported beside the number.
+        rng = np.random.default_rng(seed)
+        idx = pd.date_range("2026-01-01", periods=n, freq="B")
+        bench = pd.Series(rng.normal(0.0004, 0.01, n), index=idx)
+        port = alpha_daily + beta * bench + pd.Series(rng.normal(0, noise, n), index=idx)
+        return port, bench
+
+    def test_it_recovers_the_beta_it_was_given(self):
+        port, bench = self._series(beta=1.2)
+        out = A.market_regression(port, bench, rf=0.0)
+        assert out["sufficient"] is True
+        assert out["beta"] == pytest.approx(1.2, abs=0.05)
+
+    def test_it_recovers_the_alpha_it_was_given(self):
+        port, bench = self._series(alpha_daily=0.0002)
+        out = A.market_regression(port, bench, rf=0.0)
+        # 0.0002 a day over 252 days is about 5%.
+        assert out["alphaRegressionPct"] == pytest.approx(5.0, abs=1.5)
+
+    def test_real_alpha_is_reported_as_significant(self):
+        port, bench = self._series(alpha_daily=0.0006)
+        out = A.market_regression(port, bench, rf=0.0)
+        assert out["significant"] is True and out["pValue"] < 0.05
+
+    def test_no_alpha_is_not_dressed_up_as_alpha(self):
+        # Noise restored to a realistic level: with none, any tiny drift reads
+        # as significant, which is not the case being tested.
+        port, bench = self._series(alpha_daily=0.0, noise=0.002)
+        out = A.market_regression(port, bench, rf=0.0)
+        assert out["significant"] is False, "noise must not read as skill"
+
+    def test_a_short_sample_refuses_to_fit(self):
+        port, bench = self._series(n=15)
+        out = A.market_regression(port, bench, rf=0.0)
+        assert out["sufficient"] is False
+
+    def test_it_ships_the_points_and_the_line_the_numbers_came_from(self):
+        port, bench = self._series()
+        out = A.market_regression(port, bench, rf=0.0)
+        assert len(out["points"]) == out["observations"]
+        assert len(out["line"]) == 2
+        # The drawn line must be the fit, not a redrawn approximation.
+        (x0, y0), (x1, y1) = [(p["x"], p["y"]) for p in out["line"]]
+        assert (y1 - y0) / (x1 - x0) == pytest.approx(out["beta"], abs=0.01)
+
+
+class TestOptionMarking:
+    def test_an_occ_symbol_is_decomposed(self):
+        spec = A.parse_option_symbol("NVDA260807C200")
+        assert spec["underlying"] == "NVDA" and spec["right"] == "call"
+        assert spec["strike"] == 200.0 and spec["expiry"] == date(2026, 8, 7)
+
+    def test_a_plain_ticker_is_not_an_option(self):
+        assert A.parse_option_symbol("NVDA") is None
+
+    def test_the_fill_price_gives_back_its_own_volatility(self):
+        from math_engine import bs_price
+        truth = 0.55
+        price = float(bs_price(205.0, 200.0, 30.0, 4.0, truth * 100, "call"))
+        solved = A.implied_vol(price, 205.0, 200.0, 30 / 365, 0.04, "call")
+        assert solved == pytest.approx(truth, abs=0.01)
+
+    def test_a_price_at_or_below_intrinsic_has_no_volatility_to_solve(self):
+        # Deep in the money with no time value left: nothing to back out.
+        assert A.implied_vol(5.0, 205.0, 200.0, 30 / 365, 0.04, "call") is None
+
+    def test_an_option_position_is_marked_into_the_curve(self, monkeypatch):
+        start = date(2026, 1, 1)
+        monkeypatch.setattr(A, "_price_frame",
+                            lambda syms, s, e: _flat_prices(syms, start, 60))
+        txns = [
+            Txn(date=start, kind="deposit", amount=10_000.0),
+            Txn(date=start, kind="buy", symbol="SPY260201C100", quantity=1,
+                price=5.0, amount=-500.0, is_option=True),
+        ]
+        built = A.build_curve(txns)
+        # Cash fell by the premium; the contract carries value in its place,
+        # rather than the premium simply vanishing from the account.
+        assert float(built["cash"].iloc[-1]) == pytest.approx(9_500.0, abs=1.0)
+        assert float(built["option_value"].max()) > 0

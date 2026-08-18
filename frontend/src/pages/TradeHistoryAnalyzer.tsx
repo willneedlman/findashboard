@@ -2,7 +2,8 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import axios from 'axios'
 import {
   ResponsiveContainer, AreaChart, Area, LineChart, Line, BarChart, Bar,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, Cell,
+  ScatterChart, Scatter, ComposedChart,
+  XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, Cell,
 } from 'recharts'
 import { Upload, AlertTriangle } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
@@ -20,7 +21,16 @@ interface Metrics {
   totalReturnPct: number; annualizedReturnPct: number; benchmarkReturnPct: number
   volPct: number; sharpe: number; sortino: number; calmar: number
   maxDrawdownPct: number; alphaPct: number; beta: number
+  alphaJensenPct: number; alphaRegressionPct: number | null
   riskFreePct: number; benchmark: string
+}
+interface Regression {
+  sufficient: boolean; observations: number
+  beta?: number; alphaJensenPct?: number; alphaRegressionPct?: number
+  tStat?: number; pValue?: number; rSquared?: number; significant?: boolean
+  portfolioAnnPct?: number; benchmarkAnnPct?: number
+  points?: { x: number; y: number }[]
+  line?: { x: number; y: number }[]
 }
 interface Account {
   startDate: string; endDate: string; ledgerStartDate?: string; days: number
@@ -32,6 +42,7 @@ interface Analysis {
   metrics: Metrics
   account: Account
   series: { equity: Point[]; drawdown: Point[]; benchmark: Point[] }
+  regression: Regression
   allocation: { symbol: string; value: number; weightPct: number }[]
   monthly: { month: string; returnPct: number }[]
   caveats: string[]
@@ -201,22 +212,17 @@ export default function TradeHistoryAnalyzer() {
                 sub: `over ${a.days} days` },
               { label: 'Sharpe', value: m.sharpe.toFixed(2), sub: `vol ${m.volPct.toFixed(1)}%` },
               { label: 'Sortino', value: m.sortino.toFixed(2), sub: `calmar ${m.calmar.toFixed(2)}` },
-              { label: 'Alpha', value: pct(m.alphaPct), vc: m.alphaPct >= 0 ? T.pos : T.neg,
+              { label: 'Alpha (Jensen)', value: pct(m.alphaJensenPct), vc: m.alphaJensenPct >= 0 ? T.pos : T.neg,
                 sub: `beta ${m.beta.toFixed(2)}` },
+              { label: 'Alpha (regression)',
+                value: m.alphaRegressionPct == null ? '—' : pct(m.alphaRegressionPct),
+                vc: (m.alphaRegressionPct ?? 0) >= 0 ? T.pos : T.neg,
+                sub: data.regression.sufficient
+                  ? `t ${data.regression.tStat?.toFixed(2)} · ${data.regression.significant ? 'significant' : 'not significant'}`
+                  : 'too few days' },
               { label: 'Net gain', value: money(a.netGain), vc: a.netGain >= 0 ? T.pos : T.neg,
                 sub: `on ${money(a.netContributions)} in` },
             ]} />
-
-            {data.caveats.length > 0 && (
-              <div style={{ border: `1px solid ${T.warn}`, background: T.goldTint(5), color: T.warn, fontFamily: MONO, fontSize: 10.5, lineHeight: 1.6, padding: '10px 12px' }}>
-                <div style={{ fontFamily: SANS, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', fontSize: 9, marginBottom: 6 }}>
-                  What these numbers do not cover
-                </div>
-                <ul style={{ margin: 0, paddingLeft: 16 }}>
-                  {data.caveats.map(c => <li key={c} style={{ marginBottom: 3 }}>{c}</li>)}
-                </ul>
-              </div>
-            )}
 
             <Panel label="Account value" meta={
               <span style={{ fontFamily: MONO, fontSize: 10, color: T.muted }}>
@@ -285,6 +291,66 @@ export default function TradeHistoryAnalyzer() {
                 </div>
               </Panel>
             </div>
+
+            <Panel label={`Daily return against ${m.benchmark}`} meta={
+              data.regression.sufficient ? (
+                <span style={{ fontFamily: MONO, fontSize: 10, color: T.muted }}>
+                  {data.regression.observations} days · beta {data.regression.beta?.toFixed(2)} ·
+                  R² {data.regression.rSquared?.toFixed(3)} ·
+                  alpha {pct(data.regression.alphaRegressionPct ?? 0)} (t {data.regression.tStat?.toFixed(2)},
+                  p {data.regression.pValue?.toFixed(3)})
+                </span>
+              ) : (
+                <span style={{ fontFamily: MONO, fontSize: 10, color: T.muted }}>
+                  {data.regression.observations} overlapping days, too few to fit
+                </span>
+              )
+            }>
+              {data.regression.sufficient ? (
+                <>
+                  <div style={{ height: 320, padding: '10px 8px 4px' }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart margin={{ top: 8, right: 16, bottom: 26, left: 4 }}>
+                        <CartesianGrid stroke={T.borderFaint} />
+                        <XAxis type="number" dataKey="x" name={m.benchmark}
+                          tick={{ fontSize: 9, fill: T.muted, fontFamily: MONO }}
+                          tickFormatter={(v: number) => `${v.toFixed(1)}%`}
+                          label={{ value: `${m.benchmark} daily excess return`, position: 'insideBottom',
+                                   offset: -14, fill: T.muted, fontFamily: MONO, fontSize: 10 }} />
+                        <YAxis type="number" dataKey="y" name="Account" width={52}
+                          tick={{ fontSize: 9, fill: T.muted, fontFamily: MONO }}
+                          tickFormatter={(v: number) => `${v.toFixed(1)}%`} />
+                        <ZAxis range={[26, 26]} />
+                        <ReferenceLine x={0} stroke={T.border} />
+                        <ReferenceLine y={0} stroke={T.border} />
+                        <Tooltip cursor={{ strokeDasharray: '3 3' }}
+                          contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, fontFamily: MONO, fontSize: 11 }}
+                          formatter={(v: number, n: string) => [`${v.toFixed(2)}%`, n]} />
+                        <Scatter name="Daily" data={data.regression.points ?? []} fill={T.blue} fillOpacity={0.55} />
+                        <Line name="Fit" data={data.regression.line ?? []} dataKey="y" stroke={T.gold}
+                          strokeWidth={1.8} dot={false} isAnimationActive={false} legendType="none" />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div style={{ padding: '2px 12px 12px', fontFamily: MONO, fontSize: 10, color: T.muted, lineHeight: 1.65 }}>
+                    Each point is one day: {m.benchmark}&apos;s excess return across, the account&apos;s up.
+                    The slope is beta, the intercept is alpha.
+                    {' '}
+                    <strong style={{ color: T.text }}>Jensen {pct(m.alphaJensenPct)}</strong> applies CAPM to the
+                    compounded returns; <strong style={{ color: T.text }}>regression {pct(m.alphaRegressionPct ?? 0)}</strong>
+                    {' '}is the intercept of this fit and carries a standard error, so it can be tested.
+                    {' '}
+                    {data.regression.significant
+                      ? `At p ${data.regression.pValue?.toFixed(3)} this alpha is distinguishable from zero.`
+                      : `At p ${data.regression.pValue?.toFixed(3)} this alpha is not distinguishable from zero: on ${data.regression.observations} days a gap this size is what noise looks like.`}
+                  </div>
+                </>
+              ) : (
+                <div style={{ padding: 14, fontFamily: MONO, fontSize: 11, color: T.muted }}>
+                  A regression needs at least 20 overlapping days.
+                </div>
+              )}
+            </Panel>
 
             <Panel label="Holdings at the end of the period">
               <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: MONO, fontSize: 11 }}>

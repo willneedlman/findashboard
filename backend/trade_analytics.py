@@ -24,6 +24,7 @@ smoothed over:
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date, timedelta
 
 import numpy as np
@@ -69,6 +70,128 @@ def _is_security_transfer(t: Txn) -> bool:
     return t.kind in ("deposit", "withdrawal") and bool(t.symbol) and t.quantity > 0
 
 
+
+# ── Options ─────────────────────────────────────────────────────────────────
+# A contract has no free historical price series, but it does not need one: the
+# fill price in the ledger is a real observation, so the volatility the market
+# charged at that moment can be solved out of it and the contract marked against
+# the underlying from there. That is one measured input per trade rather than an
+# assumed volatility applied to everything.
+_CONTRACT_MULTIPLIER = 100.0
+_OCC = re.compile(r"^([A-Z.]{1,6})(\d{2})(\d{2})(\d{2})([CP])(\d+(?:\.\d+)?)$")
+
+
+def parse_option_symbol(symbol: str) -> dict | None:
+    """"NVDA260807C200" -> underlying, expiry, right and strike."""
+    m = _OCC.match((symbol or "").strip().upper())
+    if not m:
+        return None
+    root, yy, mm, dd, right, strike = m.groups()
+    try:
+        expiry = date(2000 + int(yy), int(mm), int(dd))
+    except ValueError:
+        return None
+    return {"underlying": root, "expiry": expiry,
+            "right": "call" if right == "C" else "put", "strike": float(strike)}
+
+
+def implied_vol(price: float, S: float, K: float, T: float, r: float, right: str) -> float | None:
+    """Volatility that reprices the fill, by bisection.
+
+    Bisection rather than Newton: vega collapses on a deep or nearly-expired
+    contract and a derivative method walks off. Fifty halvings of a wide bracket
+    is fast enough here and cannot diverge.
+    """
+    from math_engine import bs_price
+
+    def _bs(sigma: float) -> float:
+        # bs_price takes days and percents; this module works in years/decimals.
+        return float(bs_price(S, K, T * 365.0, r * 100.0, sigma * 100.0, right))
+
+    if price <= 0 or S <= 0 or K <= 0 or T <= 0:
+        return None
+    intrinsic = max(S - K, 0.0) if right == "call" else max(K - S, 0.0)
+    if price <= intrinsic:
+        return None                      # no time value: nothing to solve for
+    lo, hi = 1e-4, 5.0
+    if _bs(hi) < price:
+        return None                      # beyond any believable volatility
+    for _ in range(50):
+        mid = (lo + hi) / 2
+        if _bs(mid) < price:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2
+
+
+def _mark_options(txns, calendar, prices, rf: float = 0.04):
+    """Daily mark-to-market of every option position.
+
+    Returns (value series, realised cash, contracts held at the end, notes).
+    A short position marks negative: it is a liability until it is closed.
+    """
+    from math_engine import bs_price
+
+    value = pd.Series(0.0, index=calendar)
+    realised = 0.0
+    open_lots: dict[str, dict] = {}
+    unpriced: set[str] = set()
+
+    for t in sorted((x for x in txns if x.is_option), key=lambda x: x.date):
+        realised += t.amount
+        spec = parse_option_symbol(t.symbol)
+        if not spec or spec["underlying"] not in prices.columns:
+            unpriced.add(t.symbol)
+            continue
+        lot = open_lots.setdefault(t.symbol, {**spec, "contracts": 0.0, "vol": None})
+        lot["contracts"] += t.quantity if t.kind == "buy" else -t.quantity
+        # Solve the volatility out of this fill and carry it forward.
+        day = pd.Timestamp(t.date)
+        if day in prices.index and t.price > 0:
+            S = float(prices.loc[day, spec["underlying"]])
+            T = max((spec["expiry"] - t.date).days, 0) / 365.0
+            solved = implied_vol(t.price, S, spec["strike"], T, rf, spec["right"])
+            if solved:
+                lot["vol"] = solved
+
+    for symbol, lot in open_lots.items():
+        under = prices[lot["underlying"]]
+        vol = lot["vol"]
+        if vol is None:
+            # No fill gave a solvable volatility, so fall back to what the
+            # underlying actually did. Stated as an assumption, not a price.
+            realised_vol = under.pct_change().std() * np.sqrt(_TRADING_DAYS)
+            vol = float(realised_vol) if np.isfinite(realised_vol) and realised_vol > 0 else 0.30
+            unpriced.add(symbol)
+        # Rebuild the running contract count so the mark follows the position.
+        held = pd.Series(0.0, index=calendar)
+        for t in sorted((x for x in txns if x.is_option and x.symbol == symbol), key=lambda x: x.date):
+            day = pd.Timestamp(t.date)
+            if day > calendar[-1]:
+                continue
+            day = day if day in calendar else calendar[calendar.searchsorted(day)]
+            held.loc[day:] += t.quantity if t.kind == "buy" else -t.quantity
+        expiry = pd.Timestamp(lot["expiry"])
+        for day in calendar:
+            contracts = float(held.loc[day])
+            if contracts == 0 or day > expiry:
+                continue                 # expired or assigned: carried at zero
+            T = max((expiry - day).days, 0) / 365.0
+            S = float(under.loc[day])
+            if T <= 0 or vol <= 0:
+                # On expiry day the contract is worth its intrinsic value, and
+                # Black-Scholes divides by sigma*sqrt(T) to get there.
+                px = max(S - lot["strike"], 0.0) if lot["right"] == "call" \
+                    else max(lot["strike"] - S, 0.0)
+            else:
+                px = float(bs_price(S, lot["strike"], T * 365.0,
+                                    rf * 100.0, vol * 100.0, lot["right"]))
+            value.loc[day] += contracts * _CONTRACT_MULTIPLIER * float(px)
+
+    return value, realised, open_lots, sorted(unpriced)
+
+
 def build_curve(txns: list[Txn], benchmark: str = "SPY") -> dict:
     """Daily equity, external flows, and the marked positions behind them."""
     dated = sorted((t for t in txns if t.date), key=lambda t: t.date)
@@ -77,7 +200,13 @@ def build_curve(txns: list[Txn], benchmark: str = "SPY") -> dict:
 
     start, end = dated[0].date, max(dated[-1].date, date.today())
     equities = sorted({t.symbol for t in dated if t.symbol and not t.is_option})
-    prices = _price_frame(equities + [benchmark], start, end)
+    # An option is marked against its underlying, so that series is needed even
+    # when the underlying itself was never traded.
+    underlyings = sorted({
+        spec["underlying"] for t in dated if t.is_option
+        for spec in [parse_option_symbol(t.symbol)] if spec
+    })
+    prices = _price_frame(sorted(set(equities + underlyings + [benchmark])), start, end)
     if prices.empty:
         return {"error": "no price history available for these symbols"}
     calendar = prices.index
@@ -85,7 +214,6 @@ def build_curve(txns: list[Txn], benchmark: str = "SPY") -> dict:
     shares = pd.DataFrame(0.0, index=calendar, columns=equities)
     cash = pd.Series(0.0, index=calendar)
     flows = pd.Series(0.0, index=calendar)
-    option_pnl = pd.Series(0.0, index=calendar)
 
     for t in dated:
         day = pd.Timestamp(t.date)
@@ -106,9 +234,8 @@ def build_curve(txns: list[Txn], benchmark: str = "SPY") -> dict:
             continue
 
         if t.is_option:
-            # No historical series for a contract: realised cash only.
+            # Cash moves here; the position itself is marked below.
             cash.loc[day:] += t.amount
-            option_pnl.loc[day] += t.amount
             continue
 
         if t.kind in ("buy", "sell") and t.symbol in shares.columns:
@@ -117,12 +244,17 @@ def build_curve(txns: list[Txn], benchmark: str = "SPY") -> dict:
 
     held = prices[equities] if equities else pd.DataFrame(index=calendar)
     holdings = (shares * held).sum(axis=1) if equities else pd.Series(0.0, index=calendar)
-    equity = holdings + cash
+    option_value, option_realised, option_lots, option_unpriced = _mark_options(
+        dated, calendar, prices)
+    equity = holdings + option_value + cash
 
     return {
         "equity": equity, "holdings": holdings, "cash": cash, "flows": flows,
         "shares": shares, "prices": prices, "benchmark": benchmark,
-        "option_realised": float(option_pnl.sum()),
+        "option_value": option_value,
+        "option_realised": option_realised,
+        "option_lots": option_lots,
+        "option_unpriced": option_unpriced,
         "symbols": equities,
     }
 
@@ -158,6 +290,74 @@ def _twr(equity: pd.Series, flows: pd.Series) -> pd.Series:
     prev = equity.shift(1)
     ret = (equity - flows) / prev - 1.0
     return ret.replace([np.inf, -np.inf], np.nan).where(prev >= floor).dropna()
+
+
+
+def market_regression(port: pd.Series, bench: pd.Series, rf: float) -> dict:
+    """Regress daily excess return on the market's, and say whether it is noise.
+
+    Two alphas, because they answer different questions and can disagree.
+
+    Jensen's alpha applies the CAPM identity to the realised compound returns:
+    what the account made beyond what its market exposure should have paid. It
+    is the number a statement would quote.
+
+    Regression alpha is the intercept of the daily fit. It carries a standard
+    error, so it comes with a t-statistic: a large alpha on a short, noisy
+    sample is usually indistinguishable from zero, and only this one can say so.
+    """
+    from scipy import stats
+
+    common = port.index.intersection(bench.index)
+    if len(common) < 20:
+        return {"observations": int(len(common)), "sufficient": False}
+    daily_rf = rf / _TRADING_DAYS
+    x = (bench.loc[common] - daily_rf).values
+    y = (port.loc[common] - daily_rf).values
+    if float(np.var(x)) <= 0 or len(np.unique(x)) < 2:
+        # A benchmark that never moves has no slope to fit, and linregress
+        # raises rather than saying so.
+        return {"observations": int(len(common)), "sufficient": False}
+
+    try:
+        fit = stats.linregress(x, y)
+    except ValueError:
+        return {"observations": int(len(common)), "sufficient": False}
+    beta = float(fit.slope)
+    alpha_daily = float(fit.intercept)
+    t_stat = alpha_daily / fit.intercept_stderr if fit.intercept_stderr else 0.0
+    p_value = float(2 * (1 - stats.t.cdf(abs(t_stat), max(len(x) - 2, 1))))
+
+    # Jensen's, on compounded realised returns rather than on daily means.
+    years = max(len(common) / _TRADING_DAYS, 1e-9)
+    port_ann = float((1 + port.loc[common]).prod() ** (1 / years) - 1)
+    bench_ann = float((1 + bench.loc[common]).prod() ** (1 / years) - 1)
+    jensen = port_ann - (rf + beta * (bench_ann - rf))
+
+    lo, hi = float(np.min(x)), float(np.max(x))
+    return {
+        "sufficient": True,
+        "observations": int(len(common)),
+        "beta": round(beta, 3),
+        "alphaRegressionPct": round(alpha_daily * _TRADING_DAYS * 100, 2),
+        "alphaJensenPct": round(jensen * 100, 2),
+        "tStat": round(float(t_stat), 2),
+        "pValue": round(p_value, 4),
+        "rSquared": round(float(fit.rvalue ** 2), 3),
+        "significant": bool(p_value < 0.05),
+        "portfolioAnnPct": round(port_ann * 100, 2),
+        "benchmarkAnnPct": round(bench_ann * 100, 2),
+        # Daily points in percent, with the fitted line's endpoints, so the
+        # chart draws the same fit these numbers came from.
+        "points": [
+            {"x": round(float(a) * 100, 4), "y": round(float(b) * 100, 4)}
+            for a, b in zip(x, y)
+        ],
+        "line": [
+            {"x": round(lo * 100, 4), "y": round((alpha_daily + beta * lo) * 100, 4)},
+            {"x": round(hi * 100, 4), "y": round((alpha_daily + beta * hi) * 100, 4)},
+        ],
+    }
 
 
 def analyze(txns: list[Txn], benchmark: str = "SPY", rf: float = 0.04) -> dict:
@@ -206,6 +406,7 @@ def analyze(txns: list[Txn], benchmark: str = "SPY", rf: float = 0.04) -> dict:
         alpha = float(arith - (rf + beta * (bench_ann - rf)))
         bench_total = float((1 + b).prod() - 1)
 
+    reg = market_regression(ret, bench_ret, rf)
     external = float(flows.sum())
     realised = _realised_pnl(txns)
     thin = days < 90 or len(ret) < 60
@@ -221,6 +422,8 @@ def analyze(txns: list[Txn], benchmark: str = "SPY", rf: float = 0.04) -> dict:
             "calmar": round(calmar, 2),
             "maxDrawdownPct": round(max_dd * 100, 2),
             "alphaPct": round(alpha * 100, 2),
+            "alphaJensenPct": reg.get("alphaJensenPct", round(alpha * 100, 2)),
+            "alphaRegressionPct": reg.get("alphaRegressionPct"),
             "beta": round(beta, 2),
             "riskFreePct": round(rf * 100, 2),
             "benchmark": benchmark,
@@ -243,6 +446,7 @@ def analyze(txns: list[Txn], benchmark: str = "SPY", rf: float = 0.04) -> dict:
             "drawdown": _series_points(dd * 100, wealth.index),
             "benchmark": _series_points(_rebased(bench_close, equity)),
         },
+        "regression": reg,
         "allocation": _allocation(built),
         "monthly": _monthly(ret),
         "caveats": _caveats(built, txns, thin, days),
@@ -326,11 +530,12 @@ def _caveats(built: dict, txns: list[Txn], thin: bool, days: int) -> list[str]:
             "are scaled from that sample and are not reliable at this length: read the total "
             "return and the drawdown instead."
         )
-    if any(t.is_option for t in txns):
+    unpriced = built.get("option_unpriced") or []
+    if unpriced:
         out.append(
-            "Option trades are carried at realised cash only. There is no free historical "
-            "price series for a contract, so their value between opening and closing is "
-            "missing from the curve."
+            f"{', '.join(unpriced[:6])} could not be priced from its own fills, so it is marked "
+            "at the underlying's realised volatility rather than at the volatility the market "
+            "charged."
         )
     transferred = sorted({t.symbol for t in txns if _is_security_transfer(t)})
     if transferred:
