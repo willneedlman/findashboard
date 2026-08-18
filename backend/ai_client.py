@@ -130,8 +130,32 @@ def _should_failover(exc: Exception) -> bool:
         return False
     sc = getattr(exc, "status_code", None)
     if sc is not None:
-        return sc in (429, 413) or sc >= 500
+        return sc in (429, 413, 402) or sc >= 500
     return type(exc).__name__ in _CONN_ERRORS
+
+
+# A provider out of credit answers 402 to every call until someone tops it up.
+# Trying it on each request costs a round trip and adds its latency to a failure
+# that was already decided, so it is set aside and retried occasionally rather
+# than continuously.
+_UNPAID_COOLDOWN_S = float(os.getenv("LLM_UNPAID_COOLDOWN_S", "900"))
+_unpaid_until: dict[str, float] = {}
+
+
+def _mark_unpaid(provider: str) -> None:
+    _unpaid_until[provider] = time.monotonic() + _UNPAID_COOLDOWN_S
+    logger.warning("%s is out of credit (402); skipping it for %.0f minutes",
+                   provider, _UNPAID_COOLDOWN_S / 60)
+
+
+def _is_unpaid(provider: str) -> bool:
+    until = _unpaid_until.get(provider)
+    if until is None:
+        return False
+    if time.monotonic() >= until:
+        _unpaid_until.pop(provider, None)   # cooldown elapsed, let it try again
+        return False
+    return True
 
 
 def _status_str(exc: Exception) -> str:
@@ -248,6 +272,12 @@ def _exhausted(exc: Exception, provider: str,
             "written. This is a size problem, not a quota: use fewer clips or a shorter report."
         ))
     status = getattr(exc, "status_code", None)
+    if any(st == "402" for _, st in tried):
+        broke = ", ".join(name for name, st in tried if st == "402")
+        return HTTPException(503, (
+            f"{broke} is out of credit, so this request could not be completed. "
+            "Top up that account, or the request will keep failing over to it and back."
+        ))
     if status == 429:
         return HTTPException(503, (
             f"Every AI provider is rate-limited right now ({provider} returned 429). "
@@ -273,6 +303,11 @@ def groq_chat(messages: list[dict], *, model: str = MODEL_SMART,
         providers.append(("cerebras", _cerebras_call))
     if not providers:
         raise HTTPException(503, "No LLM provider configured (set GROQ_API_KEY or CEREBRAS_API_KEY)")
+    # Skip anything known to be out of credit. Keep at least one provider in the
+    # list even so: a request that tries and fails reports why, where a request
+    # with nothing left to try reports only that there was nothing to try.
+    payable = [p for p in providers if not _is_unpaid(p[0])]
+    providers = payable or providers[-1:]
 
     import metrics
     last_exc: Exception | None = None
@@ -290,6 +325,8 @@ def groq_chat(messages: list[dict], *, model: str = MODEL_SMART,
             last_exc = exc
             tried.append((name, _status_str(exc)))
             metrics.record_ai(name, ok=False, error=_status_str(exc))
+            if getattr(exc, "status_code", None) == 402:
+                _mark_unpaid(name)
             if i == len(providers) - 1 or not _should_failover(exc):
                 raise _exhausted(exc, name, tried)
             logger.warning("LLM provider %s failed (%s); failing over to %s",
