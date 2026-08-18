@@ -438,10 +438,25 @@ def validate_source(source: str, ctx=None, runner: Callable | None = None,
 
     # Determinism first: an unseeded strategy also fails the causality
     # comparison, and "lookahead bias" is the wrong thing to tell the user.
-    for check in (lambda: _determinism_check(run, ctx),
-                  lambda: _causality_check(run, ctx),
-                  lambda: _warmup_check(sig, warmup)):
-        found = check()
+    # Every check that executes the strategy can be killed by the sandbox, and a
+    # validator that crashes tells the user nothing. The determinism pass runs it
+    # twice and the causality pass up to nine times, so a strategy that finishes
+    # once can still be timed out by one of them: that escaped as an uncaught
+    # SandboxError and reached the browser as a bare "Internal server error".
+    #
+    # Inconclusive is a real answer and belongs in the diagnostics, next to the
+    # checks that did complete.
+    from .sandbox import SandboxError as _SandboxError
+
+    for name, check in (("determinism", lambda: _determinism_check(run, ctx)),
+                        ("causality", lambda: _causality_check(run, ctx)),
+                        ("warmup", lambda: _warmup_check(sig, warmup))):
+        try:
+            found = check()
+        except _SandboxError as e:
+            found = [Diagnostic("L2", "warning",
+                                f"the {name} check could not run: {e}. The strategy itself "
+                                f"executed, so this is a limit on the check, not a fault in it.")]
         diags += found
         if any(d.severity == "error" for d in found):
             return ValidationResult(False, diags)

@@ -96,8 +96,10 @@ app = FastAPI(title="Alphatape Terminal API", lifespan=lifespan)
 # Alert on unhandled crashes so they're never silent (gated by ERROR_ALERTS=1).
 import logging as _logging
 import error_alert
+import error_log
 import metrics
 from fastapi import Request as _Request
+from fastapi import HTTPException as _HTTPException
 from fastapi.responses import JSONResponse as _JSONResponse
 
 _log = _logging.getLogger("main")
@@ -107,7 +109,28 @@ _log = _logging.getLogger("main")
 async def _on_unhandled_error(request: _Request, exc: Exception):
     _log.exception("unhandled error on %s %s", request.method, request.url.path)
     error_alert.alert_exception(request.url.path, request.method, exc, 500)
+    # Persisted as well as emailed. The log stream rotates within hours, so a
+    # failure reported the next morning has already lost its traceback.
+    error_log.record(request.url.path, request.method, 500, type(exc).__name__,
+                     str(exc), user_saw="Internal server error", exc=exc)
     return _JSONResponse({"detail": "Internal server error"}, status_code=500)
+
+
+@app.exception_handler(_HTTPException)
+async def _on_http_error(request: _Request, exc: _HTTPException):
+    """Deliberate 5xx are the ones users actually read, so record them too.
+
+    A 503 saying the providers are rate-limited is not a crash, but it is a
+    failure the user experienced, and the pattern over time is the signal: the
+    same message five hundred times means something structural, not a bad
+    minute. 4xx are the client's business and are left alone.
+    """
+    if exc.status_code >= 500:
+        detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+        error_log.record(request.url.path, request.method, exc.status_code,
+                         f"HTTP{exc.status_code}", detail, user_saw=detail)
+    return _JSONResponse({"detail": exc.detail}, status_code=exc.status_code,
+                         headers=getattr(exc, "headers", None))
 
 # CORS: never combine wildcard origins with credentials (browsers reflect the
 # Origin, effectively allowing every site to make credentialed requests). The SPA

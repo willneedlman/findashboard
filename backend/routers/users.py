@@ -485,6 +485,29 @@ def admin_reset_pin(username: str, req: ResetPinRequest, x_admin_secret: str = H
     return {"ok": True, "username": username}
 
 
+@router.get("/admin/errors")
+def admin_errors(x_admin_secret: str = Header(default=""), limit: int = 50,
+                 path: str = "", since_hours: float = 0):
+    """Every error that reached a user, newest first, grouped by fault.
+
+    Exists because Fly's log stream rotates within hours: a failure reported the
+    next morning has already lost its traceback, which cost real time this week.
+    Each row carries what the user was told next to what actually happened,
+    because those two have diverged repeatedly.
+    """
+    _require_admin(x_admin_secret)
+    import error_log
+    rows = error_log.recent(limit=limit, path_like=path, since_hours=since_hours)
+    return {"count": len(rows), "errors": rows}
+
+
+@router.delete("/admin/errors")
+def admin_errors_clear(x_admin_secret: str = Header(default="")):
+    _require_admin(x_admin_secret)
+    import error_log
+    return {"cleared": error_log.clear()}
+
+
 @router.get("/admin/health")
 def admin_health(x_admin_secret: str = Header(default="")):
     _require_admin(x_admin_secret)

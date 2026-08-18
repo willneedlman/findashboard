@@ -71,3 +71,25 @@ def test_a_genuinely_causal_strategy_still_passes():
 
     diags = V._causality_check(run, _dataclass_ctx())
     assert [d for d in diags if d.severity == "error"] == []
+
+
+def test_a_timed_out_check_does_not_escape_as_a_500():
+    """The determinism pass runs the strategy twice and the causality pass up to
+    nine times, so a strategy that completes once can still be killed by one of
+    them. That escaped uncaught and reached the browser as a bare "Internal
+    server error" with no reason attached."""
+    from algo_runtime.contract import Ctx
+
+    calls = {"n": 0}
+
+    def runner(source, c):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return _signals(len(c.close))       # the first run completes
+        raise SandboxError("strategy timed out after 20s")
+
+    res = V.validate_source("def signal(c):\n    return None\n",
+                            Ctx(close=np.linspace(100, 120, 200)), runner=runner)
+    # It must come back as diagnostics, not an exception.
+    assert any("could not run" in d.message or "could not be verified" in d.message
+               for d in res.diagnostics), [d.message for d in res.diagnostics]
