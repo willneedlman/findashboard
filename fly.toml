@@ -48,7 +48,16 @@ primary_region = "iad"
 [[vm]]
   # 512mb OOM-killed uvicorn at ~398MB RSS once the AIS replay buffer and
   # rates warmer landed (2026-07-02 incident). Baseline needs the headroom.
-  memory = "1024mb"
+  #
+  # 1024mb then OOM-killed it again on 2026-08-18, mid-request, during
+  # /api/strategy/generate. The proxy reported "could not find a good candidate
+  # within 40 attempts at load balancing" and the browser showed a bare
+  # "Request failed", because the process died rather than answering. Measured
+  # on the box just after that restart: 962MB usable, uvicorn already at 301MB
+  # idle, so roughly a third was gone before any request ran and one heavy
+  # endpoint could clear the rest. The baseline has not fallen since the last
+  # incident and the caches grow between restarts, so buy the headroom.
+  memory = "2048mb"
   cpu_kind = "shared"
   cpus = 1
 
