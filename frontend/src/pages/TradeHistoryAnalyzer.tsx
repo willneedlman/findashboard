@@ -21,12 +21,17 @@ interface Metrics {
   totalReturnPct: number; annualizedReturnPct: number; benchmarkReturnPct: number
   volPct: number; sharpe: number; sortino: number; calmar: number
   maxDrawdownPct: number; alphaPct: number; beta: number
-  alphaJensenPct: number; alphaRegressionPct: number | null
+  alphaRegressionPct: number | null; alphaDirectPct: number | null
   riskFreePct: number; benchmark: string
+}
+interface DirectAlpha {
+  available: boolean
+  alphaPct?: number; contributed?: number; endingValue?: number
+  benchmarkValue?: number; dollarsVsBenchmark?: number; flowCount?: number
 }
 interface Regression {
   sufficient: boolean; observations: number
-  beta?: number; alphaJensenPct?: number; alphaRegressionPct?: number
+  beta?: number; alphaRegressionPct?: number
   tStat?: number; pValue?: number; rSquared?: number; significant?: boolean
   portfolioAnnPct?: number; benchmarkAnnPct?: number
   points?: { x: number; y: number }[]
@@ -43,6 +48,7 @@ interface Analysis {
   account: Account
   series: { equity: Point[]; drawdown: Point[]; benchmark: Point[] }
   regression: Regression
+  directAlpha: DirectAlpha
   allocation: { symbol: string; value: number; weightPct: number }[]
   monthly: { month: string; returnPct: number }[]
   caveats: string[]
@@ -212,8 +218,12 @@ export default function TradeHistoryAnalyzer() {
                 sub: `over ${a.days} days` },
               { label: 'Sharpe', value: m.sharpe.toFixed(2), sub: `vol ${m.volPct.toFixed(1)}%` },
               { label: 'Sortino', value: m.sortino.toFixed(2), sub: `calmar ${m.calmar.toFixed(2)}` },
-              { label: 'Alpha (Jensen)', value: pct(m.alphaJensenPct), vc: m.alphaJensenPct >= 0 ? T.pos : T.neg,
-                sub: `beta ${m.beta.toFixed(2)}` },
+              { label: 'Alpha (direct)',
+                value: data.directAlpha.available ? pct(m.alphaDirectPct ?? 0) : '—',
+                vc: (m.alphaDirectPct ?? 0) >= 0 ? T.pos : T.neg,
+                sub: data.directAlpha.available
+                  ? `${money(data.directAlpha.dollarsVsBenchmark ?? 0)} vs ${m.benchmark}`
+                  : 'no dated flows' },
               { label: 'Alpha (regression)',
                 value: m.alphaRegressionPct == null ? '—' : pct(m.alphaRegressionPct),
                 vc: (m.alphaRegressionPct ?? 0) >= 0 ? T.pos : T.neg,
@@ -336,9 +346,8 @@ export default function TradeHistoryAnalyzer() {
                     Each point is one day: {m.benchmark}&apos;s excess return across, the account&apos;s up.
                     The slope is beta, the intercept is alpha.
                     {' '}
-                    <strong style={{ color: T.text }}>Jensen {pct(m.alphaJensenPct)}</strong> applies CAPM to the
-                    compounded returns; <strong style={{ color: T.text }}>regression {pct(m.alphaRegressionPct ?? 0)}</strong>
-                    {' '}is the intercept of this fit and carries a standard error, so it can be tested.
+                    <strong style={{ color: T.text }}>Regression alpha {pct(m.alphaRegressionPct ?? 0)}</strong> is
+                    the intercept of this fit. It carries a standard error, so unlike a plain ratio it can be tested.
                     {' '}
                     {data.regression.significant
                       ? `At p ${data.regression.pValue?.toFixed(3)} this alpha is distinguishable from zero.`
@@ -351,6 +360,30 @@ export default function TradeHistoryAnalyzer() {
                 </div>
               )}
             </Panel>
+
+            {data.directAlpha.available && (
+              <Panel label={`Your dollars against ${m.benchmark}`}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 26, padding: '14px 14px 4px' }}>
+                  <Stat label="You contributed" value={money(data.directAlpha.contributed ?? 0)} />
+                  <Stat label="You ended with" value={money(data.directAlpha.endingValue ?? 0)} />
+                  <Stat label={`Same dollars in ${m.benchmark}`} value={money(data.directAlpha.benchmarkValue ?? 0)} />
+                  <Stat label="Difference"
+                    value={money(data.directAlpha.dollarsVsBenchmark ?? 0)}
+                    color={(data.directAlpha.dollarsVsBenchmark ?? 0) >= 0 ? T.pos : T.neg} />
+                  <Stat label="Direct alpha" value={pct(m.alphaDirectPct ?? 0)}
+                    color={(m.alphaDirectPct ?? 0) >= 0 ? T.pos : T.neg} />
+                </div>
+                <div style={{ padding: '4px 14px 14px', fontFamily: MONO, fontSize: 10, color: T.muted, lineHeight: 1.65 }}>
+                  Every contribution is carried forward at {m.benchmark}&apos;s own return, so this asks what those
+                  exact dollars would have become in the index on those exact dates. Money-weighted, so the timing
+                  of the contributions counts, and no CAPM or beta assumption is involved.
+                  {a.days < 90 && (
+                    <> The rate is annualized from {a.days} days, which magnifies it; the dollar difference is
+                    the figure that is not scaled.</>
+                  )}
+                </div>
+              </Panel>
+            )}
 
             <Panel label="Holdings at the end of the period">
               <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: MONO, fontSize: 11 }}>
@@ -388,6 +421,15 @@ export default function TradeHistoryAnalyzer() {
         )}
       </div>
     </PageWrapper>
+  )
+}
+
+function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <span style={{ fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted }}>{label}</span>
+      <span style={{ fontFamily: MONO, fontSize: 16, fontWeight: 700, color: color ?? T.text, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+    </div>
   )
 }
 

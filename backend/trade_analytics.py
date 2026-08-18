@@ -293,18 +293,97 @@ def _twr(equity: pd.Series, flows: pd.Series) -> pd.Series:
 
 
 
+
+def _irr(flows: list[tuple[float, float]]) -> float | None:
+    """Annualized IRR of (years_from_start, amount) pairs, by bisection.
+
+    Bisection because a cash-flow series can have several sign changes and
+    Newton wanders off; halving a bracket cannot.
+    """
+    if len(flows) < 2 or all(a >= 0 for _, a in flows) or all(a <= 0 for _, a in flows):
+        return None
+
+    def npv(rate: float) -> float:
+        return sum(a / (1.0 + rate) ** t for t, a in flows)
+
+    lo, hi = -0.9999, 10.0
+    if npv(lo) * npv(hi) > 0:
+        return None                      # no sign change: no rate solves it
+    for _ in range(200):
+        mid = (lo + hi) / 2
+        if npv(lo) * npv(mid) <= 0:
+            hi = mid
+        else:
+            lo = mid
+    return (lo + hi) / 2
+
+
+def direct_alpha(flows: pd.Series, ending_value: float, bench: pd.Series) -> dict:
+    """Money-weighted alpha: the IRR of flows scaled by the benchmark.
+
+    Gredil, Griffiths and Stucke's Direct Alpha. Every contribution is carried
+    forward to the end date at the benchmark's own return, which asks what those
+    exact dollars would have become in the index on those exact dates. The IRR
+    of the scaled series is then the excess rate earned over the benchmark,
+    annualized, with no CAPM assumption and no beta.
+
+    Time-weighted alpha answers whether the decisions were good. This answers
+    whether the money made more than the index would have, which is the question
+    an account holder is usually asking, and the two differ whenever
+    contributions are unevenly timed.
+    """
+    moved = flows[flows != 0]
+    if moved.empty or ending_value <= 0 or bench.empty:
+        return {"available": False}
+    index = bench.reindex(bench.index.union(moved.index)).ffill()
+    end_day = bench.index[-1]
+    end_level = float(index.loc[end_day])
+    if not np.isfinite(end_level) or end_level <= 0:
+        return {"available": False}
+
+    start = moved.index[0]
+    scaled: list[tuple[float, float]] = []
+    contributed = 0.0
+    for day, amount in moved.items():
+        level = float(index.loc[day]) if day in index.index else np.nan
+        if not np.isfinite(level) or level <= 0:
+            continue
+        years = max((day - start).days, 0) / 365.25
+        # A contribution leaves the holder's pocket, so it is negative here.
+        scaled.append((years, -float(amount) * (end_level / level)))
+        contributed += float(amount)
+    if not scaled:
+        return {"available": False}
+    scaled.append((max((end_day - start).days, 0) / 365.25, float(ending_value)))
+
+    rate = _irr(scaled)
+    if rate is None:
+        return {"available": False}
+
+    # What the same dollars would have been worth in the index, for context.
+    benchmark_value = sum(
+        float(a) * (end_level / float(index.loc[d]))
+        for d, a in moved.items()
+        if d in index.index and np.isfinite(index.loc[d]) and float(index.loc[d]) > 0
+    )
+    return {
+        "available": True,
+        "alphaPct": round(rate * 100, 2),
+        "contributed": round(contributed, 2),
+        "endingValue": round(float(ending_value), 2),
+        "benchmarkValue": round(benchmark_value, 2),
+        "dollarsVsBenchmark": round(float(ending_value) - benchmark_value, 2),
+        "flowCount": int(len(moved)),
+    }
+
+
 def market_regression(port: pd.Series, bench: pd.Series, rf: float) -> dict:
     """Regress daily excess return on the market's, and say whether it is noise.
 
-    Two alphas, because they answer different questions and can disagree.
-
-    Jensen's alpha applies the CAPM identity to the realised compound returns:
-    what the account made beyond what its market exposure should have paid. It
-    is the number a statement would quote.
-
-    Regression alpha is the intercept of the daily fit. It carries a standard
+    The intercept is alpha and the slope is beta, fitted together rather than
+    plugged into an identity one at a time. The intercept carries a standard
     error, so it comes with a t-statistic: a large alpha on a short, noisy
-    sample is usually indistinguishable from zero, and only this one can say so.
+    sample is usually indistinguishable from zero, and a ratio cannot say so.
     """
     from scipy import stats
 
@@ -328,11 +407,9 @@ def market_regression(port: pd.Series, bench: pd.Series, rf: float) -> dict:
     t_stat = alpha_daily / fit.intercept_stderr if fit.intercept_stderr else 0.0
     p_value = float(2 * (1 - stats.t.cdf(abs(t_stat), max(len(x) - 2, 1))))
 
-    # Jensen's, on compounded realised returns rather than on daily means.
     years = max(len(common) / _TRADING_DAYS, 1e-9)
     port_ann = float((1 + port.loc[common]).prod() ** (1 / years) - 1)
     bench_ann = float((1 + bench.loc[common]).prod() ** (1 / years) - 1)
-    jensen = port_ann - (rf + beta * (bench_ann - rf))
 
     lo, hi = float(np.min(x)), float(np.max(x))
     return {
@@ -340,7 +417,6 @@ def market_regression(port: pd.Series, bench: pd.Series, rf: float) -> dict:
         "observations": int(len(common)),
         "beta": round(beta, 3),
         "alphaRegressionPct": round(alpha_daily * _TRADING_DAYS * 100, 2),
-        "alphaJensenPct": round(jensen * 100, 2),
         "tStat": round(float(t_stat), 2),
         "pValue": round(p_value, 4),
         "rSquared": round(float(fit.rvalue ** 2), 3),
@@ -395,18 +471,16 @@ def analyze(txns: list[Txn], benchmark: str = "SPY", rf: float = 0.04) -> dict:
     calmar = ann_return / abs(max_dd) if max_dd else 0.0
 
     common = ret.index.intersection(bench_ret.index)
-    beta = alpha = 0.0
+    beta = 0.0
     bench_total = 0.0
     if len(common) > 2 and float(bench_ret.loc[common].var()) > 0:
         b = bench_ret.loc[common]
         p = ret.loc[common]
         beta = float(np.cov(p.values, b.values)[0, 1] / np.var(b.values))
-        bench_ann = float(b.mean() * _TRADING_DAYS)
-        # Jensen's alpha: the return left after paying for the market risk taken.
-        alpha = float(arith - (rf + beta * (bench_ann - rf)))
         bench_total = float((1 + b).prod() - 1)
 
     reg = market_regression(ret, bench_ret, rf)
+    direct = direct_alpha(flows, float(equity.iloc[-1]), bench_close)
     external = float(flows.sum())
     realised = _realised_pnl(txns)
     thin = days < 90 or len(ret) < 60
@@ -421,9 +495,13 @@ def analyze(txns: list[Txn], benchmark: str = "SPY", rf: float = 0.04) -> dict:
             "sortino": round(sortino, 2),
             "calmar": round(calmar, 2),
             "maxDrawdownPct": round(max_dd * 100, 2),
-            "alphaPct": round(alpha * 100, 2),
-            "alphaJensenPct": reg.get("alphaJensenPct", round(alpha * 100, 2)),
+            # alphaPct is the regression alpha. It was a separate CAPM figure,
+            # which is Jensen's under another name and which the regression
+            # supersedes by fitting alpha and beta together and reporting
+            # whether the result is distinguishable from zero.
+            "alphaPct": reg.get("alphaRegressionPct"),
             "alphaRegressionPct": reg.get("alphaRegressionPct"),
+            "alphaDirectPct": direct.get("alphaPct"),
             "beta": round(beta, 2),
             "riskFreePct": round(rf * 100, 2),
             "benchmark": benchmark,
@@ -447,6 +525,7 @@ def analyze(txns: list[Txn], benchmark: str = "SPY", rf: float = 0.04) -> dict:
             "benchmark": _series_points(_rebased(bench_close, equity)),
         },
         "regression": reg,
+        "directAlpha": direct,
         "allocation": _allocation(built),
         "monthly": _monthly(ret),
         "caveats": _caveats(built, txns, thin, days),

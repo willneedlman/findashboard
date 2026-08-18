@@ -153,9 +153,8 @@ class TestRealisedPnl:
 
 
 class TestMarketRegression:
-    """Two alphas, because they answer different questions. Jensen's applies
-    CAPM to the compounded returns; the regression intercept carries a standard
-    error and so can be tested against zero."""
+    """The regression intercept carries a standard error, so unlike a ratio it
+    can be tested against zero."""
 
     def _series(self, n=500, beta=1.2, alpha_daily=0.0002, noise=0.0005, seed=7):
         # Enough days and little enough idiosyncratic noise that the injected
@@ -242,3 +241,69 @@ class TestOptionMarking:
         # rather than the premium simply vanishing from the account.
         assert float(built["cash"].iloc[-1]) == pytest.approx(9_500.0, abs=1.0)
         assert float(built["option_value"].max()) > 0
+
+
+class TestDirectAlpha:
+    """Money-weighted alpha: every contribution carried forward at the
+    benchmark's own return, then the IRR of that scaled series. It asks what
+    those exact dollars would have become in the index on those exact dates,
+    with no CAPM and no beta."""
+
+    def _bench(self, days=400, daily=0.0004):
+        idx = pd.date_range("2026-01-01", periods=days, freq="D")
+        return pd.Series(100.0 * (1 + daily) ** np.arange(days), index=idx)
+
+    def _flows(self, bench, points):
+        f = pd.Series(0.0, index=bench.index)
+        for offset, amount in points:
+            f.iloc[offset] += amount
+        return f
+
+    def test_matching_the_benchmark_earns_no_alpha(self):
+        bench = self._bench()
+        flows = self._flows(bench, [(0, 10_000.0)])
+        # Ending exactly where the index would have taken it.
+        ending = 10_000.0 * float(bench.iloc[-1] / bench.iloc[0])
+        out = A.direct_alpha(flows, ending, bench)
+        assert out["available"] is True
+        assert out["alphaPct"] == pytest.approx(0.0, abs=0.2)
+
+    def test_beating_the_benchmark_shows_positive_alpha(self):
+        bench = self._bench()
+        flows = self._flows(bench, [(0, 10_000.0)])
+        ending = 10_000.0 * float(bench.iloc[-1] / bench.iloc[0]) * 1.10
+        out = A.direct_alpha(flows, ending, bench)
+        assert out["alphaPct"] > 0
+        assert out["dollarsVsBenchmark"] == pytest.approx(
+            ending - out["benchmarkValue"], abs=1.0)
+
+    def test_trailing_the_benchmark_shows_negative_alpha(self):
+        bench = self._bench()
+        flows = self._flows(bench, [(0, 10_000.0)])
+        ending = 10_000.0 * float(bench.iloc[-1] / bench.iloc[0]) * 0.90
+        assert A.direct_alpha(flows, ending, bench)["alphaPct"] < 0
+
+    def test_a_late_contribution_is_scaled_from_its_own_date(self):
+        """The whole point of money-weighting: a dollar added near the end had
+        less time in the index, so it is not held to the full-period return."""
+        bench = self._bench()
+        early = A.direct_alpha(self._flows(bench, [(0, 10_000.0)]), 12_000.0, bench)
+        late = A.direct_alpha(self._flows(bench, [(350, 10_000.0)]), 12_000.0, bench)
+        assert late["benchmarkValue"] < early["benchmarkValue"]
+
+    def test_no_flows_means_nothing_to_measure(self):
+        bench = self._bench()
+        assert A.direct_alpha(pd.Series(0.0, index=bench.index), 1000.0, bench)["available"] is False
+
+    def test_an_empty_account_is_not_measured(self):
+        bench = self._bench()
+        assert A.direct_alpha(self._flows(bench, [(0, 100.0)]), 0.0, bench)["available"] is False
+
+
+class TestIrr:
+    def test_it_finds_a_known_rate(self):
+        # -1000 now, +1100 in a year is 10%.
+        assert A._irr([(0.0, -1000.0), (1.0, 1100.0)]) == pytest.approx(0.10, abs=1e-4)
+
+    def test_flows_of_one_sign_have_no_rate(self):
+        assert A._irr([(0.0, -100.0), (1.0, -100.0)]) is None
