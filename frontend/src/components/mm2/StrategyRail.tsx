@@ -32,7 +32,7 @@ export default function StrategyRail({ eng, cfg, set, onSetup, onMetrics }: {
 
   return (
     <Panel title="Quoting" right={<Toggle value={cfg.quotingOn} onChange={v => set({ quotingOn: v })} />}>
-      <div style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 5 }}>
+      <div style={{ padding: '11px 10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 5 }}>
           <span style={{ ...MONO, fontSize: 10.5, color: T.muted }}>edge</span>
           <Seg<EdgeMode>
@@ -46,7 +46,7 @@ export default function StrategyRail({ eng, cfg, set, onSetup, onMetrics }: {
         <Field label="inventory skew"><Num value={cfg.invSkewDelta} onChange={v => set({ invSkewDelta: v })} step={0.05} dp={2} min={0} width={46} /></Field>
       </div>
 
-      <div style={{ padding: '7px 8px', borderTop: `1px solid ${T.borderFaint}` }}>
+      <div style={{ padding: '10px 10px', borderTop: `1px solid ${T.borderFaint}` }}>
         <Field label="expiries"><Num value={cfg.quoteExpiries} onChange={v => set({ quoteExpiries: Math.round(v) })} step={1} min={1} max={DTES.length} width={46} /></Field>
         <Field label="strikes each side"><Num value={cfg.quoteWidth} onChange={v => set({ quoteWidth: Math.round(v) })} step={1} min={1} max={7} width={46} /></Field>
       </div>
@@ -59,7 +59,7 @@ export default function StrategyRail({ eng, cfg, set, onSetup, onMetrics }: {
         <Live label="edge captured" value={fmtK(eng.attr.spread)} tone={eng.attr.spread >= 0 ? GOOD : undefined} />
       </div>
 
-      <div style={{ padding: '7px 8px', borderTop: `1px solid ${T.borderFaint}`, display: 'flex', gap: 5 }}>
+      <div style={{ padding: '10px 10px', borderTop: `1px solid ${T.borderFaint}`, display: 'flex', gap: 8 }}>
         <div style={{ flex: '1 1 0' }}><Btn wide tone="gold" onClick={onSetup}>SETUP</Btn></div>
         <div style={{ flex: '1 1 0' }}><Btn wide tone="gold" onClick={onMetrics}>METRICS</Btn></div>
       </div>

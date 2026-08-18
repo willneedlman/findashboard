@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  BOTTOM_H, COMMAND_H, CURVE_H, DESIGN_H, GAP, GUTTER, MIDDLE_H, MIN_VIEWPORT_H,
-  RISK_COL_MIN, middleHeight,
-} from './layout'
+import { BOTTOM_H, COMMAND_H, CURVE_H, DESIGN_H, GAP, GUTTER, MIDDLE_H, MIN_VIEWPORT_H, RISK_COL_MIN, middleHeight } from './layout'
 
 /**
  * The screen must fit with nothing scrolling but the chain. These numbers drifted
@@ -45,5 +42,26 @@ describe('vertical budget', () => {
     // a body that holds eight 25px rows without scrolling.
     const matrix = MIDDLE_H - CURVE_H - GAP
     expect(matrix - 46 - 22).toBeGreaterThanOrEqual(8 * 25)
+  })
+})
+
+/**
+ * The bottom pane read looser than the top: its tab body ended well short of
+ * the floor and the P&L chart was mostly empty plot area, while the quoting
+ * rail above was pressed tight. Height moved from one to the other.
+ */
+describe('the bottom is tighter than the top, not looser', () => {
+  it('gives the middle row more height than the bottom pane', () => {
+    expect(MIDDLE_H).toBeGreaterThan(BOTTOM_H * 2)
+  })
+
+  it('keeps the risk column whole at the stated floor', () => {
+    expect(middleHeight(MIN_VIEWPORT_H)).toBeGreaterThanOrEqual(RISK_COL_MIN)
+  })
+
+  it('leaves the P&L chart enough to show a shape', () => {
+    // Tab strip, the 78px canvas, its legend and the panel's own chrome.
+    const chartChrome = 24 + 78 + 20
+    expect(BOTTOM_H).toBeGreaterThan(chartChrome)
   })
 })

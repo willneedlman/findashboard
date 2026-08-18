@@ -33,7 +33,7 @@ export default function QuoteRail({ eng, cfg, set, tick, onSetup, onMetrics }: {
       style={{ height: '100%', minHeight: 0 }}
       bodyStyle={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}
     >
-      <div style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 5 }}>
+      <div style={{ padding: '11px 10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
         <FieldRow label="edge" value={cfg.edgeBp} onChange={v => set({ edgeBp: v })}
           step={0.02} dp={2} unit="bp" primary />
         <FieldRow label="long-end widen" value={cfg.longEndWiden} onChange={v => set({ longEndWiden: v })}
@@ -44,7 +44,7 @@ export default function QuoteRail({ eng, cfg, set, tick, onSetup, onMetrics }: {
           step={5} dp={0} unit="mm" />
       </div>
 
-      <div style={{ padding: '7px 8px', borderTop: `1px solid ${T.borderFaint}`, display: 'flex', flexDirection: 'column', gap: 5 }}>
+      <div style={{ padding: '10px 10px', borderTop: `1px solid ${T.borderFaint}`, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <FieldRow label="inventory" value={cfg.invSkewBp} onChange={v => set({ invSkewBp: v })}
           step={0.05} dp={2} unit="bp" />
         <FieldRow label="curve tilt" value={cfg.curveSkewBp} onChange={v => set({ curveSkewBp: v })}
@@ -56,8 +56,8 @@ export default function QuoteRail({ eng, cfg, set, tick, onSetup, onMetrics }: {
       </div>
 
       <div style={{
-        padding: '7px 8px', borderTop: `1px solid ${T.borderFaint}`, flex: 1, minHeight: 0,
-        display: 'flex', flexDirection: 'column', gap: 5,
+        padding: '10px 10px', borderTop: `1px solid ${T.borderFaint}`, flex: 1, minHeight: 0,
+        display: 'flex', flexDirection: 'column', gap: 8,
       }}>
         <MeterRow label="quoted nodes" text={`${s.quotedNodes} / ${scope}`}
           used={scope ? s.quotedNodes / scope : 0} fill={alpha(GOOD, 70)} />
@@ -67,7 +67,7 @@ export default function QuoteRail({ eng, cfg, set, tick, onSetup, onMetrics }: {
         <ReadRow label="informed hits" value={String(s.informedFills)} color={s.informedFills ? BAD : T.muted} />
       </div>
 
-      <div style={{ padding: '7px 8px', borderTop: `1px solid ${T.borderFaint}`, display: 'flex', gap: 5 }}>
+      <div style={{ padding: '10px 10px', borderTop: `1px solid ${T.borderFaint}`, display: 'flex', gap: 8 }}>
         <RailBtn onClick={onSetup}>SETUP</RailBtn>
         <RailBtn onClick={onMetrics}>METRICS</RailBtn>
       </div>

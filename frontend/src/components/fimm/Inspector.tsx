@@ -8,9 +8,9 @@
 
 import { useState } from 'react'
 import { T, alpha } from '../../lib/theme'
-import { MONO, LABEL, Canvas, useTokens, GOOD, BAD, WARN, Empty } from '../mm2/ui'
+import { MONO, LABEL, Canvas, useTokens, hexAlpha, GOOD, BAD, WARN, Empty } from '../mm2/ui'
 import { fmt32 } from '../../lib/fimm/bondmath'
-import { fmtMoney, type FiEngine, type NodeView } from '../../lib/fimm/engine'
+import { fmtMoney, type FiEngine, type NodeView, type Sample } from '../../lib/fimm/engine'
 
 type Tab = 'issue' | 'fills' | 'log'
 type LogFilter = 'all' | 'warn' | 'breach'
@@ -59,8 +59,11 @@ export default function Inspector({ eng, view, tick }: {
           {tab === 'fills' && <Fills eng={eng} />}
           {tab === 'log' && <Log eng={eng} filter={logFilter} onFilter={setLogFilter} />}
         </div>
-        <div style={{ width: ATTR_W, flexShrink: 0, borderLeft: `1px solid ${T.borderFaint}`, overflow: 'hidden' }}>
-          <Attribution eng={eng} tick={tick} />
+        <div style={{
+          width: ATTR_W, flexShrink: 0, borderLeft: `1px solid ${T.borderFaint}`,
+          overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0,
+        }}>
+          <RightPane eng={eng} tick={tick} />
         </div>
       </div>
     </div>
@@ -353,6 +356,112 @@ function Log({ eng, filter, onFilter }: {
         })}
       </div>
     </div>
+  )
+}
+
+
+// ── Right pane ────────────────────────────────────────────────────────────────
+// The rates desk had attribution and no chart; the options desk had a chart and
+// no attribution. Both are worth having, and neither needs the whole column, so
+// they share it behind a toggle.
+
+const PNL_SERIES = [
+  { key: 'total', label: 'Total', color: (t: Record<string, string>) => t.gold },
+  { key: 'spread', label: 'Spread', color: (t: Record<string, string>) => t.pos },
+  { key: 'curve', label: 'Curve', color: (t: Record<string, string>) => t.blue },
+  { key: 'carry', label: 'Carry', color: (t: Record<string, string>) => t.orange },
+  { key: 'hedge', label: 'Hedge', color: (t: Record<string, string>) => t.neg },
+] as const
+
+/** Total is the sample's own P&L; the rest are attribution buckets on it. */
+type PnlKey = typeof PNL_SERIES[number]['key']
+
+function seriesValue(sample: Sample, key: PnlKey): number {
+  if (key === 'total') return sample.pnl
+  return Number(sample.attr?.[key] ?? 0)
+}
+
+function RightPane({ eng, tick }: { eng: FiEngine; tick: number }) {
+  const [mode, setMode] = useState<'pnl' | 'attr'>('pnl')
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
+        padding: '5px 8px', borderBottom: `1px solid ${T.borderFaint}`, flexShrink: 0,
+      }}>
+        <span style={{ ...LABEL, fontSize: 9, letterSpacing: '0.16em', color: alpha(T.gold, 70) }}>
+          {mode === 'pnl' ? 'P&L timeline' : 'Attribution'}
+        </span>
+        <div style={{ display: 'flex' }}>
+          {([['P&L', 'pnl'], ['ATTR', 'attr']] as const).map(([label, value]) => (
+            <button key={value} onClick={() => setMode(value)} style={{
+              ...LABEL, fontSize: 8.5, padding: '3px 8px', cursor: 'pointer',
+              background: mode === value ? alpha(T.gold, 16) : 'transparent',
+              color: mode === value ? T.gold : T.muted,
+              border: `1px solid ${mode === value ? alpha(T.gold, 45) : T.borderFaint}`,
+            }}>{label}</button>
+          ))}
+        </div>
+      </div>
+      {mode === 'pnl' ? <PnlTimeline eng={eng} tick={tick} /> : <Attribution eng={eng} tick={tick} />}
+    </div>
+  )
+}
+
+function PnlTimeline({ eng, tick }: { eng: FiEngine; tick: number }) {
+  const tok = useTokens()
+  void tick
+  const s = eng.samples
+  const latest = s[s.length - 1]
+  if (s.length < 2) {
+    return <Empty>Run the session and the P&L builds as it goes.</Empty>
+  }
+  return (
+    <>
+      <div style={{ flex: 1, minHeight: 0, padding: '2px 4px' }}>
+        <Canvas height={78} draw={(ctx, w, h) => {
+          if (!tok.gold) return
+          let lo = 0, hi = 0
+          for (const p of s) for (const ser of PNL_SERIES) {
+            const v = seriesValue(p, ser.key)
+            lo = Math.min(lo, v); hi = Math.max(hi, v)
+          }
+          if (lo === hi) { lo -= 1; hi += 1 }
+          const pad = (hi - lo) * 0.1
+          lo -= pad; hi += pad
+          const t0 = s[0].t, span = Math.max(s[s.length - 1].t - t0, 1)
+          const X = (t: number) => ((t - t0) / span) * w
+          const Y = (v: number) => h - 6 - ((v - lo) / (hi - lo)) * (h - 12)
+
+          // Zero line first: on a flat book every series sits on it, and without
+          // it the panel reads as having drawn nothing.
+          ctx.strokeStyle = hexAlpha(tok.muted, 0.38)
+          ctx.beginPath(); ctx.moveTo(0, Y(0)); ctx.lineTo(w, Y(0)); ctx.stroke()
+          for (const ser of PNL_SERIES) {
+            ctx.beginPath()
+            s.forEach((p, i) => {
+              const x = X(p.t), y = Y(seriesValue(p, ser.key))
+              i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)
+            })
+            ctx.strokeStyle = ser.color(tok)
+            ctx.lineWidth = ser.key === 'total' ? 1.7 : 1
+            ctx.stroke()
+          }
+        }} />
+      </div>
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', gap: '0 10px', padding: '3px 8px 5px',
+        borderTop: `1px solid ${T.borderFaint}`, flexShrink: 0,
+      }}>
+        {PNL_SERIES.map(ser => (
+          <span key={ser.key} style={{ ...MONO, fontSize: 9, whiteSpace: 'nowrap' }}>
+            <span style={{ color: tok.gold ? ser.color(tok) : T.muted }}>{ser.label}</span>
+            {' '}
+            <span style={{ color: T.text }}>{latest ? fmtMoney(seriesValue(latest, ser.key)) : '—'}</span>
+          </span>
+        ))}
+      </div>
+    </>
   )
 }
 
