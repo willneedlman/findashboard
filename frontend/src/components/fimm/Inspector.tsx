@@ -389,8 +389,13 @@ function RightPane({ eng, tick }: { eng: FiEngine; tick: number }) {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
         padding: '5px 8px', borderBottom: `1px solid ${T.borderFaint}`, flexShrink: 0,
       }}>
-        <span style={{ ...LABEL, fontSize: 9, letterSpacing: '0.16em', color: alpha(T.gold, 70) }}>
-          {mode === 'pnl' ? 'P&L timeline' : 'Attribution'}
+        <span style={{ display: 'flex', alignItems: 'baseline', gap: 7, minWidth: 0 }}>
+          <span style={{ ...LABEL, fontSize: 9, letterSpacing: '0.16em', color: alpha(T.gold, 70) }}>
+            {mode === 'pnl' ? 'P&L timeline' : 'Attribution'}
+          </span>
+          {mode === 'attr' && (
+            <span style={{ ...MONO, fontSize: 9, color: T.muted }}>five books</span>
+          )}
         </span>
         <div style={{ display: 'flex' }}>
           {([['P&L', 'pnl'], ['ATTR', 'attr']] as const).map(([label, value]) => (
@@ -485,14 +490,6 @@ function Attribution({ eng, tick }: { eng: FiEngine; tick: number }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      <div style={{
-        display: 'flex', alignItems: 'baseline', gap: 8, padding: '5px 8px', flexShrink: 0,
-        borderBottom: `1px solid ${T.borderFaint}`, background: alpha(T.gold, 4),
-      }}>
-        <span style={{ ...LABEL, fontSize: 9, letterSpacing: '0.16em', color: alpha(T.gold, 70) }}>Attribution</span>
-        <span style={{ ...MONO, fontSize: 9, color: T.muted, marginLeft: 'auto' }}>five books</span>
-      </div>
-
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '4px 8px' }}>
         {s.length < 2
           ? <div style={{ ...MONO, fontSize: 9.5, color: T.muted, padding: '8px 0' }}>Run the session and it builds as it goes.</div>

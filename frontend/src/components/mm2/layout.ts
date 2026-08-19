@@ -28,6 +28,17 @@ export const GAP = 4
 export const BOTTOM_H = 218
 
 /**
+ * The rates desk needs more than the options desk, and one constant for both
+ * was wrong. What the options workbench had spare was its P&L chart's empty
+ * plot area; the rates inspector spends its height on a three-column read of
+ * the issue, its carry and its analytics, seven rows apiece, and at 218 the
+ * last of them was cut off and the pane scrolled. Sized to hold that read
+ * whole, because a pane that scrolls in a screen authored not to is worse than
+ * a pane that is slightly taller.
+ */
+export const BOTTOM_H_RATES = 244
+
+/**
  * What the risk column needs with all three panels whole: the meters, the
  * exposure floor and the hedge ticket including its buttons.
  */
@@ -54,13 +65,13 @@ export const CURVE_H = 118
  * Smallest window the screen is expected to hold without clipping.
  *
  * Was raised to 760 when the bottom pane grew to 264 to absorb the P&L band.
- * The bottom has since given 46 back, so the same risk column now clears at
- * 714; the floor stays at 720, the round number the handoff started from and
- * the point below which the risk column collapses first, its headline numbers
- * already being chips on the command bar.
+ * The bottom has since given height back, so this comes down with it — but it
+ * is set by the RATES desk, whose bottom pane is the taller of the two. Below
+ * this the risk column collapses first, its headline numbers already being
+ * chips on the command bar.
  */
-export const MIN_VIEWPORT_H = 720
+export const MIN_VIEWPORT_H = 736
 
 /** Height the middle row (rail, chain, risk) receives at a given window height. */
-export const middleHeight = (viewportH: number) =>
-  viewportH - GUTTER * 2 - COMMAND_H - GAP * 2 - BOTTOM_H
+export const middleHeight = (viewportH: number, bottom: number = BOTTOM_H) =>
+  viewportH - GUTTER * 2 - COMMAND_H - GAP * 2 - bottom

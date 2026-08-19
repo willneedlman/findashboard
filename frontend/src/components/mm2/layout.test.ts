@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { BOTTOM_H, COMMAND_H, CURVE_H, DESIGN_H, GAP, GUTTER, MIDDLE_H, MIN_VIEWPORT_H, RISK_COL_MIN, middleHeight } from './layout'
+import { BOTTOM_H, BOTTOM_H_RATES, COMMAND_H, CURVE_H, DESIGN_H, GAP, GUTTER, MIDDLE_H, MIN_VIEWPORT_H, RISK_COL_MIN, middleHeight } from './layout'
 
 /**
  * The screen must fit with nothing scrolling but the chain. These numbers drifted
@@ -55,8 +55,19 @@ describe('the bottom is tighter than the top, not looser', () => {
     expect(MIDDLE_H).toBeGreaterThan(BOTTOM_H * 2)
   })
 
-  it('keeps the risk column whole at the stated floor', () => {
+  it('keeps the risk column whole at the stated floor, on BOTH desks', () => {
+    // The rates desk has the taller bottom pane, so it is the binding one. A
+    // floor checked against the options desk alone passed while the rates risk
+    // column clipped by ten pixels.
     expect(middleHeight(MIN_VIEWPORT_H)).toBeGreaterThanOrEqual(RISK_COL_MIN)
+    expect(middleHeight(MIN_VIEWPORT_H, BOTTOM_H_RATES)).toBeGreaterThanOrEqual(RISK_COL_MIN)
+  })
+
+  it('gives the rates inspector room for its three-column read', () => {
+    // Tab strip, padding, the instrument line, and a column of seven rows with
+    // its heading. At 218 the last row was cut off and the pane scrolled.
+    const tallestBody = 24 + 18 + 21 + 8 + (13 + 3 + 7 * 15) + 8 + 28
+    expect(BOTTOM_H_RATES).toBeGreaterThanOrEqual(tallestBody)
   })
 
   it('leaves the P&L chart enough to show a shape', () => {

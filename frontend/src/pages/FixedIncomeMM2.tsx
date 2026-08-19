@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { T } from '../lib/theme'
 import { MONO, Panel, GOOD, BAD, WARN } from '../components/mm2/ui'
-import { BOTTOM_H, GAP } from '../components/mm2/layout'
+import { BOTTOM_H_RATES, GAP } from '../components/mm2/layout'
 import TopBar from '../components/fimm/TopBar'
 import QuoteRail from '../components/fimm/QuoteRail'
 import Matrix, { MatrixHeader, ScopeLine } from '../components/fimm/Matrix'
@@ -170,7 +170,7 @@ export default function FixedIncomeMM2() {
         </div>
       </div>
 
-      <div style={{ height: BOTTOM_H, flexShrink: 0, minHeight: 0, display: 'flex' }}>
+      <div style={{ height: BOTTOM_H_RATES, flexShrink: 0, minHeight: 0, display: 'flex' }}>
         <Inspector eng={eng} view={view} tick={tick} />
       </div>
 
