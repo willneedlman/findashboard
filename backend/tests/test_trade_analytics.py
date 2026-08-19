@@ -300,6 +300,228 @@ class TestDirectAlpha:
         assert A.direct_alpha(self._flows(bench, [(0, 100.0)]), 0.0, bench)["available"] is False
 
 
+class TestBestTrades:
+    """The trades that made the money, built from position episodes.
+
+    Not lots. A brokerage export never says which lot a sale closed, so a
+    per-lot answer is invented. What it does state is when a position went on
+    and when it came off, so that stretch is the trade and everything bought
+    and sold inside it belongs to it.
+    """
+
+    def _txn(self, day, kind, symbol, qty, amount, **kw):
+        return Txn(date=date(2026, 1, 1) + timedelta(days=day), kind=kind,
+                   symbol=symbol, quantity=qty, amount=amount, **kw)
+
+    def _built(self, symbols=("AAA",), days=200, last=100.0):
+        idx = pd.date_range("2026-01-01", periods=days, freq="D")
+        prices = pd.DataFrame({s: [last] * days for s in (*symbols, "SPY")}, index=idx)
+        return {"prices": prices}
+
+    def test_a_round_trip_is_one_trade(self):
+        txns = [self._txn(0, "buy", "AAA", 10, -1000.0),
+                self._txn(30, "sell", "AAA", 10, 1500.0)]
+        out = A.best_trades(self._built(), txns)
+        assert len(out) == 1
+        assert out[0]["pnl"] == pytest.approx(500.0)
+        assert out[0]["returnPct"] == pytest.approx(50.0)
+        assert out[0]["heldDays"] == 30
+        assert out[0]["open"] is False
+
+    def test_scaling_in_and_out_stays_one_trade(self):
+        # Four fills, one position, one answer. Splitting them into four trades
+        # would report the same money four times.
+        txns = [self._txn(0, "buy", "AAA", 5, -500.0),
+                self._txn(5, "buy", "AAA", 5, -600.0),
+                self._txn(20, "sell", "AAA", 4, 500.0),
+                self._txn(40, "sell", "AAA", 6, 900.0)]
+        out = A.best_trades(self._built(), txns)
+        assert len(out) == 1 and out[0]["fills"] == 4
+        assert out[0]["pnl"] == pytest.approx(300.0)
+        assert out[0]["heldDays"] == 40
+
+    def test_going_back_in_later_is_a_second_trade(self):
+        txns = [self._txn(0, "buy", "AAA", 10, -1000.0),
+                self._txn(10, "sell", "AAA", 10, 1200.0),
+                self._txn(60, "buy", "AAA", 10, -1000.0),
+                self._txn(90, "sell", "AAA", 10, 1100.0)]
+        out = A.best_trades(self._built(), txns)
+        assert [r["pnl"] for r in out] == [pytest.approx(200.0), pytest.approx(100.0)]
+        assert out[0]["opened"] == "2026-01-01" and out[1]["opened"] == "2026-03-02"
+
+    def test_dividends_collected_while_held_belong_to_the_trade(self):
+        txns = [self._txn(0, "buy", "AAA", 10, -1000.0),
+                self._txn(15, "dividend", "AAA", 0, 25.0),
+                self._txn(30, "sell", "AAA", 10, 1000.0)]
+        assert A.best_trades(self._built(), txns)[0]["pnl"] == pytest.approx(25.0)
+
+    def test_a_dividend_after_the_exit_is_not_part_of_it(self):
+        txns = [self._txn(0, "buy", "AAA", 10, -1000.0),
+                self._txn(30, "sell", "AAA", 10, 1000.0),
+                self._txn(60, "dividend", "AAA", 0, 25.0)]
+        assert A.best_trades(self._built(), txns) == []
+
+    def test_an_open_position_is_marked_at_the_last_price(self):
+        txns = [self._txn(0, "buy", "AAA", 10, -900.0)]
+        out = A.best_trades(self._built(last=100.0), txns)
+        assert out[0]["open"] is True
+        assert out[0]["pnl"] == pytest.approx(100.0)
+
+    def test_fees_count_against_the_trade(self):
+        txns = [self._txn(0, "buy", "AAA", 10, -1000.0, fees=0.65),
+                self._txn(10, "sell", "AAA", 10, 1100.0, fees=0.65)]
+        assert A.best_trades(self._built(), txns)[0]["pnl"] == pytest.approx(98.7)
+
+    def test_losers_are_not_best_trades(self):
+        txns = [self._txn(0, "buy", "AAA", 10, -1000.0),
+                self._txn(10, "sell", "AAA", 10, 400.0)]
+        assert A.best_trades(self._built(), txns) == []
+
+    def test_ranked_by_dollars_not_by_percent(self):
+        """A $40 position that doubled is a better story than a $4,000 position
+        up 12%, and the second one is what moved the account."""
+        txns = [self._txn(0, "buy", "SMALL", 1, -40.0),
+                self._txn(10, "sell", "SMALL", 1, 80.0),
+                self._txn(0, "buy", "BIG", 1, -4000.0),
+                self._txn(10, "sell", "BIG", 1, 4480.0)]
+        out = A.best_trades(self._built(symbols=("SMALL", "BIG")), txns)
+        assert [r["symbol"] for r in out] == ["BIG", "SMALL"]
+        assert out[1]["returnPct"] > out[0]["returnPct"]
+
+    def test_the_share_of_the_winnings_adds_up(self):
+        txns = [self._txn(0, "buy", "AAA", 1, -100.0), self._txn(9, "sell", "AAA", 1, 400.0),
+                self._txn(0, "buy", "BBB", 1, -100.0), self._txn(9, "sell", "BBB", 1, 200.0)]
+        out = A.best_trades(self._built(symbols=("AAA", "BBB")), txns)
+        assert sum(r["shareOfGainsPct"] for r in out) == pytest.approx(100.0, abs=0.2)
+
+    def test_an_open_position_with_no_price_is_left_out(self):
+        # Guessing at what it is worth would rank a fiction above real trades.
+        txns = [self._txn(0, "buy", "GHOST", 10, -900.0)]
+        assert A.best_trades(self._built(symbols=("AAA",)), txns) == []
+
+    def test_the_benchmark_window_matches_the_holding_period(self):
+        idx = pd.date_range("2026-01-01", periods=200, freq="D")
+        prices = pd.DataFrame({"AAA": [100.0] * 200,
+                               "SPY": 100.0 * (1.001 ** np.arange(200))}, index=idx)
+        txns = [self._txn(0, "buy", "AAA", 10, -1000.0),
+                self._txn(30, "sell", "AAA", 10, 1500.0)]
+        out = A.best_trades({"prices": prices}, txns)
+        assert out[0]["benchmarkPct"] == pytest.approx(3.04, abs=0.05)
+
+    def test_a_same_day_trade_still_gets_a_benchmark(self):
+        # The window has one row, so it reaches back to the prior close rather
+        # than reporting nothing for every day trade.
+        idx = pd.date_range("2026-01-01", periods=50, freq="D")
+        prices = pd.DataFrame({"AAA": [100.0] * 50,
+                               "SPY": 100.0 * (1.01 ** np.arange(50))}, index=idx)
+        txns = [self._txn(10, "buy", "AAA", 1, -100.0),
+                self._txn(10, "sell", "AAA", 1, 150.0)]
+        out = A.best_trades({"prices": prices}, txns)
+        assert out[0]["heldDays"] == 0
+        assert out[0]["benchmarkPct"] == pytest.approx(1.0, abs=0.01)
+
+    def test_an_option_carries_its_contract(self):
+        txns = [self._txn(0, "buy", "NVDA260807C200", 1, -312.0, is_option=True),
+                self._txn(6, "sell", "NVDA260807C200", 1, 892.0, is_option=True)]
+        out = A.best_trades(self._built(symbols=("NVDA",)), txns)
+        assert out[0]["isOption"] is True
+        assert out[0]["contract"] == "NVDA Aug 07 2026 call 200"
+
+    def test_a_closed_position_does_not_stay_open_on_rounding_dust(self):
+        txns = [self._txn(0, "buy", "AAA", 0.1 + 0.2, -100.0),
+                self._txn(10, "sell", "AAA", 0.3, 160.0)]
+        assert A.best_trades(self._built(), txns)[0]["open"] is False
+
+
+class TestAllocationDust:
+    """A liquidated book is not nine holdings worth nothing.
+
+    Buying and selling the same name to the penny lands on 1e-16 shares, not on
+    zero. Those residues passed a `> 0` test, so an account that had sold
+    everything came back with nine positions whose weights were the ratios of
+    one rounding error to another, each priced at $0.
+    """
+
+    def _built(self, last_shares: dict, price=100.0):
+        idx = pd.date_range("2026-01-01", periods=3, freq="D")
+        shares = pd.DataFrame({s: [0.0, 0.0, q] for s, q in last_shares.items()}, index=idx)
+        prices = pd.DataFrame({s: [price] * 3 for s in last_shares}, index=idx)
+        return {"shares": shares, "prices": prices}
+
+    def test_rounding_residue_is_not_a_position(self):
+        built = self._built({"JOBY": 5.68e-14, "VOO": 2.2e-16, "LMT": 1.1e-16})
+        assert A._allocation(built) == []
+
+    def test_real_positions_survive_beside_residue(self):
+        built = self._built({"NVDA": 12.0, "GHOST": 1.1e-16})
+        out = A._allocation(built)
+        assert [r["symbol"] for r in out] == ["NVDA"]
+        assert out[0]["weightPct"] == pytest.approx(100.0)
+
+    def test_weights_are_taken_over_what_is_left(self):
+        # The dust must not dilute the weights of the positions that remain.
+        built = self._built({"A": 3.0, "B": 1.0, "DUST": 1e-15})
+        out = {r["symbol"]: r["weightPct"] for r in A._allocation(built)}
+        assert out == {"A": pytest.approx(75.0), "B": pytest.approx(25.0)}
+
+    def test_a_position_worth_under_a_cent_is_closed(self):
+        built = self._built({"PENNY": 0.00005}, price=100.0)   # half a cent
+        assert A._allocation(built) == []
+
+
+class TestBenchmarkShadow:
+    """The line drawn beside the account on the value chart.
+
+    Rebasing the index to the account's opening value made a deposit look like
+    a win: the account line stepped up, the index did not, and the gap was
+    funding rather than return. Anchoring on an unfunded first row was worse,
+    flattening the benchmark onto the axis until it vanished.
+    """
+
+    def _bench(self, days=300, daily=0.0003):
+        idx = pd.date_range("2026-01-01", periods=days, freq="D")
+        return pd.Series(100.0 * (1 + daily) ** np.arange(days), index=idx)
+
+    def test_a_deposit_lifts_both_lines(self):
+        bench = self._bench()
+        equity = pd.Series(1_000.0, index=bench.index)
+        equity.iloc[150:] = 6_000.0
+        flows = pd.Series(0.0, index=bench.index)
+        flows.iloc[0] = 1_000.0
+        flows.iloc[150] = 5_000.0
+        shadow = A._benchmark_shadow(bench, equity, flows)
+        assert shadow.iloc[151] > 5_900.0
+        # And it keeps growing at the index's rate afterwards.
+        assert shadow.iloc[-1] > shadow.iloc[151]
+
+    def test_holding_the_index_tracks_it(self):
+        bench = self._bench()
+        equity = pd.Series(1_000.0 * (bench / bench.iloc[0]), index=bench.index)
+        flows = pd.Series(0.0, index=bench.index)
+        flows.iloc[0] = 1_000.0
+        shadow = A._benchmark_shadow(bench, equity, flows)
+        assert shadow.iloc[-1] == pytest.approx(float(equity.iloc[-1]), rel=1e-6)
+
+    def test_an_unfunded_first_row_does_not_flatten_it(self):
+        # The ledger opens with a fraction of a cent of stock-lending income.
+        bench = self._bench()
+        equity = pd.Series(0.0, index=bench.index)
+        equity.iloc[1:] = 2_000.0
+        flows = pd.Series(0.0, index=bench.index)
+        flows.iloc[1] = 2_000.0
+        shadow = A._benchmark_shadow(bench, equity, flows)
+        assert shadow.iloc[-1] > 2_000.0
+
+    def test_a_withdrawal_comes_out_of_the_shadow_too(self):
+        bench = self._bench()
+        equity = pd.Series(5_000.0, index=bench.index)
+        flows = pd.Series(0.0, index=bench.index)
+        flows.iloc[0] = 5_000.0
+        flows.iloc[100] = -2_000.0
+        shadow = A._benchmark_shadow(bench, equity, flows)
+        assert shadow.iloc[101] < 3_200.0
+
+
 class TestIrr:
     def test_it_finds_a_known_rate(self):
         # -1000 now, +1100 in a year is 10%.

@@ -77,7 +77,22 @@ class ParseResult:
             "transactions": [t.as_dict() for t in self.txns],
             "skipped": self.skipped[:20],
             "skippedCount": len(self.skipped),
+            "skippedKinds": self.skipped_kinds(),
         }
+
+    def skipped_kinds(self) -> list[dict]:
+        """What the unread rows were, grouped and counted, commonest first.
+
+        A bare count is not a disclosure. One export dropped 611 rows and the
+        reader had no way to tell whether that was 611 option trades, which
+        change the answer, or 611 margin-rate notices, which do not.
+        """
+        counts: dict[str, int] = {}
+        for row in self.skipped:
+            label = row.split(":", 1)[0].strip() or "unlabelled"
+            counts[label] = counts.get(label, 0) + 1
+        return [{"kind": k, "count": n}
+                for k, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
 
 
 def _money(raw) -> float:

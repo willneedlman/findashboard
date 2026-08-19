@@ -425,9 +425,12 @@ def market_regression(port: pd.Series, bench: pd.Series, rf: float) -> dict:
         "benchmarkAnnPct": round(bench_ann * 100, 2),
         # Daily points in percent, with the fitted line's endpoints, so the
         # chart draws the same fit these numbers came from.
+        # Each point carries its trading date. The card that opens on a point
+        # is headed by the day, and a scatter with no dates cannot say which.
         "points": [
-            {"x": round(float(a) * 100, 4), "y": round(float(b) * 100, 4)}
-            for a, b in zip(x, y)
+            {"x": round(float(a) * 100, 4), "y": round(float(b) * 100, 4),
+             "d": str(d.date())}
+            for a, b, d in zip(x, y, common)
         ],
         "line": [
             {"x": round(lo * 100, 4), "y": round((alpha_daily + beta * lo) * 100, 4)},
@@ -479,6 +482,7 @@ def analyze(txns: list[Txn], benchmark: str = "SPY", rf: float = 0.04) -> dict:
         beta = float(np.cov(p.values, b.values)[0, 1] / np.var(b.values))
         bench_total = float((1 + b).prod() - 1)
 
+    shown = equity.loc[measured_from:]
     reg = market_regression(ret, bench_ret, rf)
     direct = direct_alpha(flows, float(equity.iloc[-1]), bench_close)
     external = float(flows.sum())
@@ -520,17 +524,89 @@ def analyze(txns: list[Txn], benchmark: str = "SPY", rf: float = 0.04) -> dict:
             "symbols": built["symbols"],
         },
         "series": {
-            "equity": _series_points(equity),
-            "drawdown": _series_points(dd * 100, wealth.index),
-            "benchmark": _series_points(_rebased(bench_close, equity)),
+            # Drawn from the first funded day, like every figure beside it: the
+            # unfunded run-in is a flat zero that owns half the y axis.
+            "equity": _series_points(shown),
+            "drawdown": drawdown_points(equity.loc[wealth.index], wealth),
+            "benchmark": _series_points(_benchmark_shadow(bench_close, shown, flows)),
         },
         "regression": reg,
+        "dailyBook": daily_book(built),
+        "marks": {
+            # The two dates the section strips name, and the benchmark's own
+            # annualized figure so Run summary compares like with like.
+            "troughDate": str(wealth.idxmin().date()) if len(wealth) else None,
+            "peakDate": str(equity.loc[wealth.index].idxmax().date()) if len(wealth) else None,
+            "peakValue": round(float(equity.loc[wealth.index].max()), 2) if len(wealth) else None,
+            "benchmarkAnnualizedPct": reg.get("benchmarkAnnPct"),
+        },
         "directAlpha": direct,
+        "bestTrades": _labelled_trades(built, txns, benchmark),
         "allocation": _allocation(built),
-        "monthly": _monthly(ret),
+        "monthly": _monthly(ret, bench_ret),
         "caveats": _caveats(built, txns, thin, days),
         "returnMethod": "time-weighted, external flows removed",
     }
+
+
+
+# How many days of per-position detail to ship. A decade of history times a
+# dozen names is a payload nobody reads; the card only opens on a day the
+# scatter shows, and the recent end is the part anyone inspects.
+_DAILY_BOOK_DAYS = 1500
+
+
+def daily_book(built: dict, days: int = _DAILY_BOOK_DAYS) -> dict:
+    """For each trading day, what was held and what each position did that day.
+
+    The weighted mean of a day's position moves reconciles to that day's
+    account return, which is the point: the card explains the dot rather than
+    listing something adjacent to it.
+    """
+    shares: pd.DataFrame = built["shares"]
+    prices: pd.DataFrame = built["prices"]
+    if shares.empty or not len(shares.columns):
+        return {}
+    held = shares.iloc[-days:]
+    px = prices[shares.columns].reindex(held.index)
+    moves = px.pct_change()
+    out: dict[str, list[dict]] = {}
+    for day in held.index:
+        row = []
+        for symbol in shares.columns:
+            qty = float(held.at[day, symbol])
+            pct = float(moves.at[day, symbol]) if day in moves.index else float("nan")
+            if qty <= 0 or not np.isfinite(pct):
+                continue
+            value = qty * float(px.at[day, symbol])
+            # Same rounding dust that _allocation drops. A closed position
+            # leaves 1e-16 shares behind, and listing it as a mover is noise.
+            if value < 0.01:
+                continue
+            row.append({"symbol": symbol, "pct": round(pct * 100, 2)})
+        if row:
+            # Biggest mover first: the card is read for what moved, not
+            # alphabetically.
+            row.sort(key=lambda r: -abs(r["pct"]))
+            out[str(day.date())] = row[:12]
+    return out
+
+
+def drawdown_points(equity: pd.Series, wealth: pd.Series) -> list[dict]:
+    """Drawdown with the value and the running peak it is measured against.
+
+    Hovering a trough and being told only the percentage leaves the reader to
+    work out what it was a percentage of.
+    """
+    peak = equity.cummax()
+    dd = (wealth - wealth.cummax()) / wealth.cummax()
+    common = dd.index.intersection(equity.index)
+    step = max(1, len(common) // 400)
+    return [
+        {"d": str(d.date()), "v": round(float(dd.loc[d]) * 100, 4),
+         "equity": round(float(equity.loc[d]), 2), "peak": round(float(peak.loc[d]), 2)}
+        for d in list(common)[::step]
+    ]
 
 
 def _series_points(series: pd.Series, index=None) -> list[dict]:
@@ -540,21 +616,53 @@ def _series_points(series: pd.Series, index=None) -> list[dict]:
     return [{"d": str(i.date()), "v": round(float(v), 4)} for i, v in list(s.items())[::step]]
 
 
-def _rebased(bench: pd.Series, equity: pd.Series) -> pd.Series:
-    """Benchmark scaled to the account's starting value, for one shared axis."""
+def _benchmark_shadow(bench: pd.Series, equity: pd.Series, flows: pd.Series) -> pd.Series:
+    """The same dollars, on the same days, in the benchmark instead.
+
+    Scaling the index to the account's opening value answers the wrong question
+    as soon as money is paid in: a deposit lifts the account line and leaves the
+    index behind, which reads as outperformance nobody earned. Anchoring on an
+    unfunded first row is worse still, because a dust-sized start flattens the
+    whole benchmark onto the axis and the line disappears.
+
+    This curve buys the benchmark with every external flow on the day it
+    happened, so the gap between the two lines is return rather than funding.
+    """
     b = bench.reindex(equity.index).ffill().dropna()
-    if b.empty or b.iloc[0] == 0:
+    if b.empty:
         return b
-    start = float(equity.iloc[0]) or 1.0
-    return b / float(b.iloc[0]) * start
+    idx = b.index
+    growth = b.pct_change().fillna(0.0).to_numpy()
+    added = flows.reindex(idx).fillna(0.0).to_numpy()
+    # The account's value on the first day already contains that day's flow.
+    value = float(equity.loc[idx[0]]) or float(added[0])
+    out = [value]
+    for i in range(1, len(idx)):
+        value = value * (1.0 + float(growth[i])) + float(added[i])
+        out.append(value)
+    return pd.Series(out, index=idx)
 
 
 def _allocation(built: dict) -> list[dict]:
+    """Open positions on the last day, priced.
+
+    A ledger that buys and sells the same name to the penny does not land on
+    zero shares, it lands on 1e-16 of them. Those residues are worth a hundred
+    trillionth of a cent each, and a book that had been fully liquidated came
+    back as nine holdings whose weights were the ratios of one rounding error
+    to another. A position has to be worth at least a cent to be a position.
+    """
     shares, prices = built["shares"], built["prices"]
     if shares.empty:
         return []
     last = shares.iloc[-1]
-    values = {s: float(last[s] * prices[s].iloc[-1]) for s in shares.columns if last[s] > 0}
+    values = {}
+    for s in shares.columns:
+        if last[s] <= 0:
+            continue
+        v = float(last[s] * prices[s].iloc[-1])
+        if v >= 0.01:
+            values[s] = v
     total = sum(values.values())
     if total <= 0:
         return []
@@ -565,12 +673,182 @@ def _allocation(built: dict) -> list[dict]:
     )
 
 
-def _monthly(ret: pd.Series) -> list[dict]:
+def _monthly(ret: pd.Series, bench_ret: pd.Series | None = None) -> list[dict]:
+    """Monthly compounded return, beside the benchmark's own month.
+
+    Comparing a month to the whole period tells the reader nothing; comparing it
+    to what the index did that month is the only way to read it.
+    """
     if ret.empty:
         return []
-    grouped = (1 + ret).groupby([ret.index.year, ret.index.month]).prod() - 1
-    return [{"month": f"{y}-{m:02d}", "returnPct": round(float(v) * 100, 2)}
-            for (y, m), v in grouped.items()]
+
+    def by_month(series: pd.Series) -> dict:
+        grouped = (1 + series).groupby([series.index.year, series.index.month]).prod() - 1
+        return {f"{y}-{m:02d}": float(v) for (y, m), v in grouped.items()}
+
+    mine = by_month(ret)
+    theirs = by_month(bench_ret.loc[bench_ret.index.intersection(ret.index)]) \
+        if bench_ret is not None and not bench_ret.empty else {}
+    out = []
+    for month, value in mine.items():
+        row = {"month": month, "returnPct": round(value * 100, 2)}
+        if month in theirs:
+            row["benchmarkReturnPct"] = round(theirs[month] * 100, 2)
+        out.append(row)
+    return out
+
+
+# A position is treated as open while its quantity is meaningfully away from
+# zero. The same 1e-16 residue that faked nine holdings would otherwise keep a
+# closed trade open forever.
+_QTY_DUST = 1e-6
+_TRADE_MIN_BASIS = 1.0
+
+
+def _episodes(txns: list[Txn]) -> list[dict]:
+    """Every stretch a symbol was held, from opening it to closing it out.
+
+    Not lots. A brokerage export never says which lot a sale closed, so any
+    per-lot figure is invented rather than measured, and _realised_pnl already
+    refuses to invent one. What the export does state without ambiguity is when
+    a position went on and when it came off, so that stretch is the trade: all
+    the buying inside it is the money in, all the selling is the money out, and
+    scaling in or out is part of the trade rather than a separate one.
+    """
+    by_symbol: dict[str, list[Txn]] = {}
+    for t in sorted(txns, key=lambda x: (x.date, x.kind)):
+        if t.symbol and t.kind in ("buy", "sell", "dividend"):
+            by_symbol.setdefault(t.symbol, []).append(t)
+
+    out: list[dict] = []
+    for symbol, rows in by_symbol.items():
+        live: dict | None = None
+        qty = 0.0
+        for t in rows:
+            if t.kind == "dividend":
+                # Income only counts while the position was actually on.
+                if live:
+                    live["income"] += t.amount
+                continue
+            signed = t.quantity if t.kind == "buy" else -t.quantity
+            if live is None:
+                live = {
+                    "symbol": symbol, "isOption": t.is_option, "opened": t.date,
+                    "closed": None, "invested": 0.0, "returned": 0.0, "income": 0.0,
+                    "fills": 0, "shares": 0.0,
+                }
+            live["fills"] += 1
+            live["shares"] = max(live["shares"], abs(qty + signed))
+            if t.amount < 0:
+                live["invested"] += -t.amount
+            else:
+                live["returned"] += t.amount
+            live["invested"] += abs(t.fees)
+            qty += signed
+            if abs(qty) < _QTY_DUST:
+                live["closed"] = t.date
+                out.append(live)
+                live, qty = None, 0.0
+        if live is not None:
+            live["openQty"] = qty
+            out.append(live)
+    return out
+
+
+def best_trades(built: dict, txns: list[Txn], benchmark: str = "SPY",
+                top: int = 6) -> list[dict]:
+    """The trades that made the most money, with what they were up against.
+
+    Ranked by dollars rather than by percent. A $40 position that doubled is a
+    better story than a $4,000 position up 12%, and the second one is what
+    actually moved the account.
+    """
+    prices: pd.DataFrame = built["prices"]
+    bench = prices[benchmark] if benchmark in prices.columns else None
+    last_day = prices.index[-1]
+
+    priced: list[dict] = []
+    for e in _episodes(txns):
+        value = 0.0
+        if e["closed"] is None:
+            qty = e.get("openQty", 0.0)
+            col = e["symbol"] if e["symbol"] in prices.columns else None
+            if col is None or abs(qty) < _QTY_DUST:
+                # An option still open, or a name with no price history. Its
+                # profit is unknown, and guessing at it would rank a fiction
+                # above real trades.
+                continue
+            value = float(qty) * float(prices[col].iloc[-1])
+
+        basis = e["invested"] if e["invested"] >= _TRADE_MIN_BASIS else e["returned"]
+        if basis < _TRADE_MIN_BASIS:
+            continue
+        pnl = e["returned"] + e["income"] + value - e["invested"]
+        end = e["closed"] or last_day.date()
+        held = max((end - e["opened"]).days, 0)
+
+        row = {
+            "symbol": e["symbol"], "isOption": e["isOption"],
+            "opened": str(e["opened"]), "closed": str(e["closed"]) if e["closed"] else None,
+            "open": e["closed"] is None, "heldDays": held, "fills": e["fills"],
+            "invested": round(e["invested"], 2), "returned": round(e["returned"], 2),
+            "income": round(e["income"], 2), "openValue": round(value, 2),
+            "pnl": round(pnl, 2), "returnPct": round(pnl / basis * 100, 2),
+        }
+        if e["isOption"]:
+            spec = parse_option_symbol(e["symbol"])
+            if spec:
+                row["contract"] = (f"{spec['underlying']} {spec['expiry']:%b %d %Y} "
+                                   f"{spec['right']} {spec['strike']:g}")
+        if bench is not None:
+            row["benchmarkPct"] = _window_return(bench, e["opened"], end)
+        priced.append(row)
+
+    priced.sort(key=lambda r: -r["pnl"])
+    winners = [r for r in priced if r["pnl"] > 0][:top]
+    total = sum(r["pnl"] for r in priced if r["pnl"] > 0)
+    for r in winners:
+        r["shareOfGainsPct"] = round(r["pnl"] / total * 100, 1) if total > 0 else None
+    return winners
+
+
+def _labelled_trades(built: dict, txns: list[Txn], benchmark: str) -> list[dict]:
+    """Best trades, each with the kind of trade it was.
+
+    Imported here rather than at module scope: trade_classify reads the option
+    symbol parser out of this module, and binding it at the top would be a
+    circular import.
+    """
+    trades = best_trades(built, txns, benchmark)
+    if not trades:
+        return trades
+    try:
+        import trade_classify
+        return trade_classify.classify(trades, built["prices"])
+    except Exception as e:                          # noqa: BLE001 — a label is not worth the tile
+        logger.warning("trade classify failed (%s)", e)
+        return trades
+
+
+def _window_return(series: pd.Series, start: date, end: date) -> float | None:
+    """The benchmark's own move between two dates, in percent.
+
+    A trade opened and closed inside one session still has an index to be
+    measured against, so a single-day window reaches back to the prior close
+    rather than reporting nothing.
+    """
+    clean = series.dropna()
+    window = clean.loc[pd.Timestamp(start):pd.Timestamp(end)]
+    if window.empty:
+        return None
+    if len(window) < 2:
+        before = clean.loc[:window.index[0]]
+        if len(before) < 2:
+            return None
+        window = before.iloc[-2:]
+    if float(window.iloc[0]) == 0:
+        return None
+    return round((float(window.iloc[-1]) / float(window.iloc[0]) - 1) * 100, 2)
 
 
 def _realised_pnl(txns: list[Txn]) -> float:

@@ -343,17 +343,6 @@
     white-space: normal !important;
   }
 
-  .portfolio-analysis-settings-trigger {
-    flex-wrap: wrap;
-    padding: 9px 10px !important;
-  }
-
-  .portfolio-analysis-settings-trigger > :nth-child(2) {
-    order: 3;
-    width: 100%;
-    white-space: normal !important;
-  }
-
   .portfolio-downtrend-grid {
     grid-template-columns: 1fr !important;
   }
@@ -1548,3 +1537,396 @@ textarea.ft-control {
   .vol-loading-ladder > div { animation: none; opacity: 0.62; }
   .vol-heat-cell, .vol-expiry-cell, .vol-atm-cell { transition: none; }
 }
+
+/* ── Trade Analyzer ────────────────────────────────────────────────
+   One frame, not a stack of cards. The frame owns the only outer border; the
+   bands inside are divided by hairlines alone, so the page reads as a single
+   instrument rather than as six panels that happen to be adjacent.
+
+   Modeled on .vol-scanner-frame. Kept as its own block rather than reusing the
+   .vol-* classes in place: Volatility Scanner depends on those, and a shared
+   set would mean every change to one tool is a change to the other.
+   ────────────────────────────────────────────────────────────────────────── */
+.tha-frame {
+  width: 100%;
+  overflow: hidden;
+  background: var(--theme-bg, #101c2e);
+  border: 1px solid var(--theme-border, rgba(255,255,255,0.08));
+  font-variant-numeric: tabular-nums;
+}
+.tha-frame :focus-visible {
+  outline: 1px solid var(--theme-primary, #c9a84c);
+  outline-offset: 2px;
+}
+
+/* Section strip. flex-wrap lets the meta drop to its own line rather than
+   crushing the title, which is what a breakpoint would otherwise be for. */
+.tha-strip {
+  min-height: 38px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  white-space: nowrap;
+  gap: 4px 16px;
+  padding: 9px 22px;
+  background: var(--theme-surface, #0d1826);
+  border-bottom: 1px solid var(--theme-border, rgba(255,255,255,0.08));
+  color: var(--theme-primary, #c9a84c);
+  font: 700 10px/1.2 var(--theme-sans, sans-serif);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.tha-strip-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--theme-secondary, #8099b0);
+  font: 500 10px/1.2 var(--theme-sans, sans-serif);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.tha-strip-meta > i {
+  width: 1px;
+  height: 11px;
+  background: color-mix(in srgb, var(--theme-text, #d7e3fc) 12%, transparent);
+}
+
+.tha-band { border-bottom: 1px solid var(--theme-border, rgba(255,255,255,0.08)); }
+.tha-split {
+  display: grid;
+  border-bottom: 1px solid var(--theme-border, rgba(255,255,255,0.08));
+}
+.tha-split > :first-child { border-right: 1px solid var(--theme-border, rgba(255,255,255,0.08)); }
+.tha-split:last-child { border-bottom: 0; }
+/* A grid cell stretches, but its contents do not follow unless told to. Left to
+   themselves the charts sat at their natural height and left a band of dead
+   space under the shorter column. */
+.tha-split > * { display: flex; flex-direction: column; min-width: 0; }
+.tha-fill { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.tha-fill > .tha-plot { flex: 1; min-height: 150px; }
+.tha-split-2-1 { grid-template-columns: 2fr 1fr; }
+.tha-split-1-1 { grid-template-columns: 1fr 1fr; }
+.tha-split-5-4 { grid-template-columns: 5fr 4fr; }
+@media (max-width: 1100px) {
+  .tha-split-2-1, .tha-split-1-1, .tha-split-5-4 { grid-template-columns: 1fr; }
+  .tha-split > :first-child {
+    border-right: 0;
+    border-bottom: 1px solid var(--theme-border, rgba(255,255,255,0.08));
+  }
+}
+
+/* Import band */
+.tha-import { padding: 14px 22px 12px; }
+.tha-controls { display: flex; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
+.tha-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.tha-field > label {
+  color: var(--theme-secondary, #8099b0);
+  font: 700 9px/1.2 var(--theme-sans, sans-serif);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.tha-note {
+  margin-top: 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: var(--theme-secondary, #8099b0);
+  font: 500 10px/1.45 var(--theme-sans, sans-serif);
+}
+.tha-note > .dim { color: var(--theme-text-dim, rgba(255,255,255,0.4)); }
+
+/* KPI band. No overflow:hidden here — it clips the help tooltips. */
+/* Three shared rows across all five cells. A reserved label height used to hold
+   the baselines together, which cost every cell the height of a second line it
+   almost never needed. Subgrid aligns them without paying for the space. */
+.tha-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-rows: auto auto auto;
+  background: var(--theme-surface, #0d1826);
+  border-bottom: 1px solid var(--theme-border, rgba(255,255,255,0.08));
+}
+.tha-kpi {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  row-gap: 3px;
+  padding: 9px 14px 10px;
+  border-left: 1px solid var(--theme-border, rgba(255,255,255,0.08));
+}
+.tha-kpi:first-child { border-left: 0; }
+.tha-kpi-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  color: var(--theme-secondary, #8099b0);
+  font: 700 9px/1.2 var(--theme-sans, sans-serif);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.tha-kpi-value {
+  align-self: end;
+  white-space: nowrap;
+  font: 700 17px/1.15 var(--theme-mono, monospace);
+}
+.tha-kpi-sub {
+  white-space: nowrap;
+  color: var(--theme-secondary, #8099b0);
+  font: 400 9px/1.3 var(--theme-mono, monospace);
+}
+
+.tha-section { padding: 14px 22px 10px; position: relative; }
+.tha-section-tight { padding: 8px 22px 12px; }
+.tha-plot { position: relative; }
+/* Under the plot, not floating on it: at the right edge the account line runs
+   through the top corner, and a legend laid over it was unreadable against
+   exactly the series it was naming. */
+.tha-plot-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 16px;
+  margin-top: 4px;
+  color: var(--theme-secondary, #8099b0);
+  font: 400 9px/1.3 var(--theme-mono, monospace);
+}
+.tha-plot-legend > span { display: inline-flex; align-items: center; }
+.tha-swatch { display: inline-block; width: 16px; height: 2px; margin-right: 6px; vertical-align: middle; }
+
+/* Run summary rows. nowrap and flex:none on the value, or strings like
+   "robinhood · 968 trades" break mid-word. */
+.tha-stat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--theme-border-faint, rgba(255,255,255,0.05));
+  color: var(--theme-secondary, #8099b0);
+  font: 500 10px/1.2 var(--theme-sans, sans-serif);
+}
+.tha-stat:last-child { border-bottom: 0; }
+.tha-stat > span { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.tha-stat > strong {
+  flex: none;
+  white-space: nowrap;
+  color: var(--theme-text, #d7e3fc);
+  font: 600 12px/1.2 var(--theme-mono, monospace);
+}
+
+/* Day card, hovered or pinned, over the scatter. */
+.tha-daycard {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  max-width: calc(100% - 20px);
+  pointer-events: none;
+  background: var(--theme-surface, #0d1826);
+  border: 1px solid var(--theme-border, rgba(255,255,255,0.08));
+  box-shadow: 0 6px 20px rgba(0,0,0,0.55);
+  font: 400 11px/1.6 var(--theme-mono, monospace);
+}
+.tha-daycard-col { padding: 7px 10px; }
+.tha-daycard-col + .tha-daycard-col { border-left: 1px solid var(--theme-border, rgba(255,255,255,0.08)); }
+.tha-daycard-date {
+  color: var(--theme-primary, #c9a84c);
+  font: 700 9px/1.4 var(--theme-sans, sans-serif);
+  letter-spacing: 0.14em;
+}
+.tha-daycard-row { display: flex; justify-content: space-between; gap: 14px; }
+.tha-daycard-row > span:first-child { color: var(--theme-secondary, #8099b0); }
+.tha-daycard-rule {
+  height: 1px;
+  margin: 5px 0;
+  background: var(--theme-border-faint, rgba(255,255,255,0.05));
+}
+.tha-daycard-hint { color: var(--theme-text-dim, rgba(255,255,255,0.4)); font-size: 9px; }
+.tha-daycard-none {
+  max-width: 22ch;
+  padding: 6px 0 2px;
+  color: var(--theme-secondary, #8099b0);
+  font: 400 10px/1.5 var(--theme-mono, monospace);
+}
+.tha-poshead {
+  color: var(--theme-secondary, #8099b0);
+  font: 700 9px/1.4 var(--theme-sans, sans-serif);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.tha-posrow {
+  display: grid;
+  grid-template-columns: 44px 96px 52px;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+.tha-posrow > .sym { font: 700 11px/1.4 var(--theme-mono, monospace); color: var(--theme-text, #d7e3fc); }
+.tha-posrow > .val { text-align: right; }
+
+/* Zero-anchored diverging bar. The number is always printed beside it; colour
+   never carries the meaning alone. */
+.tha-divbar { position: relative; height: 7px; background: rgba(255,255,255,0.05); }
+.tha-divbar::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255,255,255,0.22);
+}
+.tha-divbar > i { position: absolute; top: 0; bottom: 0; }
+
+/* Holdings table */
+.tha-holdrow {
+  display: grid;
+  grid-template-columns: minmax(40px, 50px) minmax(0, 1fr) 78px 44px;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--theme-border-faint, rgba(255,255,255,0.05));
+}
+/* Absolute fill, so the column takes the height the row already has instead of
+   setting it. A book of 21 names otherwise pushed this tile past the bottom of
+   the frame and past the chart it sits beside. */
+.tha-holdbody { flex: 1; min-height: 0; position: relative; }
+.tha-holdscroll {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 22px 10px;
+}
+.tha-holdfoot {
+  position: sticky;
+  bottom: -10px;
+  margin-top: 9px;
+  padding: 7px 0 10px;
+  background: var(--theme-bg, #101c2e);
+  border-top: 1px solid var(--theme-border-faint, rgba(255,255,255,0.05));
+  color: var(--theme-secondary, #8099b0);
+  font: 500 10px/1.6 var(--theme-sans, sans-serif);
+}
+.tha-holdhead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-top: 10px;
+  background: var(--theme-bg, #101c2e);
+  border-bottom: 1px solid var(--theme-border, rgba(255,255,255,0.08));
+  color: var(--theme-secondary, #8099b0);
+  font: 700 9px/1.2 var(--theme-sans, sans-serif);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+/* Best trades. Two lines per trade: the figures on a fixed grid so the eye can
+   run down a column, and the reason underneath in prose. */
+.tha-trades { display: flex; flex-direction: column; }
+.tha-trade {
+  display: grid;
+  grid-template-columns: 20px minmax(120px, 1.4fr) minmax(150px, 1.2fr)
+                         96px 104px 84px minmax(60px, 0.6fr);
+  align-items: baseline;
+  gap: 4px 18px;
+  padding: 9px 0 10px;
+  border-bottom: 1px solid var(--theme-border-faint, rgba(255,255,255,0.05));
+}
+.tha-trade:last-child { border-bottom: 0; }
+.tha-trade-rank {
+  color: var(--theme-text-dim, rgba(255,255,255,0.4));
+  font: 700 10px/1.4 var(--theme-mono, monospace);
+}
+.tha-trade-name { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.tha-trade-name > .sym {
+  color: var(--theme-text, #d7e3fc);
+  font: 700 12.5px/1.3 var(--theme-mono, monospace);
+}
+.tha-tag {
+  padding: 1px 5px;
+  color: var(--theme-secondary, #8099b0);
+  border: 1px solid var(--theme-border, rgba(255,255,255,0.08));
+  font: 700 8px/1.5 var(--theme-sans, sans-serif);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.tha-trade-when {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--theme-secondary, #8099b0);
+  font: 400 10.5px/1.4 var(--theme-mono, monospace);
+}
+.tha-trade-when > i {
+  width: 1px;
+  height: 9px;
+  background: color-mix(in srgb, var(--theme-text, #d7e3fc) 14%, transparent);
+}
+.tha-trade-num { display: flex; flex-direction: column; gap: 2px; }
+.tha-trade-num > span {
+  color: var(--theme-text-dim, rgba(255,255,255,0.4));
+  font: 700 8px/1.2 var(--theme-sans, sans-serif);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.tha-trade-num > strong {
+  color: var(--theme-text, #d7e3fc);
+  font: 700 13px/1.2 var(--theme-mono, monospace);
+}
+.tha-trade-bar {
+  height: 5px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--theme-text, #d7e3fc) 6%, transparent);
+}
+.tha-trade-bar > i {
+  display: block;
+  height: 100%;
+  background: color-mix(in srgb, var(--theme-positive, #22c55e) 45%, transparent);
+}
+/* What kind of trade it was, measured rather than asserted. Gold because it is
+   the first thing worth reading on the row after the name. */
+.tha-kind {
+  color: var(--theme-primary, #c9a84c);
+  font: 700 9px/1.4 var(--theme-sans, sans-serif);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+/* The reason spans the full width under the figures rather than squeezing into
+   a column, so it reads as a sentence instead of a caption. */
+.tha-trade-note {
+  grid-column: 2 / -1;
+  margin: 3px 0 0;
+  color: var(--theme-secondary, #8099b0);
+  font: 500 10px/1.6 var(--theme-sans, sans-serif);
+}
+.tha-trade-note > p { margin: 0; }
+.tha-trade-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 5px; }
+.tha-trade-read {
+  margin-top: 4px !important;
+  color: var(--theme-text-dim, rgba(255,255,255,0.4));
+}
+.tha-trade-read > .tha-tag { margin-right: 7px; }
+@media (max-width: 1100px) {
+  .tha-trade { grid-template-columns: 20px 1fr 1fr; }
+  .tha-trade-bar { display: none; }
+  .tha-trade-note { grid-column: 1 / -1; }
+}
+
+/* overflow is a guard, not decoration: an over-long bar escaped its column and
+   ran underneath the value and weight text. */
+.tha-weightbar {
+  height: 6px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--theme-text, #d7e3fc) 6%, transparent);
+}
+.tha-weightbar > i {
+  display: block;
+  height: 100%;
+  background: color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent);
+}
+
