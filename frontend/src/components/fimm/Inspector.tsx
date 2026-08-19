@@ -48,8 +48,14 @@ export default function Inspector({ eng, view, tick }: {
             color: tab === t.key ? T.gold : T.muted,
           }}>{t.label}</button>
         ))}
-        <span style={{ ...MONO, fontSize: 10, color: T.muted, marginLeft: 'auto', paddingRight: 12 }}>
-          selected <span style={{ color: T.gold }}>{view?.node.label ?? '—'}</span>
+        <span style={{
+          display: 'flex', alignItems: 'baseline', gap: 8,
+          marginLeft: 'auto', paddingRight: 12, minWidth: 0,
+        }}>
+          <span style={{ ...MONO, fontSize: 12, fontWeight: 700, color: T.gold }}>
+            {view?.node.label ?? '—'}
+          </span>
+          {view && <PositionTag view={view} />}
         </span>
       </div>
 
@@ -72,6 +78,18 @@ export default function Inspector({ eng, view, tick }: {
 
 // ── Issue ─────────────────────────────────────────────────────────────────────
 
+
+/** Position, in the words the body used to spend a row on. */
+function PositionTag({ view }: { view: NodeView }) {
+  const held = view.posMM
+  const cash = view.node.kind === 'cash'
+  return (
+    <span style={{ ...MONO, fontSize: 10, color: held > 0 ? GOOD : held < 0 ? BAD : T.muted }}>
+      {held === 0 ? 'flat' : `${held > 0 ? 'long' : 'short'} ${Math.abs(held).toFixed(0)}${cash ? 'mm' : ' lots'}`}
+    </span>
+  )
+}
+
 function Issue({ eng, view }: { eng: FiEngine; view: NodeView | null }) {
   if (!view) return <Empty>Click any issue in the matrix to inspect it.</Empty>
   const nd = view.node
@@ -83,16 +101,6 @@ function Issue({ eng, view }: { eng: FiEngine; view: NodeView | null }) {
 
   return (
     <div style={{ padding: '9px 12px', display: 'flex', flexDirection: 'column', gap: 8, height: '100%', minHeight: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexShrink: 0 }}>
-        <span style={{ ...MONO, fontSize: 15, fontWeight: 700, color: T.gold }}>{nd.label}</span>
-        <span style={{ ...MONO, fontSize: 11, color: held > 0 ? GOOD : held < 0 ? BAD : T.muted }}>
-          {held === 0 ? 'flat' : `${held > 0 ? 'long' : 'short'} ${Math.abs(held).toFixed(0)}${cash ? 'mm' : ' lots'}`}
-        </span>
-        <span style={{ ...MONO, fontSize: 10, color: T.muted, marginLeft: 'auto' }}>
-          click any issue in the matrix to inspect it
-        </span>
-      </div>
-
       <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
         <Col title="Issue and market" width={186}>
           <Row k="cusip" v={nd.cusip} />

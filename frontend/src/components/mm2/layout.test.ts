@@ -76,3 +76,33 @@ describe('the bottom is tighter than the top, not looser', () => {
     expect(BOTTOM_H).toBeGreaterThan(chartChrome)
   })
 })
+
+
+/**
+ * The rates inspector carried its own "10Y flat" line, repeating the selection
+ * the tab strip above it already named, and the nine-row depth ladder beside it
+ * overflowed by nine pixels and scrolled. The line moved into the strip.
+ */
+describe('the rates depth ladder fits without scrolling', () => {
+  const TAB_STRIP = 24
+  const BODY_PADDING = 9 * 2
+  /** Heading, the bid/yield/ask header, and nine rows pinned at 17px. */
+  const LADDER = 13 + 4 + 12 + 9 * 17
+  /** Column heading and seven rows, plus the wrapped market note beneath. */
+  const TALLEST_COLUMN = 13 + 3 + 7 * 15 + 28
+
+  const bodyHeight = BOTTOM_H_RATES - TAB_STRIP - BODY_PADDING
+
+  it('holds the whole ladder', () => {
+    expect(bodyHeight).toBeGreaterThanOrEqual(LADDER)
+  })
+
+  it('holds the tallest data column', () => {
+    expect(bodyHeight).toBeGreaterThanOrEqual(TALLEST_COLUMN)
+  })
+
+  it('would not have fitted with the instrument line still in the body', () => {
+    // 21px of type plus the 8px gap under it: the row that moved to the strip.
+    expect(bodyHeight - 29).toBeLessThan(LADDER)
+  })
+})
