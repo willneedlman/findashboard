@@ -116,9 +116,13 @@ export function PortfolioTab() {
         axios.post('/api/portfolio/backtest', {
           tickers: assets.map(a => a.ticker),
           weights,
+          sides: assets.map(a => a.side === 'short' ? 'short' : 'long'),
           benchmark, benchmark_source: benchmarkSource, start, end,
           leverage: Math.max(1, Number(leverage) || 1),
           borrow_rate: Math.max(0, Number(borrowRate) || 0),
+          // The same field finances leverage and pays stock-loan fees; the
+          // engine only charges it against short notional.
+          short_borrow_rate: Math.max(0, Number(borrowRate) || 0),
           rebalance,
           dividend_mode: dividendMode,
         }),
@@ -226,6 +230,7 @@ export function PortfolioTab() {
             let stratPortRet = 0
             assets.forEach((a, li) => {
               const wt = a.weight / totalWeight
+              const sign = a.side === 'short' ? -1 : 1
               if (a.strategy === CUSTOM_STRATEGY_KEY && a.instMode === 'combo') {
                 // Combo's own entry/exit timing is already resolved server-side (no
                 // sl/tp/trail overlay — there's no clean "% OTM stop" on a spread),
@@ -233,11 +238,13 @@ export function PortfolioTab() {
                 // asset: blend pos% of the combo's own return with (1-pos)% idle
                 // cash yield, the same formula used below for equity/option legs.
                 const comboRet = comboRetMaps[li]?.[row.date] ?? 0
-                stratPortRet += wt * (pos * comboRet + (1 - pos) * rfDaily)
+                stratPortRet += wt * (pos * sign * comboRet + (1 - pos) * rfDaily)
                 return
               }
-              const actualRet = tickerRetMaps[a.ticker][row.date] ?? 0
-              const dividendRet = dividendMode === 'cash' ? (tickerDividendMaps[a.ticker][row.date] ?? 0) : 0
+              // Fold direction into the leg return before anything reads it, so
+              // sl/tp/trail gate on what the POSITION did, not the underlying.
+              const actualRet = sign * (tickerRetMaps[a.ticker][row.date] ?? 0)
+              const dividendRet = dividendMode === 'cash' ? sign * (tickerDividendMaps[a.ticker][row.date] ?? 0) : 0
               if (!legInTrade[li] || legStopped[li]) { stratPortRet += wt * rfDaily; return }
               legEntryCum[li] *= (1 + actualRet)
               legPeakCum[li]   = Math.max(legPeakCum[li], legEntryCum[li])

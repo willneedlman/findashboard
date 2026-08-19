@@ -341,7 +341,7 @@ export default function ConfigHeader(p: Props) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(166px, 1fr))', gap: 8 }}>
               {p.holdings.map((h, i) => (
                 <HoldingCard key={i} holding={h} index={i} maxWeight={maxWeight} tickerListId={p.tickerListId}
-                  hideDrift={p.mode === 'backtester'} allowCombo={isBT} allowShort={!isBT}
+                  hideDrift={p.mode === 'backtester'} allowCombo={isBT} allowShort
                   onChange={patch => updateHolding(i, patch)}
                   onRemove={() => p.onHoldingsChange(p.holdings.filter((_, j) => j !== i))} />
               ))}

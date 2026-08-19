@@ -121,6 +121,12 @@ class BacktestRequest(BaseModel):
     # homescreen Overview) validates alongside a CASH sleeve leg.
     tickers: list[str] = Field(default_factory=list, max_length=60)
     weights: list[float] = Field(default_factory=list, max_length=60)
+    # Weights stay positive magnitudes; direction lives here. Empty means the
+    # historical all-long book, which must walk byte-identically to before.
+    sides: list[Literal["long", "short"]] = Field(default_factory=list, max_length=60)
+    # Annual cost of borrow on short notional. Separate from borrow_rate, which
+    # finances leverage on the long side.
+    short_borrow_rate: float = Field(default=0.0, ge=0.0, le=100.0)
     benchmark: str = "SPY"
     start: str = "2020-01-01"
     end: str = "2024-12-31"
@@ -137,14 +143,16 @@ class BacktestRequest(BaseModel):
 
     @model_validator(mode='after')
     def _validate(self):
-        eq_t, eq_w = [], []
-        for t, w in zip(self.tickers, self.weights):
+        padded = list(self.sides) + ["long"] * (len(self.tickers) - len(self.sides))
+        eq_t, eq_w, eq_s = [], [], []
+        for t, w, side in zip(self.tickers, self.weights, padded):
             if t.strip().upper() == CASH_SYMBOL:
                 self.cash_weight += w
             else:
-                eq_t.append(t); eq_w.append(w)
+                eq_t.append(t); eq_w.append(w); eq_s.append(side)
         self.tickers = validate_tickers(eq_t, max_count=60) if eq_t else []
         self.weights = eq_w
+        self.sides = eq_s
         if not self.tickers and self.cash_weight <= 0:
             raise HTTPException(400, "No holdings provided")
         if self.benchmark_source == "ticker":
@@ -182,7 +190,20 @@ def _walk_portfolio_with_dividends(
     cash_daily: float,
     mask: np.ndarray,
     dividend_mode: str,
+    borrow_daily: float = 0.0,
 ) -> tuple[np.ndarray, np.ndarray]:
+    """Walk a book of signed exposures.
+
+    A short leg is a NEGATIVE entry in equity_target. The arithmetic already
+    handles it: multiplying -100 by a 1.05 growth factor gives -105, which is
+    exactly the 5 the short lost, and a dividend on a negative position is paid
+    out rather than received. What a short additionally costs is the borrow,
+    charged daily against the cash sleeve on the short notional outstanding.
+
+    Caller-side invariant: equity_target.sum() + cash_target == 1, because
+    short proceeds are credited to cash. Without that the book does not start
+    at NAV 1 and every return is scaled wrong.
+    """
     equity = equity_target.copy()
     cash_sleeve = cash_target
     dividend_cash = 0.0
@@ -195,6 +216,10 @@ def _walk_portfolio_with_dividends(
         equity = equity * price_growth[t]
         cash_sleeve *= 1 + cash_daily
         dividend_cash *= 1 + cash_daily
+        if borrow_daily:
+            short_notional = -float(equity[equity < 0].sum())
+            if short_notional > 0:
+                cash_sleeve -= short_notional * borrow_daily
         if dividend_mode == "reinvest":
             equity += leg_payments
         elif dividend_mode == "cash":
@@ -293,6 +318,7 @@ def backtest(req: BacktestRequest):
         raise HTTPException(404, "No benchmark price data for the selected window")
     kept_idx = [i for i, t in enumerate(req.tickers) if t in raw.columns]
     req.tickers = [req.tickers[i] for i in kept_idx]
+    req.sides = [req.sides[i] for i in kept_idx] if req.sides else []
     eq_w = eq_w[kept_idx] if len(eq_w) else eq_w
     if not req.tickers and req.cash_weight <= 0:
         raise HTTPException(404, "No price data for the provided holdings")
@@ -311,8 +337,17 @@ def backtest(req: BacktestRequest):
     dividend_returns = dividends.div(raw.shift(1)).reindex(daily.index).fillna(0.0)
     cash_daily = (1 + _get_risk_free_rate()) ** (1 / 252) - 1
     mask = _rebalance_mask(daily.index, req.rebalance)
-    eq_target = eq_w / total_w if len(eq_w) else np.array([])
-    cash_target = req.cash_weight / total_w
+    signs = np.array(
+        [-1.0 if side == "short" else 1.0 for side in req.sides] or [1.0] * len(eq_w),
+        dtype=float,
+    ) if len(eq_w) else np.array([])
+    eq_target = (eq_w * signs) / total_w if len(eq_w) else np.array([])
+    # Selling short raises cash equal to the notional, so the sleeve carries the
+    # user's own cash plus twice the short book: once to offset the negative
+    # position and once as the proceeds. eq_target.sum() + cash_target == 1.
+    short_frac = float(eq_w[signs < 0].sum()) / total_w if len(eq_w) else 0.0
+    cash_target = req.cash_weight / total_w + 2.0 * short_frac
+    borrow_daily = (1 + req.short_borrow_rate / 100) ** (1 / 252) - 1 if short_frac else 0.0
     port_values, paid = _walk_portfolio_with_dividends(
         (1 + daily[req.tickers]).to_numpy(),
         dividend_returns[req.tickers].to_numpy(),
@@ -321,6 +356,7 @@ def backtest(req: BacktestRequest):
         cash_daily,
         mask,
         req.dividend_mode,
+        borrow_daily,
     )
     port = pd.Series(port_values, index=daily.index)
     if req.benchmark_source == "ticker":

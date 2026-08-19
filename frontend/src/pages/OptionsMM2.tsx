@@ -167,12 +167,12 @@ export default function OptionsMM2() {
 
       {/* Command bar (46) */}
       <header style={{
-        display: 'flex', alignItems: 'center', gap: 14, padding: '6px 12px', flexShrink: 0, height: 46,
+        display: 'flex', alignItems: 'center', gap: 9, padding: '6px 10px', flexShrink: 0, height: 46,
         boxSizing: 'border-box', background: T.surface, border: `1px solid ${T.border}`,
-        borderTop: `2px solid ${statusColor}`,
+        borderTop: `2px solid ${statusColor}`, overflow: 'hidden',
       }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, minWidth: 176 }}>
-          <span style={{ ...LABEL, fontSize: 9, color: statusColor }}>{status}</span>
+          <span style={{ ...LABEL, fontSize: 9, letterSpacing: '0.16em', color: statusColor }}>{status}</span>
           <span style={{ ...MONO, fontSize: 14, fontWeight: 600, color: T.text }}>{fmtClock(eng.clock)}</span>
         </div>
 

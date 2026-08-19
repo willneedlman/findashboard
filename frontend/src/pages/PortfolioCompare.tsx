@@ -203,10 +203,8 @@ export function PortfolioCompareContent() {
           )}
           <PMImportPicker style={{ ...inputStyle, cursor: 'pointer' }} onImport={importFromPM} />
           <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <div style={{ flex: 1 }}><label style={labelStyle}>Start</label><input type="date" style={inputStyle} value={start} onChange={e => setStart(e.target.value)} /></div>
-              <div style={{ flex: 1 }}><label style={labelStyle}>End</label><input type="date" style={inputStyle} value={end} onChange={e => setEnd(e.target.value)} /></div>
-            </div>
+            <div><label style={labelStyle}>Start</label><input type="date" style={inputStyle} value={start} onChange={e => setStart(e.target.value)} /></div>
+            <div><label style={labelStyle}>End</label><input type="date" style={inputStyle} value={end} onChange={e => setEnd(e.target.value)} /></div>
           </div>
           <button onClick={() => m.mutate()} disabled={m.isPending}
             style={{ ...inputStyle, cursor: 'pointer', background: C.gold, color: 'var(--theme-bg)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '8px 0' }}>

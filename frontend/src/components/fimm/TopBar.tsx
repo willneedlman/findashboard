@@ -43,12 +43,16 @@ export default function TopBar({
       boxSizing: 'border-box', background: T.surface, border: `1px solid ${T.border}`,
       borderTop: `2px solid ${statusColor}`, overflow: 'hidden',
     }}>
-      <span style={{ ...LABEL, fontSize: 9, letterSpacing: '0.16em', color: statusColor }}>{status}</span>
-      <span style={{ ...MONO, fontSize: 14, fontWeight: 600, color: T.text }}>{fmtClock(eng.clock)}</span>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, minWidth: 176 }}>
+        <span style={{ ...LABEL, fontSize: 9, letterSpacing: '0.16em', color: statusColor }}>{status}</span>
+        <span style={{ ...MONO, fontSize: 14, fontWeight: 600, color: T.text }}>{fmtClock(eng.clock)}</span>
+      </div>
 
-      <Btn tone={running ? 'bad' : 'good'} onClick={onRun}>{running ? 'PAUSE' : 'RUN'}</Btn>
-      <Seg options={SPEEDS.map(s => ({ label: `${s}x`, value: s }))} value={speed} onChange={onSpeed} size={9} />
-      <Btn onClick={onReset}>RESET</Btn>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Btn tone={running ? 'bad' : 'good'} onClick={onRun}>{running ? 'PAUSE' : 'RUN'}</Btn>
+        <Seg options={SPEEDS.map(s => ({ label: `${s}x`, value: s }))} value={speed} onChange={onSpeed} size={9} />
+        <Btn onClick={onReset}>RESET</Btn>
+      </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginLeft: 'auto' }}>
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>

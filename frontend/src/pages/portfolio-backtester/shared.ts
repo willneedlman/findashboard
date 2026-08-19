@@ -56,7 +56,10 @@ export type Tab = 'portfolio' | 'strategy'
 
 export type Asset = {
   ticker: string
+  // Always a positive magnitude. Direction is `side`, so a long/short book
+  // still normalizes against gross exposure.
   weight: number
+  side?: 'long' | 'short'
   strategy: string
   stratParams: StrategyParams
   // Multi-leg options combo instead of the plain equity position (Custom Rule
@@ -68,7 +71,7 @@ export type Asset = {
 }
 
 export const makeAsset = (ticker: string, weight: number): Asset => ({
-  ticker, weight, strategy: STRATEGIES[0], stratParams: {},
+  ticker, weight, side: 'long', strategy: STRATEGIES[0], stratParams: {},
   instMode: 'underlying', comboLegs: legsToCombo(PRESETS['Short Straddle']), comboDte: 30,
 })
 
