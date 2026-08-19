@@ -4,7 +4,7 @@ import {
   Filter, Brain, CalendarDays, Activity,
   GitCompare, GitMerge, PieChart, Globe, Scale, Coins, Boxes, RotateCcw, Gem,
   LineChart, BarChart2, Waves, Zap, Shuffle, Percent,
-  GitBranch, Landmark, Dices, Gauge, BookOpen, Bell, Workflow, Clock, ArrowLeftRight, Home,
+  GitBranch, Landmark, Dices, Gauge, BookOpen, Workflow, Clock, ArrowLeftRight, Home,
   CandlestickChart, Megaphone, Rocket,
   Container, Fuel, MapPinned, Waypoints,
   ClipboardList,
@@ -55,7 +55,6 @@ export const HUBS: Hub[] = [
       { title: 'Sentiment Tracker', chip: 'Sentiment Tracker', desc: 'AI-scored news sentiment across 7 sources',                 route: '/sentiment',          icon: Brain },
       { title: 'Earnings Scanner',  chip: 'Earnings Scanner', desc: 'One calendar: who reports when, your holdings inline, and an AI filing summary on any row', route: '/earnings', tickerParam: true, icon: CalendarDays },
       { title: 'Market Hours',      chip: 'Market Hours',     desc: 'Live global session clock across futures, US, Europe, Asia', route: '/market-hours',       icon: Clock },
-      { title: 'Price Alerts',      chip: 'Price Alerts',     desc: 'Price and percent-change notifications',                     route: '/alerts',             icon: Bell },
     ],
   },
   {
@@ -71,7 +70,6 @@ export const HUBS: Hub[] = [
       { title: 'ETF Analyzer',      chip: 'ETF Analyzer',    desc: 'Look-through holdings, overlap, and concentration',        route: '/etf-analyzer', tickerParam: true,       icon: Boxes },
       { title: 'NAV Tracker',       chip: 'NAV Tracker',     desc: 'Premium and discount on asset-backed proxies',             route: '/nav', tickerParam: true,                icon: Gem },
       { title: 'IPO Scanner',       chip: 'IPO Scanner',     desc: 'Upcoming and recent public offerings with pricing and deal size', route: '/ipo-calendar',    icon: Rocket },
-      { title: 'Report Creator',    chip: 'Report Creator',  desc: 'Collect evidence manually or let AlphaTape research across its tools, then build a print-ready report', route: '/report-creator', icon: ClipboardList },
     ],
   },
   {

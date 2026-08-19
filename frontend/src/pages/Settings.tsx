@@ -1,10 +1,15 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, Suspense } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { Palette, Bell, User, ShieldAlert } from 'lucide-react'
+import { lazyWithReload } from '../lib/chunkReload'
 import { useTheme, DEFAULT_THEME, MONO_FONTS, SANS_FONTS, applyTheme, type Theme } from '../contexts/ThemeContext'
 
 const PREVIEW_SKIP = new Set(['San Francisco'])
 import PageWrapper from '../components/PageWrapper'
 import useIsMobile from '../hooks/useIsMobile'
 import axios from 'axios'
+
+const Alerts = lazyWithReload(() => import('./Alerts'))
 
 // ── Admin whitelist — add usernames here to grant access to site-wide stats ──
 const ADMIN_USERS = [
@@ -29,6 +34,40 @@ const PRESETS: { name: string; theme: Partial<Theme> }[] = [
   { name: 'Rosewood',       theme: { primaryColor: '#881337', secondaryColor: '#5a1c1c', tertiaryColor: '#c47878', bgColor: '#fdf4f4', surfaceColor: '#e8d5d5', chartNeutralColor: '#ff9494', primaryFont: 'San Francisco', secondaryFont: 'Sora', primaryFontUrl: '', secondaryFontUrl: '' } },
   { name: 'Paper White',    theme: { primaryColor: '#171717', secondaryColor: '#64748b', tertiaryColor: '#404040', bgColor: '#ffffff', surfaceColor: '#f4f4f5', chartNeutralColor: '#9ca3af', primaryFont: 'San Francisco', secondaryFont: 'Sora', primaryFontUrl: '', secondaryFontUrl: '' } },
 ]
+
+
+// ── Tabs ─────────────────────────────────────────────────────────────────────
+type TabKey = 'appearance' | 'alerts' | 'account' | 'admin'
+
+function TabBar({ tabs, active, onSelect }: {
+  tabs: { key: TabKey; label: string; icon: typeof Palette }[]
+  active: TabKey
+  onSelect: (k: TabKey) => void
+}) {
+  return (
+    <div style={{ display: 'flex', gap: 2, marginBottom: 32, borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', flexWrap: 'wrap' }}>
+      {tabs.map(t => {
+        const on = t.key === active
+        const Icon = t.icon
+        return (
+          <button key={t.key} onClick={() => onSelect(t.key)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 7,
+              background: 'transparent', border: 'none',
+              borderBottom: `2px solid ${on ? 'var(--theme-primary)' : 'transparent'}`,
+              color: on ? 'var(--theme-primary)' : 'var(--theme-secondary)',
+              fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700,
+              letterSpacing: '0.12em', textTransform: 'uppercase',
+              padding: '9px 16px', marginBottom: -1, cursor: 'pointer',
+              transition: 'color 0.12s ease, border-color 0.12s ease',
+            }}>
+            <Icon size={12} /> {t.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
 // ── Small UI helpers ──────────────────────────────────────────────────────────
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -545,9 +584,21 @@ function AuthPanel({ onDone }: { onDone: () => void }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function Settings() {
   const { theme, user, allUsers, setTheme, logout, deleteUser } = useTheme()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [confirmDel, setConfirmDel] = useState(false)
   const [saved,      setSaved]      = useState(false)
   const isMobile = useIsMobile()
+
+  const isAdmin = !!user && ADMIN_USERS.includes(user.username.toLowerCase())
+  const TABS: { key: TabKey; label: string; icon: typeof Palette }[] = [
+    { key: 'appearance', label: 'Appearance', icon: Palette },
+    { key: 'alerts',     label: 'Alerts',     icon: Bell },
+    { key: 'account',    label: 'Account',    icon: User },
+    ...(isAdmin ? [{ key: 'admin' as TabKey, label: 'Admin', icon: ShieldAlert }] : []),
+  ]
+  const requested = searchParams.get('tab') as TabKey | null
+  const tab: TabKey = TABS.some(t => t.key === requested) ? requested! : 'appearance'
+  const setTab = (k: TabKey) => setSearchParams(k === 'appearance' ? {} : { tab: k }, { replace: true })
 
   // Draft: local copy of theme; edits here are previewed immediately but not persisted until Save
   const [draft, setDraftRaw] = useState<Theme>(() => ({ ...theme }))
@@ -613,12 +664,12 @@ export default function Settings() {
           </div>
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            {dirty && (
+            {tab === 'appearance' && dirty && (
               <button onClick={handleDiscard} style={{ background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', color: 'var(--theme-secondary)', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '6px 14px', cursor: 'pointer' }}>
                 Discard
               </button>
             )}
-            <button
+            {tab === 'appearance' && <button
               onClick={handleSave}
               disabled={!dirty}
               style={{
@@ -632,7 +683,7 @@ export default function Settings() {
               }}
             >
               {saved ? 'Saved' : 'Save'}
-            </button>
+            </button>}
             {user && (
               <button onClick={logout} style={{ background: 'color-mix(in srgb, var(--theme-negative) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-negative) 35%, transparent)', color: 'var(--theme-negative, #ef4444)', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '6px 14px', cursor: 'pointer' }}>
                 Sign Out
@@ -641,6 +692,15 @@ export default function Settings() {
           </div>
         </div>
 
+        <TabBar tabs={TABS} active={tab} onSelect={setTab} />
+
+        {tab === 'alerts' && (
+          <Suspense fallback={<div style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-secondary)' }}>Loading alerts…</div>}>
+            <Alerts embedded />
+          </Suspense>
+        )}
+
+        {tab === 'appearance' && (
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 24 : 40, alignItems: 'start' }}>
 
           {/* ── Left column ─────────────────────────────────────────────── */}
@@ -712,6 +772,12 @@ export default function Settings() {
               </div>
             </Section>
 
+          </div>
+        </div>
+        )}
+
+        {tab === 'account' && (
+          <div style={{ maxWidth: 620 }}>
             {user && (
               <Section title={`Account · ${allUsers.length} profile${allUsers.length !== 1 ? 's' : ''}`}>
                 {/* Current user */}
@@ -777,11 +843,10 @@ export default function Settings() {
               </Section>
             )}
           </div>
-        </div>
+        )}
 
-        {/* ── Admin stats — only visible to whitelisted usernames ────────── */}
-        {user && ADMIN_USERS.includes(user.username.toLowerCase()) && (
-          <div style={{ marginTop: 40, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.06))', paddingTop: 32 }}>
+        {tab === 'admin' && isAdmin && (
+          <div>
             <Section title="Site-Wide User Stats (Admin)">
               <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: 'var(--theme-secondary)', marginBottom: 12 }}>
                 Enter your <code style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-primary)' }}>ADMIN_SECRET</code> Fly env var to view registrations from all devices.

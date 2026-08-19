@@ -940,7 +940,7 @@ export function MaritimeMapContent() {
               <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
                 {inspected.kind === 'choke' ? (
                   <>
-                    <button onClick={() => navigate('/alerts')} style={{ flex: 1, padding: 7, cursor: 'pointer', background: GOLD, color: 'var(--theme-bg, #0a0e16)', border: 'none', fontFamily: SANS, fontSize: 11, fontWeight: 600 }}>Set alert</button>
+                    <button onClick={() => navigate('/settings?tab=alerts')} style={{ flex: 1, padding: 7, cursor: 'pointer', background: GOLD, color: 'var(--theme-bg, #0a0e16)', border: 'none', fontFamily: SANS, fontSize: 11, fontWeight: 600 }}>Set alert</button>
                     <button onClick={() => openHistoryFor(inspected.id)} style={{ flex: 1, padding: 7, cursor: 'pointer', background: 'transparent', color: GOLD, border: goldBorder(0.45), fontFamily: SANS, fontSize: 11, fontWeight: 600 }}>Open history</button>
                   </>
                 ) : (

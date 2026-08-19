@@ -118,7 +118,6 @@ const SupplyChain        = lazyWithReload(() => import('./pages/SupplyChain'))
 const SupplyChainMap     = lazyWithReload(() => import('./pages/SupplyChainPeers'))
 const PaperTrading       = lazyWithReload(() => import('./pages/PaperTrading'))
 const SentimentTracker   = lazyWithReload(() => import('./pages/SentimentTracker'))
-const AlertsPage         = lazyWithReload(() => import('./pages/Alerts'))
 const EconomyMonitor     = lazyWithReload(() => import('./pages/EconomyMonitor'))
 const MacroEventHub      = lazyWithReload(() => import('./pages/MacroEventHub'))
 const SectorRotation     = lazyWithReload(() => import('./pages/SectorRotation'))
@@ -361,7 +360,7 @@ export default function App() {
               <Route path="/paper-trading"       element={<PaperTrading />} />
               <Route path="/algo-runner"         element={<Navigate to="/admin" replace />} />
               <Route path="/sentiment"           element={<SentimentTracker />} />
-              <Route path="/alerts"             element={<AlertsPage />} />
+              <Route path="/alerts"             element={<Navigate to="/settings?tab=alerts" replace />} />
               <Route path="/regression"         element={<RegressionAnalysis />} />
               <Route path="/options-hub"        element={<Navigate to="/options" replace />} />
               <Route path="/macro-hub"          element={<Navigate to="/fed" replace />} />

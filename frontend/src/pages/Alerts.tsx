@@ -1,5 +1,5 @@
 import { T } from '../lib/theme'
-import { useState, useEffect, useMemo } from 'react'
+import { Fragment, useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
@@ -169,7 +169,7 @@ const ghostBtn: React.CSSProperties = {
 
 const NOTIF_KEY = 'ft-notif-asked'
 
-export default function Alerts() {
+export default function Alerts({ embedded = false }: { embedded?: boolean }) {
   const { user } = useTheme()
   const isMobile = useIsMobile()
   const qc = useQueryClient()
@@ -346,13 +346,16 @@ export default function Alerts() {
     }}>{label}</button>
   )
 
+  // Embedded in the settings hub the surrounding page owns the title, so the
+  // tool drops its own page chrome and renders as a bare panel.
+  const Shell = embedded ? Fragment : PageWrapper
   return (
-    <PageWrapper>
-      <PageHeader title="Price Alerts" actions={
+    <Shell>
+      {!embedded && <PageHeader title="Price Alerts" actions={
         <span style={{ fontFamily: T.mono, fontSize: 10, color: T.muted, letterSpacing: '0.04em' }}>
           Server-side monitor · checks every ~30s
         </span>
-      } />
+      } />}
 
       {/* Notification banner */}
       {notifState === 'default' && (
@@ -594,6 +597,6 @@ export default function Alerts() {
           </div>
         </>
       )}
-    </PageWrapper>
+    </Shell>
   )
 }

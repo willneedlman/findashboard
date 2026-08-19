@@ -2,14 +2,14 @@ import { useState, useEffect, useCallback } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Home, LayoutGrid, Briefcase, X, Menu, Settings,
+  Home, LayoutGrid, Briefcase, ClipboardList, X, Menu, Settings,
   ShieldAlert, Star, ChevronRight, ChevronLeft, Search,
 } from 'lucide-react'
 import Footer from './Footer'
 import AlphaMark from './AlphaMark'
 import TickerLinkChip from './TickerLinkChip'
 import AlertToastQueue from './AlertToastQueue'
-import ReportCaptureToolbar from './ReportCaptureToolbar'
+import ShellActions from './ShellActions'
 import { useAlertSocket, type AlertPayload } from '../hooks/useAlertSocket'
 import useIsMobile from '../hooks/useIsMobile'
 import { useTheme } from '../contexts/ThemeContext'
@@ -135,7 +135,7 @@ export default function Layout({ children }: LayoutProps) {
         <main id="main-content" className="ft-mobile-main" style={{ flex: 1, overflowY: 'auto', background: 'var(--theme-bg, #0a1628)' }}>
           <div className={`ft-mobile-content${location.pathname === '/dashboard' ? ' ft-mobile-dashboard' : ''}`} style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
             <div className="ft-mobile-page" style={{ flex: 1, minWidth: 0 }}>
-              <ReportCaptureToolbar />
+              <ShellActions />
               {children}
             </div>
             {location.pathname !== '/dashboard' && <Footer />}
@@ -161,6 +161,7 @@ export default function Layout({ children }: LayoutProps) {
                 <MobileLink to="/app" icon={Home} label="Home" active={location.pathname === '/app'} />
                 <MobileLink to="/dashboard" icon={LayoutGrid} label="My Dashboard" active={location.pathname === '/dashboard'} />
                 <MobileLink to="/portfolio-manager" icon={Briefcase} label="Portfolio Manager" active={location.pathname === '/portfolio-manager'} />
+                <MobileLink to="/report-creator" icon={ClipboardList} label="Report Creator" active={location.pathname.startsWith('/report-creator')} />
               </div>
 
               <div style={{ padding: '4px 12px 0' }}>
@@ -255,6 +256,7 @@ export default function Layout({ children }: LayoutProps) {
           <Row icon={Home} label="Home" collapsed={collapsed} active={location.pathname === '/app'} onClick={() => navigate('/app')} />
           <Row icon={LayoutGrid} label="My Dashboard" collapsed={collapsed} active={location.pathname === '/dashboard'} onClick={() => navigate('/dashboard')} />
           <Row icon={Briefcase} label="Portfolio Manager" collapsed={collapsed} active={location.pathname === '/portfolio-manager'} onClick={() => navigate('/portfolio-manager')} />
+          <Row icon={ClipboardList} label="Report Creator" collapsed={collapsed} active={location.pathname.startsWith('/report-creator')} onClick={() => navigate('/report-creator')} />
         </div>
 
         <nav className="flex-1 overflow-y-auto" style={{ padding: '4px 8px 10px' }}>
@@ -314,7 +316,7 @@ export default function Layout({ children }: LayoutProps) {
           // Sidebar collapsed → Chart Studio goes full-bleed: no gutters, no footer,
           // maximal chart area edge-to-edge.
           <div style={{ minHeight: '100vh' }}>
-            <div style={{ padding: '10px 12px 0' }}><ReportCaptureToolbar /></div>
+            <div style={{ padding: '10px 12px 0' }}><ShellActions /></div>
             {children}
           </div>
         ) : location.pathname === '/options-mm-2' || location.pathname === '/fixed-income-mm-2' ? (
@@ -326,14 +328,14 @@ export default function Layout({ children }: LayoutProps) {
           // Map cockpit, Chart Studio and the MM terminal want the full main
           // width: gutters waste chart area.
           <div className="px-4 py-4" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-            <ReportCaptureToolbar />
+            <ShellActions />
             <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
             <Footer />
           </div>
         ) : (
           // Tools own the page: full width with modest gutters, no centered max-width column.
           <div className="w-full px-5 2xl:px-8 py-5" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', boxSizing: 'border-box' }}>
-            <ReportCaptureToolbar />
+            <ShellActions />
             <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
             <Footer />
           </div>
