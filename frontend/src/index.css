@@ -330,6 +330,11 @@
     grid-template-columns: 1fr !important;
   }
 
+  .portfolio-analysis-page {
+    height: auto;
+    min-height: 0;
+  }
+
   .portfolio-analysis-header {
     align-items: flex-start !important;
     flex-wrap: wrap;
@@ -518,6 +523,13 @@
   border-bottom: 0 !important;
 }
 
+.portfolio-analysis-page {
+  /* Fills the shell's content box: 100dvh less the page gutters and the shared
+     page header. The disclaimer footer stays below the fold, as on every tool. */
+  height: calc(100dvh - 104px);
+  min-height: 620px;
+}
+
 @media (min-width: 768px) and (max-width: 1180px) {
   .portfolio-analysis-controls {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
@@ -526,6 +538,11 @@
   .portfolio-verdict-grid,
   .portfolio-analysis-grid {
     grid-template-columns: 1fr !important;
+  }
+
+  .portfolio-analysis-page {
+    height: auto;
+    min-height: 0;
   }
 
   .portfolio-analysis-advanced {
