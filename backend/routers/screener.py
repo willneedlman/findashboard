@@ -578,13 +578,21 @@ def _overlay_live_prices(rows: list) -> None:
     start = (today - _dt.timedelta(days=10)).isoformat()
     end = (today + _dt.timedelta(days=1)).isoformat()
     quotes: dict = {}
-    for i in range(0, len(symbols), 50):
-        chunk = tuple(symbols[i:i + 50])
+    # The chunks are independent downloads, and cache.py caps yfinance at two
+    # concurrent calls anyway, so fetching them in sequence just added the wait
+    # up. Five chunks of a 250-name board went from one queue to two.
+    chunks = [tuple(symbols[i:i + 50]) for i in range(0, len(symbols), 50)]
+
+    def _fetch(chunk):
         try:
-            frame = get_download(chunk, start, end, "1d", cache_ttl=300)
+            return chunk, get_download(chunk, start, end, "1d", cache_ttl=300)
         except Exception as e:
             logger.warning("screener live overlay chunk failed: %s", e)
-            continue
+            return chunk, None
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, len(chunks) or 1)) as ex:
+        fetched = list(ex.map(_fetch, chunks))
+    for chunk, frame in fetched:
         if frame is None or frame.empty:
             continue
         closes = frame.get("Close")
@@ -672,7 +680,27 @@ def _fmp_snapshot(sector, exchange) -> list:
     return [{**r, "priceSource": "fmp-stale"} for r in (disk_get(sticky_key) or [])]
 
 
-def _intl_snapshot(full: bool = False) -> list:
+_intl_warming = threading.Event()
+
+
+def _warm_intl_async() -> None:
+    """Rebuild the international snapshot off the request path, once at a time."""
+    if _intl_warming.is_set():
+        return
+    _intl_warming.set()
+
+    def _run():
+        try:
+            _intl_snapshot()
+        except Exception as e:
+            logger.warning("intl snapshot warm failed: %s", e)
+        finally:
+            _intl_warming.clear()
+
+    threading.Thread(target=_run, name="intl-snapshot-warm", daemon=True).start()
+
+
+def _intl_snapshot(full: bool = False, build: bool = True) -> list:
     """Base data for every bundled international name, FX-normalized to USD, with
     bundled names + per-index country. Disk-cached 6h (+ 7d sticky) so 'All' /
     international screens don't re-fetch ~140 quotes each time.
@@ -688,6 +716,18 @@ def _intl_snapshot(full: bool = False) -> list:
         fresh = disk_get(_INTL_SNAPSHOT_CACHE)
         if fresh is not None:
             return fresh
+        if not build:
+            # A screen should not pay for this build: ~140 separate fast_info quotes
+            # against cache.py's two-concurrent yfinance cap is ~20s of request
+            # latency. Serve the 7d sticky copy and refresh behind the request.
+            #
+            # Only when there is nothing to serve does the request still build:
+            # returning early with an empty list would silently drop every
+            # international name from the board, which is worse than being slow.
+            sticky = disk_get(f"{_INTL_SNAPSHOT_CACHE}:sticky")
+            if sticky:
+                _warm_intl_async()
+                return [{**r, "priceSource": "yfinance-stale"} for r in sticky]
     _pct = lambda v: round(v * 100, 1) if isinstance(v, (int, float)) else None
 
     def _q(tk):
@@ -1087,7 +1127,7 @@ def run_screen(req: ScreenRequest):
     else:
         intl_want = set()
     if intl_want:
-        candidates += [r for r in _intl_snapshot() if r["ticker"] in intl_want]
+        candidates += [r for r in _intl_snapshot(build=False) if r["ticker"] in intl_want]
 
     # Fallback: sector-aware liquid tickers via yfinance
     SECTOR_TICKERS: dict[str, list[str]] = {

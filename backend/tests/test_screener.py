@@ -86,7 +86,7 @@ def test_region_and_exchange_filters_keep_a_valid_bundled_international_name(mon
         "country": "Japan", "change1d": 0.0, "beta": None, "volume": None,
     }
     monkeypatch.setattr(screener.fmp, "available", lambda: False)
-    monkeypatch.setattr(screener, "_intl_snapshot", lambda: [row])
+    monkeypatch.setattr(screener, "_intl_snapshot", lambda **_: [row])
     monkeypatch.setattr(screener, "_enrich", lambda ticker, base, claim, need_fastinfo: base)
     screener._screen_cache.clear()
 
