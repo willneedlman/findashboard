@@ -1286,7 +1286,6 @@ textarea.ft-control {
   color: var(--theme-secondary, #8099b0);
   font: 500 10px/1.45 var(--theme-sans, sans-serif);
 }
-.vol-empty-band { min-height: 420px; display: grid; place-items: center; }
 .vol-loading-ladder { display: grid; grid-template-rows: 176px 440px 370px 250px 285px; }
 .vol-loading-ladder > div {
   border-bottom: 1px solid var(--theme-border, rgba(255,255,255,0.08));

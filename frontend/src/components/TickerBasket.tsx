@@ -117,7 +117,7 @@ export default function TickerBasket({ value, onChange, cap = 25, label = 'Ticke
         {value.map(t => (
           <span key={t} style={{
             display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
-            fontFamily: MONO, fontSize: 10.5, fontWeight: 700, color: T.text,
+            fontFamily: MONO, fontSize: 10.5, fontWeight: 700, color: T.gold,
             background: T.goldTint(12), border: `1px solid ${T.goldTint(34)}`, padding: '2px 3px 2px 7px',
           }}>
             {t}

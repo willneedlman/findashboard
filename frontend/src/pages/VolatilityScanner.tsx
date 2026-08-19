@@ -14,6 +14,7 @@ import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, chartClip } from '../lib/reportCaptureRegistry'
 import type { ClipDraft } from '../lib/reportCreator'
 import { T } from '../lib/theme'
+import TickerInput from '../components/TickerInput'
 
 const TAB = 'Volatility Scanner'
 const GOLD = T.gold
@@ -381,8 +382,8 @@ export function VolatilityScannerContent() {
     return pieces
   })
 
-  const submit = () => {
-    const sym = draft.trim().toUpperCase()
+  const submit = (override?: string) => {
+    const sym = (override ?? draft).trim().toUpperCase()
     if (!sym) return
     if (sym === ticker) loadSurface()
     else setTicker(sym)
@@ -427,9 +428,11 @@ export function VolatilityScannerContent() {
           <div>
             <label style={lbl} htmlFor="vol-ticker">Ticker</label>
             <div style={{ display: 'flex', gap: 6 }}>
-              <input id="vol-ticker" value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()}
-                placeholder="AAPL" style={{ ...inp, width: 110, textTransform: 'uppercase' }} />
-              <button className="vol-fetch" onClick={submit} disabled={isPending}>{isPending ? 'Loading' : 'Fetch'}</button>
+              <div style={{ width: 130 }}>
+                <TickerInput value={draft} onChange={setDraft} onEnter={() => submit()}
+                  onSelect={sym => { setDraft(sym); submit(sym) }} placeholder="AAPL" aria-label="Ticker" />
+              </div>
+              <button className="vol-fetch" onClick={() => submit()} disabled={isPending}>{isPending ? 'Loading' : 'Fetch'}</button>
             </div>
           </div>
         </div>
@@ -438,9 +441,7 @@ export function VolatilityScannerContent() {
       </div>
 
       {!data && !isPending && (
-        <div className="vol-empty-band">
-          <EmptyState title="Volatility Scanner" hint="Enter a ticker and press Fetch. One chain load drives the surface, term structure, skew, and contract evidence." />
-        </div>
+        <EmptyState title="Volatility Scanner" hint="Enter a ticker and press Fetch. One chain load drives the surface, term structure, skew, and contract evidence." />
       )}
       {isPending && !data && (
         <div className="vol-loading-ladder" aria-label="Loading volatility surface">

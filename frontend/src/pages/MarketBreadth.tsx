@@ -23,7 +23,8 @@ const LABELS: Record<string, string> = {
   '^FTSE': 'FTSE 100', '^GDAXI': 'DAX', '^FCHI': 'CAC 40', '^STOXX50E': 'Euro Stoxx 50',
   '^IBEX': 'IBEX 35', '^SSMI': 'SMI', '^AEX': 'AEX', 'FTSEMIB.MI': 'FTSE MIB',
   '^N225': 'Nikkei 225', '^HSI': 'Hang Seng', '^NSEI': 'Nifty 50', '^AXJO': 'ASX 200',
-  '^STI': 'Straits Times',
+  '^STI': 'Straits Times', '000300.SS': 'CSI 300', '000001.SS': 'SSE 50',
+  '^KS11': 'KOSPI 200', '^MXX': 'IPC Mexico',
 }
 
 interface Point {

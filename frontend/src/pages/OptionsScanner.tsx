@@ -77,7 +77,7 @@ export function OptionsScannerContent() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'premium', dir: 'desc' })
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
 
   // /chain, /options-desk and /unusual-options all redirect here, and the
   // drawer offers this page for a symbol. It read neither ?ticker= nor
@@ -94,7 +94,7 @@ export function OptionsScannerContent() {
   const runScan = async () => {
     const syms = tickers.slice(0, 25)
     if (!syms.length) return
-    setLoading(true); setError(null); setSel(null); setChain(null); setCollapsed({})
+    setLoading(true); setError(null); setSel(null); setChain(null); setExpanded({})
     chainCache.current.clear()
     try {
       const { data } = await axios.get<ScanResult>('/api/options/unusual', {
@@ -367,7 +367,7 @@ export function OptionsScannerContent() {
                 </thead>
 
                 {groups.map(g => {
-                  const shut = !!collapsed[g.ticker]
+                  const shut = !expanded[g.ticker]
                   return (
                     <tbody key={g.ticker}>
                       <tr>
@@ -376,7 +376,7 @@ export function OptionsScannerContent() {
                           borderTop: `1px solid ${T.goldTint(28)}`, borderBottom: `1px solid ${T.border}`,
                           position: 'sticky', top: 28, zIndex: 1,
                         }}>
-                          <div onClick={() => setCollapsed(c => ({ ...c, [g.ticker]: !c[g.ticker] }))}
+                          <div onClick={() => setExpanded(c => ({ ...c, [g.ticker]: !c[g.ticker] }))}
                             style={{
                               display: 'flex', alignItems: 'center', flexWrap: 'wrap',
                               gap: isMobile ? 8 : 14, rowGap: 4,
@@ -385,7 +385,7 @@ export function OptionsScannerContent() {
                             <span style={{ fontFamily: SANS, fontSize: 10, color: T.muted, width: 10, lineHeight: 1 }}>
                               {shut ? '▸' : '▾'}
                             </span>
-                            <span style={{ fontFamily: SANS, fontSize: 13, fontWeight: 600, letterSpacing: '0.02em', color: '#dce3ed', width: 54 }}>
+                            <span style={{ fontFamily: SANS, fontSize: 13, fontWeight: 600, letterSpacing: '0.02em', color: T.gold, width: 54 }}>
                               {g.ticker}
                             </span>
                             <span style={{
