@@ -88,7 +88,7 @@ export default function Layout({ children }: LayoutProps) {
   const favItems = favorites.map(p => ALL_TOOLS.find(t => t.route === p)).filter((x): x is HubTool => x != null)
 
   // Independent open/close per hub; the current hub defaults open.
-  const [open, setOpen] = useState<Record<string, boolean>>(() => ({ [activeHub?.slug ?? 'research']: true }))
+  const [open, setOpen] = useState<Record<string, boolean>>(() => ({ [activeHub?.slug ?? 'markets']: true }))
   useEffect(() => {
     if (activeHub) setOpen(o => (o[activeHub.slug] ? o : { ...o, [activeHub.slug]: true }))
   }, [activeHub?.slug]) // eslint-disable-line react-hooks/exhaustive-deps

@@ -10,6 +10,17 @@ interface Cmd { label: string; route?: string; group: string; desc?: string; ali
 const ALIASES: Record<string, string> = {
   '/earnings': 'earnings summarizer portfolio earnings earnings scanner earnings calendar corporate hub filings transcripts',
   '/volatility-scanner': 'iv rank iv tracker vol skew volatility skew implied volatility smile term structure',
+  '/trade-history': 'trade analyzer trade history broker import fidelity robinhood account performance',
+}
+
+// Same idea for the hubs retired in the 9-hub split, so old habits still land.
+const HUB_ALIASES: Record<string, string> = {
+  companies: 'research screening single name issuer fundamentals',
+  markets: 'research tape board live what is moving',
+  charts: 'charting statistics plotting overlay',
+  portfolio: 'trading book risk holdings',
+  desk: 'trading execution simulator market maker',
+  'trade-routes': 'logistics geo-logistics physical trade supply chain freight shipping chokepoint',
 }
 
 const WORKSPACE: Cmd[] = [
@@ -21,7 +32,7 @@ const WORKSPACE: Cmd[] = [
 const _RAW: Cmd[] = [
   ...WORKSPACE,
   ...HUBS.flatMap(h => [
-    { label: `${h.label} Hub`, route: `/hub/${h.slug}`, group: 'Hubs', desc: h.tagline },
+    { label: `${h.label} Hub`, route: `/hub/${h.slug}`, group: 'Hubs', desc: h.tagline, alias: HUB_ALIASES[h.slug] },
     ...h.tools.map(t => ({ label: t.title, route: t.route, group: h.label, desc: t.desc, alias: ALIASES[t.route] })),
   ]),
 ]

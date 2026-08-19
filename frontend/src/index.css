@@ -1538,7 +1538,7 @@ textarea.ft-control {
   .vol-heat-cell, .vol-expiry-cell, .vol-atm-cell { transition: none; }
 }
 
-/* ── Trade Analyzer ────────────────────────────────────────────────
+/* ── Track Record ────────────────────────────────────────────────
    One frame, not a stack of cards. The frame owns the only outer border; the
    bands inside are divided by hairlines alone, so the page reads as a single
    instrument rather than as six panels that happen to be adjacent.

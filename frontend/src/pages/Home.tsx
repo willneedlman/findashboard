@@ -927,7 +927,7 @@ export default function Home() {
               <div style={{ marginTop: 30 }}>
                 <SectionLabel icon={LayoutGrid} label="Hubs" note={`${HUBS.length} workspaces · ${ALL_TOOLS.length} tools`} />
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', columnGap: 56 }}>
-                  {HUBS.map((h, i) => <HubLedgerCell key={h.slug} slug={h.slug} last={i >= HUBS.length - 2} onNav={navigate} />)}
+                  {HUBS.map((h, i) => <HubLedgerCell key={h.slug} slug={h.slug} last={i >= HUBS.length - (isMobile ? 1 : HUBS.length % 2 === 0 ? 2 : 1)} onNav={navigate} />)}
                 </div>
               </div>
 

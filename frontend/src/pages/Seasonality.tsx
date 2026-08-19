@@ -83,7 +83,7 @@ export default function Seasonality() {
   const turn = d?.turn_of_month
 
   return (
-    <PageWrapper title="Seasonality"
+    <PageWrapper title="Ticker Seasonality"
       meta={d?.available ? `${d.ticker} · ${d.years_covered}y · ${d.first_date} to ${d.last_date}` : undefined}>
 
       {/* One control row on one baseline. Each field owns its own column so the

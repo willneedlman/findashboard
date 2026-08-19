@@ -229,9 +229,10 @@
 .mkt .filterchips .fc{font-family:var(--mono);font-size:10px;color:var(--gold);padding:3px 9px;border:1px solid rgba(201,168,76,0.3);border-radius:6px;background:rgba(201,168,76,0.06)}
 
 /* ── six-hubs band ──────────────────────────────────────────────────────── */
-.mkt .hubband{display:grid;grid-template-columns:repeat(6,1fr);border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface)}
-.mkt .hubcell{padding:20px 18px;border-right:1px solid var(--line);transition:background 180ms var(--ease)}
-.mkt .hubcell:last-child{border-right:none}
+.mkt .hubband{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface)}
+.mkt .hubcell{padding:20px 18px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);transition:background 180ms var(--ease)}
+.mkt .hubcell:nth-child(3n){border-right:none}
+.mkt .hubcell:nth-last-child(-n+3){border-bottom:none}
 .mkt a.hubcell:hover{background:rgba(255,255,255,0.025)}
 .mkt .hubcell .hn{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--gold);letter-spacing:-0.02em}
 .mkt .hubcell .hl{font-size:13px;font-weight:600;color:var(--text);margin-top:6px}
@@ -240,6 +241,10 @@
 @media (max-width:900px){
   .mkt .hubband{grid-template-columns:repeat(2,1fr)}
   .mkt .hubcell{border-bottom:1px solid var(--line)}
+  .mkt .hubcell:nth-child(3n){border-right:1px solid var(--line)}
+  .mkt .hubcell:nth-child(2n){border-right:none}
+  .mkt .hubcell:nth-last-child(-n+3){border-bottom:1px solid var(--line)}
+  .mkt .hubcell:last-child{border-bottom:none}
   .mkt .chokestrip .ck{padding:9px 10px}
   .mkt .hero-grid,.mkt .split,.mkt .foot{grid-template-columns:1fr}
   .mkt .hero h1{font-size:40px}.mkt .phero h1{font-size:34px}

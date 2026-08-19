@@ -11,9 +11,13 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-// Single source of truth for the 7-hub navigation taxonomy. Home cards, the hub
+// Single source of truth for the 9-hub navigation taxonomy. Home cards, the hub
 // landing pages, and the sidebar dropdowns all read from this list so the
 // structure can never drift between surfaces.
+//
+// A hub is named for the subject or the question, never for the activity: the
+// old "Research" hub failed that test (every tool here is research) and had
+// become a drawer for four unrelated jobs.
 
 export interface HubTool {
   title: string   // full name (sidebar rows, hub tiles)
@@ -38,21 +42,35 @@ export interface Hub {
 
 export const HUBS: Hub[] = [
   {
-    slug: 'research',
-    label: 'Research',
-    tagline: 'Screen the universe, know the company, follow the flow.',
-    masthead: 'Screen for candidates, dig into companies and filings, and track the sentiment, sector moves, and statistics behind the idea.',
+    slug: 'markets',
+    label: 'Markets',
+    tagline: 'What is moving right now, and why.',
+    masthead: 'Read the board, the breadth, and the rotation, then find out why a name is moving before you act on it.',
+    icon: Activity,
+    tools: [
+      { title: 'Global Markets',    chip: 'Global Markets',   desc: 'World indices, FX, commodities, yields, and crypto on one board', route: '/global-markets', icon: Globe },
+      { title: 'Market Breadth',    chip: 'Market Breadth',   desc: 'Advance/decline, new highs-lows, and how many members are above their moving averages', route: '/breadth', icon: Activity },
+      { title: 'Sector Rotation',   chip: 'Sector Rotation',  desc: 'GICS sector performance heatmap over time',                  route: '/sector-rotation',    icon: PieChart },
+      { title: 'Mover Radar',       chip: 'Mover Radar',      desc: 'Why a ticker is moving right now: news, filings, and social, or confirmation it is just noise', route: '/mover-radar', tickerParam: true, icon: Gauge },
+      { title: 'Sentiment Tracker', chip: 'Sentiment Tracker', desc: 'AI-scored news sentiment across 7 sources',                 route: '/sentiment',          icon: Brain },
+      { title: 'Earnings Scanner',  chip: 'Earnings Scanner', desc: 'One calendar: who reports when, your holdings inline, and an AI filing summary on any row', route: '/earnings', tickerParam: true, icon: CalendarDays },
+      { title: 'Market Hours',      chip: 'Market Hours',     desc: 'Live global session clock across futures, US, Europe, Asia', route: '/market-hours',       icon: Clock },
+      { title: 'Price Alerts',      chip: 'Price Alerts',     desc: 'Price and percent-change notifications',                     route: '/alerts',             icon: Bell },
+    ],
+  },
+  {
+    slug: 'companies',
+    label: 'Companies',
+    tagline: 'Find a name, then know it cold.',
+    masthead: 'Screen the universe down to a shortlist, then dig into the filings, the peers, the ownership, and the fund structure behind each name.',
     icon: Search,
     tools: [
       { title: 'Stock Screener',    chip: 'Stock Screener',  desc: '25+ fundamental and technical filters across the universe', route: '/screener',           icon: Filter },
-      { title: 'IPO Scanner',      chip: 'IPO Scanner',    desc: 'Upcoming and recent public offerings with pricing and deal size', route: '/ipo-calendar',    icon: Rocket },
-      { title: 'Mover Radar',       chip: 'Mover Radar',     desc: 'Why a ticker is moving right now: news, filings, and social, or confirmation it is just noise', route: '/mover-radar', tickerParam: true, icon: Gauge },
       { title: 'Company Profile',   chip: 'Company Profile', desc: 'Price history, revenue mix, ownership, and credit for one name', route: '/company-profile', tickerParam: true,  icon: Globe },
       { title: 'Peer Comparison',   chip: 'Peer Comparison', desc: 'Trading multiples versus sector peers',                    route: '/peer-comparison', tickerParam: true, icon: Scale },
-      { title: 'Earnings Scanner',  chip: 'Earnings Scanner', desc: 'One calendar: who reports when, your holdings inline, and an AI filing summary on any row', route: '/earnings', tickerParam: true, icon: CalendarDays },
-      { title: 'Sentiment Tracker', chip: 'Sentiment Tracker', desc: 'AI-scored news sentiment across 7 sources',              route: '/sentiment',          icon: Brain },
       { title: 'ETF Analyzer',      chip: 'ETF Analyzer',    desc: 'Look-through holdings, overlap, and concentration',        route: '/etf-analyzer', tickerParam: true,       icon: Boxes },
       { title: 'NAV Tracker',       chip: 'NAV Tracker',     desc: 'Premium and discount on asset-backed proxies',             route: '/nav', tickerParam: true,                icon: Gem },
+      { title: 'IPO Scanner',       chip: 'IPO Scanner',     desc: 'Upcoming and recent public offerings with pricing and deal size', route: '/ipo-calendar',    icon: Rocket },
       { title: 'Report Creator',    chip: 'Report Creator',  desc: 'Collect evidence manually or let AlphaTape research across its tools, then build a print-ready report', route: '/report-creator', icon: ClipboardList },
     ],
   },
@@ -91,44 +109,17 @@ export const HUBS: Hub[] = [
     ],
   },
   {
-    slug: 'charting',
-    label: 'Charting & Markets',
-    tagline: 'Every feed in the terminal on one chart, plus the market board.',
-    masthead: 'Candles, overlays, and cross-asset comparisons. Plot any series the terminal knows on one timeline, then read the board, the sector rotation, and the statistics behind the move.',
+    slug: 'charts',
+    label: 'Charts & Stats',
+    tagline: 'Plot it, overlay it, measure it.',
+    masthead: 'Put any series the terminal knows on one timeline, overlay the assets you care about, and run the correlation, regression, and seasonality behind the picture.',
     icon: CandlestickChart,
     tools: [
-      { title: 'Global Markets',  chip: 'Global Markets',  desc: 'World indices, FX, commodities, yields, and crypto on one board', route: '/global-markets', icon: Globe },
-      { title: 'Market Hours',    chip: 'Market Hours',    desc: 'Live global session clock across futures, US, Europe, Asia', route: '/market-hours',       icon: Clock },
-      { title: 'Market Breadth',  chip: 'Market Breadth',  desc: 'Advance/decline, new highs-lows, and how many members are above their moving averages', route: '/breadth', icon: Activity },
-      { title: 'Seasonality',     chip: 'Seasonality',     desc: 'Month, weekday and turn-of-month patterns, each shown with its sample size', route: '/seasonality', tickerParam: true, icon: CalendarRange },
-      { title: 'Sector Rotation', chip: 'Sector Rotation', desc: 'GICS sector performance heatmap over time',                  route: '/sector-rotation',    icon: PieChart },
-      { title: 'Chart Studio',    chip: 'Chart Studio',    desc: 'Every time-series feed in the app on one candlestick chart', route: '/chart-studio', icon: CandlestickChart },
-      { title: 'Asset Overlay',   chip: 'Asset Overlay',   desc: 'Overlay any set of assets on a single chart',                route: '/asset-overlay',      icon: GitCompare },
-      { title: 'Correlation',     chip: 'Correlation',     desc: 'Correlation matrix, rolling drift, and beta',                route: '/correlation',        icon: Waves },
-      { title: 'Regression',      chip: 'Regression',      desc: 'OLS and polynomial fits with diagnostics',                   route: '/regression',         icon: Activity },
-    ],
-  },
-  {
-    slug: 'trading',
-    label: 'Trading / Portfolio',
-    tagline: 'Build, test, execute, and track your book.',
-    masthead: 'Compose a strategy, test it against history, run it on the simulated desk, and track every trade and holding.',
-    icon: Terminal,
-    tools: [
-      { title: 'Portfolio Manager',        chip: 'Portfolio Manager', desc: 'Holdings, P&L, and portfolio-level greeks, plus a live tab marked to real-time prices', route: '/portfolio-manager', icon: Briefcase },
-      { title: 'Portfolio Analysis',       chip: 'Portfolio Analysis', desc: 'Sectors, alpha, beta, drawdowns, and 500-path portfolio scenarios in one view', route: '/portfolio-analysis', icon: ClipboardList },
-      { title: 'Factor Decomposition',     chip: 'Factor Decomposition', desc: 'Regress your book on market, rates, credit, oil, and dollar factors', route: '/factor-decomposition', icon: Layers },
-      { title: 'Portfolio Compare',        chip: 'Portfolio Compare', desc: 'Two to four books side by side',            route: '/portfolio-compare', icon: Scale },
-      { title: 'Portfolio Allocator',      chip: 'Portfolio Allocator', desc: 'Deploy cash with linked sliders against a solved efficient frontier, then send it to Portfolio Manager', route: '/portfolio-allocator', icon: PieChart },
-      { title: 'Portfolio Backtester',     chip: 'Portfolio Backtester', desc: 'Sharpe, Sortino, and Calmar across history', route: '/backtest',      icon: BarChart2 },
-      { title: 'Monte Carlo',              chip: 'Monte Carlo',   desc: 'GBM path simulation with VaR and CVaR',         route: '/montecarlo',        icon: Dices },
-      { title: 'Algo Builder',             chip: 'Algo Builder', desc: 'Compose entry/exit rules and risk, then save and run', route: '/algo-strategy', icon: Workflow },
-      { title: 'Pairs Trader',             chip: 'Pairs Trader',  desc: 'Cointegration, mean-reversion half-life, and a z-score spread backtest', route: '/pairs-trader',        icon: Shuffle },
-      { title: 'Paper Trading',            chip: 'Paper Trading', desc: 'Simulated live execution across asset classes', route: '/paper-trading', icon: Terminal },
-      { title: 'Options MM Simulator', chip: 'Options MM',          desc: 'Quote a chain, carry the inventory, hedge the greeks, on one screen', route: '/options-mm-2', icon: Gauge },
-      { title: 'Fixed Income MM Simulator', chip: 'Fixed Income MM', desc: 'Quote the curve, carry the DV01, hedge with futures, on one screen', route: '/fixed-income-mm-2', icon: Landmark },
-      { title: 'Trade Analyzer', chip: 'Trade Analyzer', desc: 'Import a Fidelity or Robinhood export and measure the account: drawdown, Sharpe, Sortino, alpha, beta and your best trades', route: '/trade-history', icon: ClipboardList },
-      { title: 'Price Alerts',             chip: 'Price Alerts',  desc: 'Price and percent-change notifications',        route: '/alerts',            icon: Bell },
+      { title: 'Chart Studio',       chip: 'Chart Studio',    desc: 'Every time-series feed in the app on one candlestick chart', route: '/chart-studio', icon: CandlestickChart },
+      { title: 'Asset Overlay',      chip: 'Asset Overlay',   desc: 'Overlay any set of assets on a single chart',                route: '/asset-overlay',      icon: GitCompare },
+      { title: 'Correlation',        chip: 'Correlation',     desc: 'Correlation matrix, rolling drift, and beta',                route: '/correlation',        icon: Waves },
+      { title: 'Regression',         chip: 'Regression',      desc: 'OLS and polynomial fits with diagnostics',                   route: '/regression',         icon: Activity },
+      { title: 'Ticker Seasonality', chip: 'Seasonality',     desc: 'Month, weekday and turn-of-month patterns, each shown with its sample size', route: '/seasonality', tickerParam: true, icon: CalendarRange },
     ],
   },
   {
@@ -147,10 +138,41 @@ export const HUBS: Hub[] = [
     ],
   },
   {
-    slug: 'logistics',
-    label: 'Geo-Logistics',
-    tagline: 'Track the physical economy: ships, freighters, and freight tonnage.',
-    masthead: 'Follow physical trade in near real time: liner connectivity and container rates, canal chokepoint transits, air-freighter frequency at the global cargo hubs, and US inventories and freight tonnage.',
+    slug: 'portfolio',
+    label: 'Portfolio',
+    tagline: 'What your book holds, and what it does next.',
+    masthead: 'Track holdings and P&L, decompose the risk, compare books, and push the whole thing through history and 500 simulated paths.',
+    icon: Briefcase,
+    tools: [
+      { title: 'Portfolio Manager',        chip: 'Portfolio Manager', desc: 'Holdings, P&L, and portfolio-level greeks, plus a live tab marked to real-time prices', route: '/portfolio-manager', icon: Briefcase },
+      { title: 'Portfolio Analysis',       chip: 'Portfolio Analysis', desc: 'Sectors, alpha, beta, drawdowns, and 500-path portfolio scenarios in one view', route: '/portfolio-analysis', icon: ClipboardList },
+      { title: 'Factor Decomposition',     chip: 'Factor Decomposition', desc: 'Regress your book on market, rates, credit, oil, and dollar factors', route: '/factor-decomposition', icon: Layers },
+      { title: 'Portfolio Compare',        chip: 'Portfolio Compare', desc: 'Two to four books side by side',            route: '/portfolio-compare', icon: Scale },
+      { title: 'Portfolio Allocator',      chip: 'Portfolio Allocator', desc: 'Deploy cash with linked sliders against a solved efficient frontier, then send it to Portfolio Manager', route: '/portfolio-allocator', icon: PieChart },
+      { title: 'Portfolio Backtester',     chip: 'Portfolio Backtester', desc: 'Sharpe, Sortino, and Calmar across history', route: '/backtest',      icon: BarChart2 },
+      { title: 'Monte Carlo',              chip: 'Monte Carlo',   desc: 'GBM path simulation with VaR and CVaR',         route: '/montecarlo',        icon: Dices },
+      { title: 'Track Record', chip: 'Track Record', desc: 'Import a Fidelity or Robinhood export and measure the account: drawdown, Sharpe, Sortino, alpha, beta and your best trades', route: '/trade-history', icon: ClipboardList },
+    ],
+  },
+  {
+    slug: 'desk',
+    label: 'Trading Desk',
+    tagline: 'Run it live, or practice until it is boring.',
+    masthead: 'Build and automate a strategy, trade it on paper across asset classes, and hold a two-sided book on the options and rates simulators.',
+    icon: Terminal,
+    tools: [
+      { title: 'Paper Trading',            chip: 'Paper Trading', desc: 'Simulated live execution across asset classes', route: '/paper-trading', icon: Terminal },
+      { title: 'Algo Builder',             chip: 'Algo Builder', desc: 'Compose entry/exit rules and risk, then save and run', route: '/algo-strategy', icon: Workflow },
+      { title: 'Pairs Trader',             chip: 'Pairs Trader',  desc: 'Cointegration, mean-reversion half-life, and a z-score spread backtest', route: '/pairs-trader',        icon: Shuffle },
+      { title: 'Options MM Simulator', chip: 'Options MM',          desc: 'Quote a chain, carry the inventory, hedge the greeks, on one screen', route: '/options-mm-2', icon: Gauge },
+      { title: 'Fixed Income MM Simulator', chip: 'Fixed Income MM', desc: 'Quote the curve, carry the DV01, hedge with futures, on one screen', route: '/fixed-income-mm-2', icon: Landmark },
+    ],
+  },
+  {
+    slug: 'trade-routes',
+    label: 'Trade Routes',
+    tagline: 'The lanes, canals, and supply chains under the tape.',
+    masthead: 'Follow physical trade in near real time: liner connectivity and container rates, canal chokepoint transits, air-freighter frequency at the global cargo hubs, tanker flows, and the supplier networks behind a ticker.',
     icon: Container,
     tools: [
       { title: 'Freight Map',      chip: 'Freight Map',  desc: 'Air hubs, chokepoints, connectivity ports, live cargo ships, and freight macro on one map', route: '/logistics-map', icon: MapPinned },

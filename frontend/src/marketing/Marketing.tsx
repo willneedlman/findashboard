@@ -693,7 +693,7 @@ const TAPE_FEATURES = [
   'Energy Flows', 'Chart Studio', 'Dealer Exposure', 'Market Maker', 'Sentiment Tracker',
   'Options Flow', 'Volatility Skew', 'IV Rank', 'Implied Probability', 'Strategy Builder', 'Rate Engine',
   'DCF Valuation', 'Reverse DCF', 'Stock Screener', 'Monte Carlo', 'Credit Spreads',
-  'FX Matrix', 'Paper Trading', 'Trade Analyzer', 'Price Alerts',
+  'FX Matrix', 'Paper Trading', 'Track Record', 'Price Alerts',
 ]
 function TickerTape() {
   const seq = (p: string) => TAPE_FEATURES.map(f => (
@@ -856,21 +856,23 @@ export function Landing() {
 
       <section className="blk" style={{ borderTop: '1px solid var(--line)' }}><div className="wrap">
         <Reveal className="sec-head">
-          <div className="eyebrow">Seven hubs</div>
+          <div className="eyebrow">Nine hubs</div>
           <h2>{HUBS.reduce((a, h) => a + h.tools.length, 0)} tools, each with one home.</h2>
           <p>Every tool lives in exactly one hub, so you always know where to look. A command palette jumps anywhere.</p>
         </Reveal>
         <StaggerGroup className="hubband">
           {([
-            ['research', 'Research', 'Screener · Sentiment · Earnings Scanner'],
-            ['options', 'Options', 'Dealer Exposure · Flow · Implied Vol'],
-            ['macro', 'Macro', 'Rate Engine · Global Markets · Credit'],
-            ['charting', 'Charting', 'Chart Studio · Asset Overlay · Compare'],
-            ['trading', 'Trading', 'Paper Trading · MM Sim · Trade Analyzer'],
-            ['valuation', 'Valuation', 'DCF · Reverse DCF · Multiples'],
-            ['logistics', 'Geo-Logistics', 'Freight Map · Energy Flows'],
-          ] as [string, string, string][]).map(([slug, l, t]) => (
-            <MLink key={slug} to={`/product/${slug}`} className="hubcell" variants={item}>
+            ['markets', 'charting', 'Markets', 'Global Markets \u00b7 Breadth \u00b7 Mover Radar'],
+            ['companies', 'research', 'Companies', 'Screener \u00b7 Company Profile \u00b7 ETF Analyzer'],
+            ['options', 'options', 'Options', 'Dealer Exposure \u00b7 Flow \u00b7 Implied Vol'],
+            ['macro', 'macro', 'Macro & Rates', 'Rate Engine \u00b7 Credit \u00b7 FX Matrix'],
+            ['charts', 'charting', 'Charts & Stats', 'Chart Studio \u00b7 Correlation \u00b7 Regression'],
+            ['valuation', 'valuation', 'Valuation', 'DCF \u00b7 Reverse DCF \u00b7 Multiples'],
+            ['portfolio', 'trading', 'Portfolio', 'Manager \u00b7 Backtester \u00b7 Monte Carlo'],
+            ['desk', 'trading', 'Trading Desk', 'Paper Trading \u00b7 MM Sim \u00b7 Algo Builder'],
+            ['trade-routes', 'logistics', 'Trade Routes', 'Freight Map \u00b7 Energy Flows'],
+          ] as [string, string, string, string][]).map(([slug, product, l, t]) => (
+            <MLink key={slug} to={`/product/${product}`} className="hubcell" variants={item}>
               <div className="hn">{HUBS.find(h => h.slug === slug)?.tools.length ?? 0}</div>
               <div className="hl">{l}</div>
               <div className="ht">{t}</div>
@@ -1356,7 +1358,7 @@ export function TradingPage() {
         <div className="loop">
           <div className="lp"><div className="lpn"><b><Workflow size={13} /></b> Algo Strategy Builder</div><h4>Define the rules.</h4><p>Compose entry and exit rules and risk parameters into a strategy, then save and backtest it. No code required.</p><div className="lptags"><span className="tag">Rules</span><span className="tag">Backtest</span></div></div>
           <div className="lp"><div className="lpn"><b><Terminal size={13} /></b> Paper Trading</div><h4>Trade it, risk-free.</h4><p>Simulated order execution with live prices. Equities and options, with position tracking and P&amp;L.</p><div className="lptags"><span className="tag">Live prices</span><span className="tag">Equities + options</span></div></div>
-          <div className="lp"><div className="lpn"><b><BookOpen size={13} /></b> Trade Analyzer</div><h4>Review the result.</h4><p>Import a Fidelity or Robinhood export and measure what the account actually did, down to your best trades.</p><div className="lptags"><span className="tag">Sharpe + alpha</span><span className="tag">Best trades</span></div></div>
+          <div className="lp"><div className="lpn"><b><BookOpen size={13} /></b> Track Record</div><h4>Review the result.</h4><p>Import a Fidelity or Robinhood export and measure what the account actually did, down to your best trades.</p><div className="lptags"><span className="tag">Sharpe + alpha</span><span className="tag">Best trades</span></div></div>
           <div className="lp"><div className="lpn"><b><Bell size={13} /></b> Price Alerts</div><h4>Catch the trigger.</h4><p>Price, percent-change, RSI, and price-versus-SMA alerts, pushed to your browser when they fire.</p><div className="lptags"><span className="tag">Price</span><span className="tag">RSI + SMA</span></div></div>
         </div>
       </div></section>

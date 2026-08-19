@@ -267,7 +267,10 @@ export default function App() {
             {/* Terminal — wrapped in the sidebar Layout */}
             <Route element={<TerminalChrome />}>
               <Route path="/app"        element={<Home />} />
-              <Route path="/hub/portfolio" element={<Navigate to="/hub/trading" replace />} />
+              <Route path="/hub/research"  element={<Navigate to="/hub/companies" replace />} />
+              <Route path="/hub/charting"  element={<Navigate to="/hub/charts" replace />} />
+              <Route path="/hub/trading"   element={<Navigate to="/hub/portfolio" replace />} />
+              <Route path="/hub/logistics" element={<Navigate to="/hub/trade-routes" replace />} />
               <Route path="/hub/:slug"  element={<HubLanding />} />
               <Route path="/market"     element={<RedirectWithSearch to="/company-profile" />} />
               <Route path="/global-markets" element={<GlobalMarkets />} />

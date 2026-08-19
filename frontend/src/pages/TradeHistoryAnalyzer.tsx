@@ -228,7 +228,7 @@ export default function TradeHistoryAnalyzer() {
 
   return (
     <PageWrapper
-      title="Trade Analyzer"
+      title="Track Record"
       meta={
         <span style={{
           fontFamily: MONO, fontSize: 10.5, lineHeight: 1.6, maxWidth: '96ch', color: T.muted,
