@@ -1211,11 +1211,11 @@ describe('Report Creator AlphaTape research', () => {
       goal: 'Compare AAPL and MSFT using valuation, regression, and options evidence',
     }
     const sources = [
-      { id: 'peer-valuation' as const, label: 'Peer valuation', tool: 'Peer Comparison', route: '/relative-valuation', reason: 'test', targets: ['AAPL'], domain: 'issuer' as const, critical: false },
+      { id: 'peer-valuation' as const, label: 'Peer valuation', tool: 'Peer Comparison', route: '/peer-comparison', reason: 'test', targets: ['AAPL'], domain: 'issuer' as const, critical: false },
       { id: 'dcf-valuation' as const, label: 'DCF valuation', tool: 'DCF Valuation', route: '/dcf', reason: 'test', targets: ['AAPL'], domain: 'issuer' as const, critical: false },
       { id: 'regression' as const, label: 'Regression', tool: 'Regression', route: '/regression', reason: 'test', targets: ['AAPL', 'MSFT'], domain: 'benchmark' as const, critical: false },
       { id: 'volatility-skew' as const, label: 'Skew', tool: 'Volatility Skew', route: '/skew', reason: 'test', targets: ['AAPL'], domain: 'issuer' as const, critical: false },
-      { id: 'dealer-gex' as const, label: 'GEX', tool: 'Dealer Exposure', route: '/gex', reason: 'test', targets: ['AAPL'], domain: 'issuer' as const, critical: false },
+      { id: 'dealer-gex' as const, label: 'GEX', tool: 'Dealer Exposure', route: '/dealer-exposure', reason: 'test', targets: ['AAPL'], domain: 'issuer' as const, critical: false },
       { id: 'implied-probability' as const, label: 'Probability', tool: 'Implied Probability', route: '/probability', reason: 'test', targets: ['AAPL'], domain: 'issuer' as const, critical: false },
     ]
     const result = await collectReportResearch(

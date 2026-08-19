@@ -178,7 +178,7 @@ const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`
 // command palette and <TickerLink> use, opening the slide-over in place.
 const ROW_LINKS: { label: string; base?: string; overview?: boolean }[] = [
   { label: 'Profile',  base: '/company-profile' },
-  { label: 'Peers',    base: '/relative-valuation' },
+  { label: 'Peers',    base: '/peer-comparison' },
   { label: 'Overview', overview: true },
   { label: 'DCF',      base: '/dcf' },
   { label: 'Alert',    base: '/alerts' },

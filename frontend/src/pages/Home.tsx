@@ -531,7 +531,7 @@ function TickerJumpTiles({ sym, isMobile }: { sym: string; isMobile: boolean }) 
   const tiles = [
     { icon: Globe, title: 'Company profile', sub: 'Price history, revenue mix & credit', route: `/company-profile?ticker=${sym}` },
     { icon: Calculator, title: 'DCF valuation', sub: 'Intrinsic value & upside', route: `/dcf?ticker=${sym}` },
-    { icon: Scale, title: 'Peer comparison', sub: 'Multiples vs sector peers', route: `/relative-valuation?ticker=${sym}` },
+    { icon: Scale, title: 'Peer comparison', sub: 'Multiples vs sector peers', route: `/peer-comparison?ticker=${sym}` },
     { icon: TrendingUp, title: 'Chart Studio', sub: 'Candles with every overlay', route: '/chart-studio' },
   ]
   return (

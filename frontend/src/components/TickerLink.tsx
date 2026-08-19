@@ -42,7 +42,7 @@ const routeFor = (route: string) => {
 
 const ACTIONS: Action[] = [
   { key: 'profile',  label: 'Company Profile', icon: UserRound, run: go(routeFor('/company-profile')) },
-  { key: 'peers',    label: 'Peers',           icon: Users,     run: go(routeFor('/relative-valuation')) },
+  { key: 'peers',    label: 'Peers',           icon: Users,     run: go(routeFor('/peer-comparison')) },
   { key: 'overview', label: 'Overview',        icon: PanelRight,
     run: sym => { setLinkedTicker(sym); window.dispatchEvent(new CustomEvent(DRAWER_EVENT, { detail: sym })) } },
   { key: 'dcf',      label: 'DCF Valuation',   icon: Calculator, run: go(routeFor('/dcf')) },

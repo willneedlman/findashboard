@@ -17,7 +17,6 @@
 
 const ALLOWLIST = [
   'pm-portfolios-v2',              // Portfolio Manager (multi-portfolio)
-  'ft-trade-journal',              // Trade Journal
   'alerts',                        // Price Alerts
   'finance-terminal-dashboard-v3', // Dashboard layout
   'watchlist',                     // Watchlist

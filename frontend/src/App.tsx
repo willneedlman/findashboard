@@ -11,6 +11,14 @@ import { recordRecentTicker } from './lib/recentTickers'
 // the host below owns the open event and mounts it on first use.
 const TickerDrawerPanel = lazyWithReload(() => import('./components/TickerDrawer'))
 
+// A redirect that carries the query string. Both renamed routes take ?ticker=,
+// and a bare <Navigate> drops it, so every saved link and every hand-off from
+// another tool would arrive with no symbol and look broken rather than moved.
+function KeepQuery({ to }: { to: string }) {
+  const { search } = useLocation()
+  return <Navigate to={`${to}${search}`} replace />
+}
+
 function TickerDrawerHost() {
   const [sym, setSym] = useState('')   // '' until first open; sym never resets, keeping the panel mounted for its exit animation
   const [open, setOpen] = useState(false)
@@ -108,7 +116,6 @@ const MarketBreadth      = lazyWithReload(() => import('./pages/MarketBreadth'))
 const Seasonality        = lazyWithReload(() => import('./pages/Seasonality'))
 const SupplyChain        = lazyWithReload(() => import('./pages/SupplyChain'))
 const SupplyChainMap     = lazyWithReload(() => import('./pages/SupplyChainPeers'))
-const TradeJournal       = lazyWithReload(() => import('./pages/TradeJournal'))
 const PaperTrading       = lazyWithReload(() => import('./pages/PaperTrading'))
 const SentimentTracker   = lazyWithReload(() => import('./pages/SentimentTracker'))
 const AlertsPage         = lazyWithReload(() => import('./pages/Alerts'))
@@ -317,7 +324,9 @@ export default function App() {
               <Route path="/correlation" element={<CorrelationAnalysis />} />
               <Route path="/strategy"   element={<StrategyBuilder />} />
               <Route path="/algo-strategy" element={<AlgoStrategyBuilder />} />
-              <Route path="/gex"        element={<DealerGEX />} />
+              <Route path="/dealer-exposure" element={<DealerGEX />} />
+              {/* The route said gex while the tool said Dealer Exposure. */}
+              <Route path="/gex"        element={<KeepQuery to="/dealer-exposure" />} />
               <Route path="/dashboard"       element={<CustomDashboard />} />
               <Route path="/settings"        element={<SettingsPage />} />
               <Route path="/screener"        element={<StockScreener />} />
@@ -336,13 +345,16 @@ export default function App() {
               <Route path="/market-hours"        element={<MarketHours />} />
               <Route path="/currency"            element={<CurrencyMatrix />} />
               <Route path="/flows-map"           element={<MaritimeMap />} />
-              <Route path="/relative-valuation"  element={<RelativeValuation />} />
+              <Route path="/peer-comparison"     element={<RelativeValuation />} />
+              {/* The route claimed a valuation tool. It benchmarks peers on
+                  growth and returns as well as on multiples, and never
+                  produces an intrinsic value. */}
+              <Route path="/relative-valuation"  element={<KeepQuery to="/peer-comparison" />} />
               <Route path="/mover-radar"          element={<MoverRadar />} />
               <Route path="/company-profile"     element={<SupplyChain />} />
               <Route path="/supply-chain"        element={<RedirectWithSearch to="/company-profile" />} />
               <Route path="/supply-chain-peers"  element={<SupplyChainMap />} />
               <Route path="/gamma-scalping"      element={<Navigate to="/paper-trading" replace />} />
-              <Route path="/trade-journal"       element={<TradeJournal />} />
               <Route path="/paper-trading"       element={<PaperTrading />} />
               <Route path="/algo-runner"         element={<Navigate to="/admin" replace />} />
               <Route path="/sentiment"           element={<SentimentTracker />} />

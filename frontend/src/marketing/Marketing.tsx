@@ -693,7 +693,7 @@ const TAPE_FEATURES = [
   'Energy Flows', 'Chart Studio', 'Dealer Exposure', 'Market Maker', 'Sentiment Tracker',
   'Options Flow', 'Volatility Skew', 'IV Rank', 'Implied Probability', 'Strategy Builder', 'Rate Engine',
   'DCF Valuation', 'Reverse DCF', 'Stock Screener', 'Monte Carlo', 'Credit Spreads',
-  'FX Matrix', 'Paper Trading', 'Trade Journal', 'Price Alerts',
+  'FX Matrix', 'Paper Trading', 'Trade Analyzer', 'Price Alerts',
 ]
 function TickerTape() {
   const seq = (p: string) => TAPE_FEATURES.map(f => (
@@ -862,11 +862,11 @@ export function Landing() {
         </Reveal>
         <StaggerGroup className="hubband">
           {([
-            ['research', 'Research', 'Screener · Sentiment · Earnings Summarizer'],
+            ['research', 'Research', 'Screener · Sentiment · Earnings Scanner'],
             ['options', 'Options', 'Dealer Exposure · Flow · Implied Vol'],
             ['macro', 'Macro', 'Rate Engine · Global Markets · Credit'],
             ['charting', 'Charting', 'Chart Studio · Asset Overlay · Compare'],
-            ['trading', 'Trading', 'Paper Trading · MM Sim · Journal'],
+            ['trading', 'Trading', 'Paper Trading · MM Sim · Trade Analyzer'],
             ['valuation', 'Valuation', 'DCF · Reverse DCF · Multiples'],
             ['logistics', 'Geo-Logistics', 'Freight Map · Energy Flows'],
           ] as [string, string, string][]).map(([slug, l, t]) => (
@@ -1356,7 +1356,7 @@ export function TradingPage() {
         <div className="loop">
           <div className="lp"><div className="lpn"><b><Workflow size={13} /></b> Algo Strategy Builder</div><h4>Define the rules.</h4><p>Compose entry and exit rules and risk parameters into a strategy, then save and backtest it. No code required.</p><div className="lptags"><span className="tag">Rules</span><span className="tag">Backtest</span></div></div>
           <div className="lp"><div className="lpn"><b><Terminal size={13} /></b> Paper Trading</div><h4>Trade it, risk-free.</h4><p>Simulated order execution with live prices. Equities and options, with position tracking and P&amp;L.</p><div className="lptags"><span className="tag">Live prices</span><span className="tag">Equities + options</span></div></div>
-          <div className="lp"><div className="lpn"><b><BookOpen size={13} /></b> Trade Journal</div><h4>Review the result.</h4><p>Log every trade, tag the setup, and track win rate and profit factor over time.</p><div className="lptags"><span className="tag">Win rate</span><span className="tag">Profit factor</span></div></div>
+          <div className="lp"><div className="lpn"><b><BookOpen size={13} /></b> Trade Analyzer</div><h4>Review the result.</h4><p>Import a Fidelity or Robinhood export and measure what the account actually did, down to your best trades.</p><div className="lptags"><span className="tag">Sharpe + alpha</span><span className="tag">Best trades</span></div></div>
           <div className="lp"><div className="lpn"><b><Bell size={13} /></b> Price Alerts</div><h4>Catch the trigger.</h4><p>Price, percent-change, RSI, and price-versus-SMA alerts, pushed to your browser when they fire.</p><div className="lptags"><span className="tag">Price</span><span className="tag">RSI + SMA</span></div></div>
         </div>
       </div></section>
