@@ -307,6 +307,9 @@ export default function PortfolioAnalysis() {
   const [books, setBooks] = useState<PMPortfolio[]>(() => analysisBooks())
   const [book, setBook] = useState<PMPortfolio | null>(() => activeBook())
   const [settings, setSettings] = useState<AnalysisSettings>(DEFAULT_ANALYSIS_SETTINGS)
+  // Closed by default now that the toggle rides in the header. The parameters
+  // bar was a second full-width row restating what the header already said.
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const m = useMutation({ mutationFn: ({ nextBook, nextSettings }: { nextBook: PMPortfolio; nextSettings: AnalysisSettings }) => runAnalysis(nextBook, BENCHMARK, LOOKBACK_YEARS, nextSettings) })
   const { mutate } = m
 
@@ -332,6 +335,8 @@ export default function PortfolioAnalysis() {
           books={books}
           pending={m.isPending}
           settings={settings}
+          advancedOpen={advancedOpen}
+          toggleAdvanced={() => setAdvancedOpen(open => !open)}
           selectBook={id => setBook(books.find(candidate => candidate.id === id) ?? book)}
           refresh={() => {
             const nextBooks = analysisBooks()
@@ -339,7 +344,7 @@ export default function PortfolioAnalysis() {
             setBook(nextBooks.find(candidate => candidate.id === book.id) ?? activeBook(nextBooks))
           }}
         />}
-        {book && <AnalysisSettingsDisclosure
+        {book && advancedOpen && <AnalysisSettings
           pending={m.isPending}
           settings={settings}
           applySettings={nextSettings => {
@@ -357,7 +362,7 @@ export default function PortfolioAnalysis() {
   )
 }
 
-function AnalysisHeader({ book, books, pending, settings, selectBook, refresh }: { book: PMPortfolio; books: PMPortfolio[]; pending: boolean; settings: AnalysisSettings; selectBook: (id: string) => void; refresh: () => void }) {
+function AnalysisHeader({ book, books, pending, settings, advancedOpen, toggleAdvanced, selectBook, refresh }: { book: PMPortfolio; books: PMPortfolio[]; pending: boolean; settings: AnalysisSettings; advancedOpen: boolean; toggleAdvanced: () => void; selectBook: (id: string) => void; refresh: () => void }) {
   return <div className="portfolio-analysis-header" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12, minHeight: 50, padding: '8px 14px', border: `1px solid ${T.border}`, background: T.surface }}>
     <label style={{ minWidth: 210, display: 'flex', flexDirection: 'column', gap: 3 }}>
       <span style={{ fontFamily: SANS, fontSize: 8, fontWeight: 800, color: T.muted, letterSpacing: '.12em', textTransform: 'uppercase' }}>Portfolio</span>
@@ -367,12 +372,12 @@ function AnalysisHeader({ book, books, pending, settings, selectBook, refresh }:
     </label>
     <div style={{ minWidth: 0, fontFamily: MONO, fontSize: 9.5, color: T.muted, whiteSpace: 'nowrap' }}>{book.holdings.length} equities · {book.optionsCount} options</div>
     <div style={{ marginLeft: 'auto', minWidth: 0, fontFamily: MONO, fontSize: 9.5, color: T.muted, whiteSpace: 'nowrap' }}>{BENCHMARK} · 5Y history · {(settings.horizonDays / 252).toFixed(1)}Y · {settings.simulations} paths · {modelLabel(settings.model)}</div>
+    <button type="button" onClick={toggleAdvanced} aria-expanded={advancedOpen} style={{ flex: '0 0 auto', height: 32, display: 'flex', alignItems: 'center', gap: 5, padding: '0 10px', border: `1px solid ${advancedOpen ? T.gold : T.border}`, background: advancedOpen ? mix(T.gold, 10) : 'transparent', color: advancedOpen ? T.gold : T.text, fontFamily: SANS, fontSize: 9, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer' }}>Parameters {advancedOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}</button>
     <button onClick={refresh} disabled={pending} aria-label="Refresh portfolio analysis" style={{ flex: '0 0 auto', width: 32, height: 32, display: 'grid', placeItems: 'center', border: `1px solid ${T.border}`, background: 'transparent', color: pending ? T.muted : T.gold, cursor: pending ? 'wait' : 'pointer' }}><RefreshCw size={13} /></button>
   </div>
 }
 
-function AnalysisSettingsDisclosure({ pending, settings, applySettings }: { pending: boolean; settings: AnalysisSettings; applySettings: (settings: AnalysisSettings) => void }) {
-  const [advancedOpen, setAdvancedOpen] = useState(true)
+function AnalysisSettings({ pending, settings, applySettings }: { pending: boolean; settings: AnalysisSettings; applySettings: (settings: AnalysisSettings) => void }) {
   const [draft, setDraft] = useState(settings)
   useEffect(() => setDraft(settings), [settings])
   const set = <K extends keyof AnalysisSettings>(key: K, value: AnalysisSettings[K]) => setDraft(current => ({ ...current, [key]: value }))
@@ -391,13 +396,7 @@ function AnalysisSettingsDisclosure({ pending, settings, applySettings }: { pend
   const dirty = JSON.stringify(normalized) !== JSON.stringify(settings)
   const inputStyle: React.CSSProperties = { width: '100%', height: 29, border: `1px solid ${T.border}`, background: T.bg, color: T.text, padding: '0 8px', fontFamily: MONO, fontSize: 10, outline: 'none' }
 
-  return <div style={{ display: 'flex', flexDirection: 'column' }}>
-    <button type="button" onClick={() => setAdvancedOpen(open => !open)} aria-expanded={advancedOpen} className="portfolio-analysis-settings-trigger" style={{ width: '100%', minHeight: 42, display: 'flex', alignItems: 'center', gap: 12, padding: '0 14px', border: `1px solid ${advancedOpen ? mix(T.gold, 65) : T.border}`, background: advancedOpen ? mix(T.gold, 7) : T.surface, color: T.text, cursor: 'pointer', textAlign: 'left' }}>
-      <span style={{ fontFamily: SANS, fontSize: 9, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: T.gold }}>Monte Carlo parameters</span>
-      <span style={{ minWidth: 0, fontFamily: MONO, fontSize: 9.5, color: T.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{modelLabel(settings.model)} · {settings.simulations} paths · {settings.horizonDays} days · {settings.leverage.toFixed(1)}x leverage</span>
-      <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, flex: '0 0 auto', fontFamily: SANS, fontSize: 9, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: advancedOpen ? T.gold : T.text }}>Advanced settings {advancedOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</span>
-    </button>
-    {advancedOpen && <div className="portfolio-analysis-advanced" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(100px, 1fr))', gap: 10, padding: '12px 14px', border: `1px solid ${T.border}`, borderTop: 0, background: T.surface }}>
+  return <div className="portfolio-analysis-advanced" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(100px, 1fr))', gap: 10, padding: '12px 14px', border: `1px solid ${T.border}`, borderTop: 0, background: T.surface }}>
       <AnalysisParameter label="Simulation model"><select value={draft.model} onChange={event => set('model', event.target.value as MonteCarloModel)} style={{ ...inputStyle, cursor: 'pointer' }}><option value="gbm">Normal GBM</option><option value="student_t">Fat tails · Student-t</option><option value="bootstrap">Historical bootstrap</option></select></AnalysisParameter>
       {draft.model === 'student_t' && <AnalysisParameter label="Tail degrees of freedom"><input type="number" min={2.1} max={30} step={0.5} value={draft.tDegreesFreedom} onChange={event => set('tDegreesFreedom', Number(event.target.value))} style={inputStyle} /></AnalysisParameter>}
       {draft.model === 'bootstrap' && <AnalysisParameter label="Bootstrap block days"><input type="number" min={1} max={63} step={1} value={draft.bootstrapBlockDays} onChange={event => set('bootstrapBlockDays', Number(event.target.value))} style={inputStyle} /></AnalysisParameter>}
@@ -412,7 +411,6 @@ function AnalysisSettingsDisclosure({ pending, settings, applySettings }: { pend
         <div style={{ color: T.muted, fontFamily: SANS, fontSize: 9.5, lineHeight: 1.45 }}>{draft.model === 'student_t' ? 'Student-t paths preserve modeled drift and volatility while increasing extreme moves; lower degrees of freedom produce heavier tails.' : draft.model === 'bootstrap' ? 'Historical bootstrap resamples contiguous return blocks, retaining empirical skew, fat tails, and short-run clustering without assuming a normal distribution.' : 'Normal GBM uses independent Gaussian shocks calibrated to the portfolio’s historical drift and volatility.'} Maintenance tracks marked exposure against changing equity and breaches force deleveraging.</div>
         <button type="button" onClick={() => { setDraft(normalized); applySettings(normalized) }} disabled={!dirty || pending} style={{ marginLeft: 'auto', height: 30, minWidth: 116, border: `1px solid ${dirty ? T.gold : T.border}`, background: dirty ? mix(T.gold, 12) : 'transparent', color: dirty ? T.gold : T.muted, fontFamily: SANS, fontSize: 9, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', cursor: dirty && !pending ? 'pointer' : 'default' }}>{pending ? 'Running…' : dirty ? 'Apply & rerun' : 'Applied'}</button>
       </div>
-    </div>}
   </div>
 }
 
