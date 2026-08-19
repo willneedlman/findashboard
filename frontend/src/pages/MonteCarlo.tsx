@@ -20,6 +20,7 @@ import { rulesForTicker } from '../components/CustomStrategyModal'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR, BAR_CURSOR } from '../components/ChartTooltip'
 import { FUTURES } from '../lib/futures'
 import axios from 'axios'
+import { simulationDrift } from '../lib/simulationDrift'
 import EmptyState from '../components/EmptyState'
 import HelpTip from '../components/HelpTip'
 import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
@@ -273,7 +274,10 @@ type Leg = {
   side: 'long' | 'short'
   spot: number
   vol: number
+  /** Annualized percent actually simulated, after shrinkage. */
   drift: number
+  /** What the history showed before shrinkage, so the page can print both. */
+  sampleDrift?: number
   strategy: string
   stratParams: StrategyParams
   fetched: boolean
@@ -1612,15 +1616,21 @@ export function MonteCarloContent() {
           const { data } = await axios.get(`/api/market/history?ticker=${leg.ticker}&start=2022-01-01`)
           if (data?.metrics) {
             const years = Math.max(new Date().getFullYear() - 2022, 1)
-            // CAGR = (1 + totalReturn/100)^(1/years) - 1; cap at ±150%/yr for sane simulation
             const cagr = (Math.pow(1 + data.metrics.total_return / 100, 1 / years) - 1) * 100
             const dividendYield = Math.max(0, Number(dividendSnapshot[leg.ticker]?.dividend_yield) || 0)
-            const drift = Math.max(-150, Math.min(150, +(cagr - dividendYield).toFixed(1)))
+            const sample = cagr - dividendYield
+            // Shrunk toward a market-like prior rather than clamped at 150%/yr.
+            // The clamp let a name that had run at 90% be projected forward at
+            // 90% for three years, which is the same arithmetic that produced a
+            // 5th percentile of +260% on the portfolio page before it was fixed
+            // server-side. Both surfaces now use one rule.
+            const shrunk = simulationDrift(sample, Math.round(years * 252))
             return {
               ...leg,
               spot: +data.metrics.current_price.toFixed(2),
               vol:  +data.metrics.ann_volatility.toFixed(1),
-              drift,
+              drift: +shrunk.usedAnnualPct.toFixed(1),
+              sampleDrift: +sample.toFixed(1),
               dividendYield,
               fetched: true,
             }
@@ -1946,13 +1956,20 @@ export function MonteCarloContent() {
       const effDrift = legs.reduce((s, l, i) =>
         s + signs[i] * (l.weight / totalWeight) * (calibratedDrifts[i] + legAdjs[i].stratAdj + (dividendMode === 'exclude' ? 0 : dividendYields[i])), 0)
 
+      // What the history showed, weighted the same way, so the strip can print
+      // the number that was measured beside the number being projected. Without
+      // both, a shrunk drift reads as a wrong one.
+      const sampledDrift = legs.some(l => l.sampleDrift != null)
+        ? legs.reduce((s, l, i) => s + signs[i] * (l.weight / totalWeight) * (l.sampleDrift ?? l.drift), 0)
+        : null
+
       const probTarget = targetPrice > 0
         ? terminal.filter(v => v >= targetPrice).length / terminal.length * 100
         : null
 
       return {
         bands, histogram, S0, median, p5, p95, probProfit, probRuin, probMarginCall, probLiquidation,
-        medianMaxMarginUtilization, varAmt, cvarAmt, effDrift,
+        medianMaxMarginUtilization, varAmt, cvarAmt, effDrift, sampledDrift,
         coreMetrics,
         probTarget, targetPrice, model,
         dividendMode, medianDividendIncome,
@@ -2272,7 +2289,10 @@ export function MonteCarloContent() {
                 <KpiCell grow label="P95 Outcome" value={`$${data.p95.toFixed(2)}`} />
                 <KpiCell grow label="VaR 95%" value={`$${data.varAmt.toFixed(2)}`} color={NEG} />
                 <KpiCell grow label="CVaR 95%" value={`$${data.cvarAmt.toFixed(2)}`} color={NEG} />
-                <KpiCell grow label="Eff. Drift" value={`${data.effDrift.toFixed(1)}%`} />
+                <KpiCell grow label="Eff. Drift" value={`${data.effDrift.toFixed(1)}%`}
+                  sub={data.sampledDrift != null && Math.abs(data.sampledDrift - data.effDrift) > 0.5
+                    ? `history showed ${data.sampledDrift.toFixed(1)}%`
+                    : undefined} />
                 {data.medianDividendIncome != null && <KpiCell grow label="Median Dividends" value={`$${Number(data.medianDividendIncome).toFixed(2)}`} color={Number(data.medianDividendIncome) >= 0 ? POS : NEG}
                   sub={data.dividendMode === 'cash' ? 'paid to cash' : data.dividendMode === 'exclude' ? 'observed, excluded' : 'reinvested'} />}
                 {data.probTarget !== null && <KpiCell grow label={`Prob ≥ $${data.targetPrice}`} value={`${data.probTarget.toFixed(1)}%`} color={data.probTarget > 50 ? POS : undefined} />}
