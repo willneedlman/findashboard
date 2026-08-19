@@ -180,6 +180,15 @@ function formatPubTime(raw: string): string {
 /**
  * Daily Home notification + book-specific brief. Not a hub tool.
  */
+interface MoverExplain {
+  available?: boolean
+  verdict?: 'explained' | 'noise'
+  company_name?: string
+  narrative?: { summary?: string; confidence?: string } | null
+  relative?: { spy_pct?: number; sector?: string; sector_etf?: string; sector_pct?: number; excess_vs_market?: number } | null
+  price?: { pct_move?: number; z_score?: number | null; relative_volume?: number | null } | null
+}
+
 export default function MorningBrief({
   sessionLabel,
   dateLabel,
@@ -328,6 +337,43 @@ export default function MorningBrief({
   const insights = useMemo(
     () => buildBookInsights(positions, cash, spyQ.data?.pct_change_1d ?? null),
     [positions, cash, spyQ.data?.pct_change_1d],
+  )
+
+  // Why the book moved. The headline list below answers "what was written about
+  // my biggest positions"; this answers "why did my money move today", which is
+  // a different question and usually the one being asked. Mover Radar already
+  // does the work: it scores the move against the name's own volatility,
+  // separates it from the market and sector, reads every news and filing
+  // source, and returns "noise" rather than inventing a story when nothing
+  // actually explains it.
+  //
+  // Picked by dollar impact, not by weight, and only for names that moved
+  // enough to be worth asking about. Gated on the brief being open because this
+  // is the most expensive call on the page and most Home loads never open it.
+  const MOVE_FLOOR_PCT = 1.5
+  const explainTickers = useMemo(
+    () => insights.dayAttribution
+      .filter(a => Math.abs(a.pct1d) >= MOVE_FLOOR_PCT)
+      .slice(0, 3)
+      .map(a => a.ticker),
+    [insights.dayAttribution],
+  )
+  const explainQueries = useQueries({
+    queries: explainTickers.map(t => ({
+      queryKey: ['morning-brief-explain', t],
+      queryFn: () => axios.get(`/api/movers/explain?ticker=${encodeURIComponent(t)}&timeframe=1d`).then(r => r.data),
+      enabled: open && !!t,
+      staleTime: 30 * 60 * 1000,
+      retry: 0,
+    })),
+  })
+  const explained = useMemo(
+    () => explainTickers.map((ticker, i) => {
+      const d = explainQueries[i]?.data as MoverExplain | undefined
+      const attr = insights.dayAttribution.find(a => a.ticker === ticker)
+      return { ticker, attr, data: d, loading: explainQueries[i]?.isLoading ?? false }
+    }).filter(r => r.attr),
+    [explainTickers, explainQueries.map(q => q.dataUpdatedAt).join(','), insights.dayAttribution],
   )
 
   // Book news: one headline per top weight (max 5 names) — prefetch while Home is open.
@@ -895,6 +941,55 @@ export default function MorningBrief({
                             }}>{pctStr(a.pct1d)}</span>
                           </button>
                         ))}
+                      </div>
+                    </section>
+                  )}
+
+                  {explained.length > 0 && (
+                    <section>
+                      <SectionCap icon={Newspaper} label="Why your book moved" />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>
+                        {explained.map((r, i) => {
+                          const move = r.attr!.pct1d
+                          const rel = r.data?.relative
+                          const noise = r.data?.verdict === 'noise'
+                          const summary = r.data?.narrative?.summary
+                          // A move the whole sector made is not news about the
+                          // name, and saying so is more useful than a headline.
+                          const sectorLed = rel?.sector_pct != null && rel.excess_vs_market != null
+                            && Math.abs(rel.excess_vs_market) < Math.abs(move) / 2
+                          return (
+                            <div key={r.ticker} style={{
+                              display: 'grid', gridTemplateColumns: '58px 1fr', gap: 10, alignItems: 'start',
+                              background: i % 2 ? 'transparent' : 'rgba(255,255,255,0.02)',
+                              padding: '8px 6px',
+                            }}>
+                              <button type="button"
+                                onClick={() => { dismiss(); navigate(`/mover-radar?ticker=${r.ticker}`) }}
+                                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}>
+                                <div style={{ fontFamily: F.mono, fontSize: 11, fontWeight: 700, color: F.gold }}>{r.ticker}</div>
+                                <div style={{ fontFamily: F.mono, fontSize: 10, color: move >= 0 ? F.pos : F.neg, marginTop: 2 }}>
+                                  {move >= 0 ? '+' : ''}{move.toFixed(1)}%
+                                </div>
+                              </button>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontFamily: F.sans, fontSize: 13, lineHeight: 1.4, color: F.bright }}>
+                                  {r.loading ? 'Reading the tape and the wires...'
+                                    : noise ? 'Nothing in the news, filings or social explains this one. It is inside the range this name moves on a normal day.'
+                                    : summary || 'No explanation could be assembled for this move.'}
+                                </div>
+                                <div style={{ fontFamily: F.mono, fontSize: 10, color: F.muted, marginTop: 3 }}>
+                                  {money(r.attr!.dayPnl)} of your day
+                                  {sectorLed && rel?.sector_etf ? ` · ${rel.sector_etf} ${rel.sector_pct! >= 0 ? '+' : ''}${rel.sector_pct!.toFixed(1)}%, so this was the sector` : ''}
+                                  {r.data?.narrative?.confidence ? ` · ${r.data.narrative.confidence} confidence` : ''}
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <div style={{ marginTop: 8, fontFamily: F.sans, fontSize: 11, color: F.muted }}>
+                        Biggest movers in your book, explained from news and filings. Click a name for the full read.
                       </div>
                     </section>
                   )}
