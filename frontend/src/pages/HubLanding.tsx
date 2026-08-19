@@ -3,6 +3,7 @@ import { Navigate, useParams, useNavigate } from 'react-router-dom'
 import { Search, LayoutGrid, X } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import { HUBS, hubBySlug, type HubTool } from '../lib/hubs'
+import ShellActions from '../components/ShellActions'
 
 const F = {
   gold: 'var(--theme-primary, #c9a84c)',
@@ -108,6 +109,7 @@ export default function HubLanding() {
               <LayoutGrid size={13} style={{ color: 'var(--theme-bg, #101c2e)' }} />
               <span style={{ fontFamily: F.sans, fontSize: 11.5, fontWeight: 700, color: 'var(--theme-bg, #101c2e)', whiteSpace: 'nowrap' }}>My Dashboard</span>
             </button>
+            <ShellActions />
           </div>
         </div>
 

@@ -13,6 +13,7 @@ import { formatLocalTime } from '../lib/time'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip, chartClip, textClip } from '../lib/reportCaptureRegistry'
+import ShellActions from '../components/ShellActions'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface Candle { time: number; open: number; high: number; low: number; close: number; volume: number }
@@ -1496,6 +1497,7 @@ export function ChartStudioContent() {
         <span style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '0.1em', color: 'var(--theme-secondary, #8099b0)' }}>{overlayDefs.length + LANE_IDS.length + 3} TIME-SERIES FEEDS</span>
           <LiveClock />
+          <ShellActions />
         </span>
       </div>
 

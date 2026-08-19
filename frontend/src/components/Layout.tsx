@@ -9,7 +9,6 @@ import Footer from './Footer'
 import AlphaMark from './AlphaMark'
 import TickerLinkChip from './TickerLinkChip'
 import AlertToastQueue from './AlertToastQueue'
-import ShellActions from './ShellActions'
 import { useAlertSocket, type AlertPayload } from '../hooks/useAlertSocket'
 import useIsMobile from '../hooks/useIsMobile'
 import { useTheme } from '../contexts/ThemeContext'
@@ -135,7 +134,6 @@ export default function Layout({ children }: LayoutProps) {
         <main id="main-content" className="ft-mobile-main" style={{ flex: 1, overflowY: 'auto', background: 'var(--theme-bg, #0a1628)' }}>
           <div className={`ft-mobile-content${location.pathname === '/dashboard' ? ' ft-mobile-dashboard' : ''}`} style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
             <div className="ft-mobile-page" style={{ flex: 1, minWidth: 0 }}>
-              <ShellActions />
               {children}
             </div>
             {location.pathname !== '/dashboard' && <Footer />}
@@ -316,7 +314,6 @@ export default function Layout({ children }: LayoutProps) {
           // Sidebar collapsed → Chart Studio goes full-bleed: no gutters, no footer,
           // maximal chart area edge-to-edge.
           <div style={{ minHeight: '100vh' }}>
-            <div style={{ padding: '10px 12px 0' }}><ShellActions /></div>
             {children}
           </div>
         ) : location.pathname === '/options-mm-2' || location.pathname === '/fixed-income-mm-2' ? (
@@ -328,14 +325,12 @@ export default function Layout({ children }: LayoutProps) {
           // Map cockpit, Chart Studio and the MM terminal want the full main
           // width: gutters waste chart area.
           <div className="px-4 py-4" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-            <ShellActions />
             <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
             <Footer />
           </div>
         ) : (
           // Tools own the page: full width with modest gutters, no centered max-width column.
           <div className="w-full px-5 2xl:px-8 py-5" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', boxSizing: 'border-box' }}>
-            <ShellActions />
             <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
             <Footer />
           </div>

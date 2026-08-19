@@ -15,6 +15,7 @@ import { formatLocalTime } from '../lib/time'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip, chartClip } from '../lib/reportCaptureRegistry'
+import ShellActions from '../components/ShellActions'
 
 // Weight models — how a front-end funds shock decays across meetings / tenors.
 const FED_WEIGHTS = [1.0, 0.9, 0.7, 0.5, 0.3, 0.1]
@@ -648,6 +649,7 @@ export function FedRatesContent() {
             </span>
           )}
           <LiveClock />
+          <ShellActions />
         </div>
       </div>
 

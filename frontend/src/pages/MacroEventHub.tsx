@@ -14,6 +14,7 @@ import useIsMobile from '../hooks/useIsMobile'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip } from '../lib/reportCaptureRegistry'
+import ShellActions from '../components/ShellActions'
 
 interface EventsResponse { events: MacroEvent[]; source: string; note?: string }
 interface AlertRow { id: string; condition: string; payload: string | null }
@@ -213,6 +214,7 @@ function MacroEventHubContent() {
               <Stat value={stats.upcoming} label="Upcoming" color={T.gold} />
               <Stat value={stats.high} label="High Impact" color={T.neg} />
             </div>
+            <ShellActions />
           </div>
 
           <MacroToolbar filters={{ ...filters, from: fromEff, to: toEff }} onChange={setFilters} count={filtered.length} />

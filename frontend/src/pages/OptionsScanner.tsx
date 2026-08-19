@@ -17,6 +17,7 @@ import TickerBasket from '../components/TickerBasket'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip, chartClip } from '../lib/reportCaptureRegistry'
+import ShellActions from '../components/ShellActions'
 
 // Options Scanner — Chain Scanner and Options Flow as one surface.
 //
@@ -269,12 +270,15 @@ export function OptionsScannerContent() {
           margin: 0, fontFamily: MONO, fontSize: 14, fontWeight: 700,
           letterSpacing: '0.18em', textTransform: 'uppercase', color: T.gold, lineHeight: 1.3,
         }}>Options Scanner</h1>
-        {scan && (
-          <span style={{ fontFamily: MONO, fontSize: 10, color: T.muted, letterSpacing: '0.04em' }}>
-            {scan.count} contracts cleared · {scan.scanned.length} name{scan.scanned.length === 1 ? '' : 's'}
-            {asOf ? ` · as of ${asOf} ET` : ''}
-          </span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {scan && (
+            <span style={{ fontFamily: MONO, fontSize: 10, color: T.muted, letterSpacing: '0.04em' }}>
+              {scan.count} contracts cleared · {scan.scanned.length} name{scan.scanned.length === 1 ? '' : 's'}
+              {asOf ? ` · as of ${asOf} ET` : ''}
+            </span>
+          )}
+          <ShellActions />
+        </div>
       </div>
 
       {/* 2 + 3 · ticker basket, with the scan params sharing its action row */}

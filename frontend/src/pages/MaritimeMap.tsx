@@ -14,6 +14,7 @@ import PageWrapper from '../components/PageWrapper'
 import { readToken } from '../lib/theme'
 import { formatLocalTime } from '../lib/time'
 import { TOOLTIP_STYLE } from '../components/ChartTooltip'
+import ShellActions from '../components/ShellActions'
 
 // Leaflet SVG/canvas can't consume CSS var(), so resolve theme tokens to concrete
 // values at runtime (recomputed on preset change). Semantic categories map to the
@@ -724,6 +725,7 @@ export function MaritimeMapContent() {
             <span style={{ width: 5, height: 5, borderRadius: '50%', background: C.positive, boxShadow: `0 0 7px ${C.positive}`, animation: reduced ? undefined : 'gfm-pulse 2.6s infinite' }} />
             <span style={{ fontFamily: MONO, fontSize: 9, color: SEC }}>LIVE · {vess.data?.count ?? 0} · {clock}</span>
           </span>
+          <ShellActions />
         </motion.div>
 
         {/* ── Left column: view panel on top, legend pinned to the bottom.

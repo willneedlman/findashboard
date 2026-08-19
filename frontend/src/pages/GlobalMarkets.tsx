@@ -9,6 +9,7 @@ import useIsMobile from '../hooks/useIsMobile'
 import { formatLocalTime, localDateInputValue, localTimeZone } from '../lib/time'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
+import ShellActions from '../components/ShellActions'
 
 // Global Markets board (hifi handoff "2a"): a pinnable Spotlight of benchmark
 // cards over flat editorial tables — indices by region, FX, commodities, US
@@ -306,6 +307,7 @@ export default function GlobalMarkets() {
               {WINDOWS.map(item => <button key={item.key} onClick={() => setWindow(item.key)} aria-pressed={window === item.key}
                 style={{ border: 'none', background: window === item.key ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' : 'transparent', color: window === item.key ? GOLD : 'var(--theme-secondary, #8099b0)', cursor: 'pointer', padding: '4px 6px', fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.04em' }}>{item.label}</button>)}
             </span>}
+            <ShellActions />
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap' }}>

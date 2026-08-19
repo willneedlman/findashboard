@@ -1,3 +1,5 @@
+import ShellActions from './ShellActions'
+
 interface PageHeaderProps {
   title: string
   /** Right-aligned status or context line — as-of stamps, row counts, the
@@ -11,16 +13,17 @@ export default function PageHeader({ title, meta, actions }: PageHeaderProps) {
   return (
     <div className="ft-page-header">
       <h1 className="ft-page-title">{title}</h1>
-      {(meta || actions) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
-          {meta && (
-            <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-secondary)', letterSpacing: '0.04em' }}>
-              {meta}
-            </div>
-          )}
-          {actions && <div className="ft-page-actions" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{actions}</div>}
-        </div>
-      )}
+      {/* The shell cluster closes this row rather than floating above it, so it
+          reads as page chrome and never lands on top of the meta stamp. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
+        {meta && (
+          <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-secondary)', letterSpacing: '0.04em' }}>
+            {meta}
+          </div>
+        )}
+        {actions && <div className="ft-page-actions" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{actions}</div>}
+        <ShellActions />
+      </div>
     </div>
   )
 }

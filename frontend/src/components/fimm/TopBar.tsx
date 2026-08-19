@@ -14,6 +14,7 @@
 import { T, alpha } from '../../lib/theme'
 import { MONO, LABEL, Btn, Seg, BAD, WARN, pnlColor } from '../mm2/ui'
 import { fmtClock, fmtMoney, type FiEngine, type RiskState } from '../../lib/fimm/engine'
+import ShellActions from '../ShellActions'
 
 const SPEEDS = [1, 5, 10, 25, 100]
 
@@ -80,6 +81,7 @@ export default function TopBar({
             ...MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', padding: '5px 14px',
             cursor: 'pointer', border: `1px solid ${BAD}`, background: alpha(BAD, 16), color: BAD,
           }}>KILL</button>}
+        <ShellActions />
       </div>
     </header>
   )

@@ -17,6 +17,7 @@ import { formatScreenerFilterDisplay, screenerAsOfLabel, screenerFilterPlacehold
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip, textClip } from '../lib/reportCaptureRegistry'
+import ShellActions from '../components/ShellActions'
 
 const C = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', surface: 'var(--theme-surface, #0d1826)',
@@ -602,9 +603,12 @@ export default function StockScreener() {
         {/* title bar */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', padding: isMobile ? '12px' : '15px 24px', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 22%, transparent)', flex: 'none' }}>
           <span style={{ fontFamily: C.sans, fontSize: 14, fontWeight: 700, letterSpacing: '0.22em', textTransform: 'uppercase', color: C.gold }}>Stock Screener</span>
-          <span style={{ fontFamily: C.mono, fontSize: 10, letterSpacing: '0.04em', color: C.dim }}>
-            {universeLabel.toUpperCase()} · {data ? `${data.total} MATCHES · ${screenerAsOfLabel(data.priceAsOf, data.priceSources)}` : 'READY'}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <span style={{ fontFamily: C.mono, fontSize: 10, letterSpacing: '0.04em', color: C.dim }}>
+              {universeLabel.toUpperCase()} · {data ? `${data.total} MATCHES · ${screenerAsOfLabel(data.priceAsOf, data.priceSources)}` : 'READY'}
+            </span>
+            <ShellActions />
+          </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'stretch', flex: 1, minHeight: 0 }}>

@@ -103,7 +103,6 @@
   .ft-page-header {
     margin-bottom: 24px;
     padding-bottom: 14px;
-    padding-right: 68px;
     border-bottom: 1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent);
     display: flex;
     align-items: flex-start;
@@ -599,7 +598,6 @@
     gap: 10px;
     margin-bottom: 16px;
     padding-bottom: 10px;
-    padding-right: 68px;
   }
 
   .ft-page-actions {

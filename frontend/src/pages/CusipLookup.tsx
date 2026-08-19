@@ -13,6 +13,7 @@ import {
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip, textClip } from '../lib/reportCaptureRegistry'
+import ShellActions from '../components/ShellActions'
 
 const G = 'var(--theme-primary, #c9a84c)'
 const SURFACE = 'var(--theme-surface, #0d1826)'
@@ -351,9 +352,12 @@ export default function CusipLookup() {
     <PageWrapper>
       <div className="mx-auto w-full max-w-[1180px] 2xl:max-w-[1440px]" style={{ background: 'var(--theme-bg, #0a1422)', border: `1px solid ${BORDER}` }}>
         {/* header */}
-        <div style={{ padding: '18px 22px 12px', borderBottom: `1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)` }}>
-          <div style={{ ...EYEBROW, letterSpacing: '0.22em' }}>FIXED INCOME · REFERENCE</div>
-          <div style={{ fontFamily: MONO, fontSize: 19, fontWeight: 700, letterSpacing: '0.2em', color: G, marginTop: 4 }}>BOND LOOKUP</div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, padding: '18px 22px 12px', borderBottom: `1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)` }}>
+          <div>
+            <div style={{ ...EYEBROW, letterSpacing: '0.22em' }}>FIXED INCOME · REFERENCE</div>
+            <div style={{ fontFamily: MONO, fontSize: 19, fontWeight: 700, letterSpacing: '0.2em', color: G, marginTop: 4 }}>BOND LOOKUP</div>
+          </div>
+          <ShellActions />
         </div>
 
         {/* mode tabs */}

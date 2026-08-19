@@ -10,9 +10,12 @@ import {
 } from '../lib/reportCaptureRegistry'
 import { sendToReportCreator, type ClipDraft } from '../lib/reportCreator'
 
-// Shell chrome for every tool page: clip the open view into a report, and reach
-// settings. Rendered at zero height so the cluster overlays the page's own
-// header row instead of spending a row of vertical budget on two icons.
+// Clip the open view into a report, and reach settings. Belongs INSIDE a page's
+// own header row, at the end of its right-hand cluster — PageHeader places it
+// for the 52 pages that use it, the handful with hand-rolled headers place it
+// themselves. It is deliberately not a floating overlay: hovering it above the
+// page meant it belonged to no page, landed in dead margin on the hub landings,
+// and read as just another widget gear on the dashboard.
 
 const SKIP = new Set([
   '/app',
@@ -50,8 +53,8 @@ function IconButton({ label, onClick, children }: { label: string; onClick: () =
       aria-label={label}
       style={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        width: 26, height: 26, padding: 0,
-        background: T.bg, border: `1px solid ${T.border}`, color: T.muted,
+        width: 24, height: 24, padding: 0, flexShrink: 0,
+        background: 'transparent', border: `1px solid ${T.border}`, color: T.muted,
         cursor: 'pointer', transition: 'color 0.12s ease, border-color 0.12s ease',
       }}
       onMouseEnter={e => { e.currentTarget.style.color = T.gold; e.currentTarget.style.borderColor = T.goldTint(55) }}
@@ -92,17 +95,15 @@ export default function ShellActions() {
   const title = tool?.title ?? entry?.sourceTab ?? 'this tool'
 
   return (
-    <div className="ft-shell-actions" style={{ height: 0, display: 'flex', justifyContent: 'flex-end', position: 'relative', zIndex: 20 }}>
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        {canCapture && (
-          <IconButton label={`Send ${title} to a report`} onClick={capture}>
-            <Send size={13} />
-          </IconButton>
-        )}
-        <IconButton label="Settings" onClick={() => navigate('/settings')}>
-          <Settings size={13} />
+    <div className="ft-shell-actions" style={{ display: 'inline-flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+      {canCapture && (
+        <IconButton label={`Send ${title} to a report`} onClick={capture}>
+          <Send size={12} />
         </IconButton>
-      </div>
+      )}
+      <IconButton label="Settings" onClick={() => navigate('/settings')}>
+        <Settings size={12} />
+      </IconButton>
     </div>
   )
 }

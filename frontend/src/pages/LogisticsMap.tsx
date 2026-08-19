@@ -9,6 +9,7 @@ import 'leaflet/dist/leaflet.css'
 import PageWrapper from '../components/PageWrapper'
 import { readToken } from '../lib/theme'
 import { L, Spark } from '../components/logi'
+import ShellActions from '../components/ShellActions'
 
 // Freight Map — the full-screen supply-chain view. Layers: live cargo ships and
 // cargo flights, air-cargo hubs, all ten chokepoints, and liner-connectivity ports.
@@ -255,6 +256,7 @@ export default function LogisticsMap() {
         <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 520, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 13px', background: panel, border: `1px solid ${L.border}` }}>
           <span style={{ fontFamily: L.mono, fontSize: 13, fontWeight: 700, letterSpacing: '0.18em', color: L.gold }}>FREIGHT MAP</span>
           <span style={{ fontFamily: L.mono, fontSize: 9, color: L.pos }}>● LIVE · {flights.length} flights · {vq.isLoading ? 'loading ships' : vq.isError || !vessels.length ? 'ship feed unavailable' : `${vessels.length} ships`}</span>
+          <ShellActions />
         </div>
 
         {/* Left column: VIEW + LEGEND (bottom) */}

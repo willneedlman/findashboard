@@ -23,6 +23,7 @@ import { Chain, ExpiryStrip, fmtK, type Highlight } from '../components/mm2/Chai
 import { ChainHeader } from '../components/mm2/Center'
 import { Mm2Engine, DEFAULT_CONFIG, DTE_LABELS, STEP_MS, fmtClock, fmtMoney, type Config, type Sample } from '../lib/mm2/engine'
 import { BOTTOM_H } from '../components/mm2/layout'
+import ShellActions from '../components/ShellActions'
 
 const SPEEDS = [1, 5, 10, 25, 100]
 // Everything ran four times too quickly to read. Each labelled speed now
@@ -200,6 +201,7 @@ export default function OptionsMM2() {
               ...MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', padding: '5px 16px',
               cursor: 'pointer', border: `1px solid ${BAD}`, background: alpha(BAD, 16), color: BAD,
             }}>KILL</button>}
+          <ShellActions />
         </div>
       </header>
 
