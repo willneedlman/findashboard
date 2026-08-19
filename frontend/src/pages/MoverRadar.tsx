@@ -60,8 +60,12 @@ const TIMEFRAMES: { key: string; label: string }[] = [
 
 export function MoverRadarContent() {
   const [searchParams] = useSearchParams()
-  const [input, setInput] = useState(searchParams.get('ticker') || 'AAPL')
-  const [ticker, setTicker] = useState<string | null>((searchParams.get('ticker') || 'AAPL').toUpperCase())
+  // No default symbol. Opening the page used to scan AAPL, which spent a news
+  // and filings pull on a name nobody asked about and put an answer on screen
+  // before the question. A ticker handed over in the URL still runs on arrival.
+  const handed = (searchParams.get('ticker') || '').trim().toUpperCase()
+  const [input, setInput] = useState(handed)
+  const [ticker, setTicker] = useState<string | null>(handed || null)
   const [timeframe, setTimeframe] = useState('1d')
   const [evidenceSort, setEvidenceSort] = useState<'relevance' | 'recency'>('relevance')
   const recent = getRecentTickers()
