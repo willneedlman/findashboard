@@ -24,6 +24,9 @@ interface ChartEvents {
   splits: { date: string; ratio: number }[]
 }
 
+const CHART_TYPES = [{ key: 'candles', label: 'Candles' }, { key: 'line', label: 'Line' }] as const
+type ChartType = typeof CHART_TYPES[number]['key']
+
 const TFS = ['1m', '5m', '15m', '1h', '4h', '1d', '1wk'] as const
 type TF = typeof TFS[number]
 const INTRADAY: Set<TF> = new Set(['1m', '5m', '15m', '1h', '4h'])
@@ -199,6 +202,7 @@ interface State {
   events: { earnings: boolean; dividends: boolean; splits: boolean }
   overlays: string[]
   compares: string[]
+  chartType: ChartType
   params: Params
 }
 type Action =
@@ -212,6 +216,7 @@ type Action =
   | { type: 'layerCfg'; id: string; patch: Partial<LayerCfg> }
   | { type: 'toggleRail' } | { type: 'toggleInspector' }
   | { type: 'param'; k: keyof Params; v: number }
+  | { type: 'chartType'; v: ChartType }
 
 // Clean slate by default: candles and volume only, every overlay opt-in.
 const DEFAULT: State = {
@@ -223,6 +228,7 @@ const DEFAULT: State = {
   mas: [],
   events: { earnings: false, dividends: false, splits: false },
   overlays: [], compares: [],
+  chartType: 'candles',
   params: { bbP: 20, bbK: 2, rsiP: 14, macdF: 12, macdS: 26, macdSig: 9, hvP: 30 },
 }
 
@@ -254,6 +260,7 @@ function reducer(s: State, a: Action): State {
     case 'toggleRail': return { ...s, railOpen: !s.railOpen }
     case 'toggleInspector': return { ...s, inspectorOpen: !s.inspectorOpen }
     case 'param': return { ...s, params: { ...s.params, [a.k]: a.v } }
+    case 'chartType': return { ...s, chartType: a.v }
   }
 }
 
@@ -272,7 +279,8 @@ const load = (): State => {
     // Old shape: rsi/macd/volume lived in `ind`; lanes did not exist.
     const lanes = { ...DEFAULT.lanes, ...(raw.lanes ?? {}), ...(raw.ind?.rsi != null ? { rsi: raw.ind.rsi } : {}), ...(raw.ind?.macd != null ? { macd: raw.ind.macd } : {}), ...(raw.ind?.volume != null ? { volume: raw.ind.volume } : {}) }
     const ind = { ...DEFAULT.ind, ...(raw.ind?.bb != null ? { bb: raw.ind.bb } : {}), ...(raw.ind?.vwap != null ? { vwap: raw.ind.vwap } : {}), ...(raw.ind?.gflip != null ? { gflip: raw.ind.gflip } : {}), ...(raw.ind?.gexProfile != null ? { gexProfile: raw.ind.gexProfile } : {}) }
-    return { ...DEFAULT, ...raw, range, mas, ind, lanes, laneOrder, events: { ...DEFAULT.events, ...raw.events }, params: { ...DEFAULT.params, ...raw.params } }
+    const chartType: ChartType = raw.chartType === 'line' ? 'line' : DEFAULT.chartType
+    return { ...DEFAULT, ...raw, range, mas, ind, lanes, laneOrder, chartType, events: { ...DEFAULT.events, ...raw.events }, params: { ...DEFAULT.params, ...raw.params } }
   } catch { return DEFAULT }
 }
 
@@ -561,7 +569,7 @@ const LANE_DEFS: { id: LaneId; h: number; label: string }[] = [
 // ── Main component ───────────────────────────────────────────────────────────
 export function ChartStudioContent() {
   const [state, dispatch] = useReducer(reducer, undefined, load)
-  const { ticker, assetClass, tf, range, ind, lanes, laneOrder, layerCfg, railOpen, inspectorOpen, mas, events, overlays, compares, params } = state
+  const { ticker, assetClass, tf, range, ind, lanes, laneOrder, layerCfg, railOpen, inspectorOpen, mas, events, overlays, compares, chartType, params } = state
   const cfgOf = (id: string): LayerCfg => ({ size: 'M', place: 'chart', ...layerCfg[id] })
   // Volume defaults to its own lane (unlike other overlays, which default to
   // the chart) so existing layouts don't change until a user opts in.
@@ -958,6 +966,14 @@ export function ChartStudioContent() {
       upColor: C.pos, downColor: C.neg, borderUpColor: C.pos, borderDownColor: C.neg,
       wickUpColor: C.pos, wickDownColor: C.neg, priceLineColor: C.gold, priceLineWidth: 1,
     })
+    // Both series always hold the data and only visibility flips. The candle
+    // series stays the coordinate authority (price lines, the gamma-flip line
+    // and the GEX overlay all call priceToCoordinate on it) and both sit on the
+    // same right price scale, so the mapping is identical in either mode.
+    const lineS = main.addLineSeries({
+      color: C.gold, lineWidth: 2, priceLineColor: C.gold, priceLineWidth: 1,
+      crosshairMarkerVisible: true, visible: false,
+    })
     const bbU = main.addLineSeries({ color: `${C.text}8c`, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
     const bbL = main.addLineSeries({ color: `${C.text}8c`, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
     const bbM = main.addLineSeries({ color: `${C.text}59`, lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
@@ -980,7 +996,7 @@ export function ChartStudioContent() {
     const macdSigS = laneCharts.macd?.addLineSeries({ color: C.gold, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
     const ivS = laneCharts.iv?.addAreaSeries({ lineColor: C.gold, topColor: `${C.gold}24`, bottomColor: 'transparent', lineWidth: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
     charts.current = { main, ...laneCharts }
-    series.current = { candle, bbU, bbL, bbM, vwapS: vwapS!, volS: volS!, rsiS: rsiS!, macdHist: macdHist!, macdLine: macdLine!, macdSigS: macdSigS!, ivS: ivS! }
+    series.current = { candle, lineS, bbU, bbL, bbM, vwapS: vwapS!, volS: volS!, rsiS: rsiS!, macdHist: macdHist!, macdLine: macdLine!, macdSigS: macdSigS!, ivS: ivS! }
 
     // One-way time-range sync: the price panel drives, lanes follow. (Logical
     // sync breaks once overlays add weekend time points; two-way sync lets a
@@ -1098,6 +1114,7 @@ export function ChartStudioContent() {
     setTimeout(() => { applyingSpan.current = false }, 200)
     try {
       s.candle.setData(candles.map(c => ({ time: c.time as Time, open: c.open, high: c.high, low: c.low, close: c.close })))
+      s.lineS?.setData(candles.map(c => ({ time: c.time as Time, value: c.close })))
       candleStore.current = new Map(candles.map(c => [c.time, c]))
       barCountRef.current = candles.length
       store.current.set('close', toSorted(candles.map(c => ({ time: c.time, value: c.close }))))
@@ -1394,6 +1411,15 @@ export function ChartStudioContent() {
   }, [ind.gexProfile])
 
   // ── Inspector data ──
+  // Candles vs close-only line. Both series keep their data so switching is a
+  // visibility flip with no refetch and no reset of the visible range.
+  useEffect(() => {
+    const s = series.current
+    if (!s.candle || !s.lineS) return
+    s.candle.applyOptions({ visible: chartType === 'candles' })
+    s.lineS.applyOptions({ visible: chartType === 'line' })
+  }, [chartType, ticker, tf])
+
   const lastC = candles.length ? candles[candles.length - 1] : undefined
   const inspectT = crossTime ?? lastC?.time ?? null
   const inspectC = inspectT != null ? (candleStore.current.get(inspectT) ?? lastC) : lastC
@@ -1504,6 +1530,7 @@ export function ChartStudioContent() {
       {/* ── Toolbar ── */}
       <div style={{ padding: '9px 20px', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.06))', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         <Seg options={ASSET_CLASSES.map(a => ({ key: a.key, label: a.label }))} value={assetClass} onChange={v => dispatch({ type: 'assetClass', v })} ariaLabel="Asset class" />
+        <Seg options={CHART_TYPES.map(c => ({ key: c.key, label: c.label }))} value={chartType} onChange={v => dispatch({ type: 'chartType', v })} ariaLabel="Chart type" />
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <input value={tickerDraft} onChange={e => setTickerDraft(e.target.value.toUpperCase())}
             onKeyDown={e => e.key === 'Enter' && submitTicker()} spellCheck={false} aria-label="Chart symbol"

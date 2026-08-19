@@ -13,6 +13,7 @@ import { useAlertSocket, type AlertPayload } from '../hooks/useAlertSocket'
 import useIsMobile from '../hooks/useIsMobile'
 import { useTheme } from '../contexts/ThemeContext'
 import { HUBS, ALL_TOOLS, hubForLocation, type Hub, type HubTool } from '../lib/hubs'
+import ShortcutKey from './ShortcutKey'
 
 // One source for the shell's two widths. DESIGN.md and the print stylesheet both
 // restated them, and the doc had drifted to a value the shell never animates to.
@@ -239,9 +240,7 @@ export default function Layout({ children }: LayoutProps) {
               {!collapsed && <span style={{ fontSize: 12 }}>Search…</span>}
             </span>
             {!collapsed && (
-              <span style={{ fontFamily: '-apple-system, "Segoe UI", system-ui, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.05em', lineHeight: '14px', color: 'var(--theme-secondary, #8099b0)', border: '1px solid var(--theme-border, rgba(255,255,255,0.1))', padding: '1px 6px' }}>
-                {/Mac/i.test(navigator.platform) ? '⌘K' : 'Ctrl K'}
-              </span>
+              <ShortcutKey />
             )}
           </button>
         </div>

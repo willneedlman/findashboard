@@ -17,6 +17,7 @@ import { wordMatch, tickerFromQuery } from '../lib/search'
 import { getRecentTickers, recordRecentTicker } from '../lib/recentTickers'
 import { formatLocalTime, localTimeZone, todayLocal } from '../lib/time'
 import EmptyState from '../components/EmptyState'
+import ShortcutKey from '../components/ShortcutKey'
 
 const F = {
   gold: 'var(--theme-primary, #c9a84c)',
@@ -744,7 +745,7 @@ export default function Home() {
               <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={onSearchKey} onFocus={() => setSearchFocus(true)} onBlur={() => setSearchFocus(false)} aria-label="Search tickers or tools" placeholder="Search tickers or tools" style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: F.text, fontFamily: F.sans, fontSize: 16 }} />
               {q
                 ? <button onClick={() => setQ('')} aria-label="Clear" style={{ background: 'none', border: 'none', cursor: 'pointer', color: F.muted, display: 'flex', padding: 0 }}><X size={14} /></button>
-                : <span style={{ fontFamily: F.mono, fontSize: 10, color: F.muted, border: `1px solid ${F.border}`, padding: '2px 6px', borderRadius: 3, whiteSpace: 'nowrap' }}>⌘K</span>}
+                : <ShortcutKey />}
             </div>
             {!ql && recentTickers.length > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 18, marginTop: 18, flexWrap: 'wrap' }}>
