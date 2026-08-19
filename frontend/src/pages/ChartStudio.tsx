@@ -111,7 +111,7 @@ const tickerOverlay = (sym: string, tf: TF): OverlayDef => ({
 const curveSpread = (name: string): OverlayDef => ({
   id: `spread:${name}`, label: `${name} spread`, src: 'FRED', style: 'line', cadence: 'daily · 1h cache',
   fetch: async () => {
-    const r = await axios.get('/api/rates/curve-spreads')
+    const r = await axios.get('/api/rates/curve-spreads?lookback=3650')
     const s = r.data.spreads.find((x: any) => x.name === name)
     return (s?.history ?? []).map((p: any) => ({ time: toEpoch(p.date), value: p.bp }))
   },

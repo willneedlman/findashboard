@@ -898,20 +898,26 @@ _SPREAD_DEFS = [
 
 
 @router.get("/curve-spreads")
-@cached(ttl=300, maxsize=1)
-def curve_spreads():
-    """Current level and ~6-month daily trend for the three headline curve
-    spreads, in basis points. Built from the same yfinance anchor closes the
-    yield-curve history uses (2Y/3M interpolated from the anchor set)."""
-    start = (date.today() - timedelta(days=200)).isoformat()
+@cached(ttl=300, maxsize=8)
+def curve_spreads(lookback: int = 200):
+    """Current level and daily trend for the three headline curve spreads, in
+    basis points, interpolated from the constant-maturity anchor set.
+
+    `lookback` is calendar days. It defaults to ~6 months because `low` and
+    `high` are computed over the same window and the Rate Engine panel reads
+    them as a six-month range; chart overlays pass a longer window for depth."""
+    lookback = max(30, min(int(lookback), 365 * 10))
+    start = (date.today() - timedelta(days=lookback)).isoformat()
     end = date.today().isoformat()
     syms = tuple(v[0] for v in _YF_ANCHOR_TICKERS.values())
-    try:
-        raw = get_download(syms, start=start, end=end)
-        close = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
-        close = close.ffill().dropna()
-    except Exception:
-        close = pd.DataFrame()
+    close = _fred_anchor_history(lookback).dropna()
+    if close.empty:
+        try:
+            raw = get_download(syms, start=start, end=end)
+            close = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
+            close = close.ffill().dropna()
+        except Exception:
+            close = pd.DataFrame()
 
     spreads = []
     for name, long_t, short_t in _SPREAD_DEFS:
@@ -927,7 +933,9 @@ def curve_spreads():
             lo = _interp_point(anchors, _FULL_TENOR_YEARS[long_t])
             sh = _interp_point(anchors, _FULL_TENOR_YEARS[short_t])
             series.append({"date": str(dt.date()), "bp": round((lo - sh) * 100, 1)})
-        series = series[-126:]
+        # Trim to the requested window rather than a fixed 126, which used to
+        # cap every caller at six months no matter how much history it asked for.
+        series = series[-(int(lookback * 252 / 365) + 5):]
         vals = [p["bp"] for p in series]
         spreads.append({
             "name": name,
@@ -1482,6 +1490,50 @@ def credit_spreads(lookback: int = 365):
 
 
 _YF_ANCHOR_TICKERS = {"3M": ("^IRX", 0.25), "5Y": ("^FVX", 5.0), "10Y": ("^TNX", 10.0), "30Y": ("^TYX", 30.0)}
+
+# Yahoo caps the ^TNX / ^IRX / ^FVX / ^TYX family at roughly ONE MONTH of daily
+# history no matter how long a window is requested, which silently truncated
+# every curve chart and spread history to a month. FRED carries the same
+# constant-maturity yields as full daily series, so it leads here and yfinance
+# stays as the fallback for when there is no FRED key.
+_FRED_ANCHOR_SERIES = {"^IRX": "DGS3MO", "^FVX": "DGS5", "^TNX": "DGS10", "^TYX": "DGS30"}
+
+
+def _fred_anchor_history(days: int) -> pd.DataFrame:
+    """Daily anchor yields framed exactly like the yfinance `close` frame:
+    a DatetimeIndex and one column per yfinance anchor symbol, in percent.
+    Empty frame means no key or no data, and the caller falls back."""
+    if not _FRED_KEY:
+        return pd.DataFrame()
+    start = (date.today() - timedelta(days=days)).isoformat()
+
+    def fetch(item: tuple[str, str]) -> tuple[str, pd.Series]:
+        sym, sid = item
+        try:
+            r = requests.get(
+                "https://api.stlouisfed.org/fred/series/observations",
+                params={"series_id": sid, "observation_start": start,
+                        "api_key": _FRED_KEY, "file_type": "json", "sort_order": "asc"},
+                timeout=8,
+            )
+            obs = {pd.Timestamp(o["date"]): float(o["value"])
+                   for o in r.json().get("observations", [])
+                   if o.get("value") not in (".", "", None)}
+            return sym, pd.Series(obs, dtype=float)
+        except Exception:
+            return sym, pd.Series(dtype=float)
+
+    try:
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            cols = dict(ex.map(fetch, _FRED_ANCHOR_SERIES.items()))
+    except Exception:
+        return pd.DataFrame()
+    frame = pd.DataFrame({k: v for k, v in cols.items() if not v.empty})
+    if frame.empty:
+        return pd.DataFrame()
+    # ffill only: a leading NaN must stay NaN so an anchor that starts late is
+    # not back-filled with a rate it never printed.
+    return frame.sort_index().ffill()
 _FULL_TENOR_YEARS  = {"1M": 1/12, "3M": 0.25, "6M": 0.5, "1Y": 1.0, "2Y": 2.0,
                       "3Y": 3.0,  "5Y": 5.0,  "7Y": 7.0, "10Y": 10.0, "20Y": 20.0, "30Y": 30.0}
 
@@ -1525,12 +1577,14 @@ def yield_curve_history():
     end   = date.today().isoformat()
     syms  = tuple(v[0] for v in _YF_ANCHOR_TICKERS.values())
 
-    try:
-        raw = get_download(syms, start=start, end=end)
-        close = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
-        close = close.ffill()
-    except Exception:
-        close = pd.DataFrame()
+    close = _fred_anchor_history(400)
+    if close.empty:
+        try:
+            raw = get_download(syms, start=start, end=end)
+            close = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
+            close = close.ffill()
+        except Exception:
+            close = pd.DataFrame()
 
     today  = date.today()
     result = {
