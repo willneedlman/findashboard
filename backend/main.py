@@ -29,7 +29,7 @@ from routers import (
     maritime, snapshots, credit, housing,
     portfolio_optimizer, macro_events,
     logistics, factset, comtrade, bcc, official,
-    social, movers, data_audit, admin_files, trade_history,
+    social, movers, data_audit, admin_files, trade_history, brief,
     observatory_boards,
 )
 
@@ -269,6 +269,7 @@ app.include_router(official.router,          prefix="/api/official",          ta
 app.include_router(bcc.router,               prefix="/api/bcc",               tags=["bcc"])
 app.include_router(social.router,            prefix="/api/social",             tags=["social"])
 app.include_router(movers.router,            prefix="/api/movers",             tags=["movers"])
+app.include_router(brief.router,             prefix="/api/brief",              tags=["brief"])
 app.include_router(admin_files.router,       prefix="/api/admin/files",        tags=["admin"])
 
 

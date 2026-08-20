@@ -619,6 +619,52 @@ export default function MorningBrief({
 
   const attr = insights.dayAttribution.slice(0, 6)
   const maxAbsDay = Math.max(1, ...attr.map(a => Math.abs(a.dayPnl)))
+  // The opening paragraph. Everything in this payload was measured somewhere
+  // else on this page, so the model is only asked what they add up to. It runs
+  // after the brief opens and the takeaway bullets stand in until it lands, so
+  // the page is never waiting on it and an outage costs a paragraph.
+  const briefFacts = useMemo(() => {
+    if (!open || positions.length === 0) return null
+    const ready = explained.filter(r => r.data && !r.loading)
+    if (explainTickers.length > 0 && ready.length === 0) return null
+    return {
+      book: {
+        dayPct: +insights.dayPct.toFixed(2),
+        dayPnl: Math.round(insights.dayPnl),
+        namesUp: insights.breadth.up,
+        namesDown: insights.breadth.down,
+        cashWeightPct: +insights.cashWeight.toFixed(1),
+        vsSpyPts: insights.vsSpy ? +insights.vsSpy.alphaPct.toFixed(2) : null,
+        spyPct: insights.vsSpy ? +insights.vsSpy.spyPct.toFixed(2) : null,
+        topWeights: insights.concentration.slice(0, 3).map(c => ({ ticker: c.ticker, weightPct: +c.weight.toFixed(1) })),
+        deepestUnderwater: insights.underwater.slice(0, 2).map(u => ({ ticker: u.ticker, pnlPct: +u.pnlPct.toFixed(1) })),
+      },
+      movers: ready.map(r => ({
+        ticker: r.ticker,
+        pct: +r.attr!.pct1d.toFixed(2),
+        dollars: Math.round(r.attr!.dayPnl),
+        explained: r.data!.verdict !== 'noise',
+        why: r.data!.narrative?.summary ?? null,
+        confidence: r.data!.narrative?.confidence ?? null,
+        sectorEtf: r.data!.relative?.sector_etf ?? null,
+        sectorPct: r.data!.relative?.sector_pct ?? null,
+        excessVsMarket: r.data!.relative?.excess_vs_market ?? null,
+      })),
+      earningsThisWeek: heldEarnings.filter(e => e.days <= 7)
+        .map(e => ({ ticker: e.symbol, inDays: e.days, weightPct: +e.weight.toFixed(1) })),
+      macroThisWeek: macroWeek.slice(0, 3).map(m => ({ label: m.label, inDays: m.days })),
+      alertsArmed: (alerts.data?.alerts ?? []).length,
+    }
+  }, [open, positions.length, insights, explained, explainTickers.length, heldEarnings, macroWeek, alerts.data])
+
+  const summary = useQuery<{ brief: string | null; available: boolean }>({
+    queryKey: ['morning-brief-summary', briefFacts],
+    queryFn: () => axios.post('/api/brief/summary', briefFacts).then(r => r.data),
+    enabled: !!briefFacts,
+    staleTime: 30 * 60 * 1000,
+    retry: 0,
+  })
+
   const wide = !isMobile
   const panelMax = isMobile ? '100%' : 780
 
@@ -768,23 +814,45 @@ export default function MorningBrief({
                 }}>
                   {insights.headline}
                 </p>
-                {insights.takeaways.length > 0 && (
-                  <ul style={{
-                    margin: '14px 0 0', padding: '12px 0 0', listStyle: 'none',
-                    borderTop: `1px solid ${F.border}`,
-                    display: 'flex', flexDirection: 'column', gap: 8,
-                  }}>
-                    {insights.takeaways.map((t, i) => (
-                      <li key={i} style={{
-                        display: 'grid', gridTemplateColumns: '12px 1fr', gap: 10,
-                        alignItems: 'start', fontFamily: F.sans, fontSize: 12.5, lineHeight: 1.4, color: F.sec,
-                      }}>
-                        <span style={{ color: F.muted, lineHeight: 1.4, fontSize: 11 }}>·</span>
-                        <span style={{ minWidth: 0 }}>{t}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                {/* One paragraph over the whole book, not a bullet per fact.
+                    The deterministic takeaways stand in until it lands and stay
+                    if it never does, so this strip is never empty. */}
+                <div style={{
+                  marginTop: 14, paddingTop: 12, borderTop: `1px solid ${F.border}`,
+                }}>
+                  {summary.data?.brief ? (
+                    <p style={{
+                      margin: 0, fontFamily: F.sans, fontSize: wide ? 14 : 13,
+                      lineHeight: 1.55, color: F.sec, maxWidth: '92ch',
+                    }}>{summary.data.brief}</p>
+                  ) : insights.takeaways.length > 0 ? (
+                    <p style={{
+                      margin: 0, fontFamily: F.sans, fontSize: wide ? 14 : 13,
+                      lineHeight: 1.55, color: F.sec, maxWidth: '92ch',
+                    }}>{insights.takeaways.slice(0, 3).join(' ')}</p>
+                  ) : null}
+                  {explainTickers.length > 0 && (
+                    <div style={{
+                      display: 'flex', flexWrap: 'wrap', gap: 14, marginTop: 10,
+                      fontFamily: F.mono, fontSize: 10, color: F.muted,
+                    }}>
+                      {explained.map(r => (
+                        <button key={r.ticker} type="button"
+                          onClick={() => { dismiss(); navigate(`/mover-radar?ticker=${r.ticker}`) }}
+                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', fontFamily: 'inherit', fontSize: 'inherit' }}>
+                          <span style={{ color: F.gold, fontWeight: 700 }}>{r.ticker}</span>
+                          {' '}
+                          <span style={{ color: r.attr!.pct1d >= 0 ? F.pos : F.neg }}>
+                            {r.attr!.pct1d >= 0 ? '+' : ''}{r.attr!.pct1d.toFixed(1)}%
+                          </span>
+                          {' '}{money(r.attr!.dayPnl)}
+                          {r.data?.verdict === 'noise' ? ' · unexplained' : ''}
+                        </button>
+                      ))}
+                      {summary.isFetching && <span>reading the wires...</span>}
+                    </div>
+                  )}
+                </div>
               </section>
 
               {/* Overnight — futures/index context, book+watchlist gap scan.
@@ -941,55 +1009,6 @@ export default function MorningBrief({
                             }}>{pctStr(a.pct1d)}</span>
                           </button>
                         ))}
-                      </div>
-                    </section>
-                  )}
-
-                  {explained.length > 0 && (
-                    <section>
-                      <SectionCap icon={Newspaper} label="Why your book moved" />
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>
-                        {explained.map((r, i) => {
-                          const move = r.attr!.pct1d
-                          const rel = r.data?.relative
-                          const noise = r.data?.verdict === 'noise'
-                          const summary = r.data?.narrative?.summary
-                          // A move the whole sector made is not news about the
-                          // name, and saying so is more useful than a headline.
-                          const sectorLed = rel?.sector_pct != null && rel.excess_vs_market != null
-                            && Math.abs(rel.excess_vs_market) < Math.abs(move) / 2
-                          return (
-                            <div key={r.ticker} style={{
-                              display: 'grid', gridTemplateColumns: '58px 1fr', gap: 10, alignItems: 'start',
-                              background: i % 2 ? 'transparent' : 'rgba(255,255,255,0.02)',
-                              padding: '8px 6px',
-                            }}>
-                              <button type="button"
-                                onClick={() => { dismiss(); navigate(`/mover-radar?ticker=${r.ticker}`) }}
-                                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}>
-                                <div style={{ fontFamily: F.mono, fontSize: 11, fontWeight: 700, color: F.gold }}>{r.ticker}</div>
-                                <div style={{ fontFamily: F.mono, fontSize: 10, color: move >= 0 ? F.pos : F.neg, marginTop: 2 }}>
-                                  {move >= 0 ? '+' : ''}{move.toFixed(1)}%
-                                </div>
-                              </button>
-                              <div style={{ minWidth: 0 }}>
-                                <div style={{ fontFamily: F.sans, fontSize: 13, lineHeight: 1.4, color: F.bright }}>
-                                  {r.loading ? 'Reading the tape and the wires...'
-                                    : noise ? 'Nothing in the news, filings or social explains this one. It is inside the range this name moves on a normal day.'
-                                    : summary || 'No explanation could be assembled for this move.'}
-                                </div>
-                                <div style={{ fontFamily: F.mono, fontSize: 10, color: F.muted, marginTop: 3 }}>
-                                  {money(r.attr!.dayPnl)} of your day
-                                  {sectorLed && rel?.sector_etf ? ` · ${rel.sector_etf} ${rel.sector_pct! >= 0 ? '+' : ''}${rel.sector_pct!.toFixed(1)}%, so this was the sector` : ''}
-                                  {r.data?.narrative?.confidence ? ` · ${r.data.narrative.confidence} confidence` : ''}
-                                </div>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                      <div style={{ marginTop: 8, fontFamily: F.sans, fontSize: 11, color: F.muted }}>
-                        Biggest movers in your book, explained from news and filings. Click a name for the full read.
                       </div>
                     </section>
                   )}
@@ -1273,12 +1292,12 @@ export default function MorningBrief({
                               </span>
                             </div>
                           ))}
-                          <TextLink onClick={() => { dismiss(); navigate('/alerts') }}>Manage alerts →</TextLink>
+                          <TextLink onClick={() => { dismiss(); navigate('/settings?tab=alerts') }}>Manage alerts →</TextLink>
                         </div>
                       ) : (
                         <EmptyLine>
                           No active alerts on held tickers.{' '}
-                          <TextLink onClick={() => { dismiss(); navigate('/alerts') }}>Set one →</TextLink>
+                          <TextLink onClick={() => { dismiss(); navigate('/settings?tab=alerts') }}>Set one →</TextLink>
                         </EmptyLine>
                       )}
                     </section>
