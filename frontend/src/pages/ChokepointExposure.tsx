@@ -85,8 +85,28 @@ export default function ChokepointExposure() {
 function Board({ data }: { data: Resp }) {
   const straits = data.chokepoints
   const stressed = straits.filter(c => c.disruption > 0)
-  const benefit = data.leaders.filter(l => l.score > 0)
   const pressured = data.leaders.filter(l => l.score < 0)
+  // The headline used to name whichever single ticker topped the list, which
+  // reads as arbitrary: FRO and STNG move together because they are the same
+  // trade. Leaders already carry the basket they belong to, so the headline is
+  // the basket, scored by its mean and shown with the count behind it.
+  const baskets = useMemo(() => {
+    const by = new Map<string, { key: string; name: string; scores: number[]; tickers: string[] }>()
+    for (const l of data.leaders) {
+      const key = l.group_key || l.group || 'other'
+      const b = by.get(key) ?? { key, name: l.group || key, scores: [], tickers: [] }
+      b.scores.push(l.score)
+      b.tickers.push(l.ticker)
+      by.set(key, b)
+    }
+    return [...by.values()]
+      .map(b => ({ ...b, mean: b.scores.reduce((a, c) => a + c, 0) / b.scores.length }))
+      .sort((a, b) => b.mean - a.mean)
+  }, [data.leaders])
+  const topBasket = baskets.find(b => b.mean > 0)
+  const worstBasket = [...baskets].reverse().find(b => b.mean < 0)
+  const basketSub = (b?: { mean: number; tickers: string[] }) =>
+    b ? `${b.tickers.length} name${b.tickers.length === 1 ? '' : 's'} · avg ${signed(b.mean, 1)}` : undefined
   const [strait, setStrait] = useState(straits.slice().sort((a, b) => b.disruption - a.disruption)[0]?.id ?? '')
   const [basket, setBasket] = useState('All')
   const [dir, setDir] = useState<'all' | 'tailwind' | 'headwind'>('all')
@@ -241,8 +261,8 @@ function Board({ data }: { data: Resp }) {
   const kpis = [
     { label: 'Chokepoints', value: String(straits.length), tip: { title: 'Chokepoints tracked', body: `The ${straits.length} maritime straits and canals the tool watches. Each is scored for transit stress from IMF PortWatch and the live AIS nowcast.`, source: 'IMF PortWatch + AIS' } },
     { label: 'Under stress', value: String(stressed.length), vc: stressed.length ? T.gold : T.muted, sub: `${straits.filter(c => c.status === 'congested').length} congested · ${straits.filter(c => c.status === 'watch').length} watch`, tip: { title: 'Under stress', body: `Straits whose transits are dropping versus the prior week. ${stressed.length} of ${straits.length} right now — congestion is the disruptive signal that drives the exposure scores.`, source: 'Δ vs prior-week transits' } },
-    { label: 'Top beneficiary', value: benefit[0]?.ticker ?? '—', vc: T.pos, sub: benefit[0] ? `score ${signed(benefit[0].score, 1)}` : undefined, tip: { title: 'Top beneficiary', body: `The name most helped by today's chokepoint stress. ${benefit[0]?.ticker ?? '—'} scores highest because disruption is a tailwind for its basket across the stressed straits.`, source: 'Highest positive score' } },
-    { label: 'Most pressured', value: pressured[0]?.ticker ?? '—', vc: T.neg, sub: pressured[0] ? `score ${signed(pressured[0].score, 1)}` : undefined, tip: { title: 'Most pressured', body: `The name most hurt by today's stress. ${pressured[0]?.ticker ?? '—'} sits behind a stressed strait where disruption is a headwind for its basket.`, source: 'Lowest negative score' } },
+    { label: 'Top beneficiary', value: topBasket?.name ?? '—', vc: T.pos, sub: basketSub(topBasket), tip: { title: 'Top beneficiary', body: topBasket ? `The basket most helped by today's chokepoint stress: ${topBasket.name}, averaging ${signed(topBasket.mean, 1)} across ${topBasket.tickers.join(', ')}. Disruption is a tailwind for these names across the stressed straits.` : 'No basket scores positive against today\u2019s stress.', source: 'Highest mean basket score' } },
+    { label: 'Most pressured', value: worstBasket?.name ?? '—', vc: T.neg, sub: basketSub(worstBasket), tip: { title: 'Most pressured', body: worstBasket ? `The basket most hurt by today's stress: ${worstBasket.name}, averaging ${signed(worstBasket.mean, 1)} across ${worstBasket.tickers.join(', ')}. These sit behind a stressed strait where disruption is a headwind.` : 'No basket scores negative against today\u2019s stress.', source: 'Lowest mean basket score' } },
     { label: 'Names priced', value: String(data.priced), tip: { title: 'Names priced', body: `${data.priced} exposed equities with a live quote attached. Prices are daily closes from yfinance, mapped to straits through the curated exposure map.`, source: 'yfinance closes' } },
   ]
 
@@ -252,8 +272,8 @@ function Board({ data }: { data: Resp }) {
       kpiClip('Chokepoint Exposure', 'Chokepoint Stress Snapshot', [
         { label: 'Chokepoints', value: String(straits.length) },
         { label: 'Under stress', value: String(stressed.length) },
-        { label: 'Top beneficiary', value: benefit[0]?.ticker ?? '—', sub: benefit[0] ? `score ${signed(benefit[0].score, 1)}` : undefined },
-        { label: 'Most pressured', value: pressured[0]?.ticker ?? '—', sub: pressured[0] ? `score ${signed(pressured[0].score, 1)}` : undefined },
+        { label: 'Top beneficiary', value: topBasket?.name ?? '—', sub: basketSub(topBasket) },
+        { label: 'Most pressured', value: worstBasket?.name ?? '—', sub: basketSub(worstBasket) },
         { label: 'Names priced', value: String(data.priced) },
       ]),
       tableClip(
