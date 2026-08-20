@@ -1,0 +1,657 @@
+diff --git a/frontend/src/components/CommandPalette.tsx b/frontend/src/components/CommandPalette.tsx
+index 9b59de16..6ed9c834 100644
+--- a/frontend/src/components/CommandPalette.tsx
++++ b/frontend/src/components/CommandPalette.tsx
+@@ -1,6 +1,6 @@
+ import { useState, useEffect, useRef, useMemo } from 'react'
+ import { useNavigate } from 'react-router-dom'
+-import { HUBS } from '../lib/hubs'
++import { JOBS, TOOLS, toolsForJob } from '../lib/tools'
+ import { setLinkedTicker, TICKER_TOOLS, tickerToolUrl } from '../lib/tickerLink'
+ 
+ interface Cmd { label: string; route?: string; group: string; desc?: string; alias?: string; action?: () => void }
+@@ -20,9 +20,12 @@ const WORKSPACE: Cmd[] = [
+ 
+ const _RAW: Cmd[] = [
+   ...WORKSPACE,
+-  ...HUBS.flatMap(h => [
+-    { label: `${h.label} Hub`, route: `/hub/${h.slug}`, group: 'Hubs', desc: h.tagline },
+-    ...h.tools.map(t => ({ label: t.title, route: t.route, group: h.label, desc: t.desc, alias: ALIASES[t.route] })),
++  { label: 'All tools', route: '/tools', group: 'Browse', desc: `Every one of the ${TOOLS.length} tools, filtered by what you are doing` },
++  // A job row jumps to the index pre-filtered, and its tools are searchable
++  // under that job's name, so typing "value" finds the DCF.
++  ...JOBS.flatMap(j => [
++    { label: j.label, route: `/tools?job=${j.id}`, group: 'Browse', desc: j.blurb },
++    ...toolsForJob(j.id).map(t => ({ label: t.title, route: t.route, group: j.label, desc: t.desc, alias: ALIASES[t.route] })),
+   ]),
+ ]
+ // Dedupe by route (e.g. Portfolio Manager lives in both Workspace and a hub) so
+diff --git a/frontend/src/components/Layout.tsx b/frontend/src/components/Layout.tsx
+index 47f148e7..d078c90b 100644
+--- a/frontend/src/components/Layout.tsx
++++ b/frontend/src/components/Layout.tsx
+@@ -13,7 +13,7 @@ import ReportCaptureToolbar from './ReportCaptureToolbar'
+ import { useAlertSocket, type AlertPayload } from '../hooks/useAlertSocket'
+ import useIsMobile from '../hooks/useIsMobile'
+ import { useTheme } from '../contexts/ThemeContext'
+-import { HUBS, ALL_TOOLS, hubForLocation, type Hub, type HubTool } from '../lib/hubs'
++import { JOBS, TOOLS, toolsForJob, type Job, type Tool } from '../lib/tools'
+ 
+ // One source for the shell's two widths. DESIGN.md and the print stylesheet both
+ // restated them, and the doc had drifted to a value the shell never animates to.
+@@ -33,16 +33,17 @@ export default function Layout({ children }: LayoutProps) {
+   const [drawerOpen, setDrawerOpen] = useState(false)
+   const isAdmin = !!user && ADMIN_USERS.includes(user.username?.toLowerCase())
+ 
+-  const hubLanding = location.pathname.match(/^\/hub\/([^/]+)/)
+-  const activeHub = hubLanding
+-    ? HUBS.find(h => h.slug === hubLanding[1])
+-    : hubForLocation(location.pathname, location.search)
++  // A tool sits in several job groups now, so "the active group" is whichever
++  // one the sidebar has open rather than a single parent derived from the route.
++  const activeTool = TOOLS.find(t =>
++    t.route === location.pathname + location.search
++    || (!t.route.includes('?') && t.route === location.pathname))
+   const isToolActive = (route: string) =>
+     route.includes('?') ? route === location.pathname + location.search : route === location.pathname
+ 
+   useEffect(() => {
+     const route = location.pathname + location.search
+-    const toolName = ALL_TOOLS.find(tool => tool.route === route || (!tool.route.includes('?') && tool.route === location.pathname))?.title
++    const toolName = TOOLS.find(tool => tool.route === route || (!tool.route.includes('?') && tool.route === location.pathname))?.title
+       ?? ({
+         '/app': 'home',
+         '/dashboard': 'dashboard',
+@@ -50,7 +51,7 @@ export default function Layout({ children }: LayoutProps) {
+         '/admin': 'admin',
+         '/settings': 'settings',
+       } as Record<string, string>)[location.pathname]
+-      ?? activeHub?.label
++      ?? activeTool?.title
+       ?? 'terminal'
+     const filenameTool = toolName
+       .toLowerCase()
+@@ -72,7 +73,7 @@ export default function Layout({ children }: LayoutProps) {
+       window.removeEventListener('beforeprint', handleBeforePrint)
+       window.removeEventListener('afterprint', handleAfterPrint)
+     }
+-  }, [activeHub?.label, location.pathname, location.search])
++  }, [activeTool?.title, location.pathname, location.search])
+ 
+   // Favorites are persisted by route path under ft_nav_favorites (unchanged store).
+   const [favorites, setFavorites] = useState<string[]>(() => {
+@@ -85,13 +86,15 @@ export default function Layout({ children }: LayoutProps) {
+       return next
+     })
+   }
+-  const favItems = favorites.map(p => ALL_TOOLS.find(t => t.route === p)).filter((x): x is HubTool => x != null)
++  const favItems = favorites.map(p => TOOLS.find(t => t.route === p)).filter((x): x is Tool => x != null)
+ 
+-  // Independent open/close per hub; the current hub defaults open.
+-  const [open, setOpen] = useState<Record<string, boolean>>(() => ({ [activeHub?.slug ?? 'research']: true }))
++  // Independent open/close per group. A tool belongs to several, so the primary
++  // job (the first it lists) is the one that opens rather than all of them.
++  const primaryJob: Job | undefined = activeTool?.jobs[0]
++  const [open, setOpen] = useState<Record<string, boolean>>(() => ({ [primaryJob ?? 'find']: true }))
+   useEffect(() => {
+-    if (activeHub) setOpen(o => (o[activeHub.slug] ? o : { ...o, [activeHub.slug]: true }))
+-  }, [activeHub?.slug]) // eslint-disable-line react-hooks/exhaustive-deps
++    if (primaryJob) setOpen(o => (o[primaryJob] ? o : { ...o, [primaryJob]: true }))
++  }, [primaryJob])
+ 
+   const [pendingAlerts, setPendingAlerts] = useState<AlertPayload[]>([])
+   const onAlert = useCallback((a: AlertPayload) => {
+@@ -181,10 +184,10 @@ export default function Layout({ children }: LayoutProps) {
+                     {favItems.map(t => <MobileLink key={t.route} to={t.route} icon={t.icon} label={t.title} active={isToolActive(t.route)} isFav onFavToggle={toggleFav} favKey={t.route} />)}
+                   </div>
+                 )}
+-                {HUBS.map(hub => (
+-                  <div key={hub.slug}>
+-                    <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--theme-text-dim, rgba(255,255,255,0.4))', marginTop: 18, marginBottom: 4, paddingLeft: 8, fontFamily: 'var(--theme-sans)' }}>{hub.label}</p>
+-                    {hub.tools.map(t => (
++                {JOBS.map(job => (
++                  <div key={job.id}>
++                    <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--theme-text-dim, rgba(255,255,255,0.4))', marginTop: 18, marginBottom: 4, paddingLeft: 8, fontFamily: 'var(--theme-sans)' }}>{job.label}</p>
++                    {toolsForJob(job.id).map(t => (
+                       <MobileLink key={t.route} to={t.route} icon={t.icon} label={t.title} active={isToolActive(t.route)} isFav={favorites.includes(t.route)} onFavToggle={toggleFav} favKey={t.route} />
+                     ))}
+                   </div>
+@@ -270,17 +273,17 @@ export default function Layout({ children }: LayoutProps) {
+             </>
+           )}
+ 
+-          {/* hubs */}
+-          {!collapsed && <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--theme-text-dim, rgba(255,255,255,0.4))', margin: '10px 0 5px', paddingLeft: 8, fontFamily: 'var(--theme-sans)' }}>Hubs</p>}
++          {/* what you are doing */}
++          {!collapsed && <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--theme-text-dim, rgba(255,255,255,0.4))', margin: '10px 0 5px', paddingLeft: 8, fontFamily: 'var(--theme-sans)' }}>Doing</p>}
+           {collapsed && <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '10px 6px' }} />}
+-          {HUBS.map(hub => (
+-            <HubBlock
+-              key={hub.slug}
+-              hub={hub}
++          {JOBS.map(job => (
++            <JobBlock
++              key={job.id}
++              job={job}
+               collapsed={collapsed}
+-              isOpen={!!open[hub.slug]}
+-              isActive={activeHub?.slug === hub.slug}
+-              onToggle={() => setOpen(o => ({ ...o, [hub.slug]: !o[hub.slug] }))}
++              isOpen={!!open[job.id]}
++              isActive={!!activeTool?.jobs.includes(job.id)}
++              onToggle={() => setOpen(o => ({ ...o, [job.id]: !o[job.id] }))}
+               navigate={navigate}
+               isToolActive={isToolActive}
+               favorites={favorites}
+@@ -344,27 +347,27 @@ export default function Layout({ children }: LayoutProps) {
+ }
+ 
+ // ── A hub: collapsible row + indented tool tree ──
+-function HubBlock({ hub, collapsed, isOpen, isActive, onToggle, navigate, isToolActive, favorites, toggleFav }: {
+-  hub: Hub; collapsed: boolean; isOpen: boolean; isActive: boolean; onToggle: () => void
++function JobBlock({ job, collapsed, isOpen, isActive, onToggle, navigate, isToolActive, favorites, toggleFav }: {
++  job: (typeof JOBS)[number]; collapsed: boolean; isOpen: boolean; isActive: boolean; onToggle: () => void
+   navigate: (to: string) => void; isToolActive: (route: string) => boolean
+   favorites: string[]; toggleFav: (path: string) => void
+ }) {
+-  const Icon = hub.icon
++  const Icon = job.icon
+   return (
+     <div>
+       <Row
+         icon={Icon}
+-        label={hub.label}
++        label={job.label}
+         collapsed={collapsed}
+         active={isActive}
+-        onClick={() => navigate(`/hub/${hub.slug}`)}
+-        title={collapsed ? hub.label : undefined}
++        onClick={() => navigate(`/tools?job=${job.id}`)}
++        title={collapsed ? job.label : undefined}
+         chevron={collapsed ? undefined : (isOpen ? 'open' : 'closed')}
+         onChevron={onToggle}
+       />
+       {isOpen && !collapsed && (
+         <div style={{ display: 'flex', flexDirection: 'column', margin: '0 0 6px 18px', paddingLeft: 13, borderLeft: '1px solid rgba(255,255,255,0.09)' }}>
+-          {hub.tools.map(t => (
++          {toolsForJob(job.id).map(t => (
+             <ToolRow key={t.route} label={t.title} active={isToolActive(t.route)} fav={favorites.includes(t.route)} onClick={() => navigate(t.route)} onStar={() => toggleFav(t.route)} />
+           ))}
+         </div>
+diff --git a/frontend/src/lib/accountSync.ts b/frontend/src/lib/accountSync.ts
+index e1db20fc..1735b6c1 100644
+--- a/frontend/src/lib/accountSync.ts
++++ b/frontend/src/lib/accountSync.ts
+@@ -17,7 +17,6 @@
+ 
+ const ALLOWLIST = [
+   'pm-portfolios-v2',              // Portfolio Manager (multi-portfolio)
+-  'ft-trade-journal',              // Trade Journal
+   'alerts',                        // Price Alerts
+   'finance-terminal-dashboard-v3', // Dashboard layout
+   'watchlist',                     // Watchlist
+diff --git a/frontend/src/lib/hubs.ts b/frontend/src/lib/hubs.ts
+deleted file mode 100644
+index 68b15cbf..00000000
+--- a/frontend/src/lib/hubs.ts
++++ /dev/null
+@@ -1,187 +0,0 @@
+-import {
+-  CalendarRange,
+-  Search, Calculator, Layers, Compass, Briefcase, Terminal,
+-  Filter, Brain, CalendarDays, Activity,
+-  GitCompare, GitMerge, PieChart, Globe, Scale, Coins, Boxes, RotateCcw, Gem,
+-  LineChart, BarChart2, Waves, Zap, Shuffle, Percent,
+-  GitBranch, Landmark, Dices, Gauge, BookOpen, Bell, Workflow, Clock, ArrowLeftRight, Home,
+-  CandlestickChart, Megaphone, Rocket,
+-  Container, Fuel, MapPinned, Waypoints,
+-  ClipboardList,
+-  type LucideIcon,
+-} from 'lucide-react'
+-
+-// Single source of truth for the 7-hub navigation taxonomy. Home cards, the hub
+-// landing pages, and the sidebar dropdowns all read from this list so the
+-// structure can never drift between surfaces.
+-
+-export interface HubTool {
+-  title: string   // full name (sidebar rows, hub tiles)
+-  chip: string    // short label (home hub-card chips)
+-  desc: string    // one-line description (hub tiles)
+-  route: string   // target path (may include ?tab= for in-page tabs)
+-  icon: LucideIcon
+-  // The page reads ?ticker= and actually applies it. lib/tickerLink derives the
+-  // hand-off list from this flag, so a tool cannot be offered a symbol it will
+-  // silently drop, and the list cannot drift out of step with the hubs again.
+-  tickerParam?: boolean
+-}
+-
+-export interface Hub {
+-  slug: string     // url segment for /hub/:slug
+-  label: string    // display name (cards, tabs, masthead title)
+-  tagline: string  // short line on the home hub card
+-  masthead: string // longer line on the hub landing page
+-  icon: LucideIcon
+-  tools: HubTool[]
+-}
+-
+-export const HUBS: Hub[] = [
+-  {
+-    slug: 'research',
+-    label: 'Research',
+-    tagline: 'Screen the universe, know the company, follow the flow.',
+-    masthead: 'Screen for candidates, dig into companies and filings, and track the sentiment, sector moves, and statistics behind the idea.',
+-    icon: Search,
+-    tools: [
+-      { title: 'Stock Screener',    chip: 'Stock Screener',  desc: '25+ fundamental and technical filters across the universe', route: '/screener',           icon: Filter },
+-      { title: 'IPO Scanner',      chip: 'IPO Scanner',    desc: 'Upcoming and recent public offerings with pricing and deal size', route: '/ipo-calendar',    icon: Rocket },
+-      { title: 'Mover Radar',       chip: 'Mover Radar',     desc: 'Why a ticker is moving right now: news, filings, and social, or confirmation it is just noise', route: '/mover-radar', tickerParam: true, icon: Gauge },
+-      { title: 'Company Profile',   chip: 'Company Profile', desc: 'Price history, revenue mix, ownership, and credit for one name', route: '/company-profile', tickerParam: true,  icon: Globe },
+-      { title: 'Peer Comparison',   chip: 'Peer Comparison', desc: 'Trading multiples versus sector peers',                    route: '/relative-valuation', tickerParam: true, icon: Scale },
+-      { title: 'Earnings Scanner',  chip: 'Earnings Scanner', desc: 'One calendar: who reports when, your holdings inline, and an AI filing summary on any row', route: '/earnings', tickerParam: true, icon: CalendarDays },
+-      { title: 'Sentiment Tracker', chip: 'Sentiment Tracker', desc: 'AI-scored news sentiment across 7 sources',              route: '/sentiment',          icon: Brain },
+-      { title: 'ETF Analyzer',      chip: 'ETF Analyzer',    desc: 'Look-through holdings, overlap, and concentration',        route: '/etf-analyzer', tickerParam: true,       icon: Boxes },
+-      { title: 'NAV Tracker',       chip: 'NAV Tracker',     desc: 'Premium and discount on asset-backed proxies',             route: '/nav', tickerParam: true,                icon: Gem },
+-      { title: 'Report Creator',    chip: 'Report Creator',  desc: 'Collect evidence manually or let AlphaTape research across its tools, then build a print-ready report', route: '/report-creator', icon: ClipboardList },
+-    ],
+-  },
+-  {
+-    slug: 'options',
+-    label: 'Options',
+-    tagline: 'Price, scan, and structure options end to end.',
+-    masthead: 'Price, scan, and structure options end to end, from a single contract to a full multi-leg book.',
+-    icon: Layers,
+-    tools: [
+-      { title: 'Options Scanner',     chip: 'Options Scanner',     desc: 'Unusual flow and the chain it sits in, on one surface', route: '/options-scanner', tickerParam: true, icon: Activity },
+-      { title: 'Volatility Scanner',  chip: 'Volatility Scanner',  desc: 'One IV surface across expiry and strike, with rank, term structure and skew from a single load', route: '/volatility-scanner', tickerParam: true, icon: Waves },
+-      { title: 'Dealer Exposure',          chip: 'Dealer Exposure',          desc: 'Gamma exposure by strike and expiry',               route: '/gex', tickerParam: true,             icon: Zap },
+-      { title: 'Implied Probability', chip: 'Implied Probability', desc: 'Risk-neutral distributions from the chain',         route: '/probability', tickerParam: true,     icon: Percent },
+-      { title: 'Options Pricer',      chip: 'Options Pricer',      desc: 'Black-Scholes greeks and payoff diagrams',          route: '/options',         icon: LineChart },
+-      { title: 'Options Strategy',    chip: 'Options Strategy',    desc: 'Multi-leg P&L and risk profiles',                   route: '/strategy',        icon: Shuffle },
+-    ],
+-  },
+-  {
+-    slug: 'macro',
+-    label: 'Macro & Rates',
+-    tagline: 'Rates, growth, and credit in one read.',
+-    masthead: 'Rates, growth, and credit in one read, from the implied FOMC path to high-yield spreads, FX crosses, and positioning.',
+-    icon: Compass,
+-    tools: [
+-      { title: 'Macro Monitor',  chip: 'Macro Monitor',  desc: 'Growth, inflation, and labor-market dashboards', route: '/economy',        icon: Compass },
+-      { title: 'Economic Calendar', chip: 'Econ Calendar', desc: 'US, EU and Asia economic releases and central-bank decisions with consensus and the release-day market reaction', route: '/macro-events', icon: Megaphone },
+-      { title: 'Rate Engine',    chip: 'Rate Engine',    desc: 'Implied FOMC path and the full yield curve',     route: '/fed',            icon: GitBranch },
+-      { title: 'Bond Analytics', chip: 'Bond Analytics', desc: 'Yield-to-maturity, duration, and convexity',     route: '/bond',           icon: Landmark },
+-      { title: 'Bond Lookup',    chip: 'Bond Lookup',    desc: 'Resolve a CUSIP or issuer to bond reference data', route: '/cusip',          icon: BookOpen },
+-      { title: 'Credit Spreads', chip: 'Credit Spreads', desc: 'Investment-grade and high-yield spread monitor', route: '/credit-spreads', icon: Activity },
+-      { title: 'Credit Stress', chip: 'Credit Stress', desc: 'Financial stress, bank lending standards, delinquencies, and charge-offs from Federal Reserve sources', route: '/credit-delinquencies', icon: Percent },
+-      { title: 'FX Matrix', chip: 'FX Matrix',           desc: 'Spot cross-rates, forward points, cross-currency basis, and FX vol', route: '/currency', icon: ArrowLeftRight },
+-      { title: 'Trader Positioning', chip: 'Trader Positioning', desc: 'CFTC positioning across commodities, rates, FX, and equity-index futures', route: '/trader-positioning', icon: BarChart2 },
+-      { title: 'Housing Market', chip: 'Housing Market', desc: 'Home prices, mortgage rates, affordability, supply/demand, construction, and rental listings', route: '/housing', icon: Home },
+-    ],
+-  },
+-  {
+-    slug: 'charting',
+-    label: 'Charting & Markets',
+-    tagline: 'Every feed in the terminal on one chart, plus the market board.',
+-    masthead: 'Candles, overlays, and cross-asset comparisons. Plot any series the terminal knows on one timeline, then read the board, the sector rotation, and the statistics behind the move.',
+-    icon: CandlestickChart,
+-    tools: [
+-      { title: 'Global Markets',  chip: 'Global Markets',  desc: 'World indices, FX, commodities, yields, and crypto on one board', route: '/global-markets', icon: Globe },
+-      { title: 'Market Hours',    chip: 'Market Hours',    desc: 'Live global session clock across futures, US, Europe, Asia', route: '/market-hours',       icon: Clock },
+-      { title: 'Market Breadth',  chip: 'Market Breadth',  desc: 'Advance/decline, new highs-lows, and how many members are above their moving averages', route: '/breadth', icon: Activity },
+-      { title: 'Seasonality',     chip: 'Seasonality',     desc: 'Month, weekday and turn-of-month patterns, each shown with its sample size', route: '/seasonality', tickerParam: true, icon: CalendarRange },
+-      { title: 'Sector Rotation', chip: 'Sector Rotation', desc: 'GICS sector performance heatmap over time',                  route: '/sector-rotation',    icon: PieChart },
+-      { title: 'Chart Studio',    chip: 'Chart Studio',    desc: 'Every time-series feed in the app on one candlestick chart', route: '/chart-studio', icon: CandlestickChart },
+-      { title: 'Asset Overlay',   chip: 'Asset Overlay',   desc: 'Overlay any set of assets on a single chart',                route: '/asset-overlay',      icon: GitCompare },
+-      { title: 'Correlation',     chip: 'Correlation',     desc: 'Correlation matrix, rolling drift, and beta',                route: '/correlation',        icon: Waves },
+-      { title: 'Regression',      chip: 'Regression',      desc: 'OLS and polynomial fits with diagnostics',                   route: '/regression',         icon: Activity },
+-    ],
+-  },
+-  {
+-    slug: 'trading',
+-    label: 'Trading / Portfolio',
+-    tagline: 'Build, test, execute, and track your book.',
+-    masthead: 'Compose a strategy, test it against history, run it on the simulated desk, and track every trade and holding.',
+-    icon: Terminal,
+-    tools: [
+-      { title: 'Portfolio Manager',        chip: 'Portfolio Manager', desc: 'Holdings, P&L, and portfolio-level greeks, plus a live tab marked to real-time prices', route: '/portfolio-manager', icon: Briefcase },
+-      { title: 'Portfolio Analysis',       chip: 'Portfolio Analysis', desc: 'Sectors, alpha, beta, drawdowns, and 500-path portfolio scenarios in one view', route: '/portfolio-analysis', icon: ClipboardList },
+-      { title: 'Factor Decomposition',     chip: 'Factor Decomposition', desc: 'Regress your book on market, rates, credit, oil, and dollar factors', route: '/factor-decomposition', icon: Layers },
+-      { title: 'Portfolio Compare',        chip: 'Portfolio Compare', desc: 'Two to four books side by side',            route: '/portfolio-compare', icon: Scale },
+-      { title: 'Portfolio Allocator',      chip: 'Portfolio Allocator', desc: 'Deploy cash with linked sliders against a solved efficient frontier, then send it to Portfolio Manager', route: '/portfolio-allocator', icon: PieChart },
+-      { title: 'Portfolio Backtester',     chip: 'Portfolio Backtester', desc: 'Sharpe, Sortino, and Calmar across history', route: '/backtest',      icon: BarChart2 },
+-      { title: 'Monte Carlo',              chip: 'Monte Carlo',   desc: 'GBM path simulation with VaR and CVaR',         route: '/montecarlo',        icon: Dices },
+-      { title: 'Algo Builder',             chip: 'Algo Builder', desc: 'Compose entry/exit rules and risk, then save and run', route: '/algo-strategy', icon: Workflow },
+-      { title: 'Pairs Trader',             chip: 'Pairs Trader',  desc: 'Cointegration, mean-reversion half-life, and a z-score spread backtest', route: '/pairs-trader',        icon: Shuffle },
+-      { title: 'Paper Trading',            chip: 'Paper Trading', desc: 'Simulated live execution across asset classes', route: '/paper-trading', icon: Terminal },
+-      { title: 'Options MM Simulator', chip: 'Options MM',          desc: 'Quote a chain, carry the inventory, hedge the greeks, on one screen', route: '/options-mm-2', icon: Gauge },
+-      { title: 'Fixed Income MM Simulator', chip: 'Fixed Income MM', desc: 'Quote the curve, carry the DV01, hedge with futures, on one screen', route: '/fixed-income-mm-2', icon: Landmark },
+-      { title: 'Trade History Analyzer', chip: 'Trade History', desc: 'Import a Fidelity or Robinhood export and measure the account: drawdown, Sharpe, Sortino, alpha and beta', route: '/trade-history', icon: ClipboardList },
+-      { title: 'Trade Journal',            chip: 'Trade Journal', desc: 'Entry/exit, P&L, and win-rate analytics',       route: '/trade-journal',     icon: BookOpen },
+-      { title: 'Price Alerts',             chip: 'Price Alerts',  desc: 'Price and percent-change notifications',        route: '/alerts',            icon: Bell },
+-    ],
+-  },
+-  {
+-    slug: 'valuation',
+-    label: 'Valuation',
+-    tagline: 'Intrinsic value three ways, plus reverse-engineered expectations.',
+-    masthead: 'Pin down intrinsic value three ways and reverse-engineer exactly what the current price is pricing in.',
+-    icon: Calculator,
+-    tools: [
+-      { title: 'Master Valuation',  chip: 'Master Valuation', desc: 'One shared forecast connecting DCF, reverse expectations, multiples, dividends, and business parts', route: '/master-valuation', tickerParam: true, icon: GitMerge },
+-      { title: 'DCF Valuation',     chip: 'DCF',         desc: 'Adjustable growth stages and CapEx/D&A/WC glide paths',         route: '/dcf', tickerParam: true,         icon: Calculator },
+-      { title: 'Reverse DCF',       chip: 'Reverse DCF', desc: 'Solve for the growth the current price implies',                route: '/reverse-dcf', tickerParam: true, icon: RotateCcw },
+-      { title: 'Multiples',         chip: 'Multiples',   desc: 'Implied price from target P/E, EV/Sales, and more',             route: '/multiples', tickerParam: true,   icon: Scale },
+-      { title: 'Dividend Discount', chip: 'DDM',         desc: 'Gordon and multi-stage dividend discount models',              route: '/ddm', tickerParam: true,         icon: Coins },
+-      { title: 'Sum of the Parts',  chip: 'SOTP',        desc: 'Value each business segment, then sum the parts',               route: '/sotp', tickerParam: true,        icon: Boxes },
+-    ],
+-  },
+-  {
+-    slug: 'logistics',
+-    label: 'Geo-Logistics',
+-    tagline: 'Track the physical economy: ships, freighters, and freight tonnage.',
+-    masthead: 'Follow physical trade in near real time: liner connectivity and container rates, canal chokepoint transits, air-freighter frequency at the global cargo hubs, and US inventories and freight tonnage.',
+-    icon: Container,
+-    tools: [
+-      { title: 'Freight Map',      chip: 'Freight Map',  desc: 'Air hubs, chokepoints, connectivity ports, live cargo ships, and freight macro on one map', route: '/logistics-map', icon: MapPinned },
+-      { title: 'Trade Flows',      chip: 'Trade Flows', desc: 'Bilateral trade by commodity and country: top partners, tonnage, and world share', route: '/trade-flows',         icon: ArrowLeftRight },
+-      { title: 'Supply Chain Map', chip: 'Supply Chain Map', desc: 'Map a company\'s sourcing and end-market overlap across peer firms', route: '/supply-chain-peers', tickerParam: true, icon: Waypoints },
+-      { title: 'Energy Flows',     chip: 'Energy Flows', desc: 'Live AIS tankers, energy pipelines, export terminals, and chokepoints',                       route: '/flows-map',     icon: Fuel },
+-      { title: 'Chokepoint Exposure', chip: 'Exposure',  desc: 'Live chokepoint stress mapped to the tankers, oil, refiners, and shippers it moves',         route: '/chokepoint-exposure', icon: Waypoints },
+-    ],
+-  },
+-]
+-
+-export const ALL_TOOLS: HubTool[] = HUBS.flatMap(h => h.tools)
+-
+-export function hubBySlug(slug: string | undefined): Hub | undefined {
+-  return HUBS.find(h => h.slug === slug)
+-}
+-
+-// Resolve the current location to the tool it represents (for recents + active
+-// state). Prefer an exact path+query match, then fall back to a query-less path.
+-export function findToolByLocation(pathname: string, search: string): HubTool | undefined {
+-  const full = pathname + (search || '')
+-  return ALL_TOOLS.find(t => t.route === full)
+-    ?? ALL_TOOLS.find(t => !t.route.includes('?') && t.route === pathname)
+-}
+-
+-// Which hub does the current location belong to? Used to auto-open the sidebar
+-// dropdown and highlight the active hub.
+-export function hubForLocation(pathname: string, search: string): Hub | undefined {
+-  const full = pathname + (search || '')
+-  const exact = HUBS.find(h => h.tools.some(t => t.route === full))
+-  if (exact) return exact
+-  return HUBS.find(h => h.tools.some(t => t.route.split('?')[0] === pathname))
+-}
+diff --git a/frontend/src/lib/tickerLink.ts b/frontend/src/lib/tickerLink.ts
+index 180c5e66..5f1e7d9a 100644
+--- a/frontend/src/lib/tickerLink.ts
++++ b/frontend/src/lib/tickerLink.ts
+@@ -5,7 +5,7 @@
+ // it is session context, not saved data.
+ 
+ import { useEffect, useState } from 'react'
+-import { HUBS } from './hubs'
++import { TOOLS } from './tools'
+ 
+ const SYM_KEY = 'ft_linked_ticker'
+ const ON_KEY  = 'ft_link_on'
+@@ -17,17 +17,15 @@ export const TICKER_SYM_RE = /^[A-Z][A-Z0-9.\-]{0,9}$/
+ // palette's "open SYMBOL in <tool>" commands, the drawer's Open In grid, and
+ // linked-route injection.
+ //
+-// Derived from HUBS rather than hand-copied. The hand-copied version listed
+-// /skew, which no longer exists in HUBS at all, and omitted fifteen tools that
+-// do take a symbol. A fourth copy lived in components/TickerLink under a
+-// comment claiming it mirrored this one. Tag `tickerParam: true` on the hub
+-// entry and every surface picks it up.
++// Derived from TOOLS rather than hand-copied. The hand-copied version listed
++// /skew, which no longer exists at all, and omitted fifteen tools that do take
++// a symbol. A fourth copy lived in components/TickerLink under a comment
++// claiming it mirrored this one. Tag `tickerParam: true` on the registry entry
++// and every surface picks it up.
+ export interface TickerTool { label: string; short: string; route: string; param?: 'tickers' }
+-export const TICKER_TOOLS: TickerTool[] = HUBS.flatMap(hub =>
+-  hub.tools
+-    .filter(tool => tool.tickerParam)
+-    .map(tool => ({ label: tool.title, short: tool.chip, route: tool.route })),
+-)
++export const TICKER_TOOLS: TickerTool[] = TOOLS
++  .filter(tool => tool.tickerParam)
++  .map(tool => ({ label: tool.title, short: tool.chip, route: tool.route }))
+ 
+ export const tickerToolUrl = (t: TickerTool, sym: string) =>
+   `${t.route}?${t.param ?? 'ticker'}=${sym}`
+diff --git a/frontend/src/pages/Home.tsx b/frontend/src/pages/Home.tsx
+index 8048a289..861eb34c 100644
+--- a/frontend/src/pages/Home.tsx
++++ b/frontend/src/pages/Home.tsx
+@@ -11,7 +11,7 @@ import MorningBrief from '../components/MorningBrief'
+ import useIsMobile from '../hooks/useIsMobile'
+ import { usePortfolio, type PortfolioHolding } from '../contexts/PortfolioContext'
+ import { loadActivePortfolio, useQuotes, priceHoldings } from '../components/dashboard/widgets/usePortfolio'
+-import { HUBS, ALL_TOOLS } from '../lib/hubs'
++import { JOBS, ALL_TOOLS, TOOLS, toolsForJob } from '../lib/tools'
+ import { getRecents } from '../lib/recents'
+ import { wordMatch, tickerFromQuery } from '../lib/search'
+ import { getRecentTickers, recordRecentTicker } from '../lib/recentTickers'
+@@ -925,9 +925,9 @@ export default function Home() {
+ 
+               {/* ── Hubs ledger ── */}
+               <div style={{ marginTop: 30 }}>
+-                <SectionLabel icon={LayoutGrid} label="Hubs" note={`${HUBS.length} workspaces · ${ALL_TOOLS.length} tools`} />
++                <SectionLabel icon={LayoutGrid} label="Doing" note={`${TOOLS.length} tools · a tool that does two jobs is under both`} />
+                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', columnGap: 56 }}>
+-                  {HUBS.map((h, i) => <HubLedgerCell key={h.slug} slug={h.slug} last={i >= HUBS.length - 2} onNav={navigate} />)}
++                  {JOBS.map((j, i) => <JobLedgerCell key={j.id} id={j.id} last={i >= JOBS.length - 2} onNav={navigate} />)}
+                 </div>
+               </div>
+ 
+@@ -1021,22 +1021,23 @@ function ThisWeek({ holdings, onOpen }: { holdings: string[]; onOpen: () => void
+   )
+ }
+ 
+-// Hubs ledger cell — header/subheader → hairline → clickable tool tags (tileless).
+-function HubLedgerCell({ slug, last, onNav }: { slug: string; last: boolean; onNav: (route: string) => void }) {
+-  const hub = HUBS.find(h => h.slug === slug)!
++// Ledger cell — header/subheader → hairline → clickable tool tags (tileless).
++function JobLedgerCell({ id, last, onNav }: { id: (typeof JOBS)[number]['id']; last: boolean; onNav: (route: string) => void }) {
++  const job = JOBS.find(j => j.id === id)!
++  const tools = toolsForJob(id)
+   return (
+     <div style={{ padding: '26px 0', borderBottom: last ? 'none' : `1px solid ${F.border}` }}>
+       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+-        <span style={{ fontFamily: F.sans, fontSize: 22, fontWeight: 400, color: F.bright }}>{hub.label}</span>
+-        <span style={{ fontFamily: F.mono, fontSize: 12, color: F.muted }}>{hub.tools.length}</span>
++        <span style={{ fontFamily: F.sans, fontSize: 22, fontWeight: 400, color: F.bright }}>{job.label}</span>
++        <span style={{ fontFamily: F.mono, fontSize: 12, color: F.muted }}>{tools.length}</span>
+         <div style={{ flex: 1 }} />
+-        <button onClick={() => onNav(`/hub/${hub.slug}`)} aria-label={`Open ${hub.label} hub`} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: F.gold, display: 'flex' }}>
++        <button onClick={() => onNav(`/tools?job=${job.id}`)} aria-label={`Browse ${job.label}`} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: F.gold, display: 'flex' }}>
+           <ArrowUpRight size={16} />
+         </button>
+       </div>
+-      <div style={{ fontFamily: F.sans, fontSize: 14, color: F.sec, marginTop: 6 }}>{hub.tagline}</div>
++      <div style={{ fontFamily: F.sans, fontSize: 14, color: F.sec, marginTop: 6 }}>{job.blurb}</div>
+       <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${F.borderFaint}`, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+-        {hub.tools.map(t => (
++        {tools.map(t => (
+           <button key={t.route} onClick={() => onNav(t.route)}
+             onMouseEnter={e => { e.currentTarget.style.color = F.bright; e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 55%, transparent)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)' }}
+             onMouseLeave={e => { e.currentTarget.style.color = F.sec; e.currentTarget.style.borderColor = F.border; e.currentTarget.style.background = 'transparent' }}
+diff --git a/frontend/src/pages/HubLanding.tsx b/frontend/src/pages/HubLanding.tsx
+deleted file mode 100644
+index dd713231..00000000
+--- a/frontend/src/pages/HubLanding.tsx
++++ /dev/null
+@@ -1,170 +0,0 @@
+-import { useState, useMemo } from 'react'
+-import { Navigate, useParams, useNavigate } from 'react-router-dom'
+-import { Search, LayoutGrid, X } from 'lucide-react'
+-import PageWrapper from '../components/PageWrapper'
+-import { HUBS, hubBySlug, type HubTool } from '../lib/hubs'
+-
+-const F = {
+-  gold: 'var(--theme-primary, #c9a84c)',
+-  text: 'var(--theme-text, #d7e3fc)',
+-  bright: 'var(--theme-text, #eef3fb)',
+-  sec: 'var(--theme-secondary, #8099b0)',
+-  muted: 'var(--theme-secondary, #8099b0)',
+-  surface: 'var(--theme-surface, #101c2e)',
+-  panel: 'var(--theme-bg, #0d1826)',
+-  topbar: 'color-mix(in srgb, var(--theme-bg, #0d1826) 88%, #000)',
+-  border: 'var(--theme-border, rgba(255,255,255,0.08))',
+-  borderFaint: 'var(--theme-border-faint, rgba(255,255,255,0.05))',
+-  sans: 'var(--theme-sans)',
+-  mono: 'var(--theme-mono)',
+-}
+-
+-function ToolTile({ tool, num }: { tool: HubTool; num: string }) {
+-  const navigate = useNavigate()
+-  const [hover, setHover] = useState(false)
+-  const Icon = tool.icon
+-  return (
+-    <div
+-      role="button"
+-      tabIndex={0}
+-      onClick={() => navigate(tool.route)}
+-      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(tool.route) } }}
+-      onMouseEnter={() => setHover(true)}
+-      onMouseLeave={() => setHover(false)}
+-      style={{
+-        display: 'flex', flexDirection: 'column', gap: 11, padding: '16px 16px 15px',
+-        background: hover ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 5%, var(--theme-bg, #0d1826))' : F.panel,
+-        border: `1px solid ${hover ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 44%, transparent)' : F.border}`,
+-        cursor: 'pointer', outline: 'none',
+-        transform: hover ? 'translateY(-2px)' : 'none',
+-        transition: 'border-color 0.14s ease, background 0.14s ease, transform 0.14s ease',
+-      }}
+-    >
+-      <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+-        <span style={{
+-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, flexShrink: 0,
+-          background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)',
+-          border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 20%, transparent)', color: F.gold,
+-        }}>
+-          <Icon size={16} />
+-        </span>
+-        <span style={{ flex: 1, fontFamily: F.sans, fontSize: 13.5, fontWeight: 700, color: F.text, lineHeight: 1.25 }}>{tool.title}</span>
+-        <span style={{ fontFamily: F.mono, fontSize: 11, fontWeight: 700, color: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 38%, transparent)', flexShrink: 0 }}>{num}</span>
+-      </div>
+-      <div style={{ fontFamily: F.sans, fontSize: 11, color: F.sec, lineHeight: 1.5 }}>{tool.desc}</div>
+-    </div>
+-  )
+-}
+-
+-export default function HubLanding() {
+-  const { slug } = useParams()
+-  const navigate = useNavigate()
+-  const hub = hubBySlug(slug)
+-  const [q, setQ] = useState('')
+-  const [focused, setFocused] = useState(false)
+-
+-  const ql = q.trim().toLowerCase()
+-  const tools = useMemo(
+-    () => !hub ? [] : !ql ? hub.tools : hub.tools.filter(t => `${t.title} ${t.desc}`.toLowerCase().includes(ql)),
+-    [hub, ql],
+-  )
+-
+-  if (!hub) return <Navigate to="/app" replace />
+-  const hubIndex = HUBS.findIndex(h => h.slug === hub.slug) + 1
+-  const Watermark = hub.icon
+-
+-  return (
+-    <PageWrapper>
+-      <div className="mx-auto w-full max-w-[1180px] 2xl:max-w-[1440px]" style={{ background: F.surface, border: `1px solid ${F.border}` }}>
+-        {/* top chrome — breadcrumb + search + my dashboard */}
+-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 22px', borderBottom: `1px solid ${F.border}`, background: F.topbar, flexWrap: 'wrap' }}>
+-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: F.sans, fontSize: 11, color: F.muted }}>
+-            <span style={{ fontFamily: 'Cinzel, Georgia, serif', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', color: F.gold }}>ALPHATAPE</span>
+-            <span style={{ opacity: 0.5 }}>/</span>
+-            <span style={{ color: 'var(--theme-text, #9fb0c6)', fontWeight: 600 }}>{hub.label}</span>
+-          </div>
+-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10, flex: '1 1 260px', minWidth: 0, justifyContent: 'flex-end' }}>
+-            <div style={{
+-              display: 'flex', alignItems: 'center', gap: 8, background: F.surface,
+-              border: `1px solid ${focused ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 55%, transparent)' : F.border}`,
+-              padding: '7px 11px', flex: 1, minWidth: 0, maxWidth: 240, transition: 'border-color 0.15s ease',
+-            }}>
+-              <Search size={12} style={{ color: F.muted, flexShrink: 0 }} />
+-              <input
+-                value={q}
+-                onChange={e => setQ(e.target.value)}
+-                onFocus={() => setFocused(true)}
+-                onBlur={() => setFocused(false)}
+-                aria-label={`Filter ${hub.label} tools`}
+-                placeholder="Search tools, tickers"
+-                style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: F.text, fontFamily: F.sans, fontSize: 11.5 }}
+-              />
+-              {q && <button onClick={() => setQ('')} aria-label="Clear" style={{ background: 'none', border: 'none', cursor: 'pointer', color: F.muted, display: 'flex', padding: 0 }}><X size={12} /></button>}
+-            </div>
+-            <button
+-              onClick={() => navigate('/dashboard')}
+-              style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0, background: F.gold, border: 'none', padding: '7px 12px', cursor: 'pointer' }}
+-            >
+-              <LayoutGrid size={13} style={{ color: 'var(--theme-bg, #101c2e)' }} />
+-              <span style={{ fontFamily: F.sans, fontSize: 11.5, fontWeight: 700, color: 'var(--theme-bg, #101c2e)', whiteSpace: 'nowrap' }}>My Dashboard</span>
+-            </button>
+-          </div>
+-        </div>
+-
+-        {/* hub switcher tab bar */}
+-        <div style={{ display: 'flex', padding: '0 22px', borderBottom: `1px solid ${F.border}`, background: F.panel, overflowX: 'auto' }}>
+-          {HUBS.map(h => {
+-            const Icon = h.icon
+-            const active = h.slug === hub.slug
+-            return (
+-              <button
+-                key={h.slug}
+-                onClick={() => navigate(`/hub/${h.slug}`)}
+-                style={{
+-                  display: 'flex', alignItems: 'center', gap: 8, padding: '11px 16px',
+-                  fontFamily: F.mono, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
+-                  background: 'none', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+-                  color: active ? F.gold : F.muted,
+-                  borderBottom: `2px solid ${active ? F.gold : 'transparent'}`, marginBottom: -1,
+-                  transition: 'color 0.12s ease',
+-                }}
+-              >
+-                <Icon size={13} />{h.label}
+-              </button>
+-            )
+-          })}
+-        </div>
+-
+-        {/* masthead */}
+-        <div style={{ position: 'relative', overflow: 'hidden', padding: '30px 26px 26px', borderBottom: `1px solid ${F.border}`, background: 'linear-gradient(180deg, var(--theme-bg, #0d1826) 0%, var(--theme-surface, #101c2e) 100%)' }}>
+-          <Watermark size={230} strokeWidth={1.25} style={{ position: 'absolute', top: -46, right: -30, color: F.gold, opacity: 0.06, pointerEvents: 'none' }} />
+-          <div style={{ position: 'relative' }}>
+-            <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+-              <span style={{ width: 22, height: 2, background: F.gold }} />
+-              <span style={{ fontFamily: F.mono, fontSize: 15, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: F.gold }}>{hub.label} Hub</span>
+-              <span style={{ fontFamily: F.mono, fontSize: 12, color: F.muted, letterSpacing: '0.1em' }}>{String(hubIndex).padStart(2, '0')} / {String(HUBS.length).padStart(2, '0')}</span>
+-            </div>
+-            <p style={{ margin: '14px 0 0', fontFamily: F.sans, fontSize: 13.5, color: F.sec, lineHeight: 1.55, maxWidth: 560 }}>{hub.masthead}</p>
+-          </div>
+-        </div>
+-
+-        {/* tools grid */}
+-        <div style={{ padding: '22px 26px 30px' }}>
+-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 0 14px' }}>
+-            <span style={{ fontFamily: F.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: F.sec }}>All Tools</span>
+-            <div style={{ flex: 1, height: 1, background: F.borderFaint }} />
+-          </div>
+-          {tools.length === 0 ? (
+-            <div style={{ padding: '32px 0', textAlign: 'center', fontFamily: F.sans, fontSize: 12, color: F.sec }}>
+-              No tools match <span style={{ color: F.text, fontFamily: F.mono }}>{q}</span>
+-            </div>
+-          ) : (
+-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 11 }}>
+-              {tools.map(t => <ToolTile key={t.route} tool={t} num={String(hub.tools.indexOf(t) + 1).padStart(2, '0')} />)}
+-            </div>
+-          )}
+-        </div>
+-      </div>
+-    </PageWrapper>
+-  )
+-}
