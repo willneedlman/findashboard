@@ -701,7 +701,7 @@ export function SupplyChainPeersContent() {
 
   return <div>
     <PageHeader title="Supply Chain Map" />
-    <div style={{ maxWidth: 1320 }}>
+    <div>
       <div
         onMouseDown={event => {
           if ((event.target as HTMLElement).closest('button')) return
