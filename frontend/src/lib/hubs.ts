@@ -60,7 +60,7 @@ export const HUBS: Hub[] = [
   {
     slug: 'companies',
     label: 'Companies',
-    tagline: 'Find a name, then know it cold.',
+    tagline: 'Narrow the universe down to a single company.',
     masthead: 'Screen the universe down to a shortlist, then dig into the filings, the peers, the ownership, and the fund structure behind each name.',
     icon: Search,
     tools: [
@@ -123,8 +123,8 @@ export const HUBS: Hub[] = [
   {
     slug: 'valuation',
     label: 'Valuation',
-    tagline: 'Intrinsic value three ways, plus reverse-engineered expectations.',
-    masthead: 'Pin down intrinsic value three ways and reverse-engineer exactly what the current price is pricing in.',
+    tagline: 'What it is worth, and what the price already assumes.',
+    masthead: 'Value a company five ways, from a full DCF to the growth the current price is already implying.',
     icon: Calculator,
     tools: [
       { title: 'Master Valuation',  chip: 'Master Valuation', desc: 'One shared forecast connecting DCF, reverse expectations, multiples, dividends, and business parts', route: '/master-valuation', tickerParam: true, icon: GitMerge },
@@ -155,7 +155,7 @@ export const HUBS: Hub[] = [
   {
     slug: 'desk',
     label: 'Trading Desk',
-    tagline: 'Run it live, or practice until it is boring.',
+    tagline: 'Build a strategy and run it without real money.',
     masthead: 'Build and automate a strategy, trade it on paper across asset classes, and hold a two-sided book on the options and rates simulators.',
     icon: Terminal,
     tools: [
