@@ -97,22 +97,26 @@ export default function CommandPalette() {
   const results = useMemo(() => {
     const trimmed = q.trim()
     if (!trimmed) return COMMANDS
-    const tools = COMMANDS.map(c => ({ c, s: score(q, c) })).filter(x => x.s >= 0)
+    const toolMatches = COMMANDS.map(c => ({ c, s: score(q, c) })).filter(x => x.s >= 0)
       .sort((a, b) => a.s - b.s).map(x => x.c).slice(0, 40)
 
     // Plain-language routing. A phrase nobody would type as a tool name
     // ("what is it worth", "why is it dropping") still lands somewhere, and the
-    // symbol rides along to tools that read one. Redundant when a tool label
-    // already matched the same route and there is no symbol to carry.
-    const toolRoutes = new Set(tools.map(c => (c.route ?? '').split('?')[0]))
-    const intents: Cmd[] = resolveIntents(trimmed)
-      .filter(m => m.ticker || !toolRoutes.has(m.route))
-      .map(m => ({
-        label: m.ticker ? `${m.title} · ${m.ticker}` : m.title,
-        route: intentUrl(m),
-        group: 'Go to',
-        desc: ALL_ROUTE_DESC[m.route],
-      }))
+    // symbol rides along to tools that read one.
+    //
+    // When a phrase and a tool label resolve to the SAME route, keep one row and
+    // let the intent own it. Dropping the intent instead was the asymmetry Will
+    // hit: the identical query showed a "Go to" row on Home and a plain hub row
+    // here, which reads as the routing not running at all.
+    const matched = resolveIntents(trimmed)
+    const intents: Cmd[] = matched.map(m => ({
+      label: m.ticker ? `${m.title} · ${m.ticker}` : m.title,
+      route: intentUrl(m),
+      group: 'Go to',
+      desc: ALL_ROUTE_DESC[m.route],
+    }))
+    const intentRoutes = new Set(matched.map(m => m.route))
+    const tools = toolMatches.filter(c => !intentRoutes.has((c.route ?? '').split('?')[0]))
 
     // Only a query that IS a symbol gets the "open SYMBOL in ..." wall. It used
     // to be any 1-5 letter token, so typing "vol" or "chart" buried the tool
@@ -122,7 +126,11 @@ export default function CommandPalette() {
     // resolves to AAPL instead of opening a drawer on a listing that is not
     // real. A query that IS a listed ticker keeps it.
     const listed = companies.some(c => c.ticker === guess)
-    const sym = listed ? guess : (companies[0]?.ticker ?? guess)
+    // A company match may only stand in for the symbol on a lookup-shaped query.
+    // Letting it win on a phrase would drop a wall of ticker shortcuts under
+    // "apple earnings date" when the phrase already named the destination.
+    const nameLookup = !matched.length
+    const sym = listed ? guess : ((nameLookup ? companies[0]?.ticker : null) ?? guess)
 
     const companyCmds: Cmd[] = companies
       .filter(c => c.ticker !== sym)
