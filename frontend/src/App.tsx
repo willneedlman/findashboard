@@ -355,6 +355,10 @@ export default function App() {
               <Route path="/mover-radar"          element={<MoverRadar />} />
               <Route path="/company-profile"     element={<SupplyChain />} />
               <Route path="/supply-chain"        element={<RedirectWithSearch to="/company-profile" />} />
+              {/* Retired from the Trade Routes hub 2026-08-19: the "verified" tier is a
+                  10-record hand-curated ledger covering AAPL and MSFT, so the board could
+                  not honestly sit beside the live-data tools. Route kept so the work is
+                  not lost and existing links still resolve. */}
               <Route path="/supply-chain-peers"  element={<SupplyChainMap />} />
               <Route path="/gamma-scalping"      element={<Navigate to="/paper-trading" replace />} />
               <Route path="/paper-trading"       element={<PaperTrading />} />
