@@ -417,7 +417,7 @@ function InlineStat({ label, value, delta, deltaPos }: { label: string; value: s
 }
 
 // ── Band 6c: FOMC statement + minutes AI reads ───────────────────────────────
-interface FomcRead { available: boolean; date?: string; url?: string; stance?: string; score?: number; decision?: string; summary?: string; key_points?: string[] }
+interface FomcRead { available: boolean; date?: string; released?: string; url?: string; stance?: string; score?: number; decision?: string; summary?: string; key_points?: string[] }
 
 /** One panel, two documents. The statement lands on the day; the minutes land
  *  about three weeks later and carry the vote split and the range of views the
@@ -455,7 +455,16 @@ function FomcReadPanel({ title, endpoint, storageKey, note, defaultOpen = true }
           {!open && <span style={{ fontFamily: T.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', color: stanceColor, textTransform: 'capitalize' }}>{stance} {score > 0 ? '+' : ''}{score}</span>}
         </button>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          {data.date && <span style={{ fontFamily: T.mono, fontSize: 8.5, letterSpacing: '0.1em', color: T.muted }}>{data.date}</span>}
+          {/* Release and meeting dates are three weeks apart for minutes, and
+              showing only the meeting date made a document published today read
+              as a month-old one. */}
+          {data.released && data.released !== data.date ? (
+            <span style={{ fontFamily: T.mono, fontSize: 8.5, letterSpacing: '0.1em', color: T.muted }}>
+              <span style={{ color: T.text }}>RELEASED {data.released}</span> · MEETING {data.date}
+            </span>
+          ) : data.date ? (
+            <span style={{ fontFamily: T.mono, fontSize: 8.5, letterSpacing: '0.1em', color: T.muted }}>{data.date}</span>
+          ) : null}
           {data.url && <a href={data.url} target="_blank" rel="noreferrer" style={{ fontFamily: T.label, fontSize: 8.5, letterSpacing: '0.06em', color: T.muted, textDecoration: 'underline' }}>SOURCE</a>}
         </div>
       </div>

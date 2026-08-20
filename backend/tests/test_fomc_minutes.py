@@ -9,9 +9,10 @@ from routers import rates as R  # noqa: E402
 
 
 class _Resp:
-    def __init__(self, status=200, text=""):
+    def __init__(self, status=200, text="", headers=None):
         self.status_code = status
         self.text = text
+        self.headers = headers or {}
 
 
 def test_minutes_falls_back_when_the_newest_meeting_has_none(monkeypatch):
@@ -26,10 +27,29 @@ def test_minutes_falls_back_when_the_newest_meeting_has_none(monkeypatch):
     monkeypatch.setattr(R.requests, "head", head)
     got = R._latest_fomc_minutes()
     assert got is not None
-    date_, url = got
+    date_, url, released = got
     assert url.endswith(".htm") and "fomcminutes" in url
     assert url.endswith(f"fomcminutes{date_.replace('-', '')}.htm")
     assert len(seen) == 2  # first meeting 404'd, second answered
+    # No Last-Modified header, so it falls back to the three-week convention.
+    assert released == (R.date.fromisoformat(date_) + R.timedelta(days=21)).isoformat()
+
+
+def test_release_date_comes_from_last_modified(monkeypatch):
+    """Publishing today the minutes OF a meeting three weeks ago is not stale
+    data, and the panel must be able to say so."""
+    monkeypatch.setattr(R.requests, "head", lambda url, **kw: _Resp(
+        200, headers={"Last-Modified": "Wed, 19 Aug 2026 18:01:21 GMT"}))
+    meeting, _url, released = R._latest_fomc_minutes()
+    assert released == "2026-08-19"
+    assert released != meeting
+
+
+def test_a_broken_last_modified_falls_back_rather_than_raising(monkeypatch):
+    monkeypatch.setattr(R.requests, "head", lambda url, **kw: _Resp(
+        200, headers={"Last-Modified": "not a date"}))
+    meeting, _url, released = R._latest_fomc_minutes()
+    assert released == (R.date.fromisoformat(meeting) + R.timedelta(days=21)).isoformat()
 
 
 def test_minutes_returns_none_when_nothing_is_published(monkeypatch):

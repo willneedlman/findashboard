@@ -7,7 +7,7 @@ import sys, os
 import calendar
 import math
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import pandas as pd
 from cache import get_history, get_download, get_info, cached
@@ -1316,18 +1316,31 @@ def _fed_doc_text(url: str, anchors: tuple[str, ...] = _STATEMENT_ANCHORS, limit
         return ""
 
 
-def _latest_fomc_minutes() -> tuple[str, str] | None:
-    """(meeting_date, minutes_url) for the most recent meeting whose minutes are
-    actually published. Minutes land about three weeks after the meeting, so the
-    newest meeting usually has none yet and the walk falls back a meeting."""
+def _latest_fomc_minutes() -> tuple[str, str, str | None] | None:
+    """(meeting_date, minutes_url, release_date) for the most recent meeting whose
+    minutes are actually published.
+
+    The two dates are NOT the same and conflating them reads as stale data: the
+    minutes published today are the minutes OF a meeting three weeks ago. The
+    release date comes from the page's Last-Modified header, which is stamped at
+    the 2:00pm ET release, and falls back to the Fed's three-week convention.
+    """
     today = date.today()
     past = sorted((date.fromisoformat(d) for d in _FOMC_DATES if date.fromisoformat(d) <= today), reverse=True)
     for d in past[:4]:
         url = f"https://www.federalreserve.gov/monetarypolicy/fomcminutes{d.strftime('%Y%m%d')}.htm"
         try:
             r = requests.head(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=8, allow_redirects=True)
-            if r.status_code == 200:
-                return d.isoformat(), url
+            if r.status_code != 200:
+                continue
+            released = (d + timedelta(days=21)).isoformat()
+            stamp = r.headers.get("Last-Modified")
+            if stamp:
+                try:
+                    released = datetime.strptime(stamp, "%a, %d %b %Y %H:%M:%S %Z").date().isoformat()
+                except Exception:
+                    pass
+            return d.isoformat(), url, released
         except Exception:
             continue
     return None
@@ -1399,10 +1412,10 @@ def fomc_minutes():
     info = _latest_fomc_minutes()
     if not info:
         return {"available": False}
-    d, url = info
+    d, url, released = info
     text = _fed_doc_text(url, _MINUTES_ANCHORS, 9000)
     if len(text) < 400:
-        return {"available": False, "date": d, "url": url}
+        return {"available": False, "date": d, "url": url, "released": released}
     prompt = (
         "You are a monetary-policy analyst reading the MINUTES of an FOMC meeting, "
         "released about three weeks after the decision.\n"
@@ -1427,7 +1440,7 @@ def fomc_minutes():
         st, en = clean.find("{"), clean.rfind("}")
         obj = json.loads(clean[st:en + 1])
         return {
-            "available": True, "date": d, "url": url,
+            "available": True, "date": d, "url": url, "released": released,
             "stance": str(obj.get("stance", "neutral")).lower()[:20],
             "score": max(-10, min(10, int(obj.get("score", 0)))),
             "decision": _decimalize(str(obj.get("decision", ""))[:240]),
@@ -1436,7 +1449,7 @@ def fomc_minutes():
         }
     except Exception as ex:
         _log.warning("fomc minutes analysis failed: %s", ex)
-        return {"available": False, "date": d, "url": url}
+        return {"available": False, "date": d, "url": url, "released": released}
 
 
 # ── Credit Spread Monitor ──────────────────────────────────────────────────────
