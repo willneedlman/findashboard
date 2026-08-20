@@ -36,13 +36,13 @@ export function KpiStrip({ cells, cellHeight, dense }: { cells: KpiCellSpec[]; c
   return (
     <div className="ft-kpi-strip" style={{ display: 'flex', alignItems: 'stretch', background: T.surface, border: `1px solid ${T.border}` }}>
       {cells.map((k, i) => (
-        <div className="ft-kpi-cell ft-metric-tile" key={k.label} style={{ flex: 1, height: cellHeight, boxSizing: 'border-box', padding: dense ? '5px 12px' : '10px 14px', borderLeft: i ? `1px solid ${T.borderFaint}` : 'none' }}>
+        <div className="ft-kpi-cell ft-metric-tile" key={k.label} style={{ flex: 1, height: cellHeight, boxSizing: 'border-box', padding: dense ? '9px 13px' : '10px 14px', borderLeft: i ? `1px solid ${T.borderFaint}` : 'none' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <span style={{ fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, whiteSpace: 'nowrap' }}>{k.label}</span>
             {k.tip && <HelpTip title={k.tip.title} body={k.tip.body} source={k.tip.source} />}
           </div>
-          <div style={{ fontFamily: MONO, fontSize: dense ? 15 : 17, fontWeight: 700, color: k.vc ?? T.text, marginTop: dense ? 1 : 5, lineHeight: dense ? 1.15 : undefined, fontVariantNumeric: 'tabular-nums' }}>{k.value}</div>
-          {k.sub && <div style={{ fontFamily: MONO, fontSize: dense ? 8.5 : 9, color: k.sc ?? T.muted, marginTop: dense ? 0 : 2, lineHeight: dense ? 1.25 : undefined }}>{k.sub}</div>}
+          <div style={{ fontFamily: MONO, fontSize: dense ? 16 : 17, fontWeight: 700, color: k.vc ?? T.text, marginTop: dense ? 3 : 5, lineHeight: dense ? 1.2 : undefined, fontVariantNumeric: 'tabular-nums' }}>{k.value}</div>
+          {k.sub && <div style={{ fontFamily: MONO, fontSize: dense ? 9 : 9, color: k.sc ?? T.muted, marginTop: dense ? 2 : 2, lineHeight: dense ? 1.3 : undefined }}>{k.sub}</div>}
         </div>
       ))}
     </div>
