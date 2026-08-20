@@ -230,19 +230,26 @@ export default function StrategyBuilder() {
     const rows = [...new Set(prices)].sort((a, b) => a - b).map(buildRow)
 
     // Y domain follows the NET P&L (gold total) over the visible range, so the
-    // curve fills the frame (a long call reaches the top-right rather than
-    // clipping into a vertical spike). Only truly pathological ratios are
-    // clamped, and the loss floor is padded tightly since nothing sits below it.
-    // The per-leg dashed lines can run far outside this, so the axis is clamped
-    // (allowDataOverflow on the YAxis) rather than stretched to fit them.
+    // whole payoff is on screen. The per-leg dashed lines can run far outside
+    // it, which is what allowDataOverflow on the YAxis is for.
+    //
+    // The span is measured from BOTH ends, never from the downside alone. It
+    // used to clamp the top at 30x the max loss, which silently cut the chart
+    // off whenever reward was large relative to risk: a 730/800 call spread
+    // bought for nothing has zero risk, so the clamp fell back to its 50 floor
+    // and pinned the axis at 1575 while the payoff ran to 7000. Debit spreads
+    // and long calls are exactly the shapes that hit it.
     const allVals = rows.map(r => r.total)
     const rawMin  = Math.min(...allVals)
     const rawMax  = Math.max(...allVals)
-    const maxRisk = Math.max(Math.abs(rawMin), 50)
-    const top     = Math.min(Math.max(rawMax, 0),  maxRisk * 30)
-    const bot     = Math.max(Math.min(rawMin, 0), -maxRisk * 30)
-    const yMax    = Math.ceil(top + Math.max(top * 0.05, maxRisk * 0.15))
-    const yMin    = Math.floor(bot - Math.max(Math.abs(bot) * 0.05, maxRisk * 0.15))
+    const span    = Math.max(Math.abs(rawMin), Math.abs(rawMax), 50)
+    const top     = Math.max(rawMax, 0)
+    const bot     = Math.min(rawMin, 0)
+    const pad     = Math.max(span * 0.08, 10)
+    // A floor sitting exactly at zero (a spread that cost nothing) gets a thin
+    // pad instead of a full one, so the frame is not half empty below the line.
+    const yMax    = Math.ceil(top + pad)
+    const yMin    = Math.floor(bot - (bot < 0 ? pad : pad * 0.15))
 
     // Breakeven prices (zero-crossings)
     const breakevens: number[] = []
