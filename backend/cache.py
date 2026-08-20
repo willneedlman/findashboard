@@ -79,7 +79,7 @@ def _key(prefix: str, args: tuple, kwargs: dict) -> str:
     return prefix + ":" + hashlib.md5(raw.encode()).hexdigest()
 
 
-def cached(ttl: int = 300, maxsize: int = 256, persist: bool = False):
+def cached(ttl: int = 300, maxsize: int = 256, persist: bool = False, skip_if=None):
     """
     Memoize an expensive function with a per-function TTL cache.
 
@@ -93,6 +93,11 @@ def cached(ttl: int = 300, maxsize: int = 256, persist: bool = False):
     cache for multi-second endpoints like the Global Markets board).
 
     The wrapper exposes .cache_clear() to flush the in-memory tier.
+
+    skip_if(result) -> True means DO NOT store this result. Without it a
+    transient upstream failure is cached for the full TTL, which for a 6h
+    endpoint means one bad second at boot serves "unavailable" for the rest of
+    the day. Callers whose payload can express failure should pass a predicate.
     """
     def deco(fn):
         mem: TTLCache = TTLCache(maxsize=maxsize, ttl=ttl)
@@ -134,12 +139,14 @@ def cached(ttl: int = 300, maxsize: int = 256, persist: bool = False):
                         inflight.pop(k, None)
                         wait_evt.set()
                 raise
+            store = not (skip_if is not None and skip_if(val))
             with flock:
-                mem[k] = val
+                if store:
+                    mem[k] = val
                 if leader:
                     inflight.pop(k, None)
                     wait_evt.set()
-            if persist:
+            if persist and store:
                 disk_set(k, val, ttl=ttl)
             return val
 

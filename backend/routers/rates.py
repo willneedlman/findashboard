@@ -1347,7 +1347,7 @@ def _latest_fomc_minutes() -> tuple[str, str, str | None] | None:
 
 
 @router.get("/fomc-analysis")
-@cached(ttl=6 * 3600, maxsize=2)
+@cached(ttl=6 * 3600, maxsize=2, skip_if=lambda r: not r.get("available"))
 def fomc_analysis():
     """LLM read of the latest FOMC statement: hawkish/dovish score + summary.
 
@@ -1398,7 +1398,7 @@ def fomc_analysis():
 
 
 @router.get("/fomc-minutes")
-@cached(ttl=6 * 3600, maxsize=2)
+@cached(ttl=6 * 3600, maxsize=2, skip_if=lambda r: not r.get("available"))
 def fomc_minutes():
     """LLM read of the most recently published FOMC minutes.
 
