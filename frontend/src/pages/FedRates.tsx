@@ -416,14 +416,28 @@ function InlineStat({ label, value, delta, deltaPos }: { label: string; value: s
   )
 }
 
-// ── Band 6c: FOMC statement AI read ──────────────────────────────────────────
+// ── Band 6c: FOMC statement + minutes AI reads ───────────────────────────────
 interface FomcRead { available: boolean; date?: string; url?: string; stance?: string; score?: number; decision?: string; summary?: string; key_points?: string[] }
-function FomcStatementRead() {
+
+/** One panel, two documents. The statement lands on the day; the minutes land
+ *  about three weeks later and carry the vote split and the range of views the
+ *  statement compresses away. Same shape, so they read side by side. */
+function FomcReadPanel({ title, endpoint, storageKey, note, defaultOpen = true }: {
+  title: string; endpoint: string; storageKey: string; note: string; defaultOpen?: boolean
+}) {
   const { data } = useQuery<FomcRead>({
-    queryKey: ['fomc-analysis'],
-    queryFn: () => axios.get('/api/rates/fomc-analysis').then(r => r.data),
+    queryKey: [endpoint],
+    queryFn: () => axios.get(endpoint).then(r => r.data),
     staleTime: 6 * 3600 * 1000,
   })
+  const [open, setOpen] = useState(() => {
+    const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(storageKey) : null
+    return stored == null ? defaultOpen : stored === '1'
+  })
+  useEffect(() => {
+    try { localStorage.setItem(storageKey, open ? '1' : '0') } catch { /* private mode */ }
+  }, [open, storageKey])
+
   if (!data?.available) return null
   const score = Math.max(-10, Math.min(10, data.score ?? 0))
   const stance = (data.stance || 'neutral').toLowerCase()
@@ -431,45 +445,65 @@ function FomcStatementRead() {
   const markerPct = ((score + 10) / 20) * 100
   return (
     <div style={band}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
-        <span style={bandTitle}>FOMC Statement Read</span>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: open ? 12 : 0 }}>
+        {/* The disclosure control is the title itself, so the source link beside
+            it stays a link rather than nesting inside a button. */}
+        <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open}
+          style={{ ...bandTitle, display: 'flex', alignItems: 'center', gap: 7, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+          <span style={{ fontSize: 9, color: T.muted, width: 8, display: 'inline-block' }}>{open ? '\u25be' : '\u25b8'}</span>
+          {title}
+          {!open && <span style={{ fontFamily: T.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', color: stanceColor, textTransform: 'capitalize' }}>{stance} {score > 0 ? '+' : ''}{score}</span>}
+        </button>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           {data.date && <span style={{ fontFamily: T.mono, fontSize: 8.5, letterSpacing: '0.1em', color: T.muted }}>{data.date}</span>}
           {data.url && <a href={data.url} target="_blank" rel="noreferrer" style={{ fontFamily: T.label, fontSize: 8.5, letterSpacing: '0.06em', color: T.muted, textDecoration: 'underline' }}>SOURCE</a>}
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 40fr) minmax(0, 60fr)', gap: 28 }} className="rate-split">
-        {/* Left: stance + hawkish-dovish scale */}
-        <div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12 }}>
-            <span style={{ fontFamily: T.mono, fontSize: 22, fontWeight: 700, color: stanceColor, textTransform: 'capitalize' }}>{stance}</span>
-            <span style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: stanceColor }}>{score > 0 ? '+' : ''}{score}</span>
-          </div>
-          <div style={{ position: 'relative', height: 8, background: `linear-gradient(90deg, ${T.pos}, ${T.gold}, ${T.neg})`, borderRadius: 4, opacity: 0.85 }}>
-            <div style={{ position: 'absolute', left: `${markerPct}%`, top: -3, transform: 'translateX(-50%)', width: 3, height: 14, background: T.text, borderRadius: 2 }} />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: T.label, fontSize: 8.5, letterSpacing: '0.08em', color: T.muted, marginTop: 5 }}>
-            <span>DOVISH −10</span><span>NEUTRAL</span><span>+10 HAWKISH</span>
-          </div>
-          {data.decision && <div style={{ fontFamily: T.mono, fontSize: 11, color: T.text, marginTop: 14, lineHeight: 1.5 }}>{decimalize(data.decision)}</div>}
-        </div>
-        {/* Right: summary + key points */}
-        <div>
-          {data.summary && <div style={{ fontFamily: T.label, fontSize: 12.5, color: T.text, lineHeight: 1.55, marginBottom: 10 }}>{decimalize(data.summary)}</div>}
-          {(data.key_points ?? []).length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-              {data.key_points!.map((k, i) => (
-                <div key={i} style={{ display: 'flex', gap: 8, fontFamily: T.label, fontSize: 11.5, color: T.muted, lineHeight: 1.45 }}>
-                  <span style={{ color: T.gold, flex: 'none' }}>·</span><span>{decimalize(k)}</span>
-                </div>
-              ))}
+      {open && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 40fr) minmax(0, 60fr)', gap: 28 }} className="rate-split">
+          {/* Left: stance + hawkish-dovish scale */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12 }}>
+              <span style={{ fontFamily: T.mono, fontSize: 22, fontWeight: 700, color: stanceColor, textTransform: 'capitalize' }}>{stance}</span>
+              <span style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: stanceColor }}>{score > 0 ? '+' : ''}{score}</span>
             </div>
-          )}
-          <div style={{ fontFamily: T.label, fontSize: 9, color: T.muted, marginTop: 10, opacity: 0.8 }}>AI-generated read of the official statement. Verify against the source.</div>
+            <div style={{ position: 'relative', height: 8, background: `linear-gradient(90deg, ${T.pos}, ${T.gold}, ${T.neg})`, borderRadius: 4, opacity: 0.85 }}>
+              <div style={{ position: 'absolute', left: `${markerPct}%`, top: -3, transform: 'translateX(-50%)', width: 3, height: 14, background: T.text, borderRadius: 2 }} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: T.label, fontSize: 8.5, letterSpacing: '0.08em', color: T.muted, marginTop: 5 }}>
+              <span>DOVISH −10</span><span>NEUTRAL</span><span>+10 HAWKISH</span>
+            </div>
+            {data.decision && <div style={{ fontFamily: T.mono, fontSize: 11, color: T.text, marginTop: 14, lineHeight: 1.5 }}>{decimalize(data.decision)}</div>}
+          </div>
+          {/* Right: summary + key points */}
+          <div>
+            {data.summary && <div style={{ fontFamily: T.label, fontSize: 12.5, color: T.text, lineHeight: 1.55, marginBottom: 10 }}>{decimalize(data.summary)}</div>}
+            {(data.key_points ?? []).length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {data.key_points!.map((k, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, fontFamily: T.label, fontSize: 11.5, color: T.muted, lineHeight: 1.45 }}>
+                    <span style={{ color: T.gold, flex: 'none' }}>·</span><span>{decimalize(k)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ fontFamily: T.label, fontSize: 9, color: T.muted, marginTop: 10, opacity: 0.8 }}>{note}</div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
+}
+
+function FomcReads() {
+  return <>
+    <FomcReadPanel
+      title="FOMC Statement Read" endpoint="/api/rates/fomc-analysis" storageKey="fed_fomc_statement_open"
+      note="AI-generated read of the official statement. Verify against the source." />
+    <FomcReadPanel
+      title="FOMC Minutes Read" endpoint="/api/rates/fomc-minutes" storageKey="fed_fomc_minutes_open"
+      note="AI-generated read of the published minutes, released about three weeks after the meeting. Verify against the source." />
+  </>
 }
 
 export function FedRatesContent() {
@@ -770,7 +804,7 @@ export function FedRatesContent() {
           </div>
 
           {/* Band 6c — FOMC statement AI read */}
-          <FomcStatementRead />
+          <FomcReads />
 
           {/* Band 7 — disclaimer */}
           <div style={{ padding: '10px 24px', borderTop: `1px solid ${T.borderFaint}`, fontFamily: T.label, fontSize: 10, color: T.muted }}>

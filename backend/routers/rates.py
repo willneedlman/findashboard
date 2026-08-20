@@ -1282,22 +1282,55 @@ def _decimalize(text: str) -> str:
     return _re.sub(r"\s*percent\b", "%", text)
 
 
-def _fed_doc_text(url: str) -> str:
-    """Fetch a Fed release page and return the statement body as plain text."""
+_STATEMENT_ANCHORS = ("Recent indicators", "Information received", "The Committee decided")
+# Minutes open with an attendance roll and a staff review that carry no policy
+# signal, so the useful document starts at the participants' discussion. Ordered
+# latest-section-first: the policy action is the part worth scoring.
+_MINUTES_ANCHORS = (
+    "Committee Policy Action",
+    "Participants' Views on Current Conditions",
+    "Participants\u2019 Views on Current Conditions",
+    "Participants' Views",
+    "Participants\u2019 Views",
+    "Staff Review of the Economic Situation",
+)
+
+
+def _fed_doc_text(url: str, anchors: tuple[str, ...] = _STATEMENT_ANCHORS, limit: int = 6000) -> str:
+    """Fetch a Fed release page and return the body as plain text, sliced from
+    the first anchor that appears. The anchors are the whole trick: a statement
+    is short enough to take from the top, minutes are not."""
     try:
         r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=12)
         if r.status_code != 200:
             return ""
         html = _re.sub(r"<script.*?</script>|<style.*?</style>", " ", r.text, flags=_re.S)
         txt = _re.sub(r"\s+", " ", _re.sub(r"<[^>]+>", " ", html)).strip()
-        for anchor in ("Recent indicators", "Information received", "The Committee decided"):
+        for anchor in anchors:
             i = txt.find(anchor)
             if i >= 0:
-                return txt[i:i + 6000]
-        return txt[:6000]
+                return txt[i:i + limit]
+        return txt[:limit]
     except Exception as e:
         _log.warning("fed doc fetch %s: %s", url, e)
         return ""
+
+
+def _latest_fomc_minutes() -> tuple[str, str] | None:
+    """(meeting_date, minutes_url) for the most recent meeting whose minutes are
+    actually published. Minutes land about three weeks after the meeting, so the
+    newest meeting usually has none yet and the walk falls back a meeting."""
+    today = date.today()
+    past = sorted((date.fromisoformat(d) for d in _FOMC_DATES if date.fromisoformat(d) <= today), reverse=True)
+    for d in past[:4]:
+        url = f"https://www.federalreserve.gov/monetarypolicy/fomcminutes{d.strftime('%Y%m%d')}.htm"
+        try:
+            r = requests.head(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=8, allow_redirects=True)
+            if r.status_code == 200:
+                return d.isoformat(), url
+        except Exception:
+            continue
+    return None
 
 
 @router.get("/fomc-analysis")
@@ -1348,6 +1381,61 @@ def fomc_analysis():
         }
     except Exception as ex:
         _log.warning("fomc analysis failed: %s", ex)
+        return {"available": False, "date": d, "url": url}
+
+
+@router.get("/fomc-minutes")
+@cached(ttl=6 * 3600, maxsize=2)
+def fomc_minutes():
+    """LLM read of the most recently published FOMC minutes.
+
+    The minutes are a different document from the statement, not a longer one:
+    they land about three weeks later and carry the vote split, the spread of
+    views among participants, and the balance-sheet discussion the statement
+    compresses away. Same isolation rule as the statement read — a failure
+    returns available=false rather than a wrong number.
+    """
+    import json
+    info = _latest_fomc_minutes()
+    if not info:
+        return {"available": False}
+    d, url = info
+    text = _fed_doc_text(url, _MINUTES_ANCHORS, 9000)
+    if len(text) < 400:
+        return {"available": False, "date": d, "url": url}
+    prompt = (
+        "You are a monetary-policy analyst reading the MINUTES of an FOMC meeting, "
+        "released about three weeks after the decision.\n"
+        "Minutes matter for what the statement leaves out: how many members dissented and "
+        "which way, how wide the range of views was, what conditions participants attached "
+        "to future moves, and any balance-sheet discussion. Report those, not the headline "
+        "rate action on its own.\n"
+        "Return ONLY JSON, no markdown:\n"
+        '{"stance":"hawkish|dovish|neutral",'
+        '"score":<integer -10 to 10 for the OVERALL tone, negative = dovish/easing bias, positive = hawkish/tightening bias>,'
+        '"decision":"<one COMPLETE sentence stating the policy action and the vote, '
+        "e.g. 'Nine members voted to hold the target range at 3.50% to 3.75%, with two dissents favouring a cut.'>\","
+        '"summary":"<2-3 sentence plain-English summary of what the minutes revealed beyond the statement>",'
+        '"key_points":["<3 to 5 short takeaways, favouring disagreement, conditions and balance sheet>"]}\n\n'
+        f"FOMC minutes:\n{text}"
+    )
+    try:
+        from ai_client import groq_chat
+        resp = groq_chat([{"role": "user", "content": prompt}], max_tokens=700, temperature=0.0)
+        raw = resp.choices[0].message.content or ""
+        clean = _re.sub(r"```[a-z]*\n?", "", raw).strip()
+        st, en = clean.find("{"), clean.rfind("}")
+        obj = json.loads(clean[st:en + 1])
+        return {
+            "available": True, "date": d, "url": url,
+            "stance": str(obj.get("stance", "neutral")).lower()[:20],
+            "score": max(-10, min(10, int(obj.get("score", 0)))),
+            "decision": _decimalize(str(obj.get("decision", ""))[:240]),
+            "summary": _decimalize(str(obj.get("summary", ""))[:800]),
+            "key_points": [_decimalize(str(x)[:200]) for x in (obj.get("key_points") or [])][:6],
+        }
+    except Exception as ex:
+        _log.warning("fomc minutes analysis failed: %s", ex)
         return {"available": False, "date": d, "url": url}
 
 
