@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { HUBS } from '../lib/hubs'
+import { resolveIntents, extractTicker, intentUrl } from '../lib/searchIntent'
 import { setLinkedTicker, TICKER_TOOLS, tickerToolUrl } from '../lib/tickerLink'
 
 interface Cmd { label: string; route?: string; group: string; desc?: string; alias?: string; action?: () => void }
@@ -22,6 +23,10 @@ const HUB_ALIASES: Record<string, string> = {
   desk: 'trading execution simulator market maker',
   'trade-routes': 'logistics geo-logistics physical trade supply chain freight shipping chokepoint',
 }
+
+const ALL_ROUTE_DESC: Record<string, string> = Object.fromEntries(
+  HUBS.flatMap(h => h.tools).map(t => [t.route.split('?')[0], t.desc]),
+)
 
 const WORKSPACE: Cmd[] = [
   { label: 'Home', route: '/app', group: 'Workspace' },
@@ -55,7 +60,6 @@ function score(q: string, c: Cmd): number {
   return s
 }
 
-const TICKER_RE = /^[A-Za-z]{1,5}$/
 
 const GOLD = 'var(--theme-primary, #c9a84c)'
 const SURFACE = 'var(--theme-surface, #0d1826)'
@@ -77,11 +81,26 @@ export default function CommandPalette() {
     if (!trimmed) return COMMANDS
     const tools = COMMANDS.map(c => ({ c, s: score(q, c) })).filter(x => x.s >= 0)
       .sort((a, b) => a.s - b.s).map(x => x.c).slice(0, 40)
-    if (!TICKER_RE.test(trimmed)) return tools
-    // Symbol-shaped query: add the overview drawer + "open SYMBOL in <tool>"
-    // commands. Tool-name matches keep Enter ("DCF" must open DCF Valuation,
-    // not a drawer for a fake ticker); pure symbols lead with the Overview.
-    const sym = trimmed.toUpperCase()
+
+    // Plain-language routing. A phrase nobody would type as a tool name
+    // ("what is it worth", "why is it dropping") still lands somewhere, and the
+    // symbol rides along to tools that read one. Redundant when a tool label
+    // already matched the same route and there is no symbol to carry.
+    const toolRoutes = new Set(tools.map(c => (c.route ?? '').split('?')[0]))
+    const intents: Cmd[] = resolveIntents(trimmed)
+      .filter(m => m.ticker || !toolRoutes.has(m.route))
+      .map(m => ({
+        label: m.ticker ? `${m.title} · ${m.ticker}` : m.title,
+        route: intentUrl(m),
+        group: 'Go to',
+        desc: ALL_ROUTE_DESC[m.route],
+      }))
+
+    // Only a query that IS a symbol gets the "open SYMBOL in ..." wall. It used
+    // to be any 1-5 letter token, so typing "vol" or "chart" buried the tool
+    // being reached for under a screen of ticker shortcuts.
+    const sym = trimmed.split(/\s+/).length === 1 ? extractTicker(trimmed) : null
+    if (!sym) return intents.length ? [...intents, ...tools] : tools
     const overview: Cmd = {
       label: `${sym} Overview`, group: 'Ticker', desc: 'Quote, vol, gamma, earnings, news',
       action: () => { setLinkedTicker(sym); window.dispatchEvent(new CustomEvent('ft:ticker-drawer', { detail: sym })) },
@@ -90,7 +109,8 @@ export default function CommandPalette() {
       label: `${sym} → ${t.label}`, group: 'Open ticker',
       action: () => { setLinkedTicker(sym); navigate(tickerToolUrl(t, sym)) },
     }))
-    return tools.length ? [...tools, overview, ...targets] : [overview, ...targets]
+    const base = tools.length ? [...tools, overview, ...targets] : [overview, ...targets]
+    return intents.length ? [...intents, ...base] : base
   }, [q, navigate])
 
   // Global ⌘K / Ctrl+K toggle.

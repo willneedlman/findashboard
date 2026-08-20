@@ -18,6 +18,7 @@ import { getRecentTickers, recordRecentTicker } from '../lib/recentTickers'
 import { formatLocalTime, localTimeZone, todayLocal } from '../lib/time'
 import EmptyState from '../components/EmptyState'
 import ShortcutKey from '../components/ShortcutKey'
+import { resolveIntents, intentUrl } from '../lib/searchIntent'
 
 const F = {
   gold: 'var(--theme-primary, #c9a84c)',
@@ -645,7 +646,8 @@ export default function Home() {
   const otherCompanies = (sym && dashSym === sym) ? [] : companyResults.filter(c => c.ticker !== dashSym)
   const searching = ql.length >= 2 && (debouncedQ !== q.trim() || companyQuery.isFetching)
 
-  const noResults = !dashSym && filtered.length === 0 && actionResults.length === 0 && companyResults.length === 0
+  const intentHits = useMemo(() => resolveIntents(q, 3), [q])
+  const noResults = !dashSym && filtered.length === 0 && actionResults.length === 0 && companyResults.length === 0 && intentHits.length === 0
 
   // Arrow-key navigation over the flat tool+action result list; Enter opens the
   // selection, or jumps to the ticker's market data when a symbol is typed.
@@ -656,8 +658,13 @@ export default function Home() {
     if (e.key === 'ArrowDown') { e.preventDefault(); setSelIdx(i => Math.min(navRoutes.length - 1, i + 1)) }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setSelIdx(i => Math.max(-1, i - 1)) }
     else if (e.key === 'Enter') {
-      if (selIdx >= 0 && navRoutes[selIdx]) navigate(navRoutes[selIdx])
-      else if (dashSym) navigate(`/company-profile?ticker=${dashSym}`)
+      if (selIdx >= 0 && navRoutes[selIdx]) return navigate(navRoutes[selIdx])
+      // A phrase that names what the user wants beats defaulting to a profile:
+      // "AAPL implied volatility" is a request for the vol surface, not a quote.
+      const intent = resolveIntents(q)[0]
+      if (intent && q.trim().split(/\s+/).length > 1) return navigate(intentUrl(intent))
+      if (dashSym) return navigate(`/company-profile?ticker=${dashSym}`)
+      if (intent) navigate(intentUrl(intent))
     }
   }
   const recentTickers = useMemo(() => getRecentTickers(), [])
@@ -794,6 +801,18 @@ export default function Home() {
               {searching && companyResults.length === 0 && filtered.length === 0 && actionResults.length === 0 && (
                 <div style={{ padding: '32px 0', textAlign: 'center', fontFamily: F.sans, fontSize: 12, color: F.muted }}>
                   Searching…
+                </div>
+              )}
+              {intentHits.length > 0 && filtered.length === 0 && actionResults.length === 0 && (
+                <div style={{ marginBottom: 4 }}>
+                  <div style={{ fontFamily: F.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: F.muted, padding: '10px 2px 6px' }}>Go to</div>
+                  {intentHits.map(hit => (
+                    <button key={hit.route} onClick={() => navigate(intentUrl(hit))}
+                      style={{ display: 'flex', alignItems: 'baseline', gap: 10, width: '100%', textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer', padding: '9px 2px' }}>
+                      <span style={{ fontFamily: F.sans, fontSize: 14, color: F.text }}>{hit.title}</span>
+                      {hit.ticker && <span style={{ fontFamily: F.mono, fontSize: 11, color: F.gold }}>{hit.ticker}</span>}
+                    </button>
+                  ))}
                 </div>
               )}
               {noResults && !searching && (
