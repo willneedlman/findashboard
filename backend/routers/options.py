@@ -616,7 +616,7 @@ def options_chain(ticker: str, expiry: str | None = None):
 
         return {
             "expiry":      target,
-            "expirations": valid_exps[:12],
+            "expirations": valid_exps,
             "spot":        round(spot, 2) if spot else None,
             "dte":         dte,
             "t_days":      round(t_days, 4),
