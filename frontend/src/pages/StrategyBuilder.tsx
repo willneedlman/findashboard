@@ -94,11 +94,23 @@ export default function StrategyBuilder() {
 
   // Fetch full options chain for a leg — populates contract picker
   const fetchSpotForLeg = async (i: number) => {
-    const tk = legs[i].ticker.trim().toUpperCase()
+    const leg = legs[i]
+    const tk = leg.ticker.trim().toUpperCase()
     if (!tk) return
+    // Honour what is already typed. With a strike AND an expiry in hand the
+    // button prices THAT contract; it used to always load the front expiry and
+    // overwrite the strike with the at-the-money one, which threw away both
+    // inputs and made a far-dated leg impossible to price from the tile.
+    const wantExpiry = (leg.expiry || '').trim()
+    const wantK = Number(leg.K)
+    const targeted = !!wantExpiry && Number.isFinite(wantK) && wantK > 0
+
     setChain(i, { loading: true })
     try {
-      const res = await axios.get(`/api/options/chain?ticker=${tk}`)
+      const query = targeted
+        ? `?ticker=${tk}&expiry=${encodeURIComponent(wantExpiry)}`
+        : `?ticker=${tk}`
+      const res = await axios.get(`/api/options/chain${query}`)
       const d   = res.data
       const spot: number | null = d.spot ?? null
       setChain(i, {
@@ -109,7 +121,22 @@ export default function StrategyBuilder() {
         puts:           d.puts  ?? [],
         spot,
       })
-      // Update leg with nearest ATM + expiry
+      if (targeted) {
+        const side = (leg.option_type === 'call' ? d.calls : d.puts) ?? []
+        // Snap to the nearest listed strike when the typed one is not on the
+        // board, so the premium always belongs to a contract that exists.
+        const pick = side.find((c: any) => Math.abs(c.strike - wantK) < 1e-9) ?? min_strike(side, wantK)
+        if (pick) {
+          setLegs(p => p.map((l, idx) => idx !== i ? l : {
+            ...l, K: pick.strike, premium: mid(pick), expiry: d.expiry || wantExpiry,
+          }))
+        }
+        if (spot) setSpotOverrides(s => ({ ...s, [tk]: spot }))
+        setActiveChainLeg(i)
+        setDateInput(d.expiry || wantExpiry)
+        return
+      }
+      // Nothing typed yet: seed the leg from the front expiry at the money.
       if (d.expiry) {
         const side = legs[i].option_type === 'call' ? d.calls : d.puts
         const atm  = spot ? min_strike(side, spot) : null
@@ -614,7 +641,7 @@ export default function StrategyBuilder() {
                       />
                       <button onClick={() => fetchSpotForLeg(i)}
                         disabled={legChains[i]?.loading || !leg.ticker.trim()}
-                        title="Load options chain"
+                        title="Fetch price. With a strike and expiry set it prices that contract, otherwise it loads the chain at the money."
                         style={{
                           background: 'var(--theme-surface, #142032)',
                           border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
