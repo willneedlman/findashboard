@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import axios from 'axios'
 import { useNavigate } from 'react-router-dom'
 import { HUBS } from '../lib/hubs'
 import { resolveIntents, extractTicker, intentUrl } from '../lib/searchIntent'
@@ -72,6 +74,22 @@ const SANS = 'var(--theme-sans, sans-serif)'
 export default function CommandPalette() {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
+  // Company-name resolution, the way Home's search already does it: "apple"
+  // should reach AAPL. Without it the palette treated the word as a symbol and
+  // built a shortcut wall for a listing that does not exist.
+  const [debouncedQ, setDebouncedQ] = useState('')
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedQ(q.trim()), 180)
+    return () => clearTimeout(id)
+  }, [q])
+  const companyQuery = useQuery<{ results: { ticker: string; name: string }[] }>({
+    queryKey: ['cmdk-company-search', debouncedQ],
+    queryFn: () => axios.get(`/api/corporate/search?q=${encodeURIComponent(debouncedQ)}`).then(r => r.data),
+    enabled: debouncedQ.length >= 2,
+    staleTime: 300_000,
+    retry: 1,
+  })
+  const companies = companyQuery.data?.results ?? []
   const [sel, setSel] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
@@ -99,8 +117,25 @@ export default function CommandPalette() {
     // Only a query that IS a symbol gets the "open SYMBOL in ..." wall. It used
     // to be any 1-5 letter token, so typing "vol" or "chart" buried the tool
     // being reached for under a screen of ticker shortcuts.
-    const sym = trimmed.split(/\s+/).length === 1 ? extractTicker(trimmed) : null
-    if (!sym) return intents.length ? [...intents, ...tools] : tools
+    const guess = trimmed.split(/\s+/).length === 1 ? extractTicker(trimmed) : null
+    // A confident company-name match beats a bare symbol guess, so "apple"
+    // resolves to AAPL instead of opening a drawer on a listing that is not
+    // real. A query that IS a listed ticker keeps it.
+    const listed = companies.some(c => c.ticker === guess)
+    const sym = listed ? guess : (companies[0]?.ticker ?? guess)
+
+    const companyCmds: Cmd[] = companies
+      .filter(c => c.ticker !== sym)
+      .slice(0, 4)
+      .map(c => ({
+        label: `${c.name} · ${c.ticker}`, group: 'Company',
+        action: () => { setLinkedTicker(c.ticker); window.dispatchEvent(new CustomEvent('ft:ticker-drawer', { detail: c.ticker })) },
+      }))
+
+    if (!sym) {
+      const rest = [...intents, ...tools, ...companyCmds]
+      return rest.length ? rest : tools
+    }
     const overview: Cmd = {
       label: `${sym} Overview`, group: 'Ticker', desc: 'Quote, vol, gamma, earnings, news',
       action: () => { setLinkedTicker(sym); window.dispatchEvent(new CustomEvent('ft:ticker-drawer', { detail: sym })) },
@@ -109,9 +144,11 @@ export default function CommandPalette() {
       label: `${sym} → ${t.label}`, group: 'Open ticker',
       action: () => { setLinkedTicker(sym); navigate(tickerToolUrl(t, sym)) },
     }))
-    const base = tools.length ? [...tools, overview, ...targets] : [overview, ...targets]
+    const base = tools.length
+      ? [...tools, overview, ...companyCmds, ...targets]
+      : [overview, ...companyCmds, ...targets]
     return intents.length ? [...intents, ...base] : base
-  }, [q, navigate])
+  }, [q, navigate, companies])
 
   // Global ⌘K / Ctrl+K toggle.
   useEffect(() => {

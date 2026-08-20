@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
 import { AreaChart, Area, YAxis, ReferenceLine, ResponsiveContainer } from 'recharts'
-import { Search, LayoutGrid, ArrowUpRight, Clock, X, Upload, Briefcase, TrendingUp, Zap, Calculator, Globe, Scale, Building2, Sunrise } from 'lucide-react'
+import { ArrowUpRight, Briefcase, Building2, Calculator, Clock, Compass, Globe, LayoutGrid, Scale, Search, Sunrise, TrendingUp, Upload, X, Zap } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import TickerLogo from '../components/TickerLogo'
 import MarketClockMini from '../components/MarketClockMini'
@@ -646,12 +646,20 @@ export default function Home() {
   const otherCompanies = (sym && dashSym === sym) ? [] : companyResults.filter(c => c.ticker !== dashSym)
   const searching = ql.length >= 2 && (debouncedQ !== q.trim() || companyQuery.isFetching)
 
-  const intentHits = useMemo(() => resolveIntents(q, 3), [q])
+  const intentHits = useMemo(() => {
+    const byRoute = new Map(ALL_TOOLS.map(t => [t.route.split('?')[0], t]))
+    return resolveIntents(q, 4)
+      .map(hit => ({ hit, tool: byRoute.get(hit.route) }))
+      .filter((x): x is { hit: typeof x.hit; tool: NonNullable<typeof x.tool> } => !!x.tool)
+  }, [q])
   const noResults = !dashSym && filtered.length === 0 && actionResults.length === 0 && companyResults.length === 0 && intentHits.length === 0
 
   // Arrow-key navigation over the flat tool+action result list; Enter opens the
   // selection, or jumps to the ticker's market data when a symbol is typed.
-  const navRoutes = useMemo(() => [...filtered.map(t => t.route), ...actionResults.map(r => r.route)], [filtered, actionResults])
+  const navRoutes = useMemo(
+    () => [...intentHits.map(x => intentUrl(x.hit)), ...filtered.map(t => t.route), ...actionResults.map(r => r.route)],
+    [intentHits, filtered, actionResults],
+  )
   const [selIdx, setSelIdx] = useState(-1)
   useEffect(() => setSelIdx(-1), [ql])
   const onSearchKey = (e: React.KeyboardEvent) => {
@@ -786,7 +794,7 @@ export default function Home() {
                 <div>
                   <SectionLabel icon={Search} label="Tools" count={filtered.length} />
                   <ResultGrid>
-                    {filtered.map((t, i) => <ResultTile key={t.route} icon={t.icon} title={t.title} sub={t.desc} selected={selIdx === i} onClick={() => navigate(t.route)} />)}
+                    {filtered.map((t, i) => <ResultTile key={t.route} icon={t.icon} title={t.title} sub={t.desc} selected={selIdx === intentHits.length + i} onClick={() => navigate(t.route)} />)}
                   </ResultGrid>
                 </div>
               )}
@@ -803,16 +811,17 @@ export default function Home() {
                   Searching…
                 </div>
               )}
-              {intentHits.length > 0 && filtered.length === 0 && actionResults.length === 0 && (
-                <div style={{ marginBottom: 4 }}>
-                  <div style={{ fontFamily: F.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: F.muted, padding: '10px 2px 6px' }}>Go to</div>
-                  {intentHits.map(hit => (
-                    <button key={hit.route} onClick={() => navigate(intentUrl(hit))}
-                      style={{ display: 'flex', alignItems: 'baseline', gap: 10, width: '100%', textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer', padding: '9px 2px' }}>
-                      <span style={{ fontFamily: F.sans, fontSize: 14, color: F.text }}>{hit.title}</span>
-                      {hit.ticker && <span style={{ fontFamily: F.mono, fontSize: 11, color: F.gold }}>{hit.ticker}</span>}
-                    </button>
-                  ))}
+              {intentHits.length > 0 && (
+                <div>
+                  <SectionLabel icon={Compass} label="Go to" count={intentHits.length} />
+                  <ResultGrid>
+                    {intentHits.map(({ hit, tool }, i) => (
+                      <ResultTile key={hit.route} icon={tool.icon}
+                        title={hit.ticker ? `${tool.title} · ${hit.ticker}` : tool.title}
+                        sub={tool.desc} selected={selIdx === i}
+                        onClick={() => navigate(intentUrl(hit))} />
+                    ))}
+                  </ResultGrid>
                 </div>
               )}
               {noResults && !searching && (

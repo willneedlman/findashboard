@@ -26,6 +26,19 @@ describe('extractTicker', () => {
     expect(extractTicker('aapl')).toBe('AAPL')
   })
 
+  it('does not read a half-typed word as a symbol', () => {
+    // Reported from the sidebar palette: typing "wha" on the way to "what"
+    // filled the list with WHA ticker shortcuts.
+    for (const q of ['wha', 'volat', 'chart', 'port', 'sect', 'earn', 'div']) {
+      expect(extractTicker(q)).toBeNull()
+    }
+  })
+
+  it('still honours an explicitly capitalised symbol that shadows a word', () => {
+    expect(extractTicker('MARK')).toBe('MARK')
+    expect(extractTicker('WHA')).toBe('WHA')
+  })
+
   it('treats finance words shaped like symbols as words, not symbols', () => {
     for (const q of ['alpha', 'delta', 'yield', 'rates', 'bonds', 'cash']) {
       expect(extractTicker(q)).toBeNull()

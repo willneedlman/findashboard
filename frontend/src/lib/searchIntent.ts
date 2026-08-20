@@ -103,6 +103,17 @@ const VOCAB = new Set<string>([
 
 const SYMBOL_RE = /^\^?[A-Za-z]{1,5}(\.[A-Za-z])?$/
 
+// Every proper prefix of a vocabulary word. A query arrives one key at a time,
+// so "wha" shows up long before "what" does, and reading that as a symbol threw
+// a wall of "WHA -> Mover Radar" rows over the answer being reached for.
+const VOCAB_PREFIXES = (() => {
+  const out = new Set<string>()
+  for (const word of VOCAB) {
+    for (let i = 1; i < word.length; i++) out.add(word.slice(0, i))
+  }
+  return out
+})()
+
 /**
  * Pull a symbol out of a natural-language query.
  *
@@ -118,9 +129,12 @@ export function extractTicker(query: string): string | null {
     if (!token || !SYMBOL_RE.test(token)) continue
     // Typed in caps is an explicit symbol, whatever the word is.
     if (token === token.toUpperCase() && /[A-Z]/.test(token)) return token.toUpperCase()
-    // Otherwise only when it is not ordinary search vocabulary. This is what
-    // lets a lowercase "aapl" resolve while "vol" and "chart" do not.
-    if (!VOCAB.has(token.toLowerCase())) return token.toUpperCase()
+    // Otherwise only when it is neither ordinary search vocabulary nor the
+    // start of some. That is what lets a lowercase "aapl" resolve while "vol",
+    // "chart" and the half-typed "wha" do not. Typing it in caps stays the
+    // escape hatch for a real symbol that shadows a word.
+    const lower = token.toLowerCase()
+    if (!VOCAB.has(lower) && !VOCAB_PREFIXES.has(lower)) return token.toUpperCase()
   }
   return null
 }
