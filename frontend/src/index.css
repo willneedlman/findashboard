@@ -525,9 +525,14 @@
 
 .portfolio-analysis-page {
   /* Fills the shell's content box: 100dvh less the page gutters and the shared
-     page header. The disclaimer footer stays below the fold, as on every tool. */
-  height: calc(100dvh - 104px);
-  min-height: 620px;
+     page header, so the board uses the whole screen and the disclaimer footer
+     sits below the fold as on every tool.
+
+     min-height, never height. A fixed height cannot be honoured on a short
+     viewport, and the content does not shrink past the grid's row floors — it
+     overflows the box and lands on top of the footer instead. Growing and
+     scrolling is the correct failure. */
+  min-height: calc(100dvh - 104px);
 }
 
 @media (min-width: 768px) and (max-width: 1180px) {

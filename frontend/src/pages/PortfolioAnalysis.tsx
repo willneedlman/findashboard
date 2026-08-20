@@ -426,8 +426,6 @@ function Results({ data }: { data: AnalysisResult }) {
   const p95Return = mc ? (mc.percentiles.p95 - 1) * 100 : null
   const liquidationOdds = mc?.pct_forced_liquidation ?? mc?.pct_wiped ?? null
   const liquidatedPaths = liquidationOdds == null ? null : Math.round(liquidationOdds / 100 * data.simulationSettings.simulations)
-  const health = b.metrics.port_sharpe >= 1 && b.metrics.max_drawdown > -25 && (macro?.concentration.effective_n ?? 0) >= 5 ? 'Balanced' : b.metrics.max_drawdown <= -35 || (macro?.concentration.effective_n ?? 99) < 3 ? 'High risk' : 'Watch'
-  const healthColor = health === 'Balanced' ? T.pos : health === 'High risk' ? T.neg : T.warn
 
   useReportCapture(() => {
     const pieces: ClipDraft[] = [
@@ -453,14 +451,7 @@ function Results({ data }: { data: AnalysisResult }) {
   }, { sourceTab: 'Portfolio Analysis' })
 
   return <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1, minHeight: 0 }}>
-    <Panel label="Portfolio verdict" meta={new Date(data.generatedAt).toLocaleString()} style={{ padding: '34px 16px 12px', flex: 'none' }}>
-      <div className="portfolio-verdict-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, .65fr) minmax(300px, 1.5fr) minmax(260px, 1fr)', gap: 20, alignItems: 'center' }}>
-        <div><div style={{ fontFamily: SANS, fontSize: 9, color: T.muted, letterSpacing: '.14em', textTransform: 'uppercase' }}>Risk posture</div><div style={{ fontFamily: MONO, fontSize: 24, color: healthColor, fontWeight: 800, marginTop: 5 }}>{health}</div></div>
-        <div style={{ fontFamily: SANS, fontSize: 14, color: T.text, lineHeight: 1.55 }}>{verdict(data, activeReturn)}</div>
-        <div style={{ borderLeft: `1px solid ${T.border}`, paddingLeft: 18 }}><div style={{ fontFamily: SANS, fontSize: 9, color: T.muted, letterSpacing: '.12em', textTransform: 'uppercase' }}>First decision</div><div style={{ fontFamily: MONO, fontSize: 12, color: data.positions[0]?.tone ?? T.text, marginTop: 7 }}>{data.positions[0]?.ticker ?? '—'} · {data.positions[0]?.decision ?? 'No position signal'}</div><div style={{ fontFamily: SANS, fontSize: 11, color: T.muted, marginTop: 5 }}>{data.positions[0]?.rationale}</div></div>
-      </div>
-    </Panel>
-    <KpiStrip cellHeight={86} cells={[
+    <KpiStrip dense cells={[
       { label: 'Alpha', value: macro ? fmtPct(macro.alpha_ann_pct) : '—', sub: 'Factor adjusted', vc: chg(macro?.alpha_ann_pct) },
       { label: 'Beta', value: b.metrics.beta.toFixed(2), sub: `vs ${BENCHMARK}`, vc: b.metrics.beta > 1.2 ? T.warn : T.text },
       { label: 'Portfolio CAGR', value: fmtPct(b.metrics.port_cagr), sub: `${fmtPct(activeReturn)} active`, vc: chg(activeReturn) },
@@ -468,7 +459,7 @@ function Results({ data }: { data: AnalysisResult }) {
       { label: 'Sharpe', value: b.metrics.port_sharpe.toFixed(2), sub: `Sortino ${b.metrics.sortino.toFixed(2)}`, vc: b.metrics.port_sharpe >= 1 ? T.pos : T.warn },
       { label: 'Volatility', value: `${b.metrics.port_vol.toFixed(1)}%`, sub: 'Annualized', vc: b.metrics.port_vol >= 30 ? T.warn : T.text },
     ]} />
-    <KpiStrip cellHeight={86} cells={[
+    <KpiStrip dense cells={[
       { label: 'VaR 95%', value: mc ? fmtTailReturn(mc.var_95) : '—', sub: 'Terminal return at the 5th percentile', vc: mc && !isTailLoss(mc.var_95) ? T.pos : T.neg },
       { label: 'CVaR 95%', value: mc ? fmtTailReturn(mc.cvar_95) : '—', sub: 'Average terminal return in the worst 5%', vc: mc && !isTailLoss(mc.cvar_95) ? T.pos : T.neg },
       { label: 'Median outcome', value: p50Return == null ? '—' : fmtPct(p50Return), sub: '50th-percentile terminal return', vc: chg(p50Return) },
