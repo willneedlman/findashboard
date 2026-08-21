@@ -13,6 +13,7 @@ Data source: https://data.sec.gov/api/xbrl/companyfacts/CIK##########.json
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date
 
 import requests
@@ -208,20 +209,90 @@ def debt_maturity_schedule(sym: str) -> dict | None:
     return result
 
 
-def _fetch_facts(sym: str) -> dict | None:
-    cik = _cik_for(sym)
-    if not cik:
-        return None
+def _companyfacts(cik: str) -> tuple[dict | None, str]:
+    """(us-gaap facts, entityName) for one CIK."""
     try:
         r = requests.get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json",
                          headers=_UA, timeout=_TIMEOUT)
         if r.status_code == 404:
-            return None
+            return None, ""
         r.raise_for_status()
-        return r.json().get("facts", {}).get("us-gaap")
+        j = r.json()
+        return j.get("facts", {}).get("us-gaap"), j.get("entityName") or ""
     except Exception as e:
-        logger.warning("SEC companyfacts failed for %s: %s", sym, e)
+        logger.warning("SEC companyfacts failed for CIK%s: %s", cik, e)
+        return None, ""
+
+
+_SUFFIXES = {"corp", "corporation", "inc", "incorporated", "co", "company", "ltd", "limited",
+             "plc", "holdings", "holding", "group", "the", "sa", "nv", "ag", "lp", "llc",
+             "class", "common", "stock", "new"}
+
+
+def _norm_name(name: str) -> str:
+    """A company name without its corporate suffix, for comparing two spellings
+    of the same issuer. EDGAR's conformed name is "EXXON MOBIL CORP" while
+    companyfacts says "Exxon Mobil Corporation"."""
+    words = [w for w in re.sub(r"[^a-z0-9 ]+", " ", name.lower()).split() if w not in _SUFFIXES]
+    return " ".join(words)
+
+
+def _filing_cik(name: str) -> str | None:
+    """The CIK that actually files 10-Ks under this company name.
+
+    A reorganised issuer gets a NEW registrant, and SEC's ticker file follows the
+    ticker to it immediately. Exxon's XOM maps to CIK 2115436, which has 94
+    concepts and no annual facts at all, while every 10-K since 1993 sits under
+    CIK 34088. Company search resolves the name to the filing registrant.
+    """
+    # Company search matches a PREFIX of the conformed name, so the full legal
+    # name misses: "Exxon Mobil Corporation" is not a prefix of "EXXON MOBIL CORP".
+    for query in dict.fromkeys([_norm_name(name), name, " ".join(_norm_name(name).split()[:2])]):
+        if not query:
+            continue
+        try:
+            r = requests.get(
+                "https://www.sec.gov/cgi-bin/browse-edgar",
+                params={"company": query, "type": "10-K", "dateb": "", "owner": "include",
+                        "count": "10", "action": "getcompany", "output": "atom"},
+                headers=_UA, timeout=_TIMEOUT)
+            r.raise_for_status()
+            hits = re.findall(r"<cik>(\d{7,10})</cik>", r.text) or re.findall(r"CIK=(\d{7,10})", r.text)
+            if hits:
+                return hits[0].zfill(10)
+        except Exception as e:
+            logger.warning("SEC company search failed for %s: %s", query, e)
+    return None
+
+
+def _has_annual(us: dict | None) -> bool:
+    return bool(us) and bool(_annual_map(us, _INCOME["revenue"], False, instant=False))
+
+
+def _fetch_facts(sym: str) -> dict | None:
+    cik = _cik_for(sym)
+    if not cik:
         return None
+    us, name = _companyfacts(cik)
+    if _has_annual(us) or not name:
+        return us
+    # Nothing annual under the ticker's own CIK. Before giving up, check whether
+    # the history lives under a predecessor registrant of the same name.
+    key = f"sec:filingcik:v1:{cik}"
+    alt = disk_get(key)
+    if alt is None:
+        alt = _filing_cik(name) or ""
+        disk_set(key, alt, ttl=_CACHE_TTL if alt else _MISS_TTL)
+    if not alt or alt == cik:
+        return us
+    alt_us, alt_name = _companyfacts(alt)
+    # Only accept a same-issuer match: a name search can surface a trust or a
+    # subsidiary, and charting one company's filings under another's ticker
+    # would be worse than showing nothing.
+    if _has_annual(alt_us) and _norm_name(alt_name) == _norm_name(name):
+        logger.info("SEC: %s has no annual facts under CIK%s, using CIK%s", sym, cik, alt)
+        return alt_us
+    return us
 
 
 def _build(sym: str) -> dict | None:
