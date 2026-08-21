@@ -13,7 +13,7 @@ import TickerBasket from '../components/TickerBasket'
 import { useTickerParam } from '../hooks/useTickerParam'
 import { T } from '../lib/theme'
 import { MONO, SANS, mix, seg } from './cockpitKit'
-import { compile, evaluate } from '../lib/formula'
+import { compile, evaluate, lexicon, token } from '../lib/formula'
 import { TOOLTIP_STYLE } from '../components/ChartTooltip'
 
 // Reported fundamentals over time, plus metrics you define yourself.
@@ -60,6 +60,29 @@ const SCALES: { key: Scale; label: string; hint: string }[] = [
   { key: 'log', label: 'Log', hint: 'Real units on a log axis. Zero and negative points drop out' },
 ]
 
+// What a desk calls these line items, on top of the labels the rail already
+// shows. "share price / earnings" is how someone asks for a P/E; making them
+// find out it is spelled netIncome is the interface's problem, not theirs.
+const SHORTHAND: Record<string, string> = {
+  earnings: 'netIncome', 'net earnings': 'netIncome', profit: 'netIncome', 'net profit': 'netIncome',
+  'bottom line': 'netIncome',
+  sales: 'revenue', turnover: 'revenue', 'top line': 'revenue',
+  cogs: 'costOfRevenue', 'cost of goods sold': 'costOfRevenue', 'cost of sales': 'costOfRevenue',
+  opex: 'operatingExpenses', expenses: 'operatingExpenses', 'operating expense': 'operatingExpenses',
+  ebit: 'operatingIncome', 'operating profit': 'operatingIncome',
+  ebt: 'incomeBeforeTax', 'pretax income': 'incomeBeforeTax', 'pre tax income': 'incomeBeforeTax',
+  tax: 'incomeTaxExpense', taxes: 'incomeTaxExpense',
+  eps: 'epsdiluted', 'earnings per share': 'epsdiluted',
+  shares: 'weightedAverageShsOutDil', 'share count': 'weightedAverageShsOutDil',
+  'shares outstanding': 'weightedAverageShsOutDil',
+  price: 'sharePrice', 'stock price': 'sharePrice',
+  ev: 'enterpriseValue', mcap: 'marketCap', 'market value': 'marketCap',
+  capex: 'capitalExpenditure',
+  da: 'depreciationAndAmortization', depreciation: 'depreciationAndAmortization',
+  cash: 'cashAndCashEquivalents',
+  debt: 'totalDebt', equity: 'totalStockholdersEquity', 'book value': 'totalStockholdersEquity',
+}
+
 // Axis order, so dollars always take the left axis no matter what you picked first.
 const UNIT_ORDER = ['$', 'sh', '$/sh', 'x']
 const MIN_SPAN = 2
@@ -76,6 +99,13 @@ function fmt(v: number | null | undefined, unit: string): string {
   }
   if (unit === 'sh') return `${(v / 1e9).toFixed(2)}B`
   if (unit === '$/sh') return `$${v.toFixed(2)}`
+  // A custom metric can land anywhere. Two decimals turned a P/E written as
+  // price over net income (2.4e-9) into "0.00", which reads as a real zero.
+  const a = Math.abs(v)
+  if (v === 0) return '0'
+  if (a >= 1e6 || a < 0.001) return v.toExponential(2)
+  if (a < 0.01) return v.toFixed(5)
+  if (a < 1) return v.toFixed(3)
   return v.toFixed(2)
 }
 
@@ -111,8 +141,19 @@ export default function FundamentalOverlay() {
   const data = ok[0]?.data
 
   const fields = useMemo(() => data?.fields ?? [], [data])
-  const known = useMemo(() => new Set(fields.map(f => f.key)), [fields])
-  const check = useMemo(() => (expr.trim() ? compile(expr, known.size ? known : undefined) : null), [expr, known])
+  const lex = useMemo(() => lexicon(fields, SHORTHAND), [fields])
+  const check = useMemo(() => (expr.trim() ? compile(expr, fields.length ? lex : undefined) : null), [expr, lex, fields.length])
+
+  // Per-share over whole-company is the trap this box invites: "share price /
+  // earnings" parses, computes, and returns 2.4e-9 instead of a P/E. The formula
+  // is not wrong, so this warns rather than blocks.
+  const unitMix = useMemo(() => {
+    if (!check?.ok) return null
+    const units = new Set(check.vars.map(v => fields.find(f => f.key === v)?.unit))
+    return units.has('$/sh') && (units.has('$') || units.has('sh'))
+      ? 'Mixes per-share and whole-company figures. Price over net income is not a P/E; price over EPS is.'
+      : null
+  }, [check, fields])
 
   const addCustom = () => {
     if (!check?.ok || !name.trim()) return
@@ -121,6 +162,43 @@ export default function FundamentalOverlay() {
     setPicked(p => [...p, next[next.length - 1].id])
     setName(''); setExpr('')
   }
+  // Drag a field out of the rail and drop it into the formula box. Typing the
+  // name is still fine, but nobody should have to learn a spelling to start.
+  const exprRef = useRef<HTMLTextAreaElement>(null)
+  const [dropping, setDropping] = useState(false)
+
+  const insertAt = (text: string, at?: number) => {
+    setExpr(cur => {
+      const pos = at == null ? cur.length : Math.max(0, Math.min(at, cur.length))
+      const before = cur.slice(0, pos).replace(/\s+$/, '')
+      const after = cur.slice(pos).replace(/^\s+/, '')
+      return `${before}${before ? ' ' : ''}${text}${after ? ` ${after}` : ''}`
+    })
+    requestAnimationFrame(() => exprRef.current?.focus())
+  }
+
+  /** Where in the text the pointer let go, so a drop lands where you aimed it. */
+  const caretAt = (e: React.DragEvent): number | undefined => {
+    const el = exprRef.current
+    if (!el) return undefined
+    const r = el.getBoundingClientRect()
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return undefined
+    const doc = document as Document & {
+      caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null
+    }
+    const pos = doc.caretPositionFromPoint?.(e.clientX, e.clientY)
+    if (pos && (pos.offsetNode === el || el.contains(pos.offsetNode))) return pos.offset
+    return el.selectionStart ?? undefined
+  }
+
+  const onDropField = (e: React.DragEvent) => {
+    const text = e.dataTransfer.getData('application/x-ft-field') || e.dataTransfer.getData('text/plain')
+    setDropping(false)
+    if (!text) return
+    e.preventDefault()
+    insertAt(text, caretAt(e))
+  }
+
   const dropCustom = (id: string) => {
     const next = custom.filter(c => c.id !== id)
     setCustom(next); saveCustom(next)
@@ -165,13 +243,13 @@ export default function FundamentalOverlay() {
         const p = l.data.periods.find(x => x.fiscalYear === fy)
         for (const m of selected) {
           row[`${l.tk}__${m.key}`] = !p ? null
-            : m.expr ? evaluate(m.expr, p as never)
+            : m.expr ? evaluate(m.expr, p as never, lex)
             : ((p[m.key] as number) ?? null)
         }
       }
       return row
     })
-  }, [ok, selected])
+  }, [ok, selected, lex])
 
   const [scale, setScale] = useState<Scale>('abs')
   // The visible slice of fiscal years. null is the whole history.
@@ -337,6 +415,13 @@ export default function FundamentalOverlay() {
                 const on = picked.includes(f.key)
                 return (
                   <button key={f.key} onClick={() => setPicked(p => on ? p.filter(k => k !== f.key) : [...p, f.key])}
+                    draggable
+                    onDragStart={e => {
+                      e.dataTransfer.setData('application/x-ft-field', token(f.label))
+                      e.dataTransfer.setData('text/plain', token(f.label))
+                      e.dataTransfer.effectAllowed = 'copy'
+                    }}
+                    title={`${f.label} · drag into a formula, or click to plot`}
                     style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: SANS, fontSize: 10.5,
                       padding: '4px 8px', cursor: 'pointer',
                       background: on ? mix(metricColor(f.key), 14) : 'transparent',
@@ -376,18 +461,33 @@ export default function FundamentalOverlay() {
         )
       })}
 
-      <div style={{ border: `1px solid ${T.border}`, padding: 9, marginTop: 6 }}>
+      <div
+        onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; if (!dropping) setDropping(true) }}
+        onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropping(false) }}
+        onDrop={onDropField}
+        style={{ border: `1px solid ${dropping ? T.gold : T.border}`, padding: 9, marginTop: 6,
+          background: dropping ? mix(T.gold, 7) : 'transparent' }}>
         <input value={name} onChange={e => setName(e.target.value)} placeholder="Metric name"
           className="ft-control" style={{ width: '100%', marginBottom: 5 }} />
-        <textarea value={expr} onChange={e => setExpr(e.target.value)}
-          placeholder="(revenue - costOfRevenue - capitalExpenditure) / enterpriseValue"
+        <textarea ref={exprRef} value={expr} onChange={e => setExpr(e.target.value)}
+          placeholder="drag a field in, or type: share price / earnings"
           rows={3} className="ft-control" style={{ width: '100%', resize: 'vertical', fontFamily: MONO, fontSize: 10.5 }} />
-        {check && !check.ok && (
+        {dropping && (
+          <div style={{ fontFamily: SANS, fontSize: 10, color: T.gold, marginTop: 4 }}>
+            Drop to put it in the formula
+          </div>
+        )}
+        {!dropping && check && !check.ok && (
           <div style={{ fontFamily: SANS, fontSize: 10, color: T.neg, marginTop: 4 }}>{check.error}</div>
         )}
-        {check?.ok && (
+        {!dropping && check?.ok && (
           <div style={{ fontFamily: SANS, fontSize: 10, color: T.pos, marginTop: 4 }}>
-            uses {check.vars.join(', ')}
+            uses {check.vars.map(v => lex.label.get(v) ?? v).join(', ')}
+          </div>
+        )}
+        {!dropping && unitMix && (
+          <div style={{ fontFamily: SANS, fontSize: 10, color: T.warn, marginTop: 4, lineHeight: 1.45 }}>
+            {unitMix}
           </div>
         )}
         <button onClick={addCustom} disabled={!check?.ok || !name.trim()}
@@ -400,7 +500,9 @@ export default function FundamentalOverlay() {
           <Save size={12} /> Save metric
         </button>
         <div style={{ fontFamily: SANS, fontSize: 9.5, color: T.muted, marginTop: 7, lineHeight: 1.5 }}>
-          Use any field name above, with + − * / ^ and parentheses. Saved to this browser.
+          Drag any field above into this box, or type its name. Desk shorthand works too:
+          price, earnings, sales, cogs, capex, ev. Combine with + − * / ^ and parentheses.
+          Saved to this browser.
         </div>
       </div>
     </div>
@@ -417,8 +519,11 @@ export default function FundamentalOverlay() {
             hint={`SEC companyfacts has no usable us-gaap history for ${tickers.join(", ")}. Foreign issuers filing 20-F and most funds are not covered.`} />
         )}
         {!isLoading && !error && data && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ border: `1px solid ${T.border}`, background: T.bg }}>
+          // The chart is the page. Sizing it off the viewport rather than a fixed
+          // clamp means the table takes what it needs and the plot takes the rest.
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 'calc(100vh - 100px)' }}>
+            <div style={{ border: `1px solid ${T.border}`, background: T.bg,
+              flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 420 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
                 padding: '8px 12px', borderBottom: `1px solid ${T.borderFaint}` }}>
                 <div style={{ display: 'flex', width: 216 }}>
@@ -450,9 +555,13 @@ export default function FundamentalOverlay() {
                 onPointerUp={endPan}
                 onPointerCancel={endPan}
                 onDoubleClick={() => setWin(null)}
-                style={{ padding: '12px 12px 6px', touchAction: 'none',
+                style={{ touchAction: 'none', flex: '1 1 auto', minHeight: 0,
                   cursor: panning ? 'grabbing' : zoomed ? 'grab' : 'default',
-                  height: 'clamp(320px, calc(100vh - 470px), 620px)' }}>
+                  // A flexed box has a used height but a computed height of auto,
+                  // so a percentage child resolves to zero. The inset child is
+                  // what gives ResponsiveContainer something definite to measure.
+                  position: 'relative' }}>
+                <div style={{ position: 'absolute', top: 12, right: 12, bottom: 6, left: 12 }}>
                 {lines.length === 0 ? (
                   <div style={{ height: '100%', display: 'grid', placeItems: 'center', fontFamily: SANS,
                     fontSize: 12, color: T.muted }}>Add a company, then pick a field or a saved metric.</div>
@@ -501,6 +610,7 @@ export default function FundamentalOverlay() {
                     </ComposedChart>
                   </ResponsiveContainer>
                 )}
+                </div>
               </div>
               {dropped > 0 && (
                 <div style={{ padding: '0 12px 8px', fontFamily: SANS, fontSize: 9.5, color: T.warn }}>
@@ -509,7 +619,7 @@ export default function FundamentalOverlay() {
               )}
             </div>
 
-            <div style={{ border: `1px solid ${T.border}`, background: T.bg, overflowX: 'auto' }}>
+            <div style={{ border: `1px solid ${T.border}`, background: T.bg, overflowX: 'auto', flex: '0 0 auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>

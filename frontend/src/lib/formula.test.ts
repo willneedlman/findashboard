@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { compile, evaluate, series } from './formula'
+import { compile, evaluate, series, lexicon, token } from './formula'
 
 const AAPL = {
   revenue: 416_161e6, costOfRevenue: 220_998e6, capitalExpenditure: 12_700e6,
@@ -60,14 +60,66 @@ describe('compile', () => {
     expect(compile('(revenue').error).toMatch(/parenthes/)
     expect(compile('revenue)').error).toMatch(/parenthes/)
     expect(compile('revenue +').error).toMatch(/incomplete/)
-    expect(compile('revenue ebitda').error).toMatch(/incomplete/)
+    expect(compile('revenue ebitda').error).toMatch(/missing operator/)
     expect(compile('revenue $ 2').error).toMatch(/unexpected character/)
   })
 
   it('rejects a field the dataset does not have', () => {
-    const known = new Set(['revenue', 'ebitda'])
-    expect(compile('revenue / ebitda', known).ok).toBe(true)
-    expect(compile('revenue / madeUpThing', known).error).toMatch(/unknown field/)
+    const lex = lexicon([{ key: 'revenue', label: 'Revenue' }, { key: 'ebitda', label: 'EBITDA' }])
+    expect(compile('revenue / ebitda', lex).ok).toBe(true)
+    expect(compile('revenue / madeUpThing', lex).error).toMatch(/is not a field/)
+  })
+
+  it('names the field a near miss probably meant', () => {
+    const lex = lexicon([{ key: 'revenue', label: 'Revenue' }, { key: 'netIncome', label: 'Net income' }])
+    expect(compile('revenu / 2', lex).error).toMatch(/Did you mean Revenue\?/)
+  })
+})
+
+// The interface calls a field "Share price" everywhere, so that has to be what
+// the box accepts. Requiring `sharePrice` made it a guessing game.
+describe('lexicon', () => {
+  const FIELDS = [
+    { key: 'sharePrice', label: 'Share price' },
+    { key: 'netIncome', label: 'Net income' },
+    { key: 'epsdiluted', label: 'EPS (diluted)' },
+    { key: 'revenue', label: 'Revenue' },
+    { key: 'costOfRevenue', label: 'Cost of revenue' },
+  ]
+  const lex = lexicon(FIELDS, { earnings: 'netIncome', eps: 'epsdiluted', cogs: 'costOfRevenue' })
+  const P = { sharePrice: 250, netIncome: 100e9, epsdiluted: 6.25, revenue: 400e9, costOfRevenue: 220e9 }
+
+  it('reads a multi-word label as one field', () => {
+    expect(compile('share price / net income', lex).vars).toEqual(['sharePrice', 'netIncome'])
+    expect(evaluate('share price / net income', P, lex)).toBeCloseTo(250 / 100e9, 12)
+  })
+
+  it('reads trade shorthand', () => {
+    expect(evaluate('share price / earnings', { ...P, netIncome: 25 }, lex)).toBe(10)
+    expect(evaluate('revenue - cogs', P, lex)).toBe(180e9)
+  })
+
+  it('still takes the raw keys a saved formula holds', () => {
+    expect(evaluate('(revenue - costOfRevenue) / revenue', P, lex)).toBeCloseTo(0.45, 12)
+  })
+
+  it('takes the longest phrase, not the first word', () => {
+    // "share price" must not tokenise as "share" followed by "price".
+    expect(compile('share price', lex).vars).toEqual(['sharePrice'])
+  })
+
+  it('rejects a bare word that only exists inside a phrase', () => {
+    expect(compile('share * 2', lex).error).toMatch(/is not a field/)
+  })
+
+  it('writes a label the box can actually parse', () => {
+    expect(token('EPS (diluted)')).toBe('eps diluted')
+    expect(compile(token('EPS (diluted)'), lex).vars).toEqual(['epsdiluted'])
+    expect(compile(token('Share price'), lex).vars).toEqual(['sharePrice'])
+  })
+
+  it('flags two fields dragged in with no operator between them, by label', () => {
+    expect(compile('share price net income', lex).error).toBe('missing operator before "Net income"')
   })
 })
 

@@ -67,6 +67,36 @@ _CASHFLOW = {   # durations
 # separately, so add them up rather than treating D&A as missing.
 _DA_PARTS = (["Depreciation", "DepreciationNonproduction"],
              ["AmortizationOfIntangibleAssets", "AmortizationOfIntangibleAssetsExcludingGoodwill"])
+# Charting-only line items. Kept apart from the maps above because _build feeds
+# the DCF and must keep returning exactly the fields it already returns.
+_EXTRA_INCOME = {
+    "researchAndDevelopment": ["ResearchAndDevelopmentExpense"],
+    "sellingGeneralAndAdmin": ["SellingGeneralAndAdministrativeExpense",
+                               "GeneralAndAdministrativeExpense"],
+    "interestExpense": ["InterestExpense", "InterestExpenseDebt", "InterestIncomeExpenseNet"],
+}
+_EXTRA_BALANCE = {   # instants
+    "totalAssets": ["Assets"],
+    "totalLiabilities": ["Liabilities"],
+    "currentAssets": ["AssetsCurrent"],
+    "currentLiabilities": ["LiabilitiesCurrent"],
+    "inventory": ["InventoryNet"],
+    "receivables": ["AccountsReceivableNetCurrent"],
+    "propertyPlantEquipment": ["PropertyPlantAndEquipmentNet"],
+    "goodwill": ["Goodwill"],
+    "retainedEarnings": ["RetainedEarningsAccumulatedDeficit"],
+}
+_EXTRA_CASHFLOW = {   # durations. SEC tags payments as POSITIVE outflows.
+    "operatingCashFlow": ["NetCashProvidedByUsedInOperatingActivities",
+                          "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"],
+    "investingCashFlow": ["NetCashProvidedByUsedInInvestingActivities"],
+    "financingCashFlow": ["NetCashProvidedByUsedInFinancingActivities"],
+    "stockCompensation": ["ShareBasedCompensation", "AllocatedShareBasedCompensationExpense"],
+    "buybacks": ["PaymentsForRepurchaseOfCommonStock"],
+    "dividendsPaid": ["PaymentsOfDividendsCommonStock", "PaymentsOfDividends"],
+}
+_DPS = ["CommonStockDividendsPerShareDeclared"]
+
 # Shares are reported in "shares" units; everything else in USD.
 _SHARE_FIELDS = {"weightedAverageShsOutDil"}
 
@@ -261,6 +291,10 @@ def _history(sym: str) -> list[dict] | None:
     debt_cur = _annual_map(us, _DEBT_CUR, False, instant=True)
     cash_maps = {k: _annual_map(us, c, False, instant=False) for k, c in _CASHFLOW.items()}
     da_parts = [_annual_map(us, c, False, instant=False) for c in _DA_PARTS]
+    x_income = {k: _annual_map(us, c, False, instant=False) for k, c in _EXTRA_INCOME.items()}
+    x_balance = {k: _annual_map(us, c, False, instant=True) for k, c in _EXTRA_BALANCE.items()}
+    x_cash = {k: _annual_map(us, c, False, instant=False) for k, c in _EXTRA_CASHFLOW.items()}
+    dps = _annual_map(us, _DPS, False, instant=False, unit="USD/shares")
 
     years = sorted(income_maps.get("revenue", {}).keys())
     if not years:
@@ -275,6 +309,10 @@ def _history(sym: str) -> list[dict] | None:
             row[k] = balance_maps[k].get(fy)
         for k in _CASHFLOW:
             row[k] = cash_maps[k].get(fy)
+        for maps in (x_income, x_balance, x_cash):
+            for k, m in maps.items():
+                row[k] = m.get(fy)
+        row["dividendPerShare"] = dps.get(fy)
 
         lt, cur = debt_lt.get(fy), debt_cur.get(fy)
         row["totalDebt"] = (lt or 0.0) + (cur or 0.0) if (lt is not None or cur is not None) else None
@@ -285,6 +323,14 @@ def _history(sym: str) -> list[dict] | None:
             if any(p is not None for p in parts):
                 row["depreciationAndAmortization"] = sum(p or 0.0 for p in parts)
 
+        # Free cash flow and working capital are definitions, not estimates: the
+        # subtraction is the whole content, so deriving them here beats making
+        # every user write the same formula.
+        ocf, capex = row.get("operatingCashFlow"), row.get("capitalExpenditure")
+        row["freeCashFlow"] = ocf - capex if ocf is not None and capex is not None else None
+        ca, cl = row.get("currentAssets"), row.get("currentLiabilities")
+        row["workingCapital"] = ca - cl if ca is not None and cl is not None else None
+
         rows.append(row)
     return rows
 
@@ -292,7 +338,7 @@ def _history(sym: str) -> list[dict] | None:
 def get_fundamental_history(ticker: str) -> list[dict]:
     """Annual fundamental line items, oldest first. [] when SEC has nothing."""
     sym = ticker.strip().upper()
-    dk = f"sec:hist:v1:{sym}"
+    dk = f"sec:hist:v2:{sym}"
     cached = disk_get(dk)
     if cached is not None:
         return cached or []

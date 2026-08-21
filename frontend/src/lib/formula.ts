@@ -7,6 +7,22 @@
 
 export type Vars = Record<string, number | null | undefined>
 
+/**
+ * The names a formula may use. Without one, any identifier is accepted as-is.
+ *
+ * A field is called "Share price" everywhere in the interface, so that is what
+ * someone types. Only accepting `sharePrice` made the box a guessing game about
+ * a spelling the interface never shows, so the lexicon maps every spelling of a
+ * field — its key, its label, its sanitised label, and common trade shorthand —
+ * onto one canonical key. Phrases may contain spaces, and the longest one wins.
+ */
+export interface Lexicon {
+  /** Lowercased spelling -> canonical field key. */
+  alias: Map<string, string>
+  /** Canonical field key -> the label to show in an error. */
+  label: Map<string, string>
+}
+
 export interface CompileResult {
   ok: boolean
   error?: string
@@ -24,7 +40,51 @@ type Tok =
 const PREC: Record<string, number> = { '+': 1, '-': 1, '*': 2, '/': 2, '^': 3 }
 const RIGHT = new Set(['^', 'u-'])
 
-function tokenize(src: string): Tok[] | string {
+/** Every proper prefix of every phrase, so the tokeniser knows when to keep
+ *  reading words instead of stopping at the first one. */
+function prefixes(alias: Map<string, string>): Set<string> {
+  const out = new Set<string>()
+  for (const phrase of alias.keys()) {
+    const w = phrase.split(' ')
+    for (let n = 1; n < w.length; n++) out.add(w.slice(0, n).join(' '))
+  }
+  return out
+}
+
+const PREFIX_CACHE = new WeakMap<Map<string, string>, Set<string>>()
+function prefixSet(alias: Map<string, string>): Set<string> {
+  let s = PREFIX_CACHE.get(alias)
+  if (!s) { s = prefixes(alias); PREFIX_CACHE.set(alias, s) }
+  return s
+}
+
+/** Levenshtein, capped: only used to name a near miss in an error. */
+function dist(a: string, b: string): number {
+  const m = a.length, n = b.length
+  if (Math.abs(m - n) > 3) return 9
+  let prev = Array.from({ length: n + 1 }, (_, j) => j)
+  for (let i = 1; i <= m; i++) {
+    const cur = [i]
+    for (let j = 1; j <= n; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1))
+    }
+    prev = cur
+  }
+  return prev[n]
+}
+
+/** The field a misspelling most likely meant, or null when nothing is close. */
+function closest(word: string, lex: Lexicon): string | null {
+  let best: string | null = null
+  let bestD = 4
+  for (const [phrase, key] of lex.alias) {
+    const d = phrase.startsWith(word) || word.startsWith(phrase) ? 1 : dist(word, phrase)
+    if (d < bestD) { bestD = d; best = lex.label.get(key) ?? key }
+  }
+  return best
+}
+
+function tokenize(src: string, lex?: Lexicon): Tok[] | string {
   const out: Tok[] = []
   let i = 0
   while (i < src.length) {
@@ -41,9 +101,34 @@ function tokenize(src: string): Tok[] | string {
       out.push({ t: 'num', v: n }); i = j; continue
     }
     if (/[A-Za-z_]/.test(c)) {
-      let j = i
-      while (j < src.length && /[A-Za-z0-9_]/.test(src[j])) j++
-      out.push({ t: 'id', v: src.slice(i, j) }); i = j; continue
+      const word = (from: number) => {
+        let j = from
+        while (j < src.length && /[A-Za-z0-9_]/.test(src[j])) j++
+        return j
+      }
+      let j = word(i)
+      if (!lex) { out.push({ t: 'id', v: src.slice(i, j) }); i = j; continue }
+      // Keep swallowing words while the phrase so far could still grow into a
+      // known one, then take the longest phrase that actually resolves.
+      const pre = prefixSet(lex.alias)
+      const ends: number[] = [j]
+      let phrase = src.slice(i, j).toLowerCase()
+      while (pre.has(phrase)) {
+        let k = j
+        while (k < src.length && src[k] === ' ') k++
+        if (k === j || !/[A-Za-z_]/.test(src[k] ?? '')) break
+        const e = word(k)
+        phrase = `${phrase} ${src.slice(k, e).toLowerCase()}`
+        ends.push(e); j = e
+      }
+      let taken = -1
+      for (let n = ends.length - 1; n >= 0; n--) {
+        const cand = src.slice(i, ends[n]).toLowerCase().replace(/\s+/g, ' ')
+        const hit = lex.alias.get(cand)
+        if (hit) { out.push({ t: 'id', v: hit }); taken = ends[n]; break }
+      }
+      if (taken < 0) { out.push({ t: 'id', v: src.slice(i, ends[0]) }); taken = ends[0] }
+      i = taken; continue
     }
     if (c === '(') { out.push({ t: 'lp' }); i++; continue }
     if (c === ')') { out.push({ t: 'rp' }); i++; continue }
@@ -58,7 +143,14 @@ function toRpn(toks: Tok[]): Tok[] | string {
   const out: Tok[] = []
   const ops: Tok[] = []
   let prev: Tok | null = null
+  const valueish = (t: Tok | null) => !!t && (t.t === 'num' || t.t === 'id' || t.t === 'rp')
+  const show = (t: Tok) => (t.t === 'id' ? t.v : t.t === 'num' ? String(t.v) : '(')
   for (const tk of toks) {
+    // Two fields with nothing between them is the commonest way a dragged-in
+    // formula goes wrong, and "incomplete expression" said nothing about it.
+    if ((tk.t === 'num' || tk.t === 'id' || tk.t === 'lp') && valueish(prev)) {
+      return `missing operator before "${show(tk)}"`
+    }
     if (tk.t === 'num' || tk.t === 'id') { out.push(tk); prev = tk; continue }
     if (tk.t === 'lp') { ops.push(tk); prev = tk; continue }
     if (tk.t === 'rp') {
@@ -89,22 +181,37 @@ function toRpn(toks: Tok[]): Tok[] | string {
   return out
 }
 
-const RPN_CACHE = new Map<string, Tok[] | string>()
+// Keyed on the lexicon object, because the same text compiles differently under
+// a different set of names. Callers memoise their lexicon; a fresh one each
+// render only costs a re-parse.
+const LEX_CACHE = new WeakMap<Lexicon, Map<string, Tok[] | string>>()
+const BARE_CACHE = new Map<string, Tok[] | string>()
 
-function rpnFor(expr: string): Tok[] | string {
-  const hit = RPN_CACHE.get(expr)
+function rpnFor(expr: string, lex?: Lexicon): Tok[] | string {
+  let cache = BARE_CACHE
+  if (lex) {
+    const hit = LEX_CACHE.get(lex)
+    if (hit) cache = hit
+    else { cache = new Map(); LEX_CACHE.set(lex, cache) }
+  }
+  const hit = cache.get(expr)
   if (hit) return hit
-  const toks = tokenize(expr)
+  const toks = tokenize(expr, lex)
   const res = typeof toks === 'string' ? toks : toRpn(toks)
-  RPN_CACHE.set(expr, res)
+  cache.set(expr, res)
   return res
 }
 
 /** Validate an expression and report the identifiers it uses. */
-export function compile(expr: string, known?: Set<string>): CompileResult {
+export function compile(expr: string, lex?: Lexicon): CompileResult {
   if (!expr.trim()) return { ok: false, error: 'empty formula', vars: [] }
-  const rpn = rpnFor(expr)
-  if (typeof rpn === 'string') return { ok: false, error: rpn, vars: [] }
+  const rpn = rpnFor(expr, lex)
+  // Tokenising resolves a name to its key, so an error raised after that point
+  // would otherwise quote a spelling the interface never shows.
+  if (typeof rpn === 'string') {
+    const msg = lex ? rpn.replace(/"([^"]+)"/g, (m, k) => (lex.label.has(k) ? `"${lex.label.get(k)}"` : m)) : rpn
+    return { ok: false, error: msg, vars: [] }
+  }
 
   const vars: string[] = []
   let depth = 0
@@ -112,7 +219,10 @@ export function compile(expr: string, known?: Set<string>): CompileResult {
     if (tk.t === 'num') { depth++; continue }
     if (tk.t === 'id') {
       if (!vars.includes(tk.v)) vars.push(tk.v)
-      if (known && !known.has(tk.v)) return { ok: false, error: `unknown field "${tk.v}"`, vars }
+      if (lex && !lex.label.has(tk.v)) {
+        const near = closest(tk.v.toLowerCase(), lex)
+        return { ok: false, error: `"${tk.v}" is not a field${near ? `. Did you mean ${near}?` : ''}`, vars }
+      }
       depth++; continue
     }
     if (tk.t !== 'op') return { ok: false, error: 'unbalanced parentheses', vars }
@@ -128,8 +238,8 @@ export function compile(expr: string, known?: Set<string>): CompileResult {
  * a missing line item in one year must leave a GAP in the series, never a zero
  * that reads as a real reported value.
  */
-export function evaluate(expr: string, vars: Vars): number | null {
-  const rpn = rpnFor(expr)
+export function evaluate(expr: string, vars: Vars, lex?: Lexicon): number | null {
+  const rpn = rpnFor(expr, lex)
   if (typeof rpn === 'string') return null
   const st: number[] = []
   for (const tk of rpn) {
@@ -164,6 +274,32 @@ export function evaluate(expr: string, vars: Vars): number | null {
 }
 
 /** Run a formula across every period, preserving gaps. */
-export function series<T extends Vars>(expr: string, periods: T[]): (number | null)[] {
-  return periods.map(p => evaluate(expr, p))
+export function series<T extends Vars>(expr: string, periods: T[], lex?: Lexicon): (number | null)[] {
+  return periods.map(p => evaluate(expr, p, lex))
+}
+
+/** A lexicon from the dataset's own fields, plus any extra shorthand. */
+export function lexicon(
+  fields: { key: string; label: string }[],
+  shorthand: Record<string, string> = {},
+): Lexicon {
+  const alias = new Map<string, string>()
+  const label = new Map<string, string>()
+  const put = (phrase: string, key: string) => {
+    const p = phrase.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ')
+    if (p && !alias.has(p)) alias.set(p, key)
+  }
+  for (const f of fields) {
+    label.set(f.key, f.label)
+    alias.set(f.key.toLowerCase(), f.key)   // the key itself, verbatim
+    put(f.key, f.key)
+    put(f.label, f.key)
+  }
+  for (const [phrase, key] of Object.entries(shorthand)) if (label.has(key)) put(phrase, key)
+  return { alias, label }
+}
+
+/** The spelling to write into the box for a field: its label, made typeable. */
+export function token(label: string): string {
+  return label.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 }
