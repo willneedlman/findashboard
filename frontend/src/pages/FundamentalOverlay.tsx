@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueries } from '@tanstack/react-query'
 import axios from 'axios'
 import {
-  ComposedChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
+  ComposedChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, Brush,
 } from 'recharts'
 import { X, Save } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
@@ -12,7 +12,7 @@ import EmptyState from '../components/EmptyState'
 import TickerBasket from '../components/TickerBasket'
 import { useTickerParam } from '../hooks/useTickerParam'
 import { T } from '../lib/theme'
-import { MONO, SANS, mix } from './cockpitKit'
+import { MONO, SANS, mix, seg } from './cockpitKit'
 import { compile, evaluate } from '../lib/formula'
 import { TOOLTIP_STYLE } from '../components/ChartTooltip'
 
@@ -45,6 +45,24 @@ const saveCustom = (m: Custom[]) => {
 const METRIC_COLORS = [T.gold, '#60a5fa', '#3fb37f', '#c084fc', '#e0864a', '#38bdf8', '#e5484d']
 const TICKER_COLORS = [T.gold, '#60a5fa', '#3fb37f', '#c084fc', '#e0864a']
 const METRIC_DASH: (string | undefined)[] = [undefined, '7 4', '2 3', '11 4 2 4', '1 3']
+
+// Three ways to make series of different magnitude share one plot.
+//
+// Absolute gives each unit its own axis, which is enough when the numbers are
+// within an order of magnitude of each other. Indexed rebases everything to 100
+// at the left edge of the view, which is the only reading that survives revenue
+// in hundreds of billions next to a multiple of 0.04. Log keeps real units but
+// compresses the range, at the cost of dropping non-positive points.
+type Scale = 'abs' | 'idx' | 'log'
+const SCALES: { key: Scale; label: string; hint: string }[] = [
+  { key: 'abs', label: 'Absolute', hint: 'Real units, one axis per unit' },
+  { key: 'idx', label: 'Indexed', hint: 'Every series rebased to 100 at the left edge of the view' },
+  { key: 'log', label: 'Log', hint: 'Real units on a log axis. Zero and negative points drop out' },
+]
+
+// Axis order, so dollars always take the left axis no matter what you picked first.
+const UNIT_ORDER = ['$', 'sh', '$/sh', 'x']
+const MIN_SPAN = 2
 
 /** Dollar figures are read in billions; ratios are read as they are. */
 function fmt(v: number | null | undefined, unit: string): string {
@@ -155,8 +173,124 @@ export default function FundamentalOverlay() {
     })
   }, [ok, selected])
 
-  const hasMoney = selected.some(s => s.unit === '$' || s.unit === 'sh')
-  const hasRatio = selected.some(s => s.unit !== '$' && s.unit !== 'sh')
+  const [scale, setScale] = useState<Scale>('abs')
+  // The visible slice of fiscal years. null is the whole history.
+  const [win, setWin] = useState<[number, number] | null>(null)
+  const [panning, setPanning] = useState(false)
+  const plotRef = useRef<HTMLDivElement>(null)
+  const drag = useRef<{ x: number; a: number; b: number } | null>(null)
+
+  const last = Math.max(0, rows.length - 1)
+  // Swapping tickers changes the year span underneath the window, so start over
+  // rather than leaving the view pointed at years that no longer exist.
+  useEffect(() => { setWin(null) }, [rows.length])
+
+  const [lo, hi] = useMemo<[number, number]>(() => {
+    if (!win || last < MIN_SPAN) return [0, last]
+    const a = Math.max(0, Math.min(win[0], last - MIN_SPAN))
+    return [a, Math.max(a + MIN_SPAN, Math.min(win[1], last))]
+  }, [win, last])
+  const zoomed = lo > 0 || hi < last
+
+  const setSpan = useCallback((a: number, b: number) => {
+    if (last < MIN_SPAN) return
+    const span = Math.max(MIN_SPAN, Math.min(last, b - a))
+    const start = Math.max(0, Math.min(last - span, a))
+    setWin(start === 0 && start + span === last ? null : [start, start + span])
+  }, [last])
+
+  // Wheel has to be a real listener: React routes wheel through a passive root
+  // handler, so preventDefault there is a no-op and the page scrolls instead.
+  useEffect(() => {
+    const el = plotRef.current
+    if (!el || last < MIN_SPAN) return
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const r = el.getBoundingClientRect()
+      const frac = Math.min(1, Math.max(0, (e.clientX - r.left) / Math.max(1, r.width)))
+      const span = hi - lo
+      let next = Math.round(span * (e.deltaY > 0 ? 1.3 : 0.75))
+      if (next === span) next = span + (e.deltaY > 0 ? 1 : -1)
+      next = Math.max(MIN_SPAN, Math.min(last, next))
+      // Anchor on the year under the cursor so zooming walks toward what you are
+      // pointing at rather than recentring the view every notch.
+      const start = Math.round(lo + frac * span - frac * next)
+      setSpan(start, start + next)
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [lo, hi, last, setSpan])
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // The brush lives inside this box and owns its own drag.
+    if (!zoomed || (e.target as Element).closest?.('.recharts-brush')) return
+    drag.current = { x: e.clientX, a: lo, b: hi }
+    setPanning(true)
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current
+    if (!d) return
+    const w = e.currentTarget.getBoundingClientRect().width
+    const shift = Math.round((-(e.clientX - d.x) / Math.max(1, w)) * (d.b - d.a))
+    setSpan(d.a + shift, d.b + shift)
+  }
+  const endPan = () => { drag.current = null; setPanning(false) }
+
+  // Indexed and log both rewrite the plotted values, so the table below keeps
+  // reading the reported numbers no matter what the chart is showing.
+  const plotRows = useMemo(() => {
+    if (scale === 'abs') return rows
+    if (scale === 'log') {
+      return rows.map(r => {
+        const out: Record<string, number | null | string> = { fy: r.fy }
+        for (const l of lines) {
+          const v = r[l.id]
+          out[l.id] = typeof v === 'number' && v > 0 ? v : null
+        }
+        return out
+      })
+    }
+    const base: Record<string, number | null> = {}
+    for (const l of lines) {
+      let b: number | null = null
+      for (let i = lo; i <= hi; i++) {
+        const v = rows[i]?.[l.id]
+        if (typeof v === 'number' && v !== 0) { b = v; break }
+      }
+      base[l.id] = b
+    }
+    return rows.map(r => {
+      const out: Record<string, number | null | string> = { fy: r.fy }
+      for (const l of lines) {
+        const v = r[l.id]; const b = base[l.id]
+        out[l.id] = typeof v === 'number' && b ? (v / b) * 100 : null
+      }
+      return out
+    })
+  }, [rows, lines, scale, lo, hi])
+
+  // Log silently eats zero and negative points, so say how many it ate.
+  const dropped = useMemo(() => {
+    if (scale !== 'log') return 0
+    let n = 0
+    for (let i = lo; i <= hi; i++) {
+      for (const l of lines) { const v = rows[i]?.[l.id]; if (typeof v === 'number' && v <= 0) n++ }
+    }
+    return n
+  }, [scale, rows, lines, lo, hi])
+
+  // One axis per unit in play, dollars first. A unit drawn by a single line takes
+  // that line's colour, so you can tell at a glance which axis reads which line.
+  const units = useMemo(() => {
+    const present = [...new Set(lines.map(l => l.unit))]
+    return present.sort((a, b) => UNIT_ORDER.indexOf(a) - UNIT_ORDER.indexOf(b))
+  }, [lines])
+  const axisColor = (u: string) => {
+    const own = lines.filter(l => l.unit === u)
+    return own.length === 1 ? own[0].color : T.muted
+  }
+  const axisOf = (u: string) => (scale === 'idx' ? 'idx' : u)
 
   const metricColor = (key: string) => {
     if (multi) return T.gold
@@ -284,36 +418,94 @@ export default function FundamentalOverlay() {
         )}
         {!isLoading && !error && data && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ border: `1px solid ${T.border}`, background: T.bg, padding: '14px 12px 6px',
-              height: 'clamp(320px, calc(100vh - 420px), 620px)' }}>
-              {lines.length === 0 ? (
-                <div style={{ height: '100%', display: 'grid', placeItems: 'center', fontFamily: SANS,
-                  fontSize: 12, color: T.muted }}>Add a company, then pick a field or a saved metric.</div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={rows} margin={{ top: 6, right: 14, bottom: 4, left: 4 }}>
-                    <CartesianGrid stroke={T.borderFaint} vertical={false} />
-                    <XAxis dataKey="fy" tick={{ fill: T.muted, fontSize: 10, fontFamily: MONO }} />
-                    {hasMoney && <YAxis yAxisId="money" tick={{ fill: T.muted, fontSize: 10, fontFamily: MONO }}
-                      width={62} tickFormatter={(v: number) => fmt(v, '$')} />}
-                    {hasRatio && <YAxis yAxisId="ratio" orientation="right" width={52}
-                      tick={{ fill: T.muted, fontSize: 10, fontFamily: MONO }}
-                      tickFormatter={(v: number) => (Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(1))} />}
-                    <Tooltip contentStyle={TOOLTIP_STYLE}
-                      formatter={(v: number, n: string) => {
-                        const l = lines.find(x => x.label === n)
-                        return [fmt(v, l?.unit ?? 'x'), n]
-                      }} />
-                    <Legend wrapperStyle={{ fontFamily: SANS, fontSize: 11 }} />
-                    {lines.map(l => (
-                      <Line key={l.id} yAxisId={l.unit === '$' || l.unit === 'sh' ? 'money' : 'ratio'}
-                        dataKey={l.id} name={l.label} stroke={l.color} strokeDasharray={l.dash}
-                        strokeWidth={1.9} dot={false} isAnimationActive={false}
-                        // A year SEC never tagged must stay a gap, not a joined line.
-                        connectNulls={false} />
-                    ))}
-                  </ComposedChart>
-                </ResponsiveContainer>
+            <div style={{ border: `1px solid ${T.border}`, background: T.bg }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+                padding: '8px 12px', borderBottom: `1px solid ${T.borderFaint}` }}>
+                <div style={{ display: 'flex', width: 216 }}>
+                  {SCALES.map(sc => (
+                    <div key={sc.key} onClick={() => setScale(sc.key)} title={sc.hint} style={seg(scale === sc.key)}>
+                      {sc.label}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontFamily: MONO, fontSize: 10, color: T.muted }}>
+                  {rows.length ? `${rows[lo]?.fy} – ${rows[hi]?.fy}` : '—'}
+                  <span style={{ color: mix(T.muted, 70) }}> · {hi - lo + 1} yrs</span>
+                </div>
+                {zoomed && (
+                  <button onClick={() => setWin(null)} style={{ background: 'transparent',
+                    border: `1px solid ${T.border}`, color: T.muted, cursor: 'pointer', fontFamily: SANS,
+                    fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+                    padding: '4px 9px' }}>Reset zoom</button>
+                )}
+                <div style={{ marginLeft: 'auto', fontFamily: SANS, fontSize: 9.5, color: mix(T.muted, 75) }}>
+                  Scroll to zoom · drag to pan · double-click to reset
+                </div>
+              </div>
+
+              <div
+                ref={plotRef}
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={endPan}
+                onPointerCancel={endPan}
+                onDoubleClick={() => setWin(null)}
+                style={{ padding: '12px 12px 6px', touchAction: 'none',
+                  cursor: panning ? 'grabbing' : zoomed ? 'grab' : 'default',
+                  height: 'clamp(320px, calc(100vh - 470px), 620px)' }}>
+                {lines.length === 0 ? (
+                  <div style={{ height: '100%', display: 'grid', placeItems: 'center', fontFamily: SANS,
+                    fontSize: 12, color: T.muted }}>Add a company, then pick a field or a saved metric.</div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={plotRows} margin={{ top: 6, right: 8, bottom: 0, left: 4 }}>
+                      <CartesianGrid stroke={T.borderFaint} vertical={false} />
+                      <XAxis dataKey="fy" tick={{ fill: T.muted, fontSize: 10, fontFamily: MONO }} />
+                      {scale === 'idx' ? (
+                        <YAxis yAxisId="idx" width={50} tick={{ fill: T.muted, fontSize: 10, fontFamily: MONO }}
+                          tickFormatter={(v: number) => v.toFixed(0)} />
+                      ) : units.map((u, i) => (
+                        <YAxis key={u} yAxisId={u} orientation={i % 2 ? 'right' : 'left'}
+                          scale={scale === 'log' ? 'log' : 'auto'}
+                          domain={scale === 'log' ? ['auto', 'auto'] : undefined}
+                          width={u === '$' ? 62 : 54}
+                          tick={{ fill: axisColor(u), fontSize: 10, fontFamily: MONO }}
+                          tickFormatter={(v: number) => fmt(v, u)} />
+                      ))}
+                      <Tooltip contentStyle={TOOLTIP_STYLE}
+                        formatter={(v: number, n: string, p: { payload?: { fy?: string } }) => {
+                          const l = lines.find(x => x.label === n)
+                          if (scale !== 'idx') return [fmt(v, l?.unit ?? 'x'), n]
+                          // An index with no underlying number is a figure you
+                          // cannot check, so carry the reported value with it.
+                          const raw = rows.find(r => r.fy === p?.payload?.fy)?.[l?.id ?? '']
+                          return [`${v.toFixed(1)} · ${fmt(raw as number, l?.unit ?? 'x')}`, n]
+                        }} />
+                      <Legend wrapperStyle={{ fontFamily: SANS, fontSize: 11 }} />
+                      {lines.map(l => (
+                        <Line key={l.id} yAxisId={axisOf(l.unit)}
+                          dataKey={l.id} name={l.label} stroke={l.color} strokeDasharray={l.dash}
+                          strokeWidth={1.9} dot={false} isAnimationActive={false}
+                          // A year SEC never tagged must stay a gap, not a joined line.
+                          connectNulls={false} />
+                      ))}
+                      {last >= MIN_SPAN && (
+                        <Brush dataKey="fy" height={18} travellerWidth={7} startIndex={lo} endIndex={hi}
+                          stroke={T.goldTint(45)} fill={mix(T.surface, 60)}
+                          onChange={(r: { startIndex?: number; endIndex?: number }) => {
+                            if (typeof r?.startIndex === 'number' && typeof r?.endIndex === 'number') {
+                              setSpan(r.startIndex, r.endIndex)
+                            }
+                          }} />
+                      )}
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+              {dropped > 0 && (
+                <div style={{ padding: '0 12px 8px', fontFamily: SANS, fontSize: 9.5, color: T.warn }}>
+                  {dropped} point{dropped === 1 ? '' : 's'} in view are zero or negative and cannot sit on a log axis.
+                </div>
               )}
             </div>
 
