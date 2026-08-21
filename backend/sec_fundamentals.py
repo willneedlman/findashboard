@@ -238,6 +238,72 @@ def _build(sym: str) -> dict | None:
     return {"income": income, "balance": balance, "cashflow": cashflow}
 
 
+def _history(sym: str) -> list[dict] | None:
+    """Every fiscal year SEC has, as one row per year with income, balance and
+    cash-flow lines side by side.
+
+    _build deliberately collapses balance and cash flow to the latest year because
+    the DCF only needs a point-in-time snapshot. Charting fundamentals needs the
+    whole series, and the annual maps behind it already carry every year, so this
+    keeps them instead of taking years[0].
+    """
+    us = _fetch_facts(sym)
+    if not us:
+        return None
+
+    income_maps = {
+        k: _annual_map(us, c, k in _SHARE_FIELDS, instant=False,
+                       unit="USD/shares" if k == "epsdiluted" else None)
+        for k, c in _INCOME.items()
+    }
+    balance_maps = {k: _annual_map(us, c, False, instant=True) for k, c in _BALANCE.items()}
+    debt_lt = _annual_map(us, _DEBT_LT, False, instant=True)
+    debt_cur = _annual_map(us, _DEBT_CUR, False, instant=True)
+    cash_maps = {k: _annual_map(us, c, False, instant=False) for k, c in _CASHFLOW.items()}
+    da_parts = [_annual_map(us, c, False, instant=False) for c in _DA_PARTS]
+
+    years = sorted(income_maps.get("revenue", {}).keys())
+    if not years:
+        return None
+
+    rows = []
+    for fy in years:
+        row = {"fiscalYear": fy, "date": f"{fy}-12-31"}
+        for k in _INCOME:
+            row[k] = income_maps[k].get(fy)
+        for k in _BALANCE:
+            row[k] = balance_maps[k].get(fy)
+        for k in _CASHFLOW:
+            row[k] = cash_maps[k].get(fy)
+
+        lt, cur = debt_lt.get(fy), debt_cur.get(fy)
+        row["totalDebt"] = (lt or 0.0) + (cur or 0.0) if (lt is not None or cur is not None) else None
+
+        # Filers that never tag a single D&A line usually tag its components.
+        if row.get("depreciationAndAmortization") is None:
+            parts = [m.get(fy) for m in da_parts]
+            if any(p is not None for p in parts):
+                row["depreciationAndAmortization"] = sum(p or 0.0 for p in parts)
+
+        rows.append(row)
+    return rows
+
+
+def get_fundamental_history(ticker: str) -> list[dict]:
+    """Annual fundamental line items, oldest first. [] when SEC has nothing."""
+    sym = ticker.strip().upper()
+    dk = f"sec:hist:v1:{sym}"
+    cached = disk_get(dk)
+    if cached is not None:
+        return cached or []
+    rows = _history(sym)
+    if not rows:
+        disk_set(dk, [], ttl=_MISS_TTL)
+        return []
+    disk_set(dk, rows, ttl=_CACHE_TTL)
+    return rows
+
+
 def _sane(bundle: dict | None) -> bool:
     """A bundle is usable when it carries the income lines nothing else can supply:
     revenue, diluted shares, and operating income (banks/insurers report no

@@ -1579,3 +1579,117 @@ def get_verified_supply_chain_relationships(ticker: str):
     except Exception as e:
         logger.error(f"Error in verified-supply-chain-relationships endpoint: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Fundamental history: the series behind the fundamentals charting tool ─────
+
+# key -> (label, unit, group). Units drive axis formatting and tell the formula
+# builder which results are dollars, which are ratios and which are per-share.
+_FUND_FIELDS = [
+    ("revenue",                     "Revenue",              "$", "Income"),
+    ("costOfRevenue",               "Cost of revenue",      "$", "Income"),
+    ("grossProfit",                 "Gross profit",         "$", "Income"),
+    ("operatingExpenses",           "Operating expenses",   "$", "Income"),
+    ("operatingIncome",             "Operating income",     "$", "Income"),
+    ("ebitda",                      "EBITDA",               "$", "Income"),
+    ("incomeBeforeTax",             "Pre-tax income",       "$", "Income"),
+    ("incomeTaxExpense",            "Income tax",           "$", "Income"),
+    ("netIncome",                   "Net income",           "$", "Income"),
+    ("epsdiluted",                  "EPS (diluted)",        "$/sh", "Income"),
+    ("weightedAverageShsOutDil",    "Diluted shares",       "sh", "Income"),
+    ("cashAndCashEquivalents",      "Cash",                 "$", "Balance"),
+    ("totalDebt",                   "Total debt",           "$", "Balance"),
+    ("netDebt",                     "Net debt",             "$", "Balance"),
+    ("totalStockholdersEquity",     "Shareholders equity",  "$", "Balance"),
+    ("capitalExpenditure",          "Capex",                "$", "Cash flow"),
+    ("depreciationAndAmortization", "D&A",                  "$", "Cash flow"),
+    ("changeInWorkingCapital",      "Change in NWC",        "$", "Cash flow"),
+    ("marketCap",                   "Market cap",           "$", "Market"),
+    ("enterpriseValue",             "Enterprise value",     "$", "Market"),
+    ("sharePrice",                  "Share price",          "$/sh", "Market"),
+]
+
+
+def _period_closes(ticker: str, dates: list[str]) -> dict[str, float]:
+    """Closing price on or before each period end.
+
+    Market cap and EV are only meaningful per period if the price is taken AT
+    that period, not today. Without this every historical multiple would be the
+    current price over an old fundamental.
+    """
+    try:
+        hist = get_history(ticker, period="max")
+        if hist is None or hist.empty or "Close" not in hist:
+            return {}
+        closes = hist["Close"].dropna()
+        if closes.index.tz is not None:
+            closes.index = closes.index.tz_localize(None)
+    except Exception:
+        return {}
+    import pandas as pd
+    out: dict[str, float] = {}
+    for d in dates:
+        try:
+            upto = closes.loc[:pd.Timestamp(d)]
+        except Exception:
+            continue
+        if len(upto):
+            out[d] = float(upto.iloc[-1])
+    return out
+
+
+@router.get("/fundamental-history")
+@cached(ttl=6 * 3600, maxsize=64)
+def fundamental_history(ticker: str):
+    """Annual fundamentals from SEC companyfacts, one row per fiscal year, with
+    the derived lines and the per-period market values the formula builder needs.
+
+    SEC rather than FMP on purpose: FMP's free tier is exhausted, so its absolute
+    fundamentals return nothing, while companyfacts is free and unmetered.
+    """
+    sym = ticker.strip().upper()
+    try:
+        import sec_fundamentals as sec
+        rows = sec.get_fundamental_history(sym)
+    except Exception as e:
+        logger.warning("fundamental history failed for %s: %s", sym, e)
+        rows = []
+    if not rows:
+        raise HTTPException(404, f"No SEC fundamental history for {sym}")
+
+    closes = _period_closes(sym, [r["date"] for r in rows])
+
+    def sub(a, b):
+        return None if a is None or b is None else a - b
+
+    def add(a, b):
+        return None if a is None or b is None else a + b
+
+    periods = []
+    for r in rows:
+        rev, gp = r.get("revenue"), r.get("grossProfit")
+        oi, da = r.get("operatingIncome"), r.get("depreciationAndAmortization")
+        debt, cash = r.get("totalDebt"), r.get("cashAndCashEquivalents")
+        shares = r.get("weightedAverageShsOutDil")
+        px = closes.get(r["date"])
+        mcap = px * shares if (px and shares) else None
+        net_debt = sub(debt, cash)
+        row = {
+            **{k: r.get(k) for k, *_ in _FUND_FIELDS if k in r},
+            "fiscalYear": r["fiscalYear"], "date": r["date"],
+            "costOfRevenue": sub(rev, gp),
+            "operatingExpenses": sub(gp, oi),
+            "ebitda": add(oi, da),
+            "netDebt": net_debt,
+            "sharePrice": px,
+            "marketCap": mcap,
+            "enterpriseValue": add(mcap, net_debt) if mcap is not None else None,
+        }
+        periods.append(row)
+
+    return {
+        "ticker": sym,
+        "source": "SEC companyfacts",
+        "fields": [{"key": k, "label": l, "unit": u, "group": g} for k, l, u, g in _FUND_FIELDS],
+        "periods": periods,
+    }
