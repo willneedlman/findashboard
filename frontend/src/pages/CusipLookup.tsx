@@ -350,7 +350,7 @@ export default function CusipLookup() {
 
   return (
     <PageWrapper>
-      <div className="mx-auto w-full max-w-[1180px] 2xl:max-w-[1440px]" style={{ background: 'var(--theme-bg, #0a1422)', border: `1px solid ${BORDER}` }}>
+      <div className="mx-auto w-full max-w-[1180px] 2xl:max-w-[1440px]" style={{ background: 'var(--theme-bg, #0a1422)', border: `1px solid ${BORDER}`, minHeight: 'clamp(320px, calc(100vh - 250px), 900px)', display: 'flex', flexDirection: 'column' }}>
         {/* header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, padding: '18px 22px 12px', borderBottom: `1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)` }}>
           <div>

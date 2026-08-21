@@ -37,6 +37,13 @@ export interface EmptyStateProps {
                                 // whenever the underlying count updates in large steps.
 }
 
+// The three states below fill the space the page actually has rather than a
+// fixed 220/236px. On a tall window (a maximised desktop app) the old floor left
+// 500px of dead air between the message and the disclaimer footer; on a short
+// one it must not force a scroll. 330px covers the page header, the shell's
+// gutters and the footer, and the clamp keeps both ends sane.
+const FILL_HEIGHT = 'clamp(236px, calc(100vh - 330px), 820px)'
+
 const TITLE_STYLE: React.CSSProperties = {
   fontFamily: MONO, fontSize: 12, fontWeight: 700,
   letterSpacing: '0.18em', textTransform: 'uppercase',
@@ -95,7 +102,7 @@ export default function EmptyState({ title, hint, variant = 'empty', size = 'def
       )
     }
     return (
-      <div role="status" aria-live="polite" style={{ ...SHELL, flexDirection: 'column', gap: 14, minHeight: 220 }}>
+      <div role="status" aria-live="polite" style={{ ...SHELL, flexDirection: 'column', gap: 14, minHeight: FILL_HEIGHT }}>
         <div style={{ ...TITLE_STYLE, color: TXT }}>{title}</div>
         {hint && <div style={HINT_STYLE}>{hint}</div>}
         {bar}
@@ -106,7 +113,7 @@ export default function EmptyState({ title, hint, variant = 'empty', size = 'def
   // ── Unavailable ──────────────────────────────────────────────────────────
   if (variant === 'unavailable') {
     return (
-      <div role="alert" style={{ ...SHELL, flexDirection: 'column', gap: 12, minHeight: 220 }}>
+      <div role="alert" style={{ ...SHELL, flexDirection: 'column', gap: 12, minHeight: FILL_HEIGHT }}>
         <div style={{ ...TITLE_STYLE, color: SEC }}>{title}</div>
         <div style={{ ...HINT_STYLE, color: DIM }}>{hint}</div>
         {onRetry && (
@@ -122,7 +129,7 @@ export default function EmptyState({ title, hint, variant = 'empty', size = 'def
 
   // ── Empty (pre-run) ──────────────────────────────────────────────────────
   return (
-    <div style={{ ...SHELL, minHeight: 236 }}>
+    <div style={{ ...SHELL, minHeight: FILL_HEIGHT }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
         <div style={{ ...TITLE_STYLE, color: TXT }}>{title}</div>
         <div style={HINT_STYLE}>{hint}</div>
