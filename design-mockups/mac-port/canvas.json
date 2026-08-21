@@ -1,0 +1,127 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 760,
+      "h": 700,
+      "title": "Overview"
+    },
+    {
+      "file": "HomeFull.dc.html",
+      "x": 0,
+      "y": 810,
+      "w": 1728,
+      "h": 1080,
+      "title": "Home command surface \u2014 full screen"
+    },
+    {
+      "file": "HomeWindow.dc.html",
+      "x": 1848,
+      "y": 810,
+      "w": 1100,
+      "h": 760,
+      "title": "Home command surface \u2014 windowed"
+    },
+    {
+      "file": "CockpitFull.dc.html",
+      "x": 0,
+      "y": 2000,
+      "w": 1728,
+      "h": 1080,
+      "title": "KPI cockpit board \u2014 full screen"
+    },
+    {
+      "file": "CockpitWindow.dc.html",
+      "x": 1848,
+      "y": 2000,
+      "w": 1100,
+      "h": 760,
+      "title": "KPI cockpit board \u2014 windowed"
+    },
+    {
+      "file": "RailFull.dc.html",
+      "x": 0,
+      "y": 3190,
+      "w": 1728,
+      "h": 1080,
+      "title": "Sidebar rail + results \u2014 full screen"
+    },
+    {
+      "file": "RailWindow.dc.html",
+      "x": 1848,
+      "y": 3190,
+      "w": 1100,
+      "h": 760,
+      "title": "Sidebar rail + results \u2014 windowed"
+    },
+    {
+      "file": "ScannerFull.dc.html",
+      "x": 0,
+      "y": 4380,
+      "w": 1728,
+      "h": 1080,
+      "title": "Dense table scanner \u2014 full screen"
+    },
+    {
+      "file": "ScannerWindow.dc.html",
+      "x": 1848,
+      "y": 4380,
+      "w": 1100,
+      "h": 760,
+      "title": "Dense table scanner \u2014 windowed"
+    },
+    {
+      "file": "ChartDeckFull.dc.html",
+      "x": 0,
+      "y": 5570,
+      "w": 1728,
+      "h": 1080,
+      "title": "Full-bleed chart deck \u2014 full screen"
+    },
+    {
+      "file": "ChartDeckWindow.dc.html",
+      "x": 1848,
+      "y": 5570,
+      "w": 1100,
+      "h": 760,
+      "title": "Full-bleed chart deck \u2014 windowed"
+    },
+    {
+      "file": "MapDeckFull.dc.html",
+      "x": 0,
+      "y": 6760,
+      "w": 1728,
+      "h": 1080,
+      "title": "Map cockpit \u2014 full screen"
+    },
+    {
+      "file": "MapDeckWindow.dc.html",
+      "x": 1848,
+      "y": 6760,
+      "w": 1100,
+      "h": 760,
+      "title": "Map cockpit \u2014 windowed"
+    },
+    {
+      "file": "TerminalFull.dc.html",
+      "x": 0,
+      "y": 7950,
+      "w": 1728,
+      "h": 1080,
+      "title": "MM simulator terminal \u2014 full screen"
+    },
+    {
+      "file": "TerminalWindow.dc.html",
+      "x": 1848,
+      "y": 7950,
+      "w": 1100,
+      "h": 760,
+      "title": "MM simulator terminal \u2014 windowed"
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; background: #06080d; }
+    a { color: #c9a84c; } a:hover { color: #e0c169; }
+    * { box-sizing: border-box; }
+  </style>
+</helmet>
+<div style="width:1500px;height:620px;background:#101c2e;color:#d7e3fc;overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system, 'Helvetica Neue', sans-serif;border-radius:10px">
+<div style="padding:38px 44px;font-family:-apple-system, 'Helvetica Neue', sans-serif">
+  <div style="font-family:'Iowan Old Style', Georgia, serif;font-size:27px;letter-spacing:0.2em;color:#c9a84c">ALPHATAPE</div>
+  <div style="margin-top:8px;font-family:-apple-system, 'Helvetica Neue', sans-serif;font-size:17px;color:#d7e3fc">Three ways to ship a Mac app</div>
+  <div style="margin-top:11px;font-family:-apple-system, 'Helvetica Neue', sans-serif;font-size:13px;color:#8099b0;max-width:900px;line-height:1.6">
+    The same two surfaces are drawn in each shell &mdash; the Portfolio Analysis cockpit and the Stock
+    Screener. Tauri and Electron are deliberately near-identical pictures, because they ship the same
+    web build; only the frame and the engine under it change. The native column is the one that looks
+    like a different product, because it is one.
+  </div>
+  <div style="display:flex;gap:13px;margin-top:26px">
+    <div style="flex:1;border:1px solid rgba(255,255,255,0.08);background:#101c2e;padding:16px 17px;display:flex;flex-direction:column"><div style="font-family:-apple-system, 'Helvetica Neue', sans-serif;font-size:15px;font-weight:600;color:#d7e3fc">Tauri</div><div style="font-family:ui-monospace, 'SF Mono', Menlo, monospace;font-size:11px;color:#c9a84c;margin-top:3px">2-5 days &middot; ~12 MB</div><ul style="margin:13px 0 0;padding-left:16px"><li style="margin-bottom:7px;font-family:-apple-system, 'Helvetica Neue', sans-serif;font-size:12.5px;color:#8099b0;line-height:1.5">Ships the existing web build inside WKWebView.</li><li style="margin-bottom:7px;font-family:-apple-system, 'Helvetica Neue', sans-serif;font-size:12.5px;color:#8099b0;line-height:1.5">Needs the Rust toolchain, not installed here.</li><li style="margin-bottom:7px;font-family:-apple-system, 'Helvetica Neue', sans-serif;font-size:12.5px;color:#8099b0;line-height:1.5">Safari engine: the 57 tools have only been verified in Chrome, so canvas charts, Leaflet and color-mix() need re-testing.</li><li style="margin-bottom:7px;font-family:-apple-system, 'Helvetica Neue', sans-serif;font-size:12.5px;color:#8099b0;line-height:1.5">Real Mac window, menu bar, dock icon, ⌘ shortcuts.</li></ul><div style="margin-top:auto;padding-top:13px;border-top:1px solid rgba(255,255,255,0.05);font-family:-apple-system, 'Helvetica Neue', sans-serif;font-size:12.5px;color:#d7e3fc;line-height:1.45">Cheapest real app. The engine switch is the risk you are taking.</div></div>
+    <div style="flex:1;border:1px solid rgba(255,255,255,0.08);background:#101c2e;padding:16px 17px;display:flex;flex-direction:column"><div style="font-family:-apple-system, 'Helvetica Neue', sans-serif;font-size:15px;font-weight:600;color:#d7e3fc">Electron</div><div style="font-family:ui-monospace, 'SF Mono', Menlo, monospace;font-size:11px;color:#c9a84c;margin-top:3px">2-5 days &middot; ~180 MB</div><ul style="margin:13px 0 0;padding-left:16px"><li style="margin-bottom:7px;font-family:-apple-system, 'Helvetica Neue', sans-serif;font-size:12.5px;color:#8099b0;line-height:1.5">Ships the same web build inside its own Chromium.</li><li style="margin-bottom:7px;font-family:-apple-system, 'Helvetica Neue', sans-serif;font-size:12.5px;color:#8099b0;line-height:1.5">Needs nothing new installed.</li><li style="margin-bottom:7px;font-family:-apple-system, 'Helvetica Neue', sans-serif;font-size:12.5px;color:#8099b0;line-height:1.5">Renders exactly as tested. No engine risk at all.</li><li style="margin-bottom:7px;font-family:-apple-system, 'Helvetica Neue', sans-serif;font-size:12.5px;color:#8099b0;line-height:1.5">Heavier on disk and memory, which matters little on a desktop.</li></ul><div style="margin-top:auto;padding-top:13px;border-top:1px solid rgba(255,255,255,0.05);font-family:-apple-system, 'Helvetica Neue', sans-serif;font-size:12.5px;color:#3fb37f;line-height:1.45">Same app, same pixels, in a Mac window. The safe version of the cheap option.</div></div>
+    <div style="flex:1;border:1px solid rgba(255,255,255,0.08);background:#101c2e;padding:16px 17px;display:flex;flex-direction:column"><div style="font-family:-apple-system, 'Helvetica Neue', sans-serif;font-size:15px;font-weight:600;color:#d7e3fc">Native SwiftUI</div><div style="font-family:ui-monospace, 'SF Mono', Menlo, monospace;font-size:11px;color:#c9a84c;margin-top:3px">12-18 months &middot; ~25 MB</div><ul style="margin:13px 0 0;padding-left:16px"><li style="margin-bottom:7px;font-family:-apple-system, 'Helvetica Neue', sans-serif;font-size:12.5px;color:#8099b0;line-height:1.5">A second client written from scratch against the same 289 endpoints.</li><li style="margin-bottom:7px;font-family:-apple-system, 'Helvetica Neue', sans-serif;font-size:12.5px;color:#8099b0;line-height:1.5">Real sidebar material, SF Symbols, system accent, native tables and toolbars.</li><li style="margin-bottom:7px;font-family:-apple-system, 'Helvetica Neue', sans-serif;font-size:12.5px;color:#8099b0;line-height:1.5">Swift Charts replaces Recharts in 54 files; the candlestick engine has no equivalent and must be written.</li><li style="margin-bottom:7px;font-family:-apple-system, 'Helvetica Neue', sans-serif;font-size:12.5px;color:#8099b0;line-height:1.5">The web app added 164k lines in the last 90 days. A port of this length never catches up unless you freeze it.</li></ul><div style="margin-top:auto;padding-top:13px;border-top:1px solid rgba(255,255,255,0.05);font-family:-apple-system, 'Helvetica Neue', sans-serif;font-size:12.5px;color:#c9a84c;line-height:1.45">The only option that actually looks native. Only worth it scoped to a handful of daily tools.</div></div>
+  </div>
+  <div style="margin-top:22px;font-family:-apple-system, 'Helvetica Neue', sans-serif;font-size:11.5px;color:#8099b0;max-width:900px;line-height:1.6">
+    Type is a system stack throughout: the canvas cannot load Sora or Cinzel. Everything else &mdash;
+    palette, densities, rail widths, control heights &mdash; is lifted from the running app.
+  </div>
+</div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1500,"height":620}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>

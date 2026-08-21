@@ -1,0 +1,6 @@
+# Seeded canvases: ~2.4MB each because they embed the Design editor payload,
+# already published as Artifacts, and regenerable with `python3 gen.py` +
+# `python3 shells.py` followed by the seed-canvas helper. The .dc.html
+# artboards and the two generators are the real source.
+alphatape-mac-layouts.html
+alphatape-mac-shells.html

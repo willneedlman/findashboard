@@ -1,0 +1,63 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1500,
+      "h": 620,
+      "title": "Three ways to ship"
+    },
+    {
+      "file": "TauriCockpit.dc.html",
+      "x": 0,
+      "y": 716,
+      "w": 1500,
+      "h": 940,
+      "title": "Tauri (WKWebView) \u2014 Portfolio Analysis cockpit"
+    },
+    {
+      "file": "ElectronCockpit.dc.html",
+      "x": 1590,
+      "y": 716,
+      "w": 1500,
+      "h": 940,
+      "title": "Electron (Chromium) \u2014 Portfolio Analysis cockpit"
+    },
+    {
+      "file": "NativeCockpit.dc.html",
+      "x": 3180,
+      "y": 716,
+      "w": 1500,
+      "h": 940,
+      "title": "Native SwiftUI \u2014 Portfolio Analysis cockpit"
+    },
+    {
+      "file": "TauriScanner.dc.html",
+      "x": 0,
+      "y": 1752,
+      "w": 1500,
+      "h": 940,
+      "title": "Tauri (WKWebView) \u2014 Stock Screener"
+    },
+    {
+      "file": "ElectronScanner.dc.html",
+      "x": 1590,
+      "y": 1752,
+      "w": 1500,
+      "h": 940,
+      "title": "Electron (Chromium) \u2014 Stock Screener"
+    },
+    {
+      "file": "NativeScanner.dc.html",
+      "x": 3180,
+      "y": 1752,
+      "w": 1500,
+      "h": 940,
+      "title": "Native SwiftUI \u2014 Stock Screener"
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}
