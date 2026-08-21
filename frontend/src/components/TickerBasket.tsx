@@ -55,7 +55,7 @@ export function parseTickerFile(text: string): string[] {
   return out
 }
 
-export default function TickerBasket({ value, onChange, cap = 25, label = 'Tickers', actions }: {
+export default function TickerBasket({ value, onChange, cap = 25, label = 'Tickers', actions, chipColor }: {
   value: string[]
   onChange: (next: string[]) => void
   cap?: number
@@ -63,6 +63,10 @@ export default function TickerBasket({ value, onChange, cap = 25, label = 'Ticke
   /** Rendered at the end of the import row, pushed right. Lets a host put its
    *  own controls on the same line instead of spending another row on them. */
   actions?: React.ReactNode
+  /** Tints each chip with the colour that ticker is drawn in. On a chart where
+   *  hue is the identity, a rail of uniformly gold chips hides the only key the
+   *  reader has. Defaults to gold, so every existing caller is unchanged. */
+  chipColor?: (ticker: string, index: number) => string
 }) {
   const [draft, setDraft] = useState('')
   const [note, setNote] = useState<string | null>(null)
@@ -114,18 +118,22 @@ export default function TickerBasket({ value, onChange, cap = 25, label = 'Ticke
           minHeight: 32, padding: '4px 6px', cursor: 'text',
           background: T.bg, border: `1px solid ${T.goldTint(35)}`,
         }}>
-        {value.map(t => (
+        {value.map((t, i) => {
+          const c = chipColor?.(t, i)
+          return (
           <span key={t} style={{
             display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
-            fontFamily: MONO, fontSize: 10.5, fontWeight: 700, color: T.gold,
-            background: T.goldTint(12), border: `1px solid ${T.goldTint(34)}`, padding: '2px 3px 2px 7px',
+            fontFamily: MONO, fontSize: 10.5, fontWeight: 700, color: c ?? T.gold,
+            background: c ? mix(c, 12) : T.goldTint(12),
+            border: `1px solid ${c ? mix(c, 40) : T.goldTint(34)}`, padding: '2px 3px 2px 7px',
           }}>
             {t}
             <button onClick={e => { e.stopPropagation(); onChange(value.filter(x => x !== t)); setNote(null) }}
               aria-label={`Remove ${t}`} title={`Remove ${t}`}
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.muted, fontSize: 12, lineHeight: 1, padding: '0 3px' }}>×</button>
           </span>
-        ))}
+          )
+        })}
         <input
           id="tb-input"
           value={draft}

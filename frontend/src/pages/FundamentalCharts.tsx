@@ -1,15 +1,15 @@
-import { useMemo, useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
+import { useQueries } from '@tanstack/react-query'
 import axios from 'axios'
 import {
   ComposedChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
 } from 'recharts'
-import { Plus, X, Save } from 'lucide-react'
+import { X, Save } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
 import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
-import TickerInput from '../components/TickerInput'
+import TickerBasket from '../components/TickerBasket'
 import { useTickerParam } from '../hooks/useTickerParam'
 import { T } from '../lib/theme'
 import { MONO, SANS, mix } from './cockpitKit'
@@ -36,7 +36,15 @@ const saveCustom = (m: Custom[]) => {
   try { localStorage.setItem(STORE, JSON.stringify(m)) } catch { /* private mode */ }
 }
 
-const SERIES_COLORS = [T.gold, '#60a5fa', '#3fb37f', '#c084fc', '#e0864a', '#38bdf8', '#e5484d']
+// Two encodings, because one company and several are different reading problems.
+//
+// One company: hue is the metric, every line solid — nothing else needs saying.
+// Several: hue becomes the COMPANY and the dash pattern carries the metric, so
+// three names by three metrics reads as three groups instead of nine unrelated
+// lines. The company chips take the same hue, so the rail is the key.
+const METRIC_COLORS = [T.gold, '#60a5fa', '#3fb37f', '#c084fc', '#e0864a', '#38bdf8', '#e5484d']
+const TICKER_COLORS = [T.gold, '#60a5fa', '#3fb37f', '#c084fc', '#e0864a']
+const METRIC_DASH: (string | undefined)[] = [undefined, '7 4', '2 3', '11 4 2 4', '1 3']
 
 /** Dollar figures are read in billions; ratios are read as they are. */
 function fmt(v: number | null | undefined, unit: string): string {
@@ -54,26 +62,37 @@ function fmt(v: number | null | undefined, unit: string): string {
 }
 
 export default function FundamentalCharts() {
-  const [ticker, setTicker] = useState('AAPL')
-  const [draft, setDraft] = useState('AAPL')
-  // Accepts a symbol handed over from another tool via ?ticker=.
-  useTickerParam(sym => { setTicker(sym.toUpperCase()); setDraft(sym.toUpperCase()) })
-  useEffect(() => { setDraft(ticker) }, [ticker])
+  const [tickers, setTickers] = useState<string[]>(['AAPL'])
+  // A symbol handed over from another tool joins the basket rather than replacing it.
+  useTickerParam(sym => setTickers(t => (t.includes(sym.toUpperCase()) ? t : [sym.toUpperCase(), ...t].slice(0, 5))))
 
   const [picked, setPicked] = useState<string[]>(['revenue', 'ebitda', 'netIncome'])
   const [custom, setCustom] = useState<Custom[]>(loadCustom)
   const [name, setName] = useState('')
   const [expr, setExpr] = useState('')
 
-  const { data, isLoading, error } = useQuery<Resp>({
-    queryKey: ['fundamental-history', ticker],
-    queryFn: () => axios.get(`/api/corporate/fundamental-history?ticker=${encodeURIComponent(ticker)}`).then(r => r.data),
-    enabled: !!ticker,
-    staleTime: 6 * 3600 * 1000,
-    retry: 1,
+  const results = useQueries({
+    queries: tickers.map(tk => ({
+      queryKey: ['fundamental-history', tk],
+      queryFn: () => axios.get(`/api/corporate/fundamental-history?ticker=${encodeURIComponent(tk)}`).then(r => r.data as Resp),
+      staleTime: 6 * 3600 * 1000,
+      retry: 1,
+    })),
   })
+  const isLoading = results.some(r => r.isLoading)
+  // useQueries hands back fresh wrapper objects every render, so memoise on what
+  // actually changed. Without this the chart data is a new array on every
+  // keystroke in the formula box and Recharts never settles.
+  const sig = results.map((r, i) => `${tickers[i]}:${r.data ? 'y' : r.error ? 'e' : '-'}`).join('|')
+  const ok = useMemo(
+    () => results.map((r, i) => ({ tk: tickers[i], data: r.data })).filter(l => l.data) as { tk: string; data: Resp }[],
+    [sig], // eslint-disable-line react-hooks/exhaustive-deps
+  )
+  const failed = results.map((r, i) => (r.error && !r.data ? tickers[i] : null)).filter(Boolean) as string[]
+  const error = !isLoading && ok.length === 0 && results.length > 0 ? (results[0].error ?? true) : null
+  const data = ok[0]?.data
 
-  const fields = data?.fields ?? []
+  const fields = useMemo(() => data?.fields ?? [], [data])
   const known = useMemo(() => new Set(fields.map(f => f.key)), [fields])
   const check = useMemo(() => (expr.trim() ? compile(expr, known.size ? known : undefined) : null), [expr, known])
 
@@ -99,16 +118,59 @@ export default function FundamentalCharts() {
     return c ? { key, label: c.name, unit: 'x', expr: c.expr } : null
   }).filter(Boolean) as { key: string; label: string; unit: string; expr: string | null }[], [picked, fields, custom])
 
-  const rows = useMemo(() => (data?.periods ?? []).map(p => {
-    const row: Record<string, number | null | string> = { fy: String(p.fiscalYear) }
-    for (const s of selected) {
-      row[s.key] = s.expr ? evaluate(s.expr, p as never) : ((p[s.key] as number) ?? null)
-    }
-    return row
-  }), [data, selected])
+  const multi = tickers.length > 1
+
+  // Keyed to the basket slot rather than the loaded slot: a ticker that fails in
+  // the middle must not shift every colour below it, or the chips stop matching
+  // the lines.
+  const colorFor = (tk: string) => TICKER_COLORS[Math.max(0, tickers.indexOf(tk)) % TICKER_COLORS.length]
+  const dashFor = (key: string) =>
+    (multi ? METRIC_DASH[Math.max(0, selected.findIndex(s => s.key === key)) % METRIC_DASH.length] : undefined)
+
+  // One plotted line per company per metric.
+  const lines = useMemo(() => ok.flatMap(l => selected.map((m, mi) => ({
+    id: `${l.tk}__${m.key}`,
+    label: multi ? `${l.tk} ${m.label}` : m.label,
+    unit: m.unit,
+    color: multi ? colorFor(l.tk) : METRIC_COLORS[mi % METRIC_COLORS.length],
+    dash: dashFor(m.key),
+  }))), [ok, selected, tickers, multi]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fiscal years rarely line up across filers, so the x axis is the union and a
+  // company simply has no point in a year it did not report.
+  const rows = useMemo(() => {
+    const years = new Set<number>()
+    ok.forEach(l => l.data.periods.forEach(p => years.add(p.fiscalYear)))
+    return [...years].sort((a, b) => a - b).map(fy => {
+      const row: Record<string, number | null | string> = { fy: String(fy) }
+      for (const l of ok) {
+        const p = l.data.periods.find(x => x.fiscalYear === fy)
+        for (const m of selected) {
+          row[`${l.tk}__${m.key}`] = !p ? null
+            : m.expr ? evaluate(m.expr, p as never)
+            : ((p[m.key] as number) ?? null)
+        }
+      }
+      return row
+    })
+  }, [ok, selected])
 
   const hasMoney = selected.some(s => s.unit === '$' || s.unit === 'sh')
   const hasRatio = selected.some(s => s.unit !== '$' && s.unit !== 'sh')
+
+  const metricColor = (key: string) => {
+    if (multi) return T.gold
+    const i = selected.findIndex(s => s.key === key)
+    return i < 0 ? T.gold : METRIC_COLORS[i % METRIC_COLORS.length]
+  }
+
+  // The chart says which metric a line is by its dash pattern, so the rail has to
+  // show the same pattern or the key only exists in the legend.
+  const DashKey = ({ dash }: { dash?: string }) => (
+    <svg width={18} height={7} style={{ flexShrink: 0 }} aria-hidden>
+      <line x1={0} y1={3.5} x2={18} y2={3.5} stroke="currentColor" strokeWidth={1.8} strokeDasharray={dash} />
+    </svg>
+  )
 
   const label = (t: string) => (
     <div style={{ fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
@@ -117,10 +179,18 @@ export default function FundamentalCharts() {
 
   const sidebar = (
     <div style={{ padding: 13 }}>
-      <div style={{ fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
-        textTransform: 'uppercase', color: T.muted, marginBottom: 5 }}>Company</div>
-      <TickerInput value={draft} onChange={setDraft} onEnter={() => setTicker(draft.toUpperCase())}
-        onSelect={s => setTicker(s.toUpperCase())} placeholder="Ticker" aria-label="Ticker" />
+      <TickerBasket value={tickers} onChange={setTickers} cap={5} label="Companies" chipColor={multi ? colorFor : undefined} />
+      {failed.length > 0 && (
+        <div style={{ fontFamily: SANS, fontSize: 10, color: T.warn, marginTop: 5, lineHeight: 1.45 }}>
+          No SEC history for {failed.join(', ')}. Foreign issuers filing 20-F and most funds are not covered.
+        </div>
+      )}
+
+      {multi && (
+        <div style={{ fontFamily: SANS, fontSize: 9.5, color: T.muted, marginTop: 6, lineHeight: 1.5 }}>
+          Colour is the company, the line pattern is the metric.
+        </div>
+      )}
 
       {['Income', 'Balance', 'Cash flow', 'Market'].map(group => {
         const inGroup = fields.filter(f => f.group === group)
@@ -133,10 +203,12 @@ export default function FundamentalCharts() {
                 const on = picked.includes(f.key)
                 return (
                   <button key={f.key} onClick={() => setPicked(p => on ? p.filter(k => k !== f.key) : [...p, f.key])}
-                    style={{ fontFamily: SANS, fontSize: 10.5, padding: '4px 8px', cursor: 'pointer',
-                      background: on ? mix(T.gold, 14) : 'transparent',
-                      border: `1px solid ${on ? T.gold : T.border}`, color: on ? T.gold : T.muted }}>
-                    {f.label}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: SANS, fontSize: 10.5,
+                      padding: '4px 8px', cursor: 'pointer',
+                      background: on ? mix(metricColor(f.key), 14) : 'transparent',
+                      border: `1px solid ${on ? metricColor(f.key) : T.border}`,
+                      color: on ? metricColor(f.key) : T.muted }}>
+                    {on && multi && <DashKey dash={dashFor(f.key)} />}{f.label}
                   </button>
                 )
               })}
@@ -152,9 +224,13 @@ export default function FundamentalCharts() {
           <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
             <button onClick={() => setPicked(p => on ? p.filter(k => k !== c.id) : [...p, c.id])}
               style={{ flex: 1, textAlign: 'left', fontFamily: SANS, fontSize: 10.5, padding: '4px 8px',
-                cursor: 'pointer', background: on ? mix(T.gold, 14) : 'transparent',
-                border: `1px solid ${on ? T.gold : T.border}`, color: on ? T.gold : T.text, minWidth: 0 }}>
-              <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
+                cursor: 'pointer', background: on ? mix(metricColor(c.id), 14) : 'transparent',
+                border: `1px solid ${on ? metricColor(c.id) : T.border}`,
+                color: on ? metricColor(c.id) : T.text, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, overflow: 'hidden',
+                textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {on && multi && <DashKey dash={dashFor(c.id)} />}{c.name}
+              </div>
               <div style={{ fontFamily: MONO, fontSize: 8.5, color: T.muted, overflow: 'hidden',
                 textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.expr}</div>
             </button>
@@ -199,20 +275,20 @@ export default function FundamentalCharts() {
   return (
     <PageWrapper>
       <PageHeader title="Fundamental Charts"
-        meta={data ? `${data.periods.length} fiscal years · ${data.source}` : undefined} />
-      <SidebarLayout sidebar={sidebar} sidebarTitle="Fields" sidebarWidth={244}>
-        {isLoading && <EmptyState title="Fundamental Charts" variant="loading" hint={`Reading ${ticker} filings from SEC companyfacts.`} />}
+        meta={ok.length ? `${ok.length} compan${ok.length === 1 ? 'y' : 'ies'} · ${rows.length} fiscal years · ${data?.source}` : undefined} />
+      <SidebarLayout sidebar={sidebar} sidebarTitle="Series" sidebarWidth={244}>
+        {isLoading && <EmptyState title="Fundamental Charts" variant="loading" hint={`Reading ${tickers.join(", ")} from SEC companyfacts.`} />}
         {!isLoading && error && (
           <EmptyState title="No filings found" variant="unavailable"
-            hint={`SEC companyfacts has no usable us-gaap history for ${ticker}. Foreign issuers filing 20-F and most funds are not covered.`} />
+            hint={`SEC companyfacts has no usable us-gaap history for ${tickers.join(", ")}. Foreign issuers filing 20-F and most funds are not covered.`} />
         )}
         {!isLoading && !error && data && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ border: `1px solid ${T.border}`, background: T.bg, padding: '14px 12px 6px',
               height: 'clamp(320px, calc(100vh - 420px), 620px)' }}>
-              {selected.length === 0 ? (
+              {lines.length === 0 ? (
                 <div style={{ height: '100%', display: 'grid', placeItems: 'center', fontFamily: SANS,
-                  fontSize: 12, color: T.muted }}>Pick a field or a saved metric to plot.</div>
+                  fontSize: 12, color: T.muted }}>Add a company, then pick a field or a saved metric.</div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={rows} margin={{ top: 6, right: 14, bottom: 4, left: 4 }}>
@@ -225,13 +301,13 @@ export default function FundamentalCharts() {
                       tickFormatter={(v: number) => (Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(1))} />}
                     <Tooltip contentStyle={TOOLTIP_STYLE}
                       formatter={(v: number, n: string) => {
-                        const s = selected.find(x => x.label === n)
-                        return [fmt(v, s?.unit ?? 'x'), n]
+                        const l = lines.find(x => x.label === n)
+                        return [fmt(v, l?.unit ?? 'x'), n]
                       }} />
                     <Legend wrapperStyle={{ fontFamily: SANS, fontSize: 11 }} />
-                    {selected.map((s, i) => (
-                      <Line key={s.key} yAxisId={s.unit === '$' || s.unit === 'sh' ? 'money' : 'ratio'}
-                        dataKey={s.key} name={s.label} stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
+                    {lines.map(l => (
+                      <Line key={l.id} yAxisId={l.unit === '$' || l.unit === 'sh' ? 'money' : 'ratio'}
+                        dataKey={l.id} name={l.label} stroke={l.color} strokeDasharray={l.dash}
                         strokeWidth={1.9} dot={false} isAnimationActive={false}
                         // A year SEC never tagged must stay a gap, not a joined line.
                         connectNulls={false} />
@@ -255,15 +331,15 @@ export default function FundamentalCharts() {
                   </tr>
                 </thead>
                 <tbody>
-                  {selected.map((s, i) => (
-                    <tr key={s.key}>
+                  {lines.map(l => (
+                    <tr key={l.id}>
                       <td style={{ padding: '5px 10px', fontFamily: SANS, fontSize: 11.5,
-                        color: SERIES_COLORS[i % SERIES_COLORS.length], borderBottom: `1px solid ${T.borderFaint}`,
-                        position: 'sticky', left: 0, background: T.bg, whiteSpace: 'nowrap' }}>{s.label}</td>
+                        color: l.color, borderBottom: `1px solid ${T.borderFaint}`,
+                        position: 'sticky', left: 0, background: T.bg, whiteSpace: 'nowrap' }}>{l.label}</td>
                       {rows.map(r => (
                         <td key={r.fy as string} style={{ textAlign: 'right', padding: '5px 10px', fontFamily: MONO,
                           fontSize: 11, color: T.text, borderBottom: `1px solid ${T.borderFaint}`, whiteSpace: 'nowrap' }}>
-                          {fmt(r[s.key] as number, s.unit)}
+                          {fmt(r[l.id] as number, l.unit)}
                         </td>
                       ))}
                     </tr>
