@@ -61,7 +61,7 @@ function fmt(v: number | null | undefined, unit: string): string {
   return v.toFixed(2)
 }
 
-export default function FundamentalCharts() {
+export default function FundamentalOverlay() {
   const [tickers, setTickers] = useState<string[]>(['AAPL'])
   // A symbol handed over from another tool joins the basket rather than replacing it.
   useTickerParam(sym => setTickers(t => (t.includes(sym.toUpperCase()) ? t : [sym.toUpperCase(), ...t].slice(0, 5))))
@@ -274,10 +274,10 @@ export default function FundamentalCharts() {
 
   return (
     <PageWrapper>
-      <PageHeader title="Fundamental Charts"
+      <PageHeader title="Fundamental Overlay"
         meta={ok.length ? `${ok.length} compan${ok.length === 1 ? 'y' : 'ies'} · ${rows.length} fiscal years · ${data?.source}` : undefined} />
       <SidebarLayout sidebar={sidebar} sidebarTitle="Series" sidebarWidth={244}>
-        {isLoading && <EmptyState title="Fundamental Charts" variant="loading" hint={`Reading ${tickers.join(", ")} from SEC companyfacts.`} />}
+        {isLoading && <EmptyState title="Fundamental Overlay" variant="loading" hint={`Reading ${tickers.join(", ")} from SEC companyfacts.`} />}
         {!isLoading && error && (
           <EmptyState title="No filings found" variant="unavailable"
             hint={`SEC companyfacts has no usable us-gaap history for ${tickers.join(", ")}. Foreign issuers filing 20-F and most funds are not covered.`} />

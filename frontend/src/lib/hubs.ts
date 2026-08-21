@@ -67,7 +67,6 @@ export const HUBS: Hub[] = [
       { title: 'Stock Screener',    chip: 'Stock Screener',  desc: '25+ fundamental and technical filters across the universe', route: '/screener',           icon: Filter },
       { title: 'Company Profile',   chip: 'Company Profile', desc: 'Price history, revenue mix, ownership, and credit for one name', route: '/company-profile', tickerParam: true,  icon: Globe },
       { title: 'Peer Comparison',   chip: 'Peer Comparison', desc: 'Trading multiples versus sector peers',                    route: '/peer-comparison', tickerParam: true, icon: Scale },
-      { title: 'Fundamental Charts', chip: 'Fundamental Charts', desc: 'Plot reported line items over 17 years and build your own multiples with arithmetic', route: '/fundamental-charts', tickerParam: true, icon: LineChart },
       { title: 'ETF Analyzer',      chip: 'ETF Analyzer',    desc: 'Look-through holdings, overlap, and concentration',        route: '/etf-analyzer', tickerParam: true,       icon: Boxes },
       { title: 'NAV Tracker',       chip: 'NAV Tracker',     desc: 'Premium and discount on asset-backed proxies',             route: '/nav', tickerParam: true,                icon: Gem },
       { title: 'IPO Scanner',       chip: 'IPO Scanner',     desc: 'Upcoming and recent public offerings with pricing and deal size', route: '/ipo-calendar',    icon: Rocket },
@@ -116,6 +115,7 @@ export const HUBS: Hub[] = [
     tools: [
       { title: 'Chart Studio',       chip: 'Chart Studio',    desc: 'One instrument in candlesticks, with macro and fundamental feeds in synced lanes below', route: '/chart-studio', icon: CandlestickChart },
       { title: 'Asset Overlay',      chip: 'Asset Overlay',   desc: 'Several assets rebased onto one axis for relative performance, plus any fundamental metric over time',                route: '/asset-overlay',      icon: GitCompare },
+      { title: 'Fundamental Overlay', chip: 'Fundamental Overlay', desc: 'Reported line items for several companies on one timeline, plus your own multiples built with arithmetic', route: '/fundamental-overlay', tickerParam: true, icon: LineChart },
       { title: 'Correlation',        chip: 'Correlation',     desc: 'Correlation matrix, rolling drift, and beta',                route: '/correlation',        icon: Waves },
       { title: 'Regression',         chip: 'Regression',      desc: 'OLS and polynomial fits with diagnostics',                   route: '/regression',         icon: Activity },
       { title: 'Ticker Seasonality', chip: 'Seasonality',     desc: 'Month, weekday and turn-of-month patterns, each shown with its sample size', route: '/seasonality', tickerParam: true, icon: CalendarRange },
