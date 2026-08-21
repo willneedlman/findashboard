@@ -299,6 +299,60 @@ export function lexicon(
   return { alias, label }
 }
 
+/**
+ * The unit a formula's result carries, worked out from the units of its inputs.
+ *
+ * Without this every saved metric is a "ratio", so a formula that just adds two
+ * dollar figures gets a ratio axis and ratio formatting. Dollars over dollars is
+ * dimensionless, dollars over shares is dollars per share, and anything the
+ * algebra cannot name comes back null so the caller can fall back rather than
+ * assert a unit it does not have.
+ */
+export function resultUnit(
+  expr: string,
+  unitOf: (key: string) => string | undefined,
+  lex?: Lexicon,
+): string | null {
+  const rpn = rpnFor(expr, lex)
+  if (typeof rpn === 'string') return null
+  const st: (string | null)[] = []
+  const mul = (a: string | null, b: string | null): string | null => {
+    if (a === null || b === null) return null
+    if (a === 'x') return b
+    if (b === 'x') return a
+    // Per-share times a share count is the whole-company figure again.
+    if ((a === '$/sh' && b === 'sh') || (a === 'sh' && b === '$/sh')) return '$'
+    return null
+  }
+  const div = (a: string | null, b: string | null): string | null => {
+    if (a === null || b === null) return null
+    if (a === b) return 'x'
+    if (b === 'x') return a
+    if (a === '$' && b === 'sh') return '$/sh'
+    if (a === '$' && b === '$/sh') return 'sh'
+    if (a === '$/sh' && b === 'sh') return null
+    return null
+  }
+  for (const tk of rpn) {
+    if (tk.t === 'num') { st.push('x'); continue }
+    if (tk.t === 'id') { st.push(unitOf(tk.v) ?? null); continue }
+    if (tk.t !== 'op') return null
+    if (tk.v === 'u-') continue          // negation cannot change a unit
+    const b = st.pop(), a = st.pop()
+    if (a === undefined || b === undefined) return null
+    switch (tk.v) {
+      // Adding unlike things is meaningless, so the result is unnamed rather
+      // than silently taking one side's unit.
+      case '+': case '-': st.push(a === b ? a : null); break
+      case '*': st.push(mul(a, b)); break
+      case '/': st.push(div(a, b)); break
+      case '^': st.push(a === 'x' && b === 'x' ? 'x' : null); break
+      default: return null
+    }
+  }
+  return st.length === 1 ? st[0] : null
+}
+
 /** The spelling to write into the box for a field: its label, made typeable. */
 export function token(label: string): string {
   return label.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()

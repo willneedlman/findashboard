@@ -1625,6 +1625,8 @@ _FUND_FIELDS = [
     ("buybacks",                    "Buybacks",             "$", "Cash flow"),
     ("dividendsPaid",               "Dividends paid",       "$", "Cash flow"),
     ("dividendPerShare",            "Dividend per share",   "$/sh", "Cash flow"),
+    ("revenueEstimate",             "Revenue (est)",        "$", "Estimate"),
+    ("epsEstimate",                 "EPS (est)",            "$/sh", "Estimate"),
     ("marketCap",                   "Market cap",           "$", "Market"),
     ("enterpriseValue",             "Enterprise value",     "$", "Market"),
     ("sharePrice",                  "Share price",          "$/sh", "Market"),
@@ -1678,7 +1680,11 @@ def fundamental_history(ticker: str):
     if not rows:
         raise HTTPException(404, f"No SEC fundamental history for {sym}")
 
-    closes = _period_closes(sym, [r["date"] for r in rows])
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    # Today goes in the same lookup so the forward rows can carry the spot price
+    # without a second history call.
+    closes = _period_closes(sym, [r["date"] for r in rows] + [today])
 
     def sub(a, b):
         return None if a is None or b is None else a - b
@@ -1707,6 +1713,37 @@ def fundamental_history(ticker: str):
             "enterpriseValue": add(mcap, net_debt) if mcap is not None else None,
         }
         periods.append(row)
+
+    # Consensus for the fiscal years SEC cannot have yet. Today's price and the
+    # latest share count carry into those rows unchanged, because that is what a
+    # forward multiple is: what you pay now over what the year is expected to
+    # earn. Nothing else is extrapolated.
+    try:
+        import estimates
+        forward = estimates.forward_periods(sym)
+    except Exception as e:
+        logger.warning("forward estimates failed for %s: %s", sym, e)
+        forward = []
+
+    if forward and periods:
+        base = periods[-1]
+        spot = closes.get(today) or base.get("sharePrice")
+        shares = base.get("weightedAverageShsOutDil")
+        mcap = spot * shares if (spot and shares) else None
+        net_debt = base.get("netDebt")
+        for f in forward:
+            fy = base["fiscalYear"] + f["offset"]
+            periods.append({
+                "fiscalYear": fy,
+                "date": f"{fy}-12-31",
+                "estimate": True,
+                "analysts": f.get("analysts"),
+                "revenueEstimate": f.get("revenueEstimate"),
+                "epsEstimate": f.get("epsEstimate"),
+                "sharePrice": spot,
+                "marketCap": mcap,
+                "enterpriseValue": add(mcap, net_debt) if mcap is not None else None,
+            })
 
     return {
         "ticker": sym,

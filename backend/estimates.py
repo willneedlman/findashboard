@@ -181,3 +181,40 @@ def revisions(ticker: str) -> dict:
         "breadth": breadth,
         "targets": targets,
     }
+
+
+@cached(ttl=6 * 3600, maxsize=256, persist=True)
+def forward_periods(ticker: str) -> list[dict]:
+    """Consensus EPS and revenue for the two fiscal years not yet reported.
+
+    Yahoo labels these 0y and +1y: the year underway and the one after it. SEC
+    only carries a fiscal year once its 10-K is filed, so the first unreported
+    year is always the last reported one plus one, and no date arithmetic is
+    needed to line them up.
+
+    The basis is not the same. Consensus EPS is normally an adjusted figure
+    while the reported line is GAAP, and Yahoo's revenue can aggregate segments
+    differently, so these come back as their own fields rather than as a
+    continuation of the reported series.
+    """
+    import yfinance as yf
+    symbol = ticker.strip().upper()
+    stock = yf.Ticker(symbol)
+
+    def pull(attr):
+        try:
+            return _run_yf(f"{attr} {symbol}", lambda: getattr(stock, attr))
+        except Exception:
+            return None
+
+    eps, rev = pull("earnings_estimate"), pull("revenue_estimate")
+    out = []
+    for offset, period in ((1, "0y"), (2, "+1y")):
+        e = _num(eps.loc[period].get("avg")) if eps is not None and period in eps.index else None
+        r = _num(rev.loc[period].get("avg")) if rev is not None and period in rev.index else None
+        if e is None and r is None:
+            continue
+        n = _num(eps.loc[period].get("numberOfAnalysts")) if eps is not None and period in eps.index else None
+        out.append({"offset": offset, "epsEstimate": e, "revenueEstimate": r,
+                    "analysts": int(n) if n else None})
+    return out

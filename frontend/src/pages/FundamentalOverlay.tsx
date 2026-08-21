@@ -3,6 +3,7 @@ import { useQueries } from '@tanstack/react-query'
 import axios from 'axios'
 import {
   ComposedChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, Brush,
+  ReferenceArea,
 } from 'recharts'
 import { X, Save, ChevronRight, ChevronDown } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
@@ -13,7 +14,7 @@ import TickerBasket from '../components/TickerBasket'
 import { useTickerParam } from '../hooks/useTickerParam'
 import { T } from '../lib/theme'
 import { MONO, SANS, mix, seg } from './cockpitKit'
-import { compile, evaluate, lexicon, token } from '../lib/formula'
+import { compile, evaluate, lexicon, resultUnit, token } from '../lib/formula'
 import { TOOLTIP_STYLE } from '../components/ChartTooltip'
 
 // Reported fundamentals over time, plus metrics you define yourself.
@@ -23,7 +24,8 @@ import { TOOLTIP_STYLE } from '../components/ChartTooltip'
 // and carries ~17 years for a large filer.
 
 interface Field { key: string; label: string; unit: string; group: string }
-interface Period { fiscalYear: number; date: string; [k: string]: number | string | null }
+interface Period { fiscalYear: number; date: string; estimate?: boolean; analysts?: number;
+  [k: string]: number | string | boolean | null | undefined }
 interface Resp { ticker: string; source: string; fields: Field[]; periods: Period[] }
 
 interface Custom { id: string; name: string; expr: string }
@@ -32,7 +34,7 @@ const STORE = 'ft_custom_metrics_v1'
 // Which field groups are open. Closed by default: 42 line items is a rail you
 // scroll past rather than read, and the point of the sidebar is the formula.
 const OPEN_STORE = 'ft_fundamental_groups_v1'
-const GROUPS = ['Income', 'Balance', 'Cash flow', 'Market']
+const GROUPS = ['Income', 'Balance', 'Cash flow', 'Market', 'Estimate']
 const loadOpen = (): Record<string, boolean> => {
   try { return JSON.parse(localStorage.getItem(OPEN_STORE) || '{}') } catch { return {} }
 }
@@ -77,6 +79,9 @@ const SHORTHAND: Record<string, string> = {
   cogs: 'costOfRevenue', 'cost of goods sold': 'costOfRevenue', 'cost of sales': 'costOfRevenue',
   opex: 'operatingExpenses', expenses: 'operatingExpenses', 'operating expense': 'operatingExpenses',
   ebit: 'operatingIncome', 'operating profit': 'operatingIncome',
+  'forward eps': 'epsEstimate', 'consensus eps': 'epsEstimate',
+  'forward revenue': 'revenueEstimate', 'consensus revenue': 'revenueEstimate',
+  'forward sales': 'revenueEstimate',
   ebt: 'incomeBeforeTax', 'pretax income': 'incomeBeforeTax', 'pre tax income': 'incomeBeforeTax',
   tax: 'incomeTaxExpense', taxes: 'incomeTaxExpense',
   eps: 'epsdiluted', 'earnings per share': 'epsdiluted',
@@ -106,14 +111,18 @@ function fmt(v: number | null | undefined, unit: string): string {
   }
   if (unit === 'sh') return `${(v / 1e9).toFixed(2)}B`
   if (unit === '$/sh') return `$${v.toFixed(2)}`
-  // A custom metric can land anywhere. Two decimals turned a P/E written as
-  // price over net income (2.4e-9) into "0.00", which reads as a real zero.
+  // A custom metric can land anywhere on the number line, and neither end may be
+  // written in exponent form: big goes to M/B/T, small carries enough decimals to
+  // stay readable. Two decimals alone turned 2.4e-9 into "0.00", which reads as a
+  // reported zero.
   const a = Math.abs(v)
   if (v === 0) return '0'
-  if (a >= 1e6 || a < 0.001) return v.toExponential(2)
-  if (a < 0.01) return v.toFixed(5)
-  if (a < 1) return v.toFixed(3)
-  return v.toFixed(2)
+  if (a >= 1e12) return `${(v / 1e12).toFixed(2)}T`
+  if (a >= 1e9) return `${(v / 1e9).toFixed(1)}B`
+  if (a >= 1e6) return `${(v / 1e6).toFixed(1)}M`
+  if (a >= 1) return v.toFixed(2)
+  // Three significant digits, spelled out: 0.00000000242, never 2.42e-9.
+  return v.toFixed(Math.min(12, 2 - Math.floor(Math.log10(a))))
 }
 
 export default function FundamentalOverlay() {
@@ -224,8 +233,11 @@ export default function FundamentalOverlay() {
     const f = fields.find(x => x.key === key)
     if (f) return { key, label: f.label, unit: f.unit, expr: null as string | null }
     const c = custom.find(x => x.id === key)
-    return c ? { key, label: c.name, unit: 'x', expr: c.expr } : null
-  }).filter(Boolean) as { key: string; label: string; unit: string; expr: string | null }[], [picked, fields, custom])
+    if (!c) return null
+    // Dollars minus dollars is still dollars, and it belongs on the money axis.
+    const unit = resultUnit(c.expr, k => fields.find(f => f.key === k)?.unit, lex) ?? 'x'
+    return { key, label: c.name, unit, expr: c.expr }
+  }).filter(Boolean) as { key: string; label: string; unit: string; expr: string | null }[], [picked, fields, custom, lex])
 
   const multi = tickers.length > 1
 
@@ -245,13 +257,24 @@ export default function FundamentalOverlay() {
     dash: dashFor(m.key),
   }))), [ok, selected, tickers, multi]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // A year is a forecast only when nobody on the chart has actually reported it.
+  // With two companies on different fiscal calendars one can report a year the
+  // other is still estimating, and that year is not a forecast column.
+  const estYears = useMemo(() => {
+    const reported = new Set<number>(); const est = new Set<number>()
+    ok.forEach(l => l.data.periods.forEach(p => (p.estimate ? est : reported).add(p.fiscalYear)))
+    reported.forEach(y => est.delete(y))
+    return est
+  }, [ok])
+  const fyLabel = (fy: number) => (estYears.has(fy) ? `${fy}E` : String(fy))
+
   // Fiscal years rarely line up across filers, so the x axis is the union and a
   // company simply has no point in a year it did not report.
   const rows = useMemo(() => {
     const years = new Set<number>()
     ok.forEach(l => l.data.periods.forEach(p => years.add(p.fiscalYear)))
     return [...years].sort((a, b) => a - b).map(fy => {
-      const row: Record<string, number | null | string> = { fy: String(fy) }
+      const row: Record<string, number | null | string> = { fy: fyLabel(fy) }
       for (const l of ok) {
         const p = l.data.periods.find(x => x.fiscalYear === fy)
         for (const m of selected) {
@@ -262,7 +285,7 @@ export default function FundamentalOverlay() {
       }
       return row
     })
-  }, [ok, selected, lex])
+  }, [ok, selected, lex, estYears])
 
   const [scale, setScale] = useState<Scale>('abs')
   // The visible slice of fiscal years. null is the whole history.
@@ -300,7 +323,7 @@ export default function FundamentalOverlay() {
       const r = el.getBoundingClientRect()
       const frac = Math.min(1, Math.max(0, (e.clientX - r.left) / Math.max(1, r.width)))
       const span = hi - lo
-      let next = Math.round(span * (e.deltaY > 0 ? 1.3 : 0.75))
+      let next = Math.round(span * (e.deltaY > 0 ? 1.15 : 0.87))
       if (next === span) next = span + (e.deltaY > 0 ? 1 : -1)
       next = Math.max(MIN_SPAN, Math.min(last, next))
       // Anchor on the year under the cursor so zooming walks toward what you are
@@ -463,6 +486,13 @@ export default function FundamentalOverlay() {
         )
       })}
 
+      {estYears.size > 0 && (
+        <div style={{ fontFamily: SANS, fontSize: 9.5, color: T.muted, marginTop: 8, lineHeight: 1.5 }}>
+          Estimate years carry today's price, so a multiple built on them is a forward multiple.
+          Consensus is usually an adjusted basis and will not tie exactly to the reported line.
+        </div>
+      )}
+
       {label('Your metrics')}
       {custom.map(c => {
         const on = picked.includes(c.id)
@@ -618,6 +648,14 @@ export default function FundamentalOverlay() {
                           return [`${v.toFixed(1)} · ${fmt(raw as number, l?.unit ?? 'x')}`, n]
                         }} />
                       <Legend wrapperStyle={{ fontFamily: SANS, fontSize: 11 }} />
+                      {estYears.size > 0 && (
+                        // Consensus has to look different from what was filed.
+                        <ReferenceArea yAxisId={scale === 'idx' ? 'idx' : units[0]}
+                          x1={fyLabel(Math.min(...estYears))} x2={fyLabel(Math.max(...estYears))}
+                          fill={T.gold} fillOpacity={0.05} stroke={mix(T.gold, 25)} strokeOpacity={1}
+                          label={{ value: 'consensus', position: 'insideTop', fontSize: 9,
+                            fill: mix(T.gold, 70), fontFamily: SANS }} />
+                      )}
                       {lines.map(l => (
                         <Line key={l.id} yAxisId={axisOf(l.unit)}
                           dataKey={l.id} name={l.label} stroke={l.color} strokeDasharray={l.dash}
