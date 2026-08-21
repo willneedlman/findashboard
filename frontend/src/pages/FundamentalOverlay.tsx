@@ -4,7 +4,7 @@ import axios from 'axios'
 import {
   ComposedChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, Brush,
 } from 'recharts'
-import { X, Save } from 'lucide-react'
+import { X, Save, ChevronRight, ChevronDown } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
 import SidebarLayout from '../components/SidebarLayout'
@@ -29,6 +29,13 @@ interface Resp { ticker: string; source: string; fields: Field[]; periods: Perio
 interface Custom { id: string; name: string; expr: string }
 
 const STORE = 'ft_custom_metrics_v1'
+// Which field groups are open. Closed by default: 42 line items is a rail you
+// scroll past rather than read, and the point of the sidebar is the formula.
+const OPEN_STORE = 'ft_fundamental_groups_v1'
+const GROUPS = ['Income', 'Balance', 'Cash flow', 'Market']
+const loadOpen = (): Record<string, boolean> => {
+  try { return JSON.parse(localStorage.getItem(OPEN_STORE) || '{}') } catch { return {} }
+}
 const loadCustom = (): Custom[] => {
   try { return JSON.parse(localStorage.getItem(STORE) || '[]') } catch { return [] }
 }
@@ -118,6 +125,12 @@ export default function FundamentalOverlay() {
   const [custom, setCustom] = useState<Custom[]>(loadCustom)
   const [name, setName] = useState('')
   const [expr, setExpr] = useState('')
+  const [open, setOpen] = useState<Record<string, boolean>>(loadOpen)
+  const toggleGroup = (g: string) => setOpen(o => {
+    const next = { ...o, [g]: !o[g] }
+    try { localStorage.setItem(OPEN_STORE, JSON.stringify(next)) } catch { /* private mode */ }
+    return next
+  })
 
   const results = useQueries({
     queries: tickers.map(tk => ({
@@ -404,13 +417,27 @@ export default function FundamentalOverlay() {
         </div>
       )}
 
-      {['Income', 'Balance', 'Cash flow', 'Market'].map(group => {
+      {GROUPS.map(group => {
         const inGroup = fields.filter(f => f.group === group)
         if (!inGroup.length) return null
+        const chosen = inGroup.filter(f => picked.includes(f.key)).length
+        const isOpen = !!open[group]
         return (
           <div key={group}>
-            {label(group)}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            <button onClick={() => toggleGroup(group)} aria-expanded={isOpen}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', margin: '14px 0 6px',
+                padding: 0, background: 'none', border: 'none', cursor: 'pointer',
+                fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
+                textTransform: 'uppercase', color: chosen ? T.text : T.muted }}>
+              {isOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+              {group}
+              {/* A closed group has to say whether anything inside it is on the chart. */}
+              {chosen > 0 && <span style={{ color: T.gold, fontFamily: MONO, fontSize: 9 }}>{chosen}</span>}
+              <span style={{ marginLeft: 'auto', color: mix(T.muted, 60), fontFamily: MONO, fontSize: 9 }}>
+                {inGroup.length}
+              </span>
+            </button>
+            <div style={{ display: isOpen ? 'flex' : 'none', flexWrap: 'wrap', gap: 4 }}>
               {inGroup.map(f => {
                 const on = picked.includes(f.key)
                 return (
