@@ -271,8 +271,14 @@ export function PortfolioManagerContent() {
 
   const mountRef = useRef(false)
   useEffect(() => {
-    localStorage.setItem(PORTFOLIOS_KEY, JSON.stringify(pm))
+    // Nothing is written on mount. The state here was either just read from
+    // localStorage, in which case writing it back is a no-op, or it is the
+    // fabricated "Default" book that loadPortfolios returns when there is
+    // nothing stored. Persisting that default is how a synced account arrived
+    // renamed: the pull writes the real books, this effect overwrites them with
+    // the placeholder, and the reload that follows reads the placeholder back.
     if (!mountRef.current) { mountRef.current = true; return }
+    localStorage.setItem(PORTFOLIOS_KEY, JSON.stringify(pm))
     notifyPortfolioContextChanged()
     setDirty(true)
   }, [pm])
