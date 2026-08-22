@@ -52,6 +52,9 @@ export default function RevisionTrend({ tickers, colorFor, multi }: {
     })),
   })
   const loading = results.some(r => r.isLoading)
+  // "No consensus is published" and "the request failed" are different facts and
+  // must not share a message.
+  const failed = !loading && results.length > 0 && results.every(r => r.error)
   const sig = results.map((r, i) => `${tickers[i]}:${r.data ? 'y' : '-'}`).join('|')
   const ok = useMemo(
     () => results.map((r, i) => ({ tk: tickers[i], data: r.data })).filter(l => l.data) as { tk: string; data: Resp }[],
@@ -120,6 +123,7 @@ export default function RevisionTrend({ tickers, colorFor, multi }: {
             <div style={{ height: '100%', display: 'grid', placeItems: 'center', fontFamily: SANS,
               fontSize: 12, color: T.muted, textAlign: 'center', lineHeight: 1.6 }}>
               {loading ? 'Reading the consensus series.'
+                : failed ? 'Could not read the consensus series.'
                 : 'No consensus is published for these names.'}
             </div>
           ) : (

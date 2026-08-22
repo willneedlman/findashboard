@@ -147,7 +147,12 @@ function fmtAxisDate(d: string, rangeIdx: number): string {
   if (rangeIdx === 2) return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })    // 1M → Jun 3
   return dt.toLocaleDateString('en-US', { month: 'short' })                                        // 1Y → Jun
 }
-function PerformanceSpark({ tickers, weights, rangeIdx }: { tickers: string[]; weights: number[]; rangeIdx: number }) {
+function PerformanceSpark({ tickers, weights, rangeIdx, onReturn }: {
+  tickers: string[]; weights: number[]; rangeIdx: number
+  /** Return over the visible range, so the headline reads the same series the
+   *  chart draws instead of the day move under every range button. */
+  onReturn?: (pct: number | null) => void
+}) {
   // 1D pulls an intraday series (last few sessions) and shows just the latest
   // session; the longer ranges share one daily 1Y fetch sliced client-side.
   const isIntraday = rangeIdx === 0
@@ -187,6 +192,9 @@ function PerformanceSpark({ tickers, weights, rangeIdx }: { tickers: string[]; w
     // Thin the 1Y series so the SVG stays light.
     return rebased.length > 180 ? rebased.filter((_, i, a) => i === 0 || i === a.length - 1 || i % Math.floor(a.length / 160) === 0) : rebased
   }, [full, rangeIdx, isIntraday])
+
+  const rangeReturn = pts.length >= 2 ? pts[pts.length - 1].pct : null
+  useEffect(() => { onReturn?.(rangeReturn) }, [rangeReturn, onReturn])
 
   if (pts.length < 2) {
     return (
@@ -547,6 +555,7 @@ export default function Home() {
   const isMobile = useIsMobile()
   const navigate = useNavigate()
   const [rangeIdx, setRangeIdx] = useState(2) // 1M
+  const [rangeReturn, setRangeReturn] = useState<number | null>(null)
   const [tapeSource, setTapeSource] = useState<TapeSource>('holdings')
   const [searchFocus, setSearchFocus] = useState(false)
   const [q, setQ] = useState('')
@@ -849,10 +858,25 @@ export default function Home() {
                     <>
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 10 }}>
                         <span style={{ fontFamily: F.mono, fontSize: 34, fontWeight: 700, color: F.bright, fontVariantNumeric: 'tabular-nums', letterSpacing: 'var(--theme-num-tracking, normal)' }}>{money(totalValue)}</span>
-                        <span style={{ fontFamily: F.mono, fontSize: 13, color: dayPnl >= 0 ? F.pos : F.neg }}>{dayPct >= 0 ? '↑' : '↓'} {Math.abs(dayPct).toFixed(2)}%</span>
+                        {(() => {
+                          // Falls back to the day move only while the series is
+                          // loading, and only on 1D, where the two mean the same
+                          // thing. Showing it under 1Y would be the original bug.
+                          const shown = rangeReturn ?? (rangeIdx === 0 ? dayPct : null)
+                          if (shown == null) {
+                            return <span style={{ fontFamily: F.mono, fontSize: 13, color: F.muted }}>—</span>
+                          }
+                          return (
+                            <span style={{ fontFamily: F.mono, fontSize: 13, color: shown >= 0 ? F.pos : F.neg }}>
+                              {shown >= 0 ? '↑' : '↓'} {Math.abs(shown).toFixed(2)}%
+                              <span style={{ color: F.muted, marginLeft: 6 }}>{RANGES[rangeIdx].label}</span>
+                            </span>
+                          )
+                        })()}
                       </div>
                       <div style={{ marginTop: 12, height: 80 }}>
-                        <PerformanceSpark tickers={perfTickers} weights={perfWeights} rangeIdx={rangeIdx} />
+                        <PerformanceSpark tickers={perfTickers} weights={perfWeights} rangeIdx={rangeIdx}
+                          onReturn={setRangeReturn} />
                       </div>
                       <div style={{ display: 'flex', gap: 28, marginTop: 12 }}>
                         <MiniStat label="Invested" value={money(totalValue - pm.cash)} />
