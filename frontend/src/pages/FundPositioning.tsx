@@ -29,6 +29,7 @@ interface Row {
 interface Book {
   manager: string; cik: string; period: string; filed: string; amended: boolean
   kind?: string | null; kindBasis?: string | null; kindShare?: number | null
+  kindMissing?: string | null
   comparedTo: string | null; positions: number; filingRows: number; totalValue: number
   quarters: { accession: string; period: string; amended: boolean }[]
   rows: Row[]; exited: Row[]; unmapped: number
@@ -36,13 +37,20 @@ interface Book {
 interface Manager {
   cik: string; name: string; latest?: string; quarters?: number; value?: number
   kind?: string | null; kindBasis?: string | null; kindShare?: number | null
+  kindMissing?: string | null; kindSource?: string | null
 }
 
 // From the adviser's own Form ADV, joined on the CRD its cover page carries.
 // Managers without a CRD show no chip at all, because the alternative is
 // guessing a firm's type from its name.
 const KIND_TONE: Record<string, string> = {
+  'Hedge fund': '#c084fc',
+  'Private equity': '#a78bfa',
+  'Venture capital': '#e879f9',
   'Private fund': '#c084fc',
+  'Real estate fund': '#e0864a',
+  'Securitized assets': '#e0864a',
+  'Liquidity fund': '#38bdf8',
   'Asset manager': '#60a5fa',
   'Wealth manager': '#3fb37f',
   'Institutional': '#e0864a',
@@ -51,15 +59,44 @@ const KIND_TONE: Record<string, string> = {
   'Other': '#8b9bb4',
 }
 
-function KindChip({ kind, basis, share }: { kind?: string | null; basis?: string | null; share?: number | null }) {
-  if (!kind) return null
-  const c = KIND_TONE[kind] ?? T.muted
+// A label from the adviser's own Form ADV is a different claim from one implied
+// by the act of filing, so they do not get to look identical: ADV is solid and
+// coloured, the implied one is dashed and muted.
+function KindChip({ kind, basis, share, missing, source }: {
+  kind?: string | null; basis?: string | null; share?: number | null
+  missing?: string | null; source?: string | null
+}) {
+  if (!kind) {
+    // Absence is informative and worth showing quietly. Forty-two of the fifty
+    // largest filers are holding companies reporting for their subsidiaries,
+    // with no adviser registration to join on at all.
+    if (!missing) return null
+    return (
+      <span title={missing === 'not a registered adviser'
+        ? 'This filing carries no adviser registration number. The largest 13F filers are holding companies reporting for their subsidiaries, and are not themselves registered advisers.'
+        : 'This adviser registered after the Form ADV archive ends, so it has no registration on record here.'}
+        style={{ fontFamily: SANS, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.08em',
+          textTransform: 'uppercase', color: mix(T.muted, 70), border: `1px solid ${T.borderFaint}`,
+          padding: '1px 5px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+        {missing === 'not a registered adviser' ? 'no ADV' : 'ADV n/a'}
+      </span>
+    )
+  }
+  // A label from the adviser's own filing and one from SEC's registrant code are
+  // different claims. The first describes an investment mandate, the second the
+  // filing entity, so they do not get to look identical.
+  const fromAdv = source === 'adv'
+  const c = fromAdv ? (KIND_TONE[kind] ?? T.muted) : T.muted
+  const title = fromAdv
+    ? (share != null ? `Form ADV: ${Math.round(share)}% ${basis}` : `Form ADV: ${basis}`)
+    : `No adviser registration on this filing, so no finer type is available. ${basis}.`
   return (
-    <span
-      title={basis ? `Form ADV Item 5.D: ${Math.round(share ?? 0)}% of reported assets are ${basis}` : undefined}
+    <span title={title}
       style={{ fontFamily: SANS, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.08em',
-        textTransform: 'uppercase', color: c, border: `1px solid ${mix(c, 40)}`,
-        background: mix(c, 10), padding: '1px 5px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+        textTransform: 'uppercase', color: c,
+        border: `1px ${fromAdv ? 'solid' : 'dashed'} ${mix(c, 40)}`,
+        background: fromAdv ? mix(c, 10) : 'transparent',
+        padding: '1px 5px', whiteSpace: 'nowrap', flexShrink: 0 }}>
       {kind}
     </span>
   )
@@ -165,7 +202,7 @@ export default function FundPositioning() {
                     fontFamily: SANS, fontSize: 11, lineHeight: 1.35 }}>
                   {m.name}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
-                    <KindChip kind={m.kind} basis={m.kindBasis} share={m.kindShare} />
+                    <KindChip kind={m.kind} basis={m.kindBasis} share={m.kindShare} missing={m.kindMissing} source={m.kindSource} />
                     {m.latest && <span style={{ fontFamily: MONO, fontSize: 9, color: T.muted }}>
                       {m.latest}{m.value ? ` · ${money(m.value)}` : ''}
                     </span>}
@@ -259,7 +296,10 @@ export default function FundPositioning() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <KpiStrip cells={[
                   { label: 'Manager', value: b.manager?.length > 22 ? `${b.manager.slice(0, 22)}…` : b.manager,
-                    sub: b.kind ? `${b.kind} · ${Math.round(b.kindShare ?? 0)}% ${b.kindBasis}` : `CIK ${b.cik}` },
+                    sub: b.kind ? (b.kindShare != null
+                        ? `${b.kind} · ${Math.round(b.kindShare)}% ${b.kindBasis}`
+                        : `${b.kind} · ${b.kindBasis}`)
+                      : b.kindMissing ? `CIK ${b.cik} · ${b.kindMissing}` : `CIK ${b.cik}` },
                   { label: 'Reported value', value: money(b.totalValue), sub: `${b.positions} positions` },
                   { label: 'As of', value: b.period, sub: `filed ${b.filed}${b.amended ? ' · amended' : ''}` },
                   { label: 'Compared to', value: b.comparedTo ?? '—',

@@ -39,6 +39,21 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 UA = {"User-Agent": "Alphatape Research admin@alphatape.app"}
 ARCHIVE = "https://www.sec.gov/files/adv-filing-data-20111105-20241231-part1.zip"
 MEMBER = "adv-filing-data-20111105-20241231-part1/IA_ADV_Base_A_20111105_20241231.csv"
+# Part 2 carries Schedule D 7.B.1, which names each private fund an adviser
+# runs and its type. Item 5.D can only say "pooled investment vehicles"; this
+# says hedge fund, and the difference is the whole point of the label.
+ARCHIVE2 = "https://www.sec.gov/files/adv-filing-data-20111105-20241231-part2.zip"
+MEMBER2 = "adv-filing-data-20111105-20241231-part2/IA_Schedule_D_7B1_20111105_20241231.csv"
+
+FUND_KIND = {
+    "hedge fund": "Hedge fund",
+    "private equity fund": "Private equity",
+    "venture capital fund": "Venture capital",
+    "real estate fund": "Real estate fund",
+    "liquidity fund": "Liquidity fund",
+    "securitized asset fund": "Securitized assets",
+    "other private fund": "Private fund",
+}
 DB_PATH = Path(__file__).resolve().parents[1] / "data" / "thirteenf.db"
 
 SCHEMA = """
@@ -104,10 +119,49 @@ def classify(buckets: dict) -> tuple[str, str, float] | None:
     return label, basis, buckets[key] / total * 100
 
 
+def _fund_types(filings: set, cache: str) -> dict:
+    """The dominant private-fund type per filing, weighted by gross asset value.
+
+    Weighted rather than counted: an adviser with nine tiny venture funds and
+    one enormous hedge fund runs a hedge fund, and counting vehicles says the
+    opposite. Advisers whose funds are evenly split keep the generic label.
+    """
+    if cache and Path(cache).exists():
+        blob = Path(cache).read_bytes()
+        print(f"using {cache} ({len(blob)/1e6:.0f}MB)", flush=True)
+    else:
+        print(f"fetching {ARCHIVE2.rsplit('/', 1)[-1]} (429MB)", flush=True)
+        blob = requests.get(ARCHIVE2, headers=UA, timeout=1800).content
+
+    z = zipfile.ZipFile(io.BytesIO(blob))
+    totals: dict[str, dict] = {}
+    seen = 0
+    with z.open(MEMBER2) as fh:
+        for row in csv.DictReader(io.TextIOWrapper(fh, "utf-8", errors="replace")):
+            seen += 1
+            fid = (row.get("FilingID") or "").strip()
+            if fid not in filings:
+                continue
+            kind = FUND_KIND.get((row.get("Fund Type") or "").strip().lower())
+            if not kind:
+                continue
+            gav = num(row.get("Gross Asset Value")) or 1.0
+            totals.setdefault(fid, {})[kind] = totals.setdefault(fid, {}).get(kind, 0) + gav
+    print(f"    {seen:,} private funds -> {len(totals):,} advisers with a fund mix", flush=True)
+
+    out = {}
+    for fid, mix in totals.items():
+        best = max(mix, key=lambda k: mix[k])
+        share = mix[best] / sum(mix.values()) * 100
+        out[fid] = (best, f"{share:.0f}% of private fund assets")
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=str(DB_PATH))
-    ap.add_argument("--cache", default="", help="A previously downloaded archive zip")
+    ap.add_argument("--cache", default="", help="A previously downloaded part 1 zip")
+    ap.add_argument("--cache2", default="", help="A previously downloaded part 2 zip")
     args = ap.parse_args()
 
     if args.cache and Path(args.cache).exists():
@@ -138,10 +192,15 @@ def main() -> None:
             # hundred thousand advisers would be gigabytes held for no reason.
             latest[crd] = {"name": (row.get("1A") or "").strip(), "filed": filed,
                            "aum": num(row.get("5F2c")),
+                           "filing": (row.get("FilingID") or "").strip(),
                            "types": {k: num(row.get(k)) for k in CLIENT_TYPES}}
             if seen % 250_000 == 0:
                 print(f"    {seen:,} filings, {len(latest):,} advisers", flush=True)
     print(f"    {seen:,} filings -> {len(latest):,} advisers", flush=True)
+
+    # Refine the pooled-vehicle advisers with the fund types they actually run.
+    wanted = {a["filing"] for a in latest.values() if a["filing"]}
+    funds = _fund_types(wanted, args.cache2)
 
     rows, unclassified = [], 0
     for crd, a in latest.items():
@@ -150,6 +209,10 @@ def main() -> None:
             unclassified += 1
             continue
         label, basis, share = got
+        if label == "Private fund":
+            refined = funds.get(a["filing"])
+            if refined:
+                label, basis = refined
         rows.append((crd, a["name"], a["filed"], a["aum"], label, basis, round(share, 1)))
     print(f"    {len(rows):,} classified, {unclassified:,} without an Item 5.D breakdown")
 

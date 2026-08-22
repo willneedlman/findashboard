@@ -335,10 +335,15 @@ def adviser_kind(cik: str) -> dict:
         return {}
     try:
         r = conn.execute(
-            "SELECT a.kind, a.basis, a.share, a.filed FROM filers f"
-            " JOIN advisers a ON a.crd = f.crd WHERE f.cik = ? LIMIT 1", (str(int(cik)),)).fetchone()
-        return {"kind": r["kind"], "kindBasis": r["basis"], "kindShare": r["share"],
-                "kindFiled": r["filed"]} if r else {}
+            "SELECT MAX(a.kind) kind, MAX(a.basis) basis, MAX(a.share) share, MAX(a.filed) filed,"
+            " MAX(f.crd) crd FROM filers f LEFT JOIN advisers a ON a.crd = f.crd"
+            " WHERE f.cik = ?", (str(int(cik)),)).fetchone()
+        if not r:
+            return {}
+        out = _label(r)
+        if out["kind"]:
+            return {**out, "kindFiled": r["filed"]}
+        return {**out, "kindMissing": _why_unlabelled(r["crd"])}
     except Exception:
         return {}
     finally:
@@ -439,7 +444,7 @@ def book(cik: str, accession: str | None = None, limit: int = 500) -> dict:
 # body runs, so deleting the list is not enough to stop them being served.
 # v4: the payload gained the Form ADV label, and a cached v3 copy has no
 # label to show.
-@cached(ttl=_QUARTER, maxsize=256, persist=True, skip_if=lambda r: not r, version=4)
+@cached(ttl=_QUARTER, maxsize=256, persist=True, skip_if=lambda r: not r, version=7)
 def search_managers(query: str) -> list:
     """Managers matching a name, restricted to filers with a 13F on record.
 
@@ -497,7 +502,8 @@ def db_search(query: str, limit: int = 40) -> list:
         # the CRD number the cover page carries. Managers without one get no
         # label rather than a guess.
         select = ("SELECT f.cik, f.name, MAX(f.period) period, MAX(f.total) total,"
-                  " COUNT(*) quarters, MAX(a.kind) kind, MAX(a.basis) basis, MAX(a.share) share"
+                  " COUNT(*) quarters, MAX(a.kind) kind, MAX(a.basis) basis, MAX(a.share) share,"
+                  " MAX(f.crd) crd"
                   " FROM filers f LEFT JOIN advisers a ON a.crd = f.crd"
                   " WHERE f.canonical = 1")
         tail = " GROUP BY f.cik ORDER BY total DESC LIMIT ?"
@@ -507,10 +513,48 @@ def db_search(query: str, limit: int = 40) -> list:
         else:
             rows = conn.execute(select + tail, (limit,)).fetchall()
         return [{"cik": f"{int(r['cik']):010d}", "name": r["name"], "latest": r["period"],
-                 "quarters": r["quarters"], "value": r["total"], "kind": r["kind"],
-                 "kindBasis": r["basis"], "kindShare": r["share"]} for r in rows]
+                 "quarters": r["quarters"], "value": r["total"],
+                 **_label(r),
+                 "kindMissing": None if r["kind"] else _why_unlabelled(r["crd"])} for r in rows]
     finally:
         conn.close()
+
+
+def _label(r) -> dict:
+    """What kind of manager this is, and how confidently.
+
+    Form ADV where it reaches: an adviser running hedge funds says so on
+    Schedule D, and the label names the fund type and the share of private-fund
+    assets behind it.
+
+    Where it does not reach, the filing still supports one statement. A 13F
+    holdings report means the filer exercised investment discretion over at
+    least $100M of listed equity, which is asset management by the form's own
+    definition. So an unregistered filer reads "Asset manager", marked as the
+    weaker claim it is, rather than carrying a finer label nothing supports.
+
+    SEC's SIC code was tried here and removed. It classifies the REGISTRANT, so
+    it called BlackRock a broker-dealer and JPMorgan a bank, when in both cases
+    the 13F book is the asset-management arm. A wrong label is worse than a
+    coarse one.
+    """
+    if r["kind"]:
+        return {"kind": r["kind"], "kindBasis": r["basis"], "kindShare": r["share"],
+                "kindSource": "adv"}
+    return {"kind": "Asset manager", "kindShare": None, "kindSource": "filing",
+            "kindBasis": "files a 13F holdings report, so it manages this book with discretion"}
+
+
+def _why_unlabelled(crd: str | None) -> str:
+    """Why a manager has no Form ADV label, which is itself informative.
+
+    A 13F filer with no CRD is not a registered adviser: the largest filers are
+    holding companies reporting for their subsidiaries, and forty-two of the top
+    fifty have no adviser registration to join on at all. That is a fact about
+    the filer, not a hole in the data. A filer that does have a CRD but no match
+    registered after the archive ends.
+    """
+    return "registration filed after the archive ends" if crd else "not a registered adviser"
 
 
 def db_book(cik: str, period: str | None = None) -> dict | None:
@@ -561,8 +605,8 @@ def db_book(cik: str, period: str | None = None) -> dict | None:
             "comparedTo": prev["period"] if prev else None,
             "positions": cur["positions"], "filingRows": None, "totalValue": total,
             "truncated": bool(cur["truncated"]), "quarters": quarters,
-            "kind": cur["kind"], "kindBasis": cur["basis"], "kindShare": cur["share"],
-            "kindFiled": cur["adv_filed"],
+            **_label(cur), "kindFiled": cur["adv_filed"],
+            "kindMissing": None if cur["kind"] else _why_unlabelled(cur["crd"]),
             "rows": out, "exited": exited,
             "unmapped": sum(1 for r in out if not r["ticker"]),
         }
