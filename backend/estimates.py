@@ -183,7 +183,9 @@ def revisions(ticker: str) -> dict:
     }
 
 
-@cached(ttl=6 * 3600, maxsize=256, persist=True)
+# v2 added the offset-0 anchor. Without the bump the persisted v1 payload
+# keeps being served and the consensus line stays detached for the whole TTL.
+@cached(ttl=6 * 3600, maxsize=256, persist=True, version=2)
 def forward_periods(ticker: str) -> list[dict]:
     """Consensus EPS and revenue for the two fiscal years not yet reported.
 

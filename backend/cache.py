@@ -79,7 +79,8 @@ def _key(prefix: str, args: tuple, kwargs: dict) -> str:
     return prefix + ":" + hashlib.md5(raw.encode()).hexdigest()
 
 
-def cached(ttl: int = 300, maxsize: int = 256, persist: bool = False, skip_if=None):
+def cached(ttl: int = 300, maxsize: int = 256, persist: bool = False, skip_if=None,
+           version: int = 1):
     """
     Memoize an expensive function with a per-function TTL cache.
 
@@ -98,12 +99,17 @@ def cached(ttl: int = 300, maxsize: int = 256, persist: bool = False, skip_if=No
     transient upstream failure is cached for the full TTL, which for a 6h
     endpoint means one bad second at boot serves "unavailable" for the rest of
     the day. Callers whose payload can express failure should pass a predicate.
+
+    version becomes part of the key. Bump it when the SHAPE of the payload
+    changes, or a persisted result written by the previous build keeps being
+    served for the whole TTL: a deploy that adds a field to a 6h-cached
+    payload ships code whose output nobody sees until the next day.
     """
     def deco(fn):
         mem: TTLCache = TTLCache(maxsize=maxsize, ttl=ttl)
         flock = threading.Lock()
         inflight: dict[str, threading.Event] = {}
-        prefix = f"{fn.__module__}.{fn.__qualname__}"
+        prefix = f"{fn.__module__}.{fn.__qualname__}" + (f":v{version}" if version != 1 else "")
 
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):

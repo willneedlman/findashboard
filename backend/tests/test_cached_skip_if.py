@@ -49,3 +49,22 @@ def test_arguments_key_the_cache_separately():
     assert read(2)["x"] == 2
     assert read(1)["x"] == 1
     assert calls["n"] == 2
+
+
+def test_version_changes_the_key_so_a_new_payload_shape_is_not_shadowed():
+    """A deploy that adds a field to a long-TTL payload must not keep serving
+    the old shape until the TTL expires."""
+    from cache import cached
+
+    calls = {"n": 0}
+
+    def build():
+        calls["n"] += 1
+        return {"n": calls["n"]}
+
+    v1 = cached(ttl=600)(lambda: build())
+    v2 = cached(ttl=600, version=2)(lambda: build())
+    # Same qualname, so without the version they would share a key.
+    assert v1()["n"] == 1
+    assert v1()["n"] == 1
+    assert v2()["n"] == 2
