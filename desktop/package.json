@@ -1,0 +1,54 @@
+{
+  "name": "alphatape-desktop",
+  "productName": "AlphaTape Terminal",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AlphaTape Terminal for macOS",
+  "main": "main.js",
+  "scripts": {
+    "build:web": "npm --prefix ../frontend run build",
+    "start": "npm run build:web && electron .",
+    "start:local": "ALPHATAPE_API=http://127.0.0.1:8000 electron .",
+    "dist": "npm run build:web && electron-builder --mac"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.alphatape.terminal",
+    "productName": "AlphaTape Terminal",
+    "files": [
+      "main.js",
+      "server.js",
+      "package.json",
+      "build/icon.icns"
+    ],
+    "extraResources": [
+      {
+        "from": "../frontend/dist",
+        "to": "dist"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.finance",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "darkModeSupport": true,
+      "icon": "build/icon.icns"
+    },
+    "directories": {
+      "output": "release"
+    },
+    "dmg": {
+      "icon": "build/icon.icns",
+      "title": "AlphaTape Terminal"
+    }
+  }
+}
