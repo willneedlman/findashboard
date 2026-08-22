@@ -10,6 +10,7 @@ import MarketClockMini from '../components/MarketClockMini'
 import MorningBrief from '../components/MorningBrief'
 import useIsMobile from '../hooks/useIsMobile'
 import { usePortfolio, type PortfolioHolding } from '../contexts/PortfolioContext'
+import SyncStatus from '../components/SyncStatus'
 import { loadActivePortfolio, useQuotes, priceHoldings } from '../components/dashboard/widgets/usePortfolio'
 import { HUBS, ALL_TOOLS } from '../lib/hubs'
 import { getRecents } from '../lib/recents'
@@ -901,6 +902,10 @@ export default function Home() {
                   ) : (
                     <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-start' }}>
                       <div style={{ fontFamily: F.sans, fontSize: 12.5, color: F.sec, lineHeight: 1.55, maxWidth: 260 }}>Track live value, day P&amp;L, and holdings here. Add positions in the Portfolio Manager.</div>
+                      {/* An empty card on a second device usually means the book
+                          is on the account and this browser is signed out, not
+                          that there is no book. */}
+                      <SyncStatus />
                       <button onClick={() => navigate('/portfolio-manager')} style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'none', border: `1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)`, color: F.gold, fontFamily: F.sans, fontSize: 12, padding: '9px 14px', cursor: 'pointer' }}>
                         <Briefcase size={13} /> Open Portfolio Manager
                       </button>

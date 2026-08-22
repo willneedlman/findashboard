@@ -9,6 +9,7 @@ import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
 import { usePortfolio } from '../contexts/PortfolioContext'
 import { FUTURES, FUTURES_BY_GROUP, futuresSpec } from '../lib/futures'
 import { normalizeTicker, notifyPortfolioContextChanged } from '../lib/pmImport'
+import SyncStatus from '../components/SyncStatus'
 import useIsMobile from '../hooks/useIsMobile'
 
 
@@ -822,6 +823,10 @@ export function PortfolioManagerContent() {
             {/* Import / Export */}
             <div>
               <div style={{ ...lbl, marginBottom: 10 }}>Import / Export</div>
+              {/* Right where a book gets uploaded, because "saved" and "saved to
+                  your account" are different outcomes and only one of them is
+                  waiting for you on another device. */}
+              <div style={{ marginBottom: 10 }}><SyncStatus /></div>
               <input
                 value={portfolioName}
                 onChange={e => { setPortfolioName(e.target.value); localStorage.setItem('pmPortfolioName', e.target.value) }}

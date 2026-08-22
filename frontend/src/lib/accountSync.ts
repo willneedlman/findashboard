@@ -66,6 +66,11 @@ function localPrefixed(): string[] {
   return out
 }
 
+/** Device-only, deliberately not in the allowlist: when THIS browser last
+ *  pushed is a fact about the browser, not about the account. */
+export const LAST_SYNC_KEY = 'ft_last_sync'
+export const SYNC_EVENT = 'ft:account-synced'
+
 let installed = false
 let suppress = false   // true while hydrating, so writes don't echo back as pushes
 let pushTimer: ReturnType<typeof setTimeout> | null = null
@@ -140,6 +145,8 @@ export async function sync(userId: string, token: string): Promise<boolean> {
       schedule()
     }
   }
+  try { localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString()) } catch { /* quota */ }
+  window.dispatchEvent(new Event(SYNC_EVENT))
   if (changed) window.dispatchEvent(new Event('ft:portfolio-context'))
   return changed
 }
@@ -172,6 +179,14 @@ function flush() {
   fetch('/api/users/appdata', {
     method: 'PUT', headers: headers(token),
     body: JSON.stringify({ user_id: uid, data }),
+  }).then(res => {
+    // Something has to say the data left this browser. Without it, saving while
+    // signed out looks identical to saving while signed in, and the difference
+    // only shows up on the next device.
+    if (res.ok) {
+      try { localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString()) } catch { /* quota */ }
+      window.dispatchEvent(new Event(SYNC_EVENT))
+    }
   }).catch(() => { /* will re-push on the next change */ })
 }
 
