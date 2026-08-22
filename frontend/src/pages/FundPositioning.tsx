@@ -173,7 +173,8 @@ export default function FundPositioning() {
           <TickerInput value={draft} onChange={setDraft}
             onEnter={() => setTicker(draft.toUpperCase())}
             onSelect={s => { setTicker(s.toUpperCase()); setDraft(s.toUpperCase()) }}
-            placeholder="Ticker" aria-label="Ticker" />
+            placeholder="Ticker" aria-label="Ticker"
+            style={{ width: '100%', boxSizing: 'border-box' }} />
           <div style={{ fontFamily: SANS, fontSize: 9.5, color: T.muted, marginTop: 10, lineHeight: 1.55 }}>
             Which tracked managers reported this name. The filings carry no index from a security back
             to its holders, so this is the funds on the list, not every holder.
