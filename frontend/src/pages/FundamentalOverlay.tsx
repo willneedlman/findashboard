@@ -653,7 +653,24 @@ export default function FundamentalOverlay() {
                           const raw = rows.find(r => r.fy === p?.payload?.fy)?.[l?.id ?? '']
                           return [`${v.toFixed(1)} · ${fmt(raw as number, l?.unit ?? 'x')}`, n]
                         }} />
-                      <Legend wrapperStyle={{ fontFamily: SANS, fontSize: 11 }} />
+                      {/* Recharts' own key draws a 14px stub, which is too short to
+                          tell "7 4" from a solid line, so the dash that carries
+                          the metric was invisible exactly where it is needed. */}
+                      <Legend content={() => (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 16px',
+                          justifyContent: 'center', paddingTop: 6 }}>
+                          {lines.map(l => (
+                            <span key={l.id} style={{ display: 'inline-flex', alignItems: 'center',
+                              gap: 7, fontFamily: SANS, fontSize: 11, color: T.text }}>
+                              <svg width={28} height={8} style={{ flexShrink: 0 }} aria-hidden>
+                                <line x1={0} y1={4} x2={28} y2={4} stroke={l.color} strokeWidth={2}
+                                  strokeDasharray={l.dash} />
+                              </svg>
+                              {l.label}
+                            </span>
+                          ))}
+                        </div>
+                      )} />
                       {estYears.size > 0 && (
                         // Consensus has to look different from what was filed.
                         <ReferenceArea yAxisId={scale === 'idx' ? 'idx' : units[0]}

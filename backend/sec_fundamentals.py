@@ -30,6 +30,9 @@ logger = logging.getLogger(__name__)
 
 _UA = {"User-Agent": "Alphatape Research admin@alphatape.app"}
 _TIMEOUT = 15
+# The name lookup runs once per issuer and is cached for a month, so it can
+# wait longer than a data call every request depends on.
+_SEARCH_TIMEOUT = 30
 _CACHE_TTL = 30 * 86400                                # statements change quarterly
 _MISS_TTL = 10 * 60
 
@@ -247,21 +250,49 @@ def _filing_cik(name: str) -> str | None:
     """
     # Company search matches a PREFIX of the conformed name, so the full legal
     # name misses: "Exxon Mobil Corporation" is not a prefix of "EXXON MOBIL CORP".
+    #
+    # Two hosts, because www.sec.gov's cgi-bin is the one that stalls: it answers
+    # in under a second when warm and then reads out at fifteen from a datacentre
+    # address, which was enough to leave Exxon empty in production while the same
+    # call worked by hand on the same machine. Full-text search is a different
+    # host with the same answer, so it goes first.
     for query in dict.fromkeys([_norm_name(name), name, " ".join(_norm_name(name).split()[:2])]):
         if not query:
             continue
-        try:
-            r = requests.get(
-                "https://www.sec.gov/cgi-bin/browse-edgar",
-                params={"company": query, "type": "10-K", "dateb": "", "owner": "include",
-                        "count": "10", "action": "getcompany", "output": "atom"},
-                headers=_UA, timeout=_TIMEOUT)
-            r.raise_for_status()
-            hits = re.findall(r"<cik>(\d{7,10})</cik>", r.text) or re.findall(r"CIK=(\d{7,10})", r.text)
-            if hits:
-                return hits[0].zfill(10)
-        except Exception as e:
-            logger.warning("SEC company search failed for %s: %s", query, e)
+        hit = _fts_cik(query) or _browse_cik(query)
+        if hit:
+            return hit
+    return None
+
+
+def _fts_cik(query: str) -> str | None:
+    """CIK from EDGAR full-text search, which serves off efts.sec.gov."""
+    try:
+        r = requests.get("https://efts.sec.gov/LATEST/search-index",
+                         params={"q": f'"{query}"', "forms": "10-K"},
+                         headers=_UA, timeout=_SEARCH_TIMEOUT)
+        r.raise_for_status()
+        for h in r.json().get("hits", {}).get("hits", []):
+            for cik in h.get("_source", {}).get("ciks", []):
+                return str(cik).zfill(10)
+    except Exception as e:
+        logger.info("SEC full-text search failed for %s: %s", query, e)
+    return None
+
+
+def _browse_cik(query: str) -> str | None:
+    """CIK from EDGAR company search on www.sec.gov."""
+    try:
+        r = requests.get(
+            "https://www.sec.gov/cgi-bin/browse-edgar",
+            params={"company": query, "type": "10-K", "dateb": "", "owner": "include",
+                    "count": "10", "action": "getcompany", "output": "atom"},
+            headers=_UA, timeout=_SEARCH_TIMEOUT)
+        r.raise_for_status()
+        hits = re.findall(r"<cik>(\d{7,10})</cik>", r.text) or re.findall(r"CIK=(\d{7,10})", r.text)
+        return hits[0].zfill(10) if hits else None
+    except Exception as e:
+        logger.warning("SEC company search failed for %s: %s", query, e)
     return None
 
 
