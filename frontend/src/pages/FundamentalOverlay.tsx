@@ -11,7 +11,6 @@ import PageHeader from '../components/PageHeader'
 import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
 import TickerBasket from '../components/TickerBasket'
-import RevisionTrend from '../components/RevisionTrend'
 import { useTickerParam } from '../hooks/useTickerParam'
 import { T } from '../lib/theme'
 import { MONO, SANS, mix, seg } from './cockpitKit'
@@ -141,10 +140,6 @@ export default function FundamentalOverlay() {
   const [custom, setCustom] = useState<Custom[]>(loadCustom)
   const [name, setName] = useState('')
   const [expr, setExpr] = useState('')
-  // Two views of the same companies. The fiscal-year chart plots what was
-  // filed; the revision chart plots how the forecast for a year has moved. They
-  // share the basket and the colour per company, so switching keeps your place.
-  const [view, setView] = useState<'periods' | 'revisions'>('periods')
   const [open, setOpen] = useState<Record<string, boolean>>(loadOpen)
   const toggleGroup = (g: string) => setOpen(o => {
     const next = { ...o, [g]: !o[g] }
@@ -440,30 +435,19 @@ export default function FundamentalOverlay() {
     <div style={{ padding: 13 }}>
       <TickerBasket value={tickers} onChange={setTickers} cap={5} label="Companies" chipColor={multi ? colorFor : undefined} />
 
-      <div style={{ display: 'flex', marginTop: 8 }}>
-        {([['periods', 'By fiscal year'], ['revisions', 'Estimate revisions']] as const).map(([k, label]) => (
-          <div key={k} onClick={() => setView(k)} style={seg(view === k)}>{label}</div>
-        ))}
-      </div>
       {failed.length > 0 && (
         <div style={{ fontFamily: SANS, fontSize: 10, color: T.warn, marginTop: 5, lineHeight: 1.45 }}>
           No SEC history for {failed.join(', ')}. Foreign issuers filing 20-F and most funds are not covered.
         </div>
       )}
 
-      {view === 'revisions' && (
-        <div style={{ fontFamily: SANS, fontSize: 9.5, color: T.muted, marginTop: 10, lineHeight: 1.55 }}>
-          Where consensus has been, not where it is. Colour is the company, the line pattern is the
-          fiscal year being forecast. The series gains a point each day it is opened.
-        </div>
-      )}
-      {view === 'periods' && multi && (
+      {multi && (
         <div style={{ fontFamily: SANS, fontSize: 9.5, color: T.muted, marginTop: 6, lineHeight: 1.5 }}>
           Colour is the company, the line pattern is the metric.
         </div>
       )}
 
-      {view === 'periods' && GROUPS.map(group => {
+      {GROUPS.map(group => {
         const inGroup = fields.filter(f => f.group === group)
         if (!inGroup.length) return null
         const chosen = inGroup.filter(f => picked.includes(f.key)).length
@@ -509,15 +493,15 @@ export default function FundamentalOverlay() {
         )
       })}
 
-      {view === 'periods' && estYears.size > 0 && (
+      {estYears.size > 0 && (
         <div style={{ fontFamily: SANS, fontSize: 9.5, color: T.muted, marginTop: 8, lineHeight: 1.5 }}>
           Estimate years carry today's price, so a multiple built on them is a forward multiple.
           Consensus is usually an adjusted basis and will not tie exactly to the reported line.
         </div>
       )}
 
-      {view === 'periods' && label('Your metrics')}
-      {view === 'periods' && custom.map(c => {
+      {label('Your metrics')}
+      {custom.map(c => {
         const on = picked.includes(c.id)
         return (
           <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
@@ -541,7 +525,7 @@ export default function FundamentalOverlay() {
         )
       })}
 
-      {view === 'periods' && <div
+      <div
         onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; if (!dropping) setDropping(true) }}
         onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropping(false) }}
         onDrop={onDropField}
@@ -584,7 +568,7 @@ export default function FundamentalOverlay() {
           price, earnings, sales, cogs, capex, ev. Combine with + − * / ^ and parentheses.
           Saved to this browser.
         </div>
-      </div>}
+      </div>
     </div>
   )
 
@@ -602,8 +586,6 @@ export default function FundamentalOverlay() {
           // The chart is the page. Sizing it off the viewport rather than a fixed
           // clamp means the table takes what it needs and the plot takes the rest.
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 'calc(100vh - 100px)' }}>
-            {view === 'revisions' && <RevisionTrend tickers={tickers} colorFor={colorFor} multi={multi} />}
-            {view === 'periods' && <>
             <div style={{ border: `1px solid ${T.border}`, background: T.bg,
               flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 420 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
@@ -756,7 +738,6 @@ export default function FundamentalOverlay() {
                 </tbody>
               </table>
             </div>
-            </>}
           </div>
         )}
       </SidebarLayout>

@@ -88,27 +88,3 @@ def get_history_df(symbol: str, start: str | None = None, end: str | None = None
     if end:
         df = df[df.index <= pd.Timestamp(end)]
     return df
-
-
-def earnings_estimates(symbol: str) -> list[dict]:
-    """Raw EARNINGS_ESTIMATES rows: one per horizon, quarters and fiscal years.
-
-    The reason to prefer this over Yahoo for the estimate series is the 7, 30,
-    60 and 90-day-ago EPS averages on every row. They are the only free record
-    of where consensus HAS BEEN, which is what lets an accruing series start
-    with a quarter of history instead of a single point.
-    """
-    if not available():
-        return []
-    try:
-        r = requests.get(
-            "https://www.alphavantage.co/query",
-            params={"function": "EARNINGS_ESTIMATES", "symbol": symbol.upper(),
-                    "apikey": os.environ["ALPHAVANTAGE_API_KEY"]},
-            headers=_UA, timeout=_TIMEOUT)
-        r.raise_for_status()
-        rows = r.json().get("estimates")
-        return rows if isinstance(rows, list) else []
-    except Exception as e:
-        logger.warning("AV earnings estimates failed for %s: %s", symbol, e)
-        return []

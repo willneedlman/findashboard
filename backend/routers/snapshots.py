@@ -9,7 +9,7 @@ import logging
 import sqlite3
 import threading
 import sys, os
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query
 
@@ -20,7 +20,7 @@ from validation import validate_ticker
 router = APIRouter()
 _log = logging.getLogger("snapshots")
 
-_KINDS = ("gex", "iv30", "est")
+_KINDS = ("gex", "iv30")
 _CORE = ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "TSLA"]
 _MAX_POINTS = 1600
 _TTL = 5 * 365 * 86400
@@ -53,20 +53,12 @@ def _book_tickers() -> list[str]:
     return sorted(tickers)[:_MAX_BOOK_TICKERS]
 
 
-def record_point(kind: str, sym: str, payload: dict, day: str | None = None,
-                 keep_existing: bool = False) -> None:
-    """Insert/overwrite one day's point in a ticker's snapshot series.
-
-    `day` writes to a past date, which only backfill uses. `keep_existing`
-    makes it a no-op when that date already has a point, so a reconstructed
-    figure can never overwrite one that was actually observed.
-    """
+def record_point(kind: str, sym: str, payload: dict) -> None:
+    """Insert/overwrite today's point in a ticker's snapshot series."""
     sym = sym.strip().upper()
     key = f"snap:{kind}:{sym}"
     series = disk_get(key) or []
-    when = day or date.today().isoformat()
-    if keep_existing and any(p.get("d") == when for p in series):
-        return
+    when = date.today().isoformat()
     series = [p for p in series if p.get("d") != when]
     series.append({"d": when, **payload})
     series.sort(key=lambda p: p["d"])
@@ -140,129 +132,7 @@ def _compute_iv30(sym: str) -> dict | None:
     return {"v": round(iv * 100, 2), "expiry": target}
 
 
-# ── Analyst estimates ────────────────────────────────────────────────────────
-# Consensus for the fiscal years not yet reported. No free source carries a
-# dense history of where consensus HAS been, so the series has to accrue the
-# same way GEX does. Alpha Vantage does carry four lookback points per row
-# (7, 30, 60 and 90 days), which is enough to start with a quarter of history
-# instead of a single dot.
-
-def _num(v) -> float | None:
-    try:
-        f = float(v)
-    except (TypeError, ValueError):
-        return None
-    return None if f != f else f
-
-
-_AV_DAILY_BUDGET = 15   # of Alpha Vantage's 25/day, shared with holdings and history
-
-
-def _av_fiscal_years(sym: str) -> list[dict]:
-    """Alpha Vantage fiscal-year rows, within a daily call budget.
-
-    Returning nothing when the budget is spent is deliberate: the caller falls
-    back to Yahoo, which covers the same two years without the lookbacks, and
-    that is a better outcome than a quota error taking the whole series down.
-    """
-    day = date.today().isoformat()
-    used = disk_get(f"snap:avbudget:{day}") or 0
-    if used >= _AV_DAILY_BUDGET:
-        return []
-    import alphavantage as av
-    rows = av.earnings_estimates(sym)
-    disk_set(f"snap:avbudget:{day}", used + 1, ttl=2 * 86400)
-    return [r for r in rows if r.get("horizon") == "fiscal year"]
-
-
-def _compute_est(sym: str) -> dict | None:
-    """Today's consensus per fiscal year: EPS, revenue and analyst count."""
-    fy: dict[str, dict] = {}
-    for row in _av_fiscal_years(sym):
-        year = str(row.get("date") or "")[:4]
-        if not year:
-            continue
-        eps, rev = _num(row.get("eps_estimate_average")), _num(row.get("revenue_estimate_average"))
-        n = _num(row.get("eps_estimate_analyst_count"))
-        if eps is None and rev is None:
-            continue
-        fy[year] = {k: v for k, v in
-                    (("eps", eps), ("rev", rev), ("n", int(n) if n else None)) if v is not None}
-    if not fy:
-        # Yahoo has no lookbacks but covers names Alpha Vantage misses, and is
-        # where every over-budget call lands. Its periods are offsets from the
-        # last reported fiscal year, so that year has to be looked up: guessing
-        # from the calendar names the wrong year for any June or September filer.
-        try:
-            import estimates
-            import sec_fundamentals as sec
-            rows = sec.get_fundamental_history(sym)
-            if rows:
-                last_fy = rows[-1]["fiscalYear"]
-                for f in estimates.forward_periods(sym):
-                    if f.get("offset", 0) < 1:
-                        continue
-                    fy[str(last_fy + f["offset"])] = {
-                        k: v for k, v in (("eps", f.get("epsEstimate")), ("rev", f.get("revenueEstimate")),
-                                          ("n", f.get("analysts"))) if v is not None}
-        except Exception as e:
-            _log.warning("estimate fallback failed for %s: %s", sym, e)
-    return {"fy": fy} if fy else None
-
-
-_LOOKBACKS = (("eps_estimate_average_7_days_ago", 7), ("eps_estimate_average_30_days_ago", 30),
-              ("eps_estimate_average_60_days_ago", 60), ("eps_estimate_average_90_days_ago", 90))
-
-
-def seed_est(sym: str) -> int:
-    """Backfill the four lookback points. Returns how many days were added.
-
-    These carry EPS only: the revenue estimate has no published history, so
-    those days simply have no revenue rather than today's number stamped
-    backwards. Never overwrites a day already observed.
-    """
-    rows = _av_fiscal_years(sym)
-    if not rows:
-        return 0
-    today = date.today()
-    by_day: dict[str, dict[str, dict]] = {}
-    for row in rows:
-        year = str(row.get("date") or "")[:4]
-        if not year:
-            continue
-        for column, days in _LOOKBACKS:
-            eps = _num(row.get(column))
-            if eps is None:
-                continue
-            by_day.setdefault((today - timedelta(days=days)).isoformat(), {})[year] = {"eps": eps}
-    for day, fy in by_day.items():
-        record_point("est", sym, {"fy": fy, "src": "av-lookback"}, day=day, keep_existing=True)
-    return len(by_day)
-
-
-def _diluted_shares(sym: str) -> float | None:
-    """Latest reported diluted share count, on today's split basis.
-
-    Read from the fundamentals endpoint rather than SEC directly, because that
-    is where the split restatement lives: an as-filed count against a
-    split-adjusted EPS would be wrong by every split since.
-    """
-    try:
-        from routers.corporate import fundamental_history
-        periods = fundamental_history(sym).get("periods") or []
-    except Exception as e:
-        _log.info("share count lookup failed for %s: %s", sym, e)
-        return None
-    for p in reversed(periods):
-        if p.get("estimate"):
-            continue
-        n = p.get("weightedAverageShsOutDil")
-        if n:
-            return float(n)
-    return None
-
-
-_COMPUTE = {"gex": _compute_gex, "iv30": _compute_iv30, "est": _compute_est}
+_COMPUTE = {"gex": _compute_gex, "iv30": _compute_iv30}
 
 
 @router.get("/series")
@@ -277,10 +147,6 @@ def series(kind: str = Query(...), ticker: str = Query(...), compute: bool = Que
     today = date.today().isoformat()
     if compute and (not pts or pts[-1].get("d") != today):
         try:
-            # First touch of an estimate series backfills the lookbacks, so it
-            # opens with a quarter of history rather than one dot.
-            if kind == "est" and not pts:
-                seed_est(sym)
             p = _COMPUTE[kind](sym)
             if p:
                 record_point(kind, sym, p)
@@ -290,35 +156,6 @@ def series(kind: str = Query(...), ticker: str = Query(...), compute: bool = Que
 
     out: dict = {"ticker": sym.upper(), "kind": kind, "points": pts,
                  "note": "History accrues from first use. One point per trading day."}
-    if kind == "est":
-        # Net income is what a reader wants to compare across companies, but the
-        # published estimate is EPS: neither Yahoo nor Alpha Vantage carries a
-        # net-income consensus. So the SERIES stores what was published and the
-        # dollar figure is derived here, per read, against the latest reported
-        # diluted share count. Deriving at read rather than at write keeps the
-        # accrued record faithful to the source and lets the conversion improve
-        # as the share count does.
-        shares = _diluted_shares(sym)
-        # One line per fiscal year is what a revision chart plots, so pivot here
-        # rather than making every caller do it.
-        years = sorted({y for p in pts for y in (p.get("fy") or {})})
-        out["fiscal_years"] = years
-        def _point(p: dict, y: str) -> dict:
-            vals = dict((p.get("fy") or {}).get(y, {}))
-            eps = vals.get("eps")
-            if shares and eps is not None:
-                vals["ni"] = eps * shares
-            if p.get("src") == "av-lookback":
-                vals["reconstructed"] = True
-            return {"d": p["d"], **vals}
-
-        out["series"] = {y: [_point(p, y) for p in pts if y in (p.get("fy") or {})] for y in years}
-        out["diluted_shares"] = shares
-        out["note"] = ("Consensus accrues one point per day from first view. Net income is "
-                       "derived from the published EPS estimate and the latest reported "
-                       "diluted share count, because no free source publishes a net-income "
-                       "consensus. Points marked reconstructed come from the published "
-                       "7/30/60/90-day lookbacks and carry EPS only.")
     if kind == "iv30" and len(pts) >= 20:
         vals = [p["v"] for p in pts if p.get("v") is not None]
         cur, lo, hi = vals[-1], min(vals), max(vals)
@@ -344,11 +181,7 @@ def _run_loop():
         if disk_get("snap:coreloop") != today:
             watchlist = list(dict.fromkeys(_CORE + _book_tickers()))
             for sym in watchlist:
-                # Estimates are not in the daily pass: each one costs an Alpha
-                # Vantage call against a 25/day tier, and sixty tickers would
-                # spend the quota the rest of the app shares. They accrue on
-                # view instead, which is where they are actually read.
-                for kind in ("gex", "iv30"):
+                for kind in _KINDS:
                     if _stop.is_set():
                         return
                     try:
