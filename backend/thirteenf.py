@@ -416,7 +416,10 @@ def book(cik: str, accession: str | None = None, limit: int = 500) -> dict:
 
 # ── Finding a manager ────────────────────────────────────────────────────────
 
-@cached(ttl=_QUARTER, maxsize=256, persist=True, skip_if=lambda r: not r, version=2)
+# v3 abandons every entry written while the hand-typed list existed. Those
+# rows are cached fabrications, and the cache answers before the function
+# body runs, so deleting the list is not enough to stop them being served.
+@cached(ttl=_QUARTER, maxsize=256, persist=True, skip_if=lambda r: not r, version=3)
 def search_managers(query: str) -> list:
     """Managers matching a name, restricted to filers with a 13F on record.
 
