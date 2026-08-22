@@ -582,9 +582,28 @@ function AuthPanel({ onDone }: { onDone: () => void }) {
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
+/** Settings as a page. The overlay renders SettingsContent directly. */
 export default function Settings() {
+  return (
+    <PageWrapper>
+      <SettingsContent />
+    </PageWrapper>
+  )
+}
+
+/**
+ * The settings body, with no page chrome of its own.
+ *
+ * `inOverlay` changes two things and nothing else: the tab lives in component
+ * state instead of the query string, because the overlay opens over whatever
+ * tool you were using and writing ?tab= onto that tool's URL would edit the
+ * thing you were working on; and the outer box fills its container instead of
+ * centring a 900px column in a page.
+ */
+export function SettingsContent({ inOverlay = false }: { inOverlay?: boolean }) {
   const { theme, user, allUsers, setTheme, logout, deleteUser } = useTheme()
   const [searchParams, setSearchParams] = useSearchParams()
+  const [overlayTab, setOverlayTab] = useState<TabKey>('appearance')
   const [confirmDel, setConfirmDel] = useState(false)
   const [saved,      setSaved]      = useState(false)
   const isMobile = useIsMobile()
@@ -596,9 +615,12 @@ export default function Settings() {
     { key: 'account',    label: 'Account',    icon: User },
     ...(isAdmin ? [{ key: 'admin' as TabKey, label: 'Admin', icon: ShieldAlert }] : []),
   ]
-  const requested = searchParams.get('tab') as TabKey | null
+  const requested = inOverlay ? overlayTab : (searchParams.get('tab') as TabKey | null)
   const tab: TabKey = TABS.some(t => t.key === requested) ? requested! : 'appearance'
-  const setTab = (k: TabKey) => setSearchParams(k === 'appearance' ? {} : { tab: k }, { replace: true })
+  const setTab = (k: TabKey) => {
+    if (inOverlay) { setOverlayTab(k); return }
+    setSearchParams(k === 'appearance' ? {} : { tab: k }, { replace: true })
+  }
 
   // Draft: local copy of theme; edits here are previewed immediately but not persisted until Save
   const [draft, setDraftRaw] = useState<Theme>(() => ({ ...theme }))
@@ -632,25 +654,26 @@ export default function Settings() {
 
   // Gate: no user → show auth. Keyed purely off user (not local authed flag)
   // so sign-out always brings back the auth panel.
+  const shellStyle: React.CSSProperties = inOverlay
+    ? { padding: isMobile ? '18px 16px' : '24px 28px' }
+    : { maxWidth: 900, margin: '0 auto', padding: isMobile ? '20px 0' : '32px 24px' }
+
   if (!user) {
     return (
-      <PageWrapper>
-        <div style={{ maxWidth: 900, margin: '0 auto', padding: isMobile ? '20px 0' : '32px 24px' }}>
+      <div style={shellStyle}>
           <h1 style={{ fontFamily: 'var(--theme-mono)', fontSize: 18, fontWeight: 700, color: 'var(--theme-primary)', letterSpacing: '0.08em', marginBottom: 8 }}>
             TERMINAL SETTINGS
           </h1>
           <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 12, color: 'var(--theme-secondary)', marginBottom: 32 }}>
             Sign in to save your personalisation across sessions, or create a new local profile.
           </p>
-          <AuthPanel onDone={() => {/* user state drives the re-render — no local flag needed */}} />
-        </div>
-      </PageWrapper>
+        <AuthPanel onDone={() => {/* user state drives the re-render — no local flag needed */}} />
+      </div>
     )
   }
 
   return (
-    <PageWrapper>
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: isMobile ? '20px 0' : '32px 24px' }}>
+    <div style={shellStyle}>
 
         {/* Page header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 36, flexWrap: 'wrap', gap: 12 }}>
@@ -855,7 +878,6 @@ export default function Settings() {
             </Section>
           </div>
         )}
-      </div>
-    </PageWrapper>
+    </div>
   )
 }

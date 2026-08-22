@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { Send, Settings } from 'lucide-react'
+import { openSettings } from './SettingsOverlay'
 import { T } from '../lib/theme'
 import { findToolByLocation } from '../lib/hubs'
 import {
@@ -67,7 +68,6 @@ function IconButton({ label, onClick, children }: { label: string; onClick: () =
 
 export default function ShellActions() {
   const location = useLocation()
-  const navigate = useNavigate()
   // Re-render when any page registers/unregisters a capture handler.
   useSyncExternalStore(subscribeReportCapture, () => {
     const e = getReportCapture(location.pathname, location.search)
@@ -101,7 +101,9 @@ export default function ShellActions() {
           <Send size={12} />
         </IconButton>
       )}
-      <IconButton label="Settings" onClick={() => navigate('/settings')}>
+      {/* Opens over the page. Navigating there threw away whatever was on
+          screen, which is a steep price for changing a font. */}
+      <IconButton label="Settings" onClick={openSettings}>
         <Settings size={12} />
       </IconButton>
     </div>

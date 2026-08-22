@@ -44,6 +44,7 @@ import Layout from './components/Layout'
 import { ThemeProvider, useTheme } from './contexts/ThemeContext'
 import { PortfolioProvider } from './contexts/PortfolioContext'
 import AccountSync from './components/AccountSync'
+import SettingsOverlay from './components/SettingsOverlay'
 import { findToolByLocation } from './lib/hubs'
 import { recordRecent } from './lib/recents'
 import EmptyState from './components/EmptyState'
@@ -237,6 +238,7 @@ export default function App() {
       <ThemeProvider>
       <PortfolioProvider>
         <AccountSync />
+        <SettingsOverlay />
         <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* Marketing launchpad — no terminal chrome */}
