@@ -3,7 +3,6 @@ import { useQueries } from '@tanstack/react-query'
 import axios from 'axios'
 import {
   ComposedChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, Brush,
-  ReferenceArea,
 } from 'recharts'
 import { X, Save, ChevronRight, ChevronDown } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
@@ -672,14 +671,6 @@ export default function FundamentalOverlay() {
                           ))}
                         </div>
                       )} />
-                      {estYears.size > 0 && (
-                        // Consensus has to look different from what was filed.
-                        <ReferenceArea yAxisId={scale === 'idx' ? 'idx' : units[0]}
-                          x1={fyLabel(Math.min(...estYears))} x2={fyLabel(Math.max(...estYears))}
-                          fill={T.gold} fillOpacity={0.05} stroke={mix(T.gold, 25)} strokeOpacity={1}
-                          label={{ value: 'consensus', position: 'insideTop', fontSize: 9,
-                            fill: mix(T.gold, 70), fontFamily: SANS }} />
-                      )}
                       {lines.map(l => (
                         <Line key={l.id} yAxisId={axisOf(l.unit)}
                           dataKey={l.id} name={l.label} stroke={l.color} strokeDasharray={l.dash}
