@@ -1744,8 +1744,16 @@ def _period_closes(ticker: str, dates: list[str]) -> dict[str, float]:
     return out
 
 
+# A payload where no period has a price is a failed price fetch, not a company
+# without a market value. Caching it would drop every price-based multiple for
+# six hours over one bad second, which is what happened to Apple in production:
+# filings intact, sharePrice null, P/E and EV/EBITDA gone.
+def _priceless(result) -> bool:
+    return not any(p.get("sharePrice") for p in (result or {}).get("periods", []))
+
+
 @router.get("/fundamental-history")
-@cached(ttl=6 * 3600, maxsize=64)
+@cached(ttl=6 * 3600, maxsize=64, skip_if=_priceless)
 def fundamental_history(ticker: str):
     """Annual fundamentals from SEC companyfacts, one row per fiscal year, with
     the derived lines and the per-period market values the formula builder needs.

@@ -99,3 +99,20 @@ def test_a_negative_denominator_is_a_gap_not_a_cheap_multiple(stub, monkeypatch)
     assert p["evFcf"] is None
     # A negative FCF yield is a real reading, not a gap.
     assert p["fcfYield"] < 0
+
+
+def test_a_priceless_payload_is_not_cached(stub, monkeypatch):
+    """One bad second from the price feed must not remove every price-based
+    multiple for the length of the TTL."""
+    monkeypatch.setattr(corp, "_period_closes", lambda t, dates: {})
+    corp.fundamental_history.cache_clear()
+    first = _periods("NOPX")[2019]
+    assert first["sharePrice"] is None
+    assert first["pe"] is None
+
+    # Prices come back; the next call must recompute rather than serve the miss.
+    monkeypatch.setattr(corp, "_period_closes",
+                        lambda t, dates: {"2019-09-28": 2.5, "2020-09-26": 3.0, dates[-1]: 3.0})
+    second = _periods("NOPX")[2019]
+    assert second["sharePrice"] == 2.5
+    assert second["pe"] == pytest.approx(50.0)
