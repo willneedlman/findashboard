@@ -58,6 +58,10 @@ const CHROME: React.CSSProperties = {
   padding: '6px 8px',
   outline: 'none',
   cursor: 'pointer',
+  // A select sizes itself to its widest option, and one of these is a portfolio
+  // name with a holdings count, so it overhung every narrow rail it sat in.
+  maxWidth: '100%',
+  minWidth: 0,
 }
 
 const NOTE_STYLE: React.CSSProperties = {
@@ -125,8 +129,11 @@ export default function UniversePicker(props: UniversePickerProps) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+    // The shrink has to be allowed the whole way down. A flex item's automatic
+    // minimum is its content, so without these the select's max-width resolves
+    // against a wrapper that is already as wide as the select.
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, maxWidth: '100%' }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', minWidth: 0, maxWidth: '100%' }}>
         {hasBooks && (
           <select
             disabled={busy}

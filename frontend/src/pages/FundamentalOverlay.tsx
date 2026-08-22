@@ -34,7 +34,7 @@ const STORE = 'ft_custom_metrics_v1'
 // Which field groups are open. Closed by default: 42 line items is a rail you
 // scroll past rather than read, and the point of the sidebar is the formula.
 const OPEN_STORE = 'ft_fundamental_groups_v1'
-const GROUPS = ['Income', 'Balance', 'Cash flow', 'Market', 'Estimate']
+const GROUPS = ['Income', 'Balance', 'Cash flow', 'Market', 'Multiples', 'Estimate']
 const loadOpen = (): Record<string, boolean> => {
   try { return JSON.parse(localStorage.getItem(OPEN_STORE) || '{}') } catch { return {} }
 }
@@ -80,6 +80,10 @@ const SHORTHAND: Record<string, string> = {
   opex: 'operatingExpenses', expenses: 'operatingExpenses', 'operating expense': 'operatingExpenses',
   ebit: 'operatingIncome', 'operating profit': 'operatingIncome',
   'forward eps': 'epsEstimate', 'consensus eps': 'epsEstimate',
+  'ev ebitda': 'evEbitda', 'ev sales': 'evSales', 'ev fcf': 'evFcf',
+  'fcf yield': 'fcfYield', 'dividend yield': 'dividendYield', 'div yield': 'dividendYield',
+  'fwd pe': 'peFwd', 'forward pe': 'peFwd', 'fwd ps': 'psFwd',
+  'fwd ev sales': 'evSalesFwd', 'forward ev sales': 'evSalesFwd',
   'forward revenue': 'revenueEstimate', 'consensus revenue': 'revenueEstimate',
   'forward sales': 'revenueEstimate',
   ebt: 'incomeBeforeTax', 'pretax income': 'incomeBeforeTax', 'pre tax income': 'incomeBeforeTax',
@@ -96,7 +100,7 @@ const SHORTHAND: Record<string, string> = {
 }
 
 // Axis order, so dollars always take the left axis no matter what you picked first.
-const UNIT_ORDER = ['$', 'sh', '$/sh', 'x']
+const UNIT_ORDER = ['$', 'sh', '$/sh', '%', 'x']
 const MIN_SPAN = 2
 
 /** Dollar figures are read in billions; ratios are read as they are. */
@@ -111,6 +115,8 @@ function fmt(v: number | null | undefined, unit: string): string {
   }
   if (unit === 'sh') return `${(v / 1e9).toFixed(2)}B`
   if (unit === '$/sh') return `$${v.toFixed(2)}`
+  // Yields arrive already carrying their percent, so 3.2 means 3.20%.
+  if (unit === '%') return `${v.toFixed(2)}%`
   // A custom metric can land anywhere on the number line, and neither end may be
   // written in exponent form: big goes to M/B/T, small carries enough decimals to
   // stay readable. Two decimals alone turned 2.4e-9 into "0.00", which reads as a

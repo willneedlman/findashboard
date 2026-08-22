@@ -157,13 +157,13 @@ export default function TickerBasket({ value, onChange, cap = 25, label = 'Ticke
           }} />
       </div>
 
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', minWidth: 0 }}>
         <UniversePicker
           mode="tickers"
           tickerCap={cap}
           showNote={false}
           onImportTickers={(tickers, name) => add(tickers, name)}
-          style={{ fontSize: 9.5, padding: '4px 8px' }} />
+          style={{ fontSize: 9.5, padding: '4px 8px', width: '100%' }} />
 
         <input ref={fileRef} type="file" accept=".csv,.txt,.tsv" style={{ display: 'none' }}
           onChange={e => void onFile(e.target.files?.[0])} />

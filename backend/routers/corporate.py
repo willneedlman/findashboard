@@ -1630,7 +1630,90 @@ _FUND_FIELDS = [
     ("marketCap",                   "Market cap",           "$", "Market"),
     ("enterpriseValue",             "Enterprise value",     "$", "Market"),
     ("sharePrice",                  "Share price",          "$/sh", "Market"),
+    ("pe",                          "P/E",                  "x", "Multiples"),
+    ("ps",                          "P/S",                  "x", "Multiples"),
+    ("pb",                          "P/B",                  "x", "Multiples"),
+    ("evEbitda",                    "EV/EBITDA",            "x", "Multiples"),
+    ("evSales",                     "EV/Sales",             "x", "Multiples"),
+    ("evFcf",                       "EV/FCF",               "x", "Multiples"),
+    ("fcfYield",                    "FCF yield",            "%", "Multiples"),
+    ("dividendYield",               "Dividend yield",       "%", "Multiples"),
+    ("peFwd",                       "P/E (fwd)",            "x", "Multiples"),
+    ("psFwd",                       "P/S (fwd)",            "x", "Multiples"),
+    ("evSalesFwd",                  "EV/Sales (fwd)",       "x", "Multiples"),
 ]
+
+
+@cached(ttl=24 * 3600, maxsize=128)
+def _split_factors(ticker: str, dates: list[str]) -> dict[str, float]:
+    """Cumulative split ratio applied AFTER each date.
+
+    Yahoo's historical closes are already split-adjusted onto today's basis
+    while SEC reports share counts and EPS as they stood, so multiplying one by
+    the other produced Apple's FY2009 market cap as $5.7B against a real ~$160B
+    and an FCF yield of 158%. Restating the per-share figures onto today's basis
+    is what makes a seventeen-year line comparable at all.
+    """
+    try:
+        import yfinance as yf
+        from cache import _run_yf
+        splits = _run_yf(f"splits {ticker}", lambda: yf.Ticker(ticker).splits)
+    except Exception as e:
+        logger.warning("splits lookup failed for %s: %s", ticker, e)
+        return {}
+    if splits is None or splits.empty:
+        return {d: 1.0 for d in dates}
+    import pandas as pd
+    idx = splits.index
+    if getattr(idx, "tz", None) is not None:
+        splits = splits.copy()
+        splits.index = idx.tz_localize(None)
+    out = {}
+    for d in dates:
+        try:
+            after = splits.loc[pd.Timestamp(d):]
+        except Exception:
+            out[d] = 1.0
+            continue
+        factor = 1.0
+        for r in after.values:
+            if r and r > 0:
+                factor *= float(r)
+        out[d] = factor
+    return out
+
+
+def _multiples(row: dict) -> dict:
+    """The standard multiples, at the price of the period they belong to.
+
+    Trailing ones only resolve where the reported figure exists, forward ones
+    only in the consensus years, and a zero or negative denominator is a gap
+    rather than a number: a negative P/E reads as cheap and it is not.
+    """
+    def over(num, den, positive_only=True):
+        if num is None or den is None or den == 0:
+            return None
+        if positive_only and den < 0:
+            return None
+        return num / den
+
+    px, mcap, ev = row.get("sharePrice"), row.get("marketCap"), row.get("enterpriseValue")
+    fcf = row.get("freeCashFlow")
+    return {
+        "pe": over(px, row.get("epsdiluted")),
+        "ps": over(mcap, row.get("revenue")),
+        "pb": over(mcap, row.get("totalStockholdersEquity")),
+        "evEbitda": over(ev, row.get("ebitda")),
+        "evSales": over(ev, row.get("revenue")),
+        "evFcf": over(ev, fcf),
+        # Yields carry their percent so they read as 3.20%, not 0.032.
+        "fcfYield": (fcf / mcap * 100) if (fcf is not None and mcap) else None,
+        "dividendYield": (row["dividendPerShare"] / px * 100)
+                         if (row.get("dividendPerShare") is not None and px) else None,
+        "peFwd": over(px, row.get("epsEstimate")),
+        "psFwd": over(mcap, row.get("revenueEstimate")),
+        "evSalesFwd": over(ev, row.get("revenueEstimate")),
+    }
 
 
 def _period_closes(ticker: str, dates: list[str]) -> dict[str, float]:
@@ -1685,6 +1768,7 @@ def fundamental_history(ticker: str):
     # Today goes in the same lookup so the forward rows can carry the spot price
     # without a second history call.
     closes = _period_closes(sym, [r["date"] for r in rows] + [today])
+    factors = _split_factors(sym, [r["date"] for r in rows])
 
     def sub(a, b):
         return None if a is None or b is None else a - b
@@ -1697,13 +1781,23 @@ def fundamental_history(ticker: str):
         rev, gp = r.get("revenue"), r.get("grossProfit")
         oi, da = r.get("operatingIncome"), r.get("depreciationAndAmortization")
         debt, cash = r.get("totalDebt"), r.get("cashAndCashEquivalents")
-        shares = r.get("weightedAverageShsOutDil")
         px = closes.get(r["date"])
+        # Per-share figures move onto today's split basis, because the price
+        # already is: an as-filed share count against an adjusted price is off by
+        # every split since.
+        split = factors.get(r["date"], 1.0) or 1.0
+        raw_shares = r.get("weightedAverageShsOutDil")
+        shares = raw_shares * split if raw_shares is not None else None
+        eps = r.get("epsdiluted")
+        dps = r.get("dividendPerShare")
         mcap = px * shares if (px and shares) else None
         net_debt = sub(debt, cash)
         row = {
             **{k: r.get(k) for k, *_ in _FUND_FIELDS if k in r},
             "fiscalYear": r["fiscalYear"], "date": r["date"],
+            "weightedAverageShsOutDil": shares,
+            "epsdiluted": eps / split if eps is not None else None,
+            "dividendPerShare": dps / split if dps is not None else None,
             "costOfRevenue": sub(rev, gp),
             "operatingExpenses": sub(gp, oi),
             "ebitda": add(oi, da),
@@ -1712,6 +1806,7 @@ def fundamental_history(ticker: str):
             "marketCap": mcap,
             "enterpriseValue": add(mcap, net_debt) if mcap is not None else None,
         }
+        row.update(_multiples(row))
         periods.append(row)
 
     # Consensus for the fiscal years SEC cannot have yet. Today's price and the
@@ -1733,7 +1828,7 @@ def fundamental_history(ticker: str):
         net_debt = base.get("netDebt")
         for f in forward:
             fy = base["fiscalYear"] + f["offset"]
-            periods.append({
+            row = {
                 "fiscalYear": fy,
                 "date": f"{fy}-12-31",
                 "estimate": True,
@@ -1743,7 +1838,9 @@ def fundamental_history(ticker: str):
                 "sharePrice": spot,
                 "marketCap": mcap,
                 "enterpriseValue": add(mcap, net_debt) if mcap is not None else None,
-            })
+            }
+            row.update(_multiples(row))
+            periods.append(row)
 
     return {
         "ticker": sym,
