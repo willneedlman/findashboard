@@ -71,6 +71,24 @@ function localPrefixed(): string[] {
 export const LAST_SYNC_KEY = 'ft_last_sync'
 export const SYNC_EVENT = 'ft:account-synced'
 
+/**
+ * The account whose initial pull has completed on this device.
+ *
+ * Nothing is pushed before it is set, and that is the guard against the worst
+ * thing this module can do. Portfolio Manager writes its state to localStorage
+ * on mount, so a surface that mounts before the pull arrives persists an EMPTY
+ * book, the patched setItem queues it, and 1.5s later an empty payload
+ * overwrites the account — taking the book off every other device on the next
+ * pull. Deferring is self-correcting rather than lossy: flush() re-reads
+ * localStorage when it finally runs, and by then the pull has put the real
+ * values there.
+ */
+let hydratedFor: string | null = null
+
+/** True when the last session ended because the server refused the token,
+ *  rather than because someone logged out. */
+let serverRefused = false
+
 let installed = false
 let suppress = false   // true while hydrating, so writes don't echo back as pushes
 let pushTimer: ReturnType<typeof setTimeout> | null = null
@@ -99,6 +117,7 @@ export async function sync(userId: string, token: string): Promise<boolean> {
     // time dev switches between the local API and production, and retrying it
     // just fills the console with 401s while the app looks half signed in.
     if (res.status === 401 || res.status === 403) {
+      serverRefused = true
       window.dispatchEvent(new Event('ft:session-rejected'))
       return false
     }
@@ -145,10 +164,21 @@ export async function sync(userId: string, token: string): Promise<boolean> {
       schedule()
     }
   }
+  // Only now may this device push. Anything queued before this point is a
+  // mount-time default, and flush() will re-read the hydrated values instead.
+  hydratedFor = userId
+  serverRefused = false
   try { localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString()) } catch { /* quota */ }
   window.dispatchEvent(new Event(SYNC_EVENT))
+  if (dirty.size) schedule()
   if (changed) window.dispatchEvent(new Event('ft:portfolio-context'))
   return changed
+}
+
+/** Whether the server refused this device's last session, as opposed to the
+ *  user logging out. A refusal must not wipe the device. */
+export function sessionWasRefused(): boolean {
+  return serverRefused
 }
 
 /** Cancel any pending push and forget queued changes. Call on user switch so one
@@ -156,6 +186,7 @@ export async function sync(userId: string, token: string): Promise<boolean> {
 export function reset() {
   if (pushTimer) { clearTimeout(pushTimer); pushTimer = null }
   dirty.clear()
+  hydratedFor = null
 }
 
 /** Wipe this device's local copy of every synced key. Call on logout / user
@@ -170,6 +201,8 @@ export function clearLocal() {
 function flush() {
   const { uid, token } = getAuth()
   if (!uid || !token || dirty.size === 0) return
+  // Never push into an account this device has not read yet.
+  if (hydratedFor !== uid) return
   const data: Record<string, unknown> = {}
   for (const key of dirty) {
     const raw = localStorage.getItem(key)
