@@ -22,9 +22,32 @@ export default defineConfig(({ mode }) => ({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        // Dev talks to PRODUCTION by default. Saved data (portfolios, screens,
+        // recents) is account-scoped on the server, and the local backend keeps
+        // its own users database, so a local login was a different account and
+        // nothing ever followed you between dev, the live site and the desktop
+        // app. Pointing dev at prod makes them one account.
+        //
+        // This means dev writes reach live data. Set VITE_API to work against a
+        // local backend instead:
+        //   VITE_API=local npm run dev
+        //   VITE_API=http://127.0.0.1:9000 npm run dev
+        target: apiTarget(),
         changeOrigin: true,
+        secure: true,
+        ws: true,
       },
     },
   },
 }))
+
+const LOCAL_API = 'http://127.0.0.1:8000'
+const PROD_API = 'https://finance-terminal.fly.dev'
+
+function apiTarget(): string {
+  const v = (process.env.VITE_API || '').trim()
+  if (!v) return PROD_API
+  if (v === 'local') return LOCAL_API
+  if (v === 'prod') return PROD_API
+  return v
+}

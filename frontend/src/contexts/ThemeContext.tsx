@@ -379,6 +379,20 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     applyTheme(DEFAULT_THEME)
   }, [])
 
+  // A session the server refuses is over. Without this the app keeps a dead
+  // token and every account call 401s on a loop.
+  useEffect(() => {
+    const onRejected = () => {
+      if (!localStorage.getItem('ft-session-token')) return
+      localStorage.removeItem('ft-session-token')
+      setMustSetPassword(false)
+      setUserId(null)
+      saveSession(null)
+    }
+    window.addEventListener('ft:session-rejected', onRejected)
+    return () => window.removeEventListener('ft:session-rejected', onRejected)
+  }, [])
+
   const register = useCallback(async (username: string, displayName: string, password: string, email: string): Promise<boolean | 'taken' | 'email-taken'> => {
     const id = crypto.randomUUID()
     const createdAt = new Date().toISOString()
