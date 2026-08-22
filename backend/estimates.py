@@ -209,6 +209,17 @@ def forward_periods(ticker: str) -> list[dict]:
 
     eps, rev = pull("earnings_estimate"), pull("revenue_estimate")
     out = []
+    # Offset 0 is the last REPORTED year, carrying this source's own figure for
+    # it. Without it the consensus line starts in mid-air one year to the right
+    # of where the reported line ends, and the two never join. Anchoring on the
+    # source's own prior-year number rather than the filed one keeps the whole
+    # consensus line on one basis.
+    if eps is not None and "0y" in eps.index:
+        anchor_eps = _num(eps.loc["0y"].get("yearAgoEps"))
+        anchor_rev = _num(rev.loc["0y"].get("yearAgoRevenue")) if rev is not None and "0y" in rev.index else None
+        if anchor_eps is not None or anchor_rev is not None:
+            out.append({"offset": 0, "epsEstimate": anchor_eps, "revenueEstimate": anchor_rev,
+                        "analysts": None})
     for offset, period in ((1, "0y"), (2, "+1y")):
         e = _num(eps.loc[period].get("avg")) if eps is not None and period in eps.index else None
         r = _num(rev.loc[period].get("avg")) if rev is not None and period in rev.index else None

@@ -1827,6 +1827,13 @@ def fundamental_history(ticker: str):
         mcap = spot * shares if (spot and shares) else None
         net_debt = base.get("netDebt")
         for f in forward:
+            # The anchor is not a new period: it fills the consensus fields on the
+            # last reported year so the two lines meet instead of leaving a gap.
+            if f["offset"] == 0:
+                base["revenueEstimate"] = f.get("revenueEstimate")
+                base["epsEstimate"] = f.get("epsEstimate")
+                base.update(_multiples(base))
+                continue
             fy = base["fiscalYear"] + f["offset"]
             row = {
                 "fiscalYear": fy,
