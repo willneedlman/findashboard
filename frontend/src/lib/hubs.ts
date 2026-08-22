@@ -64,6 +64,7 @@ export const HUBS: Hub[] = [
     masthead: 'Screen the universe down to a shortlist, then dig into the filings, the peers, the ownership, and the fund structure behind each name.',
     icon: Search,
     tools: [
+      { title: 'Fund Positioning', chip: 'Fund Positioning', desc: 'What institutions reported holding and how it changed, from 13F filings', route: '/fund-positioning', tickerParam: true, icon: Landmark },
       { title: 'Stock Screener',    chip: 'Stock Screener',  desc: '25+ fundamental and technical filters across the universe', route: '/screener',           icon: Filter },
       { title: 'Company Profile',   chip: 'Company Profile', desc: 'Price history, revenue mix, ownership, and credit for one name', route: '/company-profile', tickerParam: true,  icon: Globe },
       { title: 'Peer Comparison',   chip: 'Peer Comparison', desc: 'Trading multiples versus sector peers',                    route: '/peer-comparison', tickerParam: true, icon: Scale },

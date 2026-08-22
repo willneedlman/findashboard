@@ -24,6 +24,7 @@ from routers import (
     sentiment, trading,
     filings, lob, regression, screener,
     paper_scheduler, paper_strategies, paper,
+    funds,
     iv_tracker, valuation, master_valuation, analytics,
     earnings, ipo, leaderboard, etf, fx,
     maritime, snapshots, credit, housing,
@@ -65,6 +66,8 @@ async def lifespan(app: FastAPI):
         snapshots.start_snapshot_loop()
         earnings.start_calendar_warm_loop()
         data_audit.start_audit_loop()
+        import thirteenf
+        thirteenf.start_warm_loop()
         # Freighter movements arrive as a single settled 24h window, so a series
         # only exists if something records one sample per day going forward.
         from observatory import air_cargo_history
@@ -82,6 +85,8 @@ async def lifespan(app: FastAPI):
         maritime_kystverket.stop_stream()
         maritime.stop_ais_stream()
     if _ENABLE_BACKGROUND_WARMERS:
+        import thirteenf
+        thirteenf.stop_warm_loop()
         data_audit.stop_audit_loop()
         earnings.stop_calendar_warm_loop()
         snapshots.stop_snapshot_loop()
@@ -253,6 +258,7 @@ app.include_router(regression.router,        prefix="/api/regression",        ta
 app.include_router(screener.router,          prefix="/api/screener",          tags=["screener"])
 app.include_router(paper.router,             prefix="/api/paper",             tags=["paper-trading"])
 app.include_router(paper_scheduler.router,   prefix="/api/paper/scheduler",   tags=["paper-trading"])
+app.include_router(funds.router,             prefix="/api/funds",             tags=["funds"])
 app.include_router(paper_strategies.router,  prefix="/api/paper/strategies",  tags=["paper-trading"])
 app.include_router(iv_tracker.router,        prefix="/api/iv",                tags=["iv-tracker"])
 app.include_router(valuation.router,         prefix="/api/valuation",         tags=["valuation"])

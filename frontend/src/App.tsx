@@ -117,6 +117,7 @@ const MarketBreadth      = lazyWithReload(() => import('./pages/MarketBreadth'))
 const Seasonality        = lazyWithReload(() => import('./pages/Seasonality'))
 const SupplyChain        = lazyWithReload(() => import('./pages/SupplyChain'))
 const FundamentalOverlay = lazyWithReload(() => import('./pages/FundamentalOverlay'))
+const FundPositioning    = lazyWithReload(() => import('./pages/FundPositioning'))
 const SupplyChainMap     = lazyWithReload(() => import('./pages/SupplyChainPeers'))
 const PaperTrading       = lazyWithReload(() => import('./pages/PaperTrading'))
 const SentimentTracker   = lazyWithReload(() => import('./pages/SentimentTracker'))
@@ -352,6 +353,7 @@ export default function App() {
               <Route path="/flows-map"           element={<MaritimeMap />} />
               <Route path="/peer-comparison"     element={<RelativeValuation />} />
               <Route path="/fundamental-overlay" element={<FundamentalOverlay />} />
+              <Route path="/fund-positioning" element={<FundPositioning />} />
               {/* The route claimed a valuation tool. It benchmarks peers on
                   growth and returns as well as on multiples, and never
                   produces an intrinsic value. */}
