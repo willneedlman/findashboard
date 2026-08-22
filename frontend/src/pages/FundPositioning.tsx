@@ -139,11 +139,26 @@ export default function FundPositioning() {
   const [ticker, setTicker] = useState('AAPL')
   const [draft, setDraft] = useState('AAPL')
   const [sort, setSort] = useState<SortKey>('value')
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [minValue, setMinValue] = useState(0)
+  const [managerSort, setManagerSort] = useState<'value' | 'name'>('value')
+  const [confirmedOnly, setConfirmedOnly] = useState(false)
   useTickerParam(sym => { setMode('ticker'); setTicker(sym.toUpperCase()); setDraft(sym.toUpperCase()) })
 
+  const kinds = useQuery<{ kinds: { kind: string; count: number; confirmed: number }[] }>({
+    queryKey: ['fund-kinds'],
+    queryFn: () => axios.get('/api/funds/kinds').then(r => r.data),
+    staleTime: 24 * 3600 * 1000,
+  })
+
   const managers = useQuery<{ managers: Manager[] }>({
-    queryKey: ['fund-managers', query],
-    queryFn: () => axios.get(`/api/funds/managers?q=${encodeURIComponent(query)}`).then(r => r.data),
+    queryKey: ['fund-managers', query, [...picked].sort().join(','), minValue, managerSort, confirmedOnly],
+    queryFn: () => axios.get('/api/funds/managers', {
+      params: {
+        q: query, kinds: [...picked].join(','), min_value: minValue,
+        sort: managerSort, confirmed: confirmedOnly, limit: 60,
+      },
+    }).then(r => r.data),
     staleTime: 6 * 3600 * 1000,
   })
 
@@ -191,6 +206,55 @@ export default function FundPositioning() {
               placeholder="Search 10,000 filers" aria-label="Search managers"
               className="ft-control" style={{ width: '100%', paddingLeft: 24, boxSizing: 'border-box' }} />
           </div>
+
+          {/* Type. Counts come from the data so an empty filter is visible
+              before you apply it rather than after. */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
+            {(kinds.data?.kinds ?? []).filter(k => k.count > 0).map(k => {
+              const on = picked.has(k.kind)
+              const c = KIND_TONE[k.kind] ?? T.muted
+              return (
+                <button key={k.kind}
+                  onClick={() => setPicked(p => {
+                    const next = new Set(p)
+                    if (!next.delete(k.kind)) next.add(k.kind)
+                    return next
+                  })}
+                  title={`${k.count.toLocaleString()} filers · ${k.confirmed.toLocaleString()} confirmed by Form ADV`}
+                  style={{ fontFamily: SANS, fontSize: 9.5, padding: '3px 7px', cursor: 'pointer',
+                    background: on ? mix(c, 16) : 'transparent',
+                    border: `1px solid ${on ? c : T.border}`, color: on ? c : T.muted }}>
+                  {k.kind} <span style={{ fontFamily: MONO, fontSize: 8.5, opacity: 0.75 }}>{k.count.toLocaleString()}</span>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Capital and order. */}
+          <div style={{ display: 'flex', marginTop: 8 }}>
+            {([[0, 'Any'], [1e9, '$1B+'], [1e10, '$10B+'], [1e11, '$100B+']] as const).map(([v, label]) => (
+              <div key={label} onClick={() => setMinValue(v)} style={seg(minValue === v)}>{label}</div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', marginTop: 5 }}>
+            {([['value', 'Largest'], ['name', 'A to Z']] as const).map(([k, label]) => (
+              <div key={k} onClick={() => setManagerSort(k)} style={seg(managerSort === k)}>{label}</div>
+            ))}
+          </div>
+
+          {/* The answer to why some chips are solid and some dashed, made
+              actionable rather than left to a tooltip. */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8,
+            fontFamily: SANS, fontSize: 10, color: T.muted, cursor: 'pointer' }}>
+            <input type="checkbox" checked={confirmedOnly}
+              onChange={e => setConfirmedOnly(e.target.checked)} />
+            Only types confirmed by Form ADV
+          </label>
+          <div style={{ fontFamily: SANS, fontSize: 9, color: mix(T.muted, 70), marginTop: 5, lineHeight: 1.5 }}>
+            A solid chip is the manager's own Form ADV registration. A dashed one is implied by the
+            filing itself: a 13F means this book is managed with discretion, but no registration is
+            on the filing to say what kind of manager it is.
+          </div>
           <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 3 }}>
             {(managers.data?.managers ?? []).map(m => {
               const on = m.cik.replace(/^0+/, '') === cik.replace(/^0+/, '')
@@ -211,9 +275,11 @@ export default function FundPositioning() {
               )
             })}
             {managers.isLoading && <div style={{ fontFamily: SANS, fontSize: 10.5, color: T.muted }}>Searching.</div>}
-            {!managers.isLoading && (managers.data?.managers ?? []).length === 0 && query.length > 1 && (
+            {!managers.isLoading && (managers.data?.managers ?? []).length === 0 && (
               <div style={{ fontFamily: SANS, fontSize: 10.5, color: T.muted, lineHeight: 1.5 }}>
-                No 13F filer matches that. EDGAR matches the start of a name, so try fewer words.
+                {picked.size || minValue || confirmedOnly
+                  ? 'No filer matches those filters. Widen the type, the size, or both.'
+                  : 'No 13F filer matches that name.'}
               </div>
             )}
           </div>

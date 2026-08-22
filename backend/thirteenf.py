@@ -444,8 +444,9 @@ def book(cik: str, accession: str | None = None, limit: int = 500) -> dict:
 # body runs, so deleting the list is not enough to stop them being served.
 # v4: the payload gained the Form ADV label, and a cached v3 copy has no
 # label to show.
-@cached(ttl=_QUARTER, maxsize=256, persist=True, skip_if=lambda r: not r, version=7)
-def search_managers(query: str) -> list:
+@cached(ttl=_QUARTER, maxsize=512, persist=True, skip_if=lambda r: not r, version=8)
+def search_managers(query: str, kinds: tuple = (), min_value: float = 0.0,
+                    sort: str = "value", confirmed_only: bool = False) -> list:
     """Managers matching a name, restricted to filers with a 13F on record.
 
     Names come from the submissions endpoint rather than the search feed:
@@ -456,8 +457,11 @@ def search_managers(query: str) -> list:
     """
     import re
     q = (query or "").strip()
-    hits = db_search(q)
-    if hits:
+    hits = db_search(q, kinds=list(kinds), min_value=min_value, sort=sort,
+                     confirmed_only=confirmed_only)
+    if hits or kinds or min_value or confirmed_only:
+        # A filter that matches nothing is an answer, not a reason to fall back
+        # to an unfiltered search that would ignore what was asked.
         return hits
     # Without the dataset there is no list to show. There used to be twenty
     # hand-typed CIKs here and four of them were wrong, labelling Soros as AQR
@@ -487,7 +491,14 @@ def search_managers(query: str) -> list:
     return out
 
 
-def db_search(query: str, limit: int = 40) -> list:
+# The label an unregistered filer gets, so SQL and the UI agree on what to
+# filter. See _label for why it is the only claim the filing supports.
+IMPLIED_KIND = "Asset manager"
+
+
+def db_search(query: str, limit: int = 40, kinds: list | None = None,
+              min_value: float = 0.0, sort: str = "value",
+              confirmed_only: bool = False) -> list:
     """Managers matching a name, from the bulk dataset.
 
     Ten thousand filers, answered from disk. Ranked by reported value so the
@@ -501,17 +512,35 @@ def db_search(query: str, limit: int = 40) -> list:
         # The label comes from the adviser's own Form ADV registration, joined on
         # the CRD number the cover page carries. Managers without one get no
         # label rather than a guess.
-        select = ("SELECT f.cik, f.name, MAX(f.period) period, MAX(f.total) total,"
-                  " COUNT(*) quarters, MAX(a.kind) kind, MAX(a.basis) basis, MAX(a.share) share,"
-                  " MAX(f.crd) crd"
-                  " FROM filers f LEFT JOIN advisers a ON a.crd = f.crd"
-                  " WHERE f.canonical = 1")
-        tail = " GROUP BY f.cik ORDER BY total DESC LIMIT ?"
+        sql = ["SELECT f.cik, f.name, MAX(f.period) period, MAX(f.total) total,"
+               " COUNT(*) quarters, MAX(a.kind) kind, MAX(a.basis) basis, MAX(a.share) share,"
+               " MAX(f.crd) crd"
+               " FROM filers f LEFT JOIN advisers a ON a.crd = f.crd"
+               " WHERE f.canonical = 1"]
+        args: list = []
         if q:
-            rows = conn.execute(select + " AND f.name LIKE ? COLLATE NOCASE" + tail,
-                                (f"%{q}%", limit)).fetchall()
-        else:
-            rows = conn.execute(select + tail, (limit,)).fetchall()
+            sql.append(" AND f.name LIKE ? COLLATE NOCASE")
+            args.append(f"%{q}%")
+        if confirmed_only:
+            sql.append(" AND a.kind IS NOT NULL")
+        if kinds:
+            marks = ",".join("?" * len(kinds))
+            # An unregistered filer has no row to match, so its implied label has
+            # to be matched explicitly or the filter would silently drop every
+            # manager without a registration.
+            clause = f" AND (a.kind IN ({marks})"
+            args.extend(kinds)
+            if IMPLIED_KIND in kinds and not confirmed_only:
+                clause += " OR a.kind IS NULL"
+            sql.append(clause + ")")
+        sql.append(" GROUP BY f.cik")
+        if min_value:
+            sql.append(" HAVING MAX(f.total) >= ?")
+            args.append(min_value)
+        sql.append(" ORDER BY f.name COLLATE NOCASE" if sort == "name" else " ORDER BY total DESC")
+        sql.append(" LIMIT ?")
+        args.append(limit)
+        rows = conn.execute("".join(sql), tuple(args)).fetchall()
         return [{"cik": f"{int(r['cik']):010d}", "name": r["name"], "latest": r["period"],
                  "quarters": r["quarters"], "value": r["total"],
                  **_label(r),
@@ -541,7 +570,7 @@ def _label(r) -> dict:
     if r["kind"]:
         return {"kind": r["kind"], "kindBasis": r["basis"], "kindShare": r["share"],
                 "kindSource": "adv"}
-    return {"kind": "Asset manager", "kindShare": None, "kindSource": "filing",
+    return {"kind": IMPLIED_KIND, "kindShare": None, "kindSource": "filing",
             "kindBasis": "files a 13F holdings report, so it manages this book with discretion"}
 
 
@@ -555,6 +584,32 @@ def _why_unlabelled(crd: str | None) -> str:
     registered after the archive ends.
     """
     return "registration filed after the archive ends" if crd else "not a registered adviser"
+
+
+def db_kinds() -> list:
+    """Every label in the dataset with a count, for the filter to offer.
+
+    Counted over the latest quarter's canonical filings so the numbers match
+    what a search can actually return.
+    """
+    conn = _db()
+    if not conn:
+        return []
+    try:
+        latest = conn.execute("SELECT MAX(period) p FROM filers WHERE canonical = 1").fetchone()["p"]
+        rows = conn.execute(
+            "SELECT COALESCE(a.kind, ?) kind, COUNT(DISTINCT f.cik) n,"
+            " COUNT(DISTINCT CASE WHEN a.kind IS NULL THEN NULL ELSE f.cik END) confirmed"
+            " FROM filers f LEFT JOIN advisers a ON a.crd = f.crd"
+            " WHERE f.canonical = 1 AND f.period = ?"
+            " GROUP BY COALESCE(a.kind, ?) ORDER BY n DESC",
+            (IMPLIED_KIND, latest, IMPLIED_KIND)).fetchall()
+        # Both numbers, because "4,686 asset managers" and "1,107 of them
+        # confirmed by a registration" are different facts and the filter should
+        # not blur them.
+        return [{"kind": r["kind"], "count": r["n"], "confirmed": r["confirmed"]} for r in rows]
+    finally:
+        conn.close()
 
 
 def db_book(cik: str, period: str | None = None) -> dict | None:
