@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS filers (
     period    TEXT NOT NULL,
     amended   INTEGER NOT NULL DEFAULT 0,
     filed     TEXT,
+    crd       TEXT,          -- joins to Form ADV, present on about 45% of cover pages
     total     REAL NOT NULL DEFAULT 0,
     positions INTEGER NOT NULL DEFAULT 0,
     truncated INTEGER NOT NULL DEFAULT 0,
@@ -136,6 +137,8 @@ def load_quarter(conn: sqlite3.Connection, url: str) -> None:
     for c in rows("COVERPAGE.tsv"):
         if c["ACCESSION_NUMBER"] in subs:
             subs[c["ACCESSION_NUMBER"]]["name"] = (c.get("FILINGMANAGER_NAME") or "").strip()
+            # The only exact key from a 13F to an adviser's registration.
+            subs[c["ACCESSION_NUMBER"]]["crd"] = (c.get("CRDNUMBER") or "").strip().lstrip("0")
     print(f"    {len(subs):,} holdings reports", flush=True)
 
     # Aggregate before storing. One row per CUSIP per filing is what every view
@@ -197,14 +200,15 @@ def load_quarter(conn: sqlite3.Connection, url: str) -> None:
             fid = next_id
             next_id += 1
         filer_rows.append((fid, acc, s_["cik"], s_.get("name") or f"CIK {s_['cik']}",
-                           s_["period"], s_["amended"], s_["filed"], total, len(items), truncated))
+                           s_["period"], s_["amended"], s_["filed"], s_.get("crd") or None,
+                           total, len(items), truncated))
         for cusip, a in kept_items:
             securities.setdefault(cusip, (cusip, a["issuer"], a["class"]))
             position_rows.append((fid, cusip, a["value"], a["shares"], a["calls"], a["puts"]))
 
     conn.executemany(
         "INSERT OR REPLACE INTO filers (id, accession, cik, name, period, amended, filed,"
-        " total, positions, truncated) VALUES (?,?,?,?,?,?,?,?,?,?)", filer_rows)
+        " crd, total, positions, truncated) VALUES (?,?,?,?,?,?,?,?,?,?,?)", filer_rows)
     conn.executemany(
         "INSERT OR IGNORE INTO securities (cusip, issuer, class) VALUES (?,?,?)",
         list(securities.values()))
@@ -283,6 +287,11 @@ def main() -> None:
     ).fetchone()[0]
     print(f"  {dupes:,} manager-quarters had more than one filing")
     conn.execute("CREATE INDEX IF NOT EXISTS filers_canon ON filers(period, canonical, total DESC)")
+    # A CRD belongs to the manager, not to one filing: only the quarter whose
+    # cover page carried it would otherwise be joinable to Form ADV.
+    conn.execute("UPDATE filers SET crd = (SELECT g.crd FROM filers g"
+                 " WHERE g.cik = filers.cik AND g.crd IS NOT NULL LIMIT 1) WHERE crd IS NULL")
+    conn.execute("CREATE INDEX IF NOT EXISTS filers_crd ON filers(crd)")
     conn.commit()
 
     periods = [r[0] for r in conn.execute(

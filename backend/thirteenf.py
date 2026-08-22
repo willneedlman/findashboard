@@ -328,6 +328,23 @@ def _pct_change(now: float, then: float | None) -> float | None:
     return (now / then - 1.0) * 100
 
 
+def adviser_kind(cik: str) -> dict:
+    """The Form ADV label for a filer, or empty when it has no CRD on record."""
+    conn = _db()
+    if not conn:
+        return {}
+    try:
+        r = conn.execute(
+            "SELECT a.kind, a.basis, a.share, a.filed FROM filers f"
+            " JOIN advisers a ON a.crd = f.crd WHERE f.cik = ? LIMIT 1", (str(int(cik)),)).fetchone()
+        return {"kind": r["kind"], "kindBasis": r["basis"], "kindShare": r["share"],
+                "kindFiled": r["filed"]} if r else {}
+    except Exception:
+        return {}
+    finally:
+        conn.close()
+
+
 def book(cik: str, accession: str | None = None, limit: int = 500) -> dict:
     """A manager's positions for one quarter, against the quarter before it.
 
@@ -397,6 +414,7 @@ def book(cik: str, accession: str | None = None, limit: int = 500) -> dict:
 
     return {
         "available": True,
+        **adviser_kind(cik),
         "cik": meta.get("cik"),
         "manager": meta.get("name"),
         "period": cur_f["period"],
@@ -419,7 +437,9 @@ def book(cik: str, accession: str | None = None, limit: int = 500) -> dict:
 # v3 abandons every entry written while the hand-typed list existed. Those
 # rows are cached fabrications, and the cache answers before the function
 # body runs, so deleting the list is not enough to stop them being served.
-@cached(ttl=_QUARTER, maxsize=256, persist=True, skip_if=lambda r: not r, version=3)
+# v4: the payload gained the Form ADV label, and a cached v3 copy has no
+# label to show.
+@cached(ttl=_QUARTER, maxsize=256, persist=True, skip_if=lambda r: not r, version=4)
 def search_managers(query: str) -> list:
     """Managers matching a name, restricted to filers with a 13F on record.
 
@@ -473,17 +493,22 @@ def db_search(query: str, limit: int = 40) -> list:
         return []
     q = (query or "").strip()
     try:
+        # The label comes from the adviser's own Form ADV registration, joined on
+        # the CRD number the cover page carries. Managers without one get no
+        # label rather than a guess.
+        select = ("SELECT f.cik, f.name, MAX(f.period) period, MAX(f.total) total,"
+                  " COUNT(*) quarters, MAX(a.kind) kind, MAX(a.basis) basis, MAX(a.share) share"
+                  " FROM filers f LEFT JOIN advisers a ON a.crd = f.crd"
+                  " WHERE f.canonical = 1")
+        tail = " GROUP BY f.cik ORDER BY total DESC LIMIT ?"
         if q:
-            rows = conn.execute(
-                "SELECT cik, name, MAX(period) period, MAX(total) total, COUNT(*) quarters"
-                " FROM filers WHERE canonical = 1 AND name LIKE ? COLLATE NOCASE"
-                " GROUP BY cik ORDER BY total DESC LIMIT ?", (f"%{q}%", limit)).fetchall()
+            rows = conn.execute(select + " AND f.name LIKE ? COLLATE NOCASE" + tail,
+                                (f"%{q}%", limit)).fetchall()
         else:
-            rows = conn.execute(
-                "SELECT cik, name, MAX(period) period, MAX(total) total, COUNT(*) quarters"
-                " FROM filers WHERE canonical = 1 GROUP BY cik ORDER BY total DESC LIMIT ?", (limit,)).fetchall()
+            rows = conn.execute(select + tail, (limit,)).fetchall()
         return [{"cik": f"{int(r['cik']):010d}", "name": r["name"], "latest": r["period"],
-                 "quarters": r["quarters"], "value": r["total"]} for r in rows]
+                 "quarters": r["quarters"], "value": r["total"], "kind": r["kind"],
+                 "kindBasis": r["basis"], "kindShare": r["share"]} for r in rows]
     finally:
         conn.close()
 
@@ -496,7 +521,9 @@ def db_book(cik: str, period: str | None = None) -> dict | None:
     try:
         c = str(int(cik))
         rows = conn.execute(
-            "SELECT * FROM filers WHERE cik = ? AND canonical = 1 ORDER BY period DESC", (c,)).fetchall()
+            "SELECT f.*, a.kind, a.basis, a.share, a.filed adv_filed FROM filers f"
+            " LEFT JOIN advisers a ON a.crd = f.crd"
+            " WHERE f.cik = ? AND f.canonical = 1 ORDER BY f.period DESC", (c,)).fetchall()
         if not rows:
             return None
         cur = next((r for r in rows if r["period"] == period), rows[0])
@@ -534,6 +561,8 @@ def db_book(cik: str, period: str | None = None) -> dict | None:
             "comparedTo": prev["period"] if prev else None,
             "positions": cur["positions"], "filingRows": None, "totalValue": total,
             "truncated": bool(cur["truncated"]), "quarters": quarters,
+            "kind": cur["kind"], "kindBasis": cur["basis"], "kindShare": cur["share"],
+            "kindFiled": cur["adv_filed"],
             "rows": out, "exited": exited,
             "unmapped": sum(1 for r in out if not r["ticker"]),
         }

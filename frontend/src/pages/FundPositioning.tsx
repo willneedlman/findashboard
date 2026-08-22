@@ -28,11 +28,42 @@ interface Row {
 }
 interface Book {
   manager: string; cik: string; period: string; filed: string; amended: boolean
+  kind?: string | null; kindBasis?: string | null; kindShare?: number | null
   comparedTo: string | null; positions: number; filingRows: number; totalValue: number
   quarters: { accession: string; period: string; amended: boolean }[]
   rows: Row[]; exited: Row[]; unmapped: number
 }
-interface Manager { cik: string; name: string; latest?: string; quarters?: number; value?: number }
+interface Manager {
+  cik: string; name: string; latest?: string; quarters?: number; value?: number
+  kind?: string | null; kindBasis?: string | null; kindShare?: number | null
+}
+
+// From the adviser's own Form ADV, joined on the CRD its cover page carries.
+// Managers without a CRD show no chip at all, because the alternative is
+// guessing a firm's type from its name.
+const KIND_TONE: Record<string, string> = {
+  'Private fund': '#c084fc',
+  'Asset manager': '#60a5fa',
+  'Wealth manager': '#3fb37f',
+  'Institutional': '#e0864a',
+  'Sub-adviser': '#38bdf8',
+  'Corporate': '#8b9bb4',
+  'Other': '#8b9bb4',
+}
+
+function KindChip({ kind, basis, share }: { kind?: string | null; basis?: string | null; share?: number | null }) {
+  if (!kind) return null
+  const c = KIND_TONE[kind] ?? T.muted
+  return (
+    <span
+      title={basis ? `Form ADV Item 5.D: ${Math.round(share ?? 0)}% of reported assets are ${basis}` : undefined}
+      style={{ fontFamily: SANS, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.08em',
+        textTransform: 'uppercase', color: c, border: `1px solid ${mix(c, 40)}`,
+        background: mix(c, 10), padding: '1px 5px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+      {kind}
+    </span>
+  )
+}
 interface Holders {
   ticker: string; asOf: string | null; comparedTo?: string | null
   source?: string; holderCount?: number; filersTotal?: number; unmapped?: boolean
@@ -133,9 +164,12 @@ export default function FundPositioning() {
                     border: `1px solid ${on ? T.gold : T.border}`, color: on ? T.gold : T.text,
                     fontFamily: SANS, fontSize: 11, lineHeight: 1.35 }}>
                   {m.name}
-                  {m.latest && <div style={{ fontFamily: MONO, fontSize: 9, color: T.muted, marginTop: 2 }}>
-                    {m.latest}{m.value ? ` · ${money(m.value)}` : ''}
-                  </div>}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+                    <KindChip kind={m.kind} basis={m.kindBasis} share={m.kindShare} />
+                    {m.latest && <span style={{ fontFamily: MONO, fontSize: 9, color: T.muted }}>
+                      {m.latest}{m.value ? ` · ${money(m.value)}` : ''}
+                    </span>}
+                  </div>
                 </button>
               )
             })}
@@ -225,7 +259,7 @@ export default function FundPositioning() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <KpiStrip cells={[
                   { label: 'Manager', value: b.manager?.length > 22 ? `${b.manager.slice(0, 22)}…` : b.manager,
-                    sub: `CIK ${b.cik}` },
+                    sub: b.kind ? `${b.kind} · ${Math.round(b.kindShare ?? 0)}% ${b.kindBasis}` : `CIK ${b.cik}` },
                   { label: 'Reported value', value: money(b.totalValue), sub: `${b.positions} positions` },
                   { label: 'As of', value: b.period, sub: `filed ${b.filed}${b.amended ? ' · amended' : ''}` },
                   { label: 'Compared to', value: b.comparedTo ?? '—',

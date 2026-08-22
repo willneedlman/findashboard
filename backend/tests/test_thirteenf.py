@@ -160,3 +160,30 @@ def test_an_unmapped_ticker_says_so_rather_than_reporting_no_holders(bulk):
     assert out["holders"] == []
     # "nobody holds it" and "we cannot identify it" are different answers.
     assert out["unmapped"] is True
+
+
+# ── Form ADV classification ──────────────────────────────────────────────────
+
+def test_the_label_follows_the_assets_not_the_client_count():
+    """An adviser with a thousand small individual accounts and one enormous
+    fund is a fund manager. Counting clients would say the opposite, so the
+    label follows Item 5.D's assets."""
+    from scripts.build_adv_types import classify
+    label, basis, share = classify({"5D3b": 5_000_000.0, "5D3f": 95_000_000.0})
+    assert label == "Private fund"
+    assert basis == "pooled investment vehicles"
+    assert share == pytest.approx(95)
+
+
+def test_registered_funds_read_as_an_asset_manager():
+    from scripts.build_adv_types import classify
+    label, _, _ = classify({"5D3d": 90.0, "5D3f": 10.0})
+    assert label == "Asset manager"
+
+
+def test_an_adviser_with_no_breakdown_gets_no_label():
+    """No Item 5.D means no basis for a label, and a blank chip is the right
+    answer where a guess would be a fabrication."""
+    from scripts.build_adv_types import classify
+    assert classify({k: 0.0 for k in ("5D3a", "5D3f")}) is None
+    assert classify({}) is None

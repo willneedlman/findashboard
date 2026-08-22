@@ -9,6 +9,8 @@ options_data and the spot lookup are monkeypatched.
 import os
 import sys
 
+from datetime import date as _date, timedelta as _timedelta
+
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -21,7 +23,12 @@ from routers.ai import (  # noqa: E402
 )
 
 _REAL = {"NVDA", "AAPL", "TSLA", "SPY", "F", "A", "AGX"}
-_EXPS = ["2026-08-21", "2026-09-18"]
+# Built from today rather than written down: the grounding code snaps to the
+# nearest expiry that has not passed, so a hardcoded date silently changes what
+# the test is asserting the moment the calendar rolls past it.
+_NEAR = _date.today() + _timedelta(days=7)
+_FAR = _date.today() + _timedelta(days=45)
+_EXPS = [_NEAR.isoformat(), _FAR.isoformat()]
 
 
 def _fake_exps(sym):
@@ -81,15 +88,15 @@ def test_uppercase_single_letter_ticker_allowed(monkeypatch):
 def test_relative_to_100_spread_rescales_and_snaps(monkeypatch):
     _patch(monkeypatch)
     draft = {"type": "draft", "name": "Bull Call Spread", "legs": [
-        {"option_type": "call", "action": "buy", "K": 100, "premium": 2, "quantity": 1, "ticker": "NVDA", "expiry": "2026-08-20"},
-        {"option_type": "call", "action": "sell", "K": 105, "premium": 2, "quantity": 1, "ticker": "NVDA", "expiry": "2026-08-20"},
+        {"option_type": "call", "action": "buy", "K": 100, "premium": 2, "quantity": 1, "ticker": "NVDA", "expiry": (_date.today() + _timedelta(days=6)).isoformat()},
+        {"option_type": "call", "action": "sell", "K": 105, "premium": 2, "quantity": 1, "ticker": "NVDA", "expiry": (_date.today() + _timedelta(days=6)).isoformat()},
     ]}
     g = _ground_options_draft(draft, "NVDA")
     assert g["spot"] == 200.0 and g["ticker"] == "NVDA"
     ks = [l["K"] for l in g["legs"]]
     assert ks == [200.0, 210.0]                       # 100/105 rescaled to spot then snapped to the 5-pt ladder
     assert g["legs"][0]["action"] == "buy" and g["legs"][1]["action"] == "sell"
-    assert all(l["expiry"] == "2026-08-21" for l in g["legs"])   # snapped to nearest real expiry
+    assert all(l["expiry"] == _EXPS[0] for l in g["legs"])   # snapped to nearest real expiry
     assert all(l["premium"] > 0 for l in g["legs"])   # real mid, never left at the placeholder
 
 
@@ -98,14 +105,14 @@ def test_absolute_strikes_are_snapped_not_rescaled(monkeypatch):
     # Already near spot -> not treated as relative-to-100; just snapped to the ladder.
     draft = {"type": "draft", "name": "Strangle", "legs": [
         {"option_type": "put", "action": "sell", "K": 188, "premium": 3, "quantity": 1, "ticker": "NVDA", "expiry": "2026-09-18"},
-        {"option_type": "call", "action": "sell", "K": 213, "premium": 3, "quantity": 1, "ticker": "NVDA", "expiry": "2026-09-18"},
+        {"option_type": "call", "action": "sell", "K": 213, "premium": 3, "quantity": 1, "ticker": "NVDA", "expiry": _EXPS[1]},
     ]}
     g = _ground_options_draft(draft, "NVDA")
     assert [l["K"] for l in g["legs"]] == [190.0, 215.0]   # snapped to nearest 5-pt strikes, not rescaled
-    assert all(l["expiry"] == "2026-09-18" for l in g["legs"])
+    assert all(l["expiry"] == _EXPS[1] for l in g["legs"])
 
 
 def test_nearest_dte_and_snap_expiry():
     assert _nearest_dte_expiry(_EXPS, 35) in _EXPS
-    assert _snap_expiry("2026-08-20", _EXPS, _EXPS[0]) == "2026-08-21"
-    assert _snap_expiry("2026-09-18", _EXPS, _EXPS[0]) == "2026-09-18"
+    assert _snap_expiry((_date.today() + _timedelta(days=6)).isoformat(), _EXPS, _EXPS[0]) == _EXPS[0]
+    assert _snap_expiry(_EXPS[1], _EXPS, _EXPS[0]) == _EXPS[1]
