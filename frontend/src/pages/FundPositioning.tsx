@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { Search } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
@@ -34,6 +34,7 @@ interface Book {
   quarters: { accession: string; period: string; amended: boolean }[]
   rows: Row[]; exited: Row[]; unmapped: number
 }
+interface ManagerPage { managers: Manager[]; total: number; offset: number; limit: number }
 interface Manager {
   cik: string; name: string; latest?: string; quarters?: number; value?: number
   kind?: string | null; kindBasis?: string | null; kindShare?: number | null
@@ -150,16 +151,29 @@ export default function FundPositioning() {
     staleTime: 24 * 3600 * 1000,
   })
 
-  const managers = useQuery<{ managers: Manager[] }>({
+  // Paged rather than capped. Six hundred hedge funds behind a list that stops
+  // at sixty is indistinguishable from sixty hedge funds, so the rail keeps
+  // loading as it is scrolled and says how many matched.
+  const PAGE = 60
+  const managers = useInfiniteQuery<ManagerPage>({
     queryKey: ['fund-managers', query, [...picked].sort().join(','), minValue, managerSort],
-    queryFn: () => axios.get('/api/funds/managers', {
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => axios.get('/api/funds/managers', {
       params: {
         q: query, kinds: [...picked].join(','), min_value: minValue,
-        sort: managerSort, limit: 60,
+        sort: managerSort, limit: PAGE, offset: pageParam,
       },
     }).then(r => r.data),
+    getNextPageParam: (last, pages) => {
+      const loaded = pages.reduce((n, p) => n + p.managers.length, 0)
+      return loaded < last.total ? loaded : undefined
+    },
     staleTime: 6 * 3600 * 1000,
   })
+  const managerRows = useMemo(
+    () => (managers.data?.pages ?? []).flatMap(p => p.managers),
+    [managers.data])
+  const managerTotal = managers.data?.pages?.[0]?.total ?? 0
 
   const book = useQuery<Book>({
     queryKey: ['fund-book', cik, accession],
@@ -272,8 +286,11 @@ export default function FundPositioning() {
             ))}
           </div>
 
-          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {(managers.data?.managers ?? []).map(m => {
+          <div style={{ fontFamily: MONO, fontSize: 9.5, color: T.muted, marginTop: 10 }}>
+            {managerTotal.toLocaleString()} filer{managerTotal === 1 ? '' : 's'} match
+          </div>
+          <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {managerRows.map(m => {
               const on = m.cik.replace(/^0+/, '') === cik.replace(/^0+/, '')
               return (
                 <button key={m.cik} onClick={() => { setCik(m.cik); setAccession(null) }}
@@ -292,7 +309,16 @@ export default function FundPositioning() {
               )
             })}
             {managers.isLoading && <div style={{ fontFamily: SANS, fontSize: 10.5, color: T.muted }}>Searching.</div>}
-            {!managers.isLoading && (managers.data?.managers ?? []).length === 0 && (
+            {managers.hasNextPage && (
+              <button onClick={() => managers.fetchNextPage()} disabled={managers.isFetchingNextPage}
+                style={{ padding: '6px 8px', cursor: 'pointer', background: 'transparent',
+                  border: `1px solid ${T.border}`, color: T.gold, fontFamily: SANS, fontSize: 10 }}>
+                {managers.isFetchingNextPage
+                  ? 'Loading'
+                  : `Show more · ${(managerTotal - managerRows.length).toLocaleString()} left`}
+              </button>
+            )}
+            {!managers.isLoading && managerRows.length === 0 && (
               <div style={{ fontFamily: SANS, fontSize: 10.5, color: T.muted, lineHeight: 1.5 }}>
                 {picked.size || minValue
                   ? 'No filer matches those filters. Widen the type, the size, or both.'

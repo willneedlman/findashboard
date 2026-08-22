@@ -21,12 +21,18 @@ def managers(
     kinds: str = Query("", description="Comma-separated labels to keep"),
     min_value: float = Query(0, ge=0, description="Smallest reported book to include"),
     sort: str = Query("value", pattern="^(value|name)$"),
-    limit: int = Query(40, le=200),
+    limit: int = Query(60, le=200),
+    offset: int = Query(0, ge=0),
 ):
-    """Managers matching a name and filters, largest book first."""
+    """Managers matching a name and filters, largest book first.
+
+    Paged, with the full match count alongside: six hundred hedge funds behind
+    a list that stops at sixty reads as sixty hedge funds.
+    """
     picked = tuple(k.strip() for k in kinds.split(",") if k.strip())
+    out = thirteenf.search_managers(q, picked, min_value, sort, limit, offset)
     return {"query": q, "kinds": list(picked), "minValue": min_value,
-            "managers": thirteenf.search_managers(q, picked, min_value, sort)[:limit]}
+            "offset": offset, "limit": limit, **out}
 
 
 @router.get("/kinds")

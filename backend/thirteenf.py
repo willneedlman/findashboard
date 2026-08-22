@@ -444,9 +444,9 @@ def book(cik: str, accession: str | None = None, limit: int = 500) -> dict:
 # body runs, so deleting the list is not enough to stop them being served.
 # v4: the payload gained the Form ADV label, and a cached v3 copy has no
 # label to show.
-@cached(ttl=_QUARTER, maxsize=512, persist=True, skip_if=lambda r: not r, version=9)
+@cached(ttl=_QUARTER, maxsize=512, persist=True, skip_if=lambda r: not r.get("managers"), version=10)
 def search_managers(query: str, kinds: tuple = (), min_value: float = 0.0,
-                    sort: str = "value") -> list:
+                    sort: str = "value", limit: int = 60, offset: int = 0) -> dict:
     """Managers matching a name, restricted to filers with a 13F on record.
 
     Names come from the submissions endpoint rather than the search feed:
@@ -457,8 +457,9 @@ def search_managers(query: str, kinds: tuple = (), min_value: float = 0.0,
     """
     import re
     q = (query or "").strip()
-    hits = db_search(q, kinds=list(kinds), min_value=min_value, sort=sort)
-    if hits or kinds or min_value:
+    hits = db_search(q, limit=limit, offset=offset, kinds=list(kinds),
+                     min_value=min_value, sort=sort)
+    if hits["managers"] or kinds or min_value or offset:
         # A filter that matches nothing is an answer, not a reason to fall back
         # to an unfiltered search that would ignore what was asked.
         return hits
@@ -467,7 +468,7 @@ def search_managers(query: str, kinds: tuple = (), min_value: float = 0.0,
     # and Man Group as Appaloosa, which is worse than showing nothing: a name
     # typed from memory beside real holdings reads as fact.
     if len(q) < 2:
-        return []
+        return {"managers": [], "total": 0}
     try:
         r = requests.get("https://www.sec.gov/cgi-bin/browse-edgar",
                          params={"company": q, "type": "13F-HR", "dateb": "", "owner": "include",
@@ -478,7 +479,7 @@ def search_managers(query: str, kinds: tuple = (), min_value: float = 0.0,
                                   or re.findall(r"CIK=(\d{7,10})", r.text)))
     except Exception as e:
         logger.warning("manager search failed for %s: %s", q, e)
-        return []
+        return {"managers": [], "total": 0}
 
     out = []
     for cik in ciks[:10]:
@@ -487,7 +488,7 @@ def search_managers(query: str, kinds: tuple = (), min_value: float = 0.0,
             out.append({"cik": meta["cik"], "name": meta["name"],
                         "latest": meta["filings"][0]["period"],
                         "quarters": len(meta["filings"])})
-    return out
+    return {"managers": out, "total": len(out)}
 
 
 # The label an unregistered filer gets, so SQL and the UI agree on what to
@@ -496,7 +497,7 @@ IMPLIED_KIND = "Asset manager"
 
 
 def db_search(query: str, limit: int = 40, kinds: list | None = None,
-              min_value: float = 0.0, sort: str = "value") -> list:
+              min_value: float = 0.0, sort: str = "value", offset: int = 0) -> dict:
     """Managers matching a name, from the bulk dataset.
 
     Ten thousand filers, answered from disk. Ranked by reported value so the
@@ -504,7 +505,7 @@ def db_search(query: str, limit: int = 40, kinds: list | None = None,
     """
     conn = _db()
     if not conn:
-        return []
+        return {"managers": [], "total": 0}
     q = (query or "").strip()
     try:
         # The label comes from the adviser's own Form ADV registration, joined on
@@ -533,14 +534,19 @@ def db_search(query: str, limit: int = 40, kinds: list | None = None,
         if min_value:
             sql.append(" HAVING MAX(f.total) >= ?")
             args.append(min_value)
+        # How many match, before the page is cut. Six hundred hedge funds behind
+        # a list that shows sixty is indistinguishable from sixty hedge funds.
+        total = conn.execute(
+            f"SELECT COUNT(*) FROM ({''.join(sql)})", tuple(args)).fetchone()[0]
+
         sql.append(" ORDER BY f.name COLLATE NOCASE" if sort == "name" else " ORDER BY total DESC")
-        sql.append(" LIMIT ?")
-        args.append(limit)
+        sql.append(" LIMIT ? OFFSET ?")
+        args.extend([limit, offset])
         rows = conn.execute("".join(sql), tuple(args)).fetchall()
-        return [{"cik": f"{int(r['cik']):010d}", "name": r["name"], "latest": r["period"],
-                 "quarters": r["quarters"], "value": r["total"],
-                 **_label(r),
-                 "kindMissing": None if r["kind"] else _why_unlabelled(r["crd"])} for r in rows]
+        return {"total": total, "managers": [
+            {"cik": f"{int(r['cik']):010d}", "name": r["name"], "latest": r["period"],
+             "quarters": r["quarters"], "value": r["total"], **_label(r),
+             "kindMissing": None if r["kind"] else _why_unlabelled(r["crd"])} for r in rows]}
     finally:
         conn.close()
 
