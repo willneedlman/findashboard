@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { Cloud, CloudOff } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import { LAST_SYNC_KEY, SYNC_EVENT } from '../lib/accountSync'
+import { openSettings } from './SettingsOverlay'
 import { T } from '../lib/theme'
 
 // Saved data is account-scoped, so it only leaves the browser once you are
@@ -47,9 +47,11 @@ export default function SyncStatus({ style }: { style?: React.CSSProperties }) {
       <span style={{ ...base, color: T.warn }}>
         <CloudOff size={12} />
         Saved to this browser only
-        <Link to="/login" style={{ color: T.gold, textDecoration: 'underline', textUnderlineOffset: 2 }}>
+        <button onClick={() => openSettings('account')}
+          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit',
+            color: T.gold, textDecoration: 'underline', textUnderlineOffset: 2 }}>
           Sign in to sync
-        </Link>
+        </button>
       </span>
     )
   }

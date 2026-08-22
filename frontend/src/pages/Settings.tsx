@@ -600,10 +600,15 @@ export default function Settings() {
  * thing you were working on; and the outer box fills its container instead of
  * centring a 900px column in a page.
  */
-export function SettingsContent({ inOverlay = false }: { inOverlay?: boolean }) {
+export function SettingsContent({ inOverlay = false, initialTab }: {
+  inOverlay?: boolean
+  initialTab?: TabKey
+}) {
   const { theme, user, allUsers, setTheme, logout, deleteUser } = useTheme()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [overlayTab, setOverlayTab] = useState<TabKey>('appearance')
+  const [overlayTab, setOverlayTab] = useState<TabKey>(initialTab ?? 'appearance')
+  // Reopening on a different tab has to move, since the component stays mounted.
+  useEffect(() => { if (initialTab) setOverlayTab(initialTab) }, [initialTab])
   const [confirmDel, setConfirmDel] = useState(false)
   const [saved,      setSaved]      = useState(false)
   const isMobile = useIsMobile()

@@ -240,6 +240,28 @@ def seed_est(sym: str) -> int:
     return len(by_day)
 
 
+def _diluted_shares(sym: str) -> float | None:
+    """Latest reported diluted share count, on today's split basis.
+
+    Read from the fundamentals endpoint rather than SEC directly, because that
+    is where the split restatement lives: an as-filed count against a
+    split-adjusted EPS would be wrong by every split since.
+    """
+    try:
+        from routers.corporate import fundamental_history
+        periods = fundamental_history(sym).get("periods") or []
+    except Exception as e:
+        _log.info("share count lookup failed for %s: %s", sym, e)
+        return None
+    for p in reversed(periods):
+        if p.get("estimate"):
+            continue
+        n = p.get("weightedAverageShsOutDil")
+        if n:
+            return float(n)
+    return None
+
+
 _COMPUTE = {"gex": _compute_gex, "iv30": _compute_iv30, "est": _compute_est}
 
 
@@ -269,19 +291,34 @@ def series(kind: str = Query(...), ticker: str = Query(...), compute: bool = Que
     out: dict = {"ticker": sym.upper(), "kind": kind, "points": pts,
                  "note": "History accrues from first use. One point per trading day."}
     if kind == "est":
+        # Net income is what a reader wants to compare across companies, but the
+        # published estimate is EPS: neither Yahoo nor Alpha Vantage carries a
+        # net-income consensus. So the SERIES stores what was published and the
+        # dollar figure is derived here, per read, against the latest reported
+        # diluted share count. Deriving at read rather than at write keeps the
+        # accrued record faithful to the source and lets the conversion improve
+        # as the share count does.
+        shares = _diluted_shares(sym)
         # One line per fiscal year is what a revision chart plots, so pivot here
         # rather than making every caller do it.
         years = sorted({y for p in pts for y in (p.get("fy") or {})})
         out["fiscal_years"] = years
-        out["series"] = {
-            y: [{"d": p["d"], **{k: v for k, v in (p.get("fy") or {}).get(y, {}).items()},
-                 **({"reconstructed": True} if p.get("src") == "av-lookback" else {})}
-                for p in pts if y in (p.get("fy") or {})]
-            for y in years
-        }
-        out["note"] = ("Consensus accrues one point per day from first view. Points marked "
-                       "reconstructed come from the published 7/30/60/90-day lookbacks and "
-                       "carry EPS only.")
+        def _point(p: dict, y: str) -> dict:
+            vals = dict((p.get("fy") or {}).get(y, {}))
+            eps = vals.get("eps")
+            if shares and eps is not None:
+                vals["ni"] = eps * shares
+            if p.get("src") == "av-lookback":
+                vals["reconstructed"] = True
+            return {"d": p["d"], **vals}
+
+        out["series"] = {y: [_point(p, y) for p in pts if y in (p.get("fy") or {})] for y in years}
+        out["diluted_shares"] = shares
+        out["note"] = ("Consensus accrues one point per day from first view. Net income is "
+                       "derived from the published EPS estimate and the latest reported "
+                       "diluted share count, because no free source publishes a net-income "
+                       "consensus. Points marked reconstructed come from the published "
+                       "7/30/60/90-day lookbacks and carry EPS only.")
     if kind == "iv30" and len(pts) >= 20:
         vals = [p["v"] for p in pts if p.get("v") is not None]
         cur, lo, hi = vals[-1], min(vals), max(vals)

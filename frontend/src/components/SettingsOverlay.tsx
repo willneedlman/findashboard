@@ -10,17 +10,25 @@ import { T } from '../lib/theme'
 
 export const OPEN_SETTINGS = 'ft:open-settings'
 
-/** Open the settings overlay from anywhere. */
-export function openSettings() {
-  window.dispatchEvent(new Event(OPEN_SETTINGS))
+export type SettingsTab = 'appearance' | 'alerts' | 'account' | 'admin'
+
+/** Open the settings overlay from anywhere, optionally on a given tab. There is
+ *  no /login route: signing in lives on the Account tab, so that is where
+ *  anything asking the user to sign in should send them. */
+export function openSettings(tab?: SettingsTab) {
+  window.dispatchEvent(new CustomEvent(OPEN_SETTINGS, { detail: tab }))
 }
 
 export default function SettingsOverlay() {
   const [open, setOpen] = useState(false)
+  const [tab, setTab] = useState<SettingsTab | undefined>(undefined)
   const close = useCallback(() => setOpen(false), [])
 
   useEffect(() => {
-    const onOpen = () => setOpen(true)
+    const onOpen = (e: Event) => {
+      setTab((e as CustomEvent<SettingsTab | undefined>).detail)
+      setOpen(true)
+    }
     window.addEventListener(OPEN_SETTINGS, onOpen)
     return () => window.removeEventListener(OPEN_SETTINGS, onOpen)
   }, [])
@@ -69,7 +77,7 @@ export default function SettingsOverlay() {
           </button>
         </div>
         <div style={{ overflowY: 'auto', flex: '1 1 auto', minHeight: 0 }}>
-          <SettingsContent inOverlay />
+          <SettingsContent inOverlay initialTab={tab} />
         </div>
       </div>
     </div>

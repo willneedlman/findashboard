@@ -15,12 +15,19 @@ import { TOOLTIP_STYLE } from './ChartTooltip'
 // 7/30/60/90-day lookbacks, which carry EPS only, and the chart says so instead
 // of drawing a revenue line that would be flat by construction.
 
-interface Point { d: string; eps?: number; rev?: number; n?: number; reconstructed?: boolean }
-interface Resp { ticker: string; fiscal_years: string[]; series: Record<string, Point[]>; note: string }
+interface Point { d: string; eps?: number; ni?: number; rev?: number; n?: number; reconstructed?: boolean }
+interface Resp {
+  ticker: string; fiscal_years: string[]; series: Record<string, Point[]>
+  diluted_shares?: number | null; note: string
+}
 
-type Metric = 'eps' | 'rev'
+// Net income and revenue only. EPS is what analysts publish, so it is still the
+// source of the net-income figure, but it does not need a control of its own:
+// it is net income over the share count, and the dollar figure is the one worth
+// comparing between companies.
+type Metric = 'ni' | 'rev'
 const METRICS: { key: Metric; label: string }[] = [
-  { key: 'eps', label: 'EPS' },
+  { key: 'ni', label: 'Net income' },
   { key: 'rev', label: 'Revenue' },
 ]
 // Fiscal year is the dash, so the company keeps the hue it has on the other chart.
@@ -40,7 +47,7 @@ export default function RevisionTrend({ tickers, colorFor, multi }: {
   colorFor: (t: string) => string
   multi: boolean
 }) {
-  const [metric, setMetric] = useState<Metric>('eps')
+  const [metric, setMetric] = useState<Metric>('ni')
 
   const results = useQueries({
     queries: tickers.map(tk => ({
@@ -92,8 +99,8 @@ export default function RevisionTrend({ tickers, colorFor, multi }: {
     return last
   }, [ok])
 
-  const fmt = (v: number | null | undefined) =>
-    (v == null || !Number.isFinite(v) ? '—' : metric === 'eps' ? `$${v.toFixed(2)}` : money(v))
+  const fmt = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? '—' : money(v))
+  const derived = metric === 'ni' && ok.some(l => l.data.diluted_shares)
   const day = (d: string) => d.slice(5).replace('-', '/')
 
   const empty = !loading && rows.length === 0
@@ -104,7 +111,7 @@ export default function RevisionTrend({ tickers, colorFor, multi }: {
       display: 'flex', flexDirection: 'column', minHeight: 420 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
         padding: '8px 12px', borderBottom: `1px solid ${T.borderFaint}` }}>
-        <div style={{ display: 'flex', width: 150 }}>
+        <div style={{ display: 'flex', width: 168 }}>
           {METRICS.map(m => (
             <div key={m.key} onClick={() => setMetric(m.key)} style={seg(metric === m.key)}>{m.label}</div>
           ))}
@@ -131,10 +138,10 @@ export default function RevisionTrend({ tickers, colorFor, multi }: {
               <ComposedChart data={rows} margin={{ top: 6, right: 8, bottom: 0, left: 4 }}>
                 <CartesianGrid stroke={T.borderFaint} vertical={false} />
                 <XAxis dataKey="d" tickFormatter={day} tick={{ fill: T.muted, fontSize: 10, fontFamily: MONO }} />
-                <YAxis width={metric === 'eps' ? 54 : 62} domain={['auto', 'auto']}
+                <YAxis width={62} domain={['auto', 'auto']}
                   tick={{ fill: T.muted, fontSize: 10, fontFamily: MONO }}
-                  tickFormatter={(v: number) => (metric === 'eps' ? `$${v.toFixed(2)}` : money(v))} />
-                {seededUntil && metric === 'eps' && (
+                  tickFormatter={(v: number) => money(v)} />
+                {seededUntil && metric === 'ni' && (
                   <ReferenceArea x1={rows[0].d as string} x2={seededUntil} fill={T.gold} fillOpacity={0.05}
                     stroke={mix(T.gold, 22)}
                     label={{ value: 'reconstructed', position: 'insideTop', fontSize: 9,
@@ -168,10 +175,12 @@ export default function RevisionTrend({ tickers, colorFor, multi }: {
         </div>
       </div>
 
-      {revGap && (
+      {(revGap || derived) && (
         <div style={{ padding: '0 12px 8px', fontFamily: SANS, fontSize: 9.5, color: T.muted, lineHeight: 1.5 }}>
-          Revenue estimates have no published history, so this series starts the day you first opened it.
-          The EPS view carries a reconstructed opening quarter.
+          {revGap && <>Revenue estimates have no published history, so this series starts the day you first
+            opened it. The net income view carries a reconstructed opening quarter. </>}
+          {derived && <>Analysts publish EPS, not net income. This is EPS times the latest reported diluted
+            share count, so it ignores whatever buybacks the forecast year brings.</>}
         </div>
       )}
     </div>

@@ -1626,6 +1626,7 @@ _FUND_FIELDS = [
     ("dividendsPaid",               "Dividends paid",       "$", "Cash flow"),
     ("dividendPerShare",            "Dividend per share",   "$/sh", "Cash flow"),
     ("revenueEstimate",             "Revenue (est)",        "$", "Estimate"),
+    ("netIncomeEstimate",           "Net income (est)",     "$", "Estimate"),
     ("epsEstimate",                 "EPS (est)",            "$/sh", "Estimate"),
     ("marketCap",                   "Market cap",           "$", "Market"),
     ("enterpriseValue",             "Enterprise value",     "$", "Market"),
@@ -1681,6 +1682,17 @@ def _split_factors(ticker: str, dates: list[str]) -> dict[str, float]:
                 factor *= float(r)
         out[d] = factor
     return out
+
+
+def _est_net_income(eps: float | None, shares: float | None) -> float | None:
+    """Consensus net income, derived.
+
+    Analysts publish EPS, not net income, so the dollar figure is EPS times the
+    latest reported diluted share count. It ignores whatever buybacks or issuance
+    the forecast year brings, which is why it stays a separate field rather than
+    joining the reported net-income line.
+    """
+    return eps * shares if (eps is not None and shares) else None
 
 
 def _multiples(row: dict) -> dict:
@@ -1840,6 +1852,7 @@ def fundamental_history(ticker: str):
             if f["offset"] == 0:
                 base["revenueEstimate"] = f.get("revenueEstimate")
                 base["epsEstimate"] = f.get("epsEstimate")
+                base["netIncomeEstimate"] = _est_net_income(f.get("epsEstimate"), shares)
                 base.update(_multiples(base))
                 continue
             fy = base["fiscalYear"] + f["offset"]
@@ -1850,6 +1863,7 @@ def fundamental_history(ticker: str):
                 "analysts": f.get("analysts"),
                 "revenueEstimate": f.get("revenueEstimate"),
                 "epsEstimate": f.get("epsEstimate"),
+                "netIncomeEstimate": _est_net_income(f.get("epsEstimate"), shares),
                 "sharePrice": spot,
                 "marketCap": mcap,
                 "enterpriseValue": add(mcap, net_debt) if mcap is not None else None,
