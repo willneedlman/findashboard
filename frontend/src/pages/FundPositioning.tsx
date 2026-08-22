@@ -142,7 +142,6 @@ export default function FundPositioning() {
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [minValue, setMinValue] = useState(0)
   const [managerSort, setManagerSort] = useState<'value' | 'name'>('value')
-  const [confirmedOnly, setConfirmedOnly] = useState(false)
   useTickerParam(sym => { setMode('ticker'); setTicker(sym.toUpperCase()); setDraft(sym.toUpperCase()) })
 
   const kinds = useQuery<{ kinds: { kind: string; count: number; confirmed: number }[] }>({
@@ -152,11 +151,11 @@ export default function FundPositioning() {
   })
 
   const managers = useQuery<{ managers: Manager[] }>({
-    queryKey: ['fund-managers', query, [...picked].sort().join(','), minValue, managerSort, confirmedOnly],
+    queryKey: ['fund-managers', query, [...picked].sort().join(','), minValue, managerSort],
     queryFn: () => axios.get('/api/funds/managers', {
       params: {
         q: query, kinds: [...picked].join(','), min_value: minValue,
-        sort: managerSort, confirmed: confirmedOnly, limit: 60,
+        sort: managerSort, limit: 60,
       },
     }).then(r => r.data),
     staleTime: 6 * 3600 * 1000,
@@ -190,8 +189,13 @@ export default function FundPositioning() {
     })
   }, [book.data, sort])
 
+  // The page is capped to the viewport and each half scrolls inside it. Before
+  // this the holdings table ran 935px inside a 900px window with no page
+  // scroll, so the rows past the fold were simply unreachable.
+  const FILL = 'calc(100vh - 112px)'
+
   const sidebar = (
-    <div style={{ padding: 13 }}>
+    <div style={{ padding: 13, maxHeight: FILL, overflowY: 'auto' }}>
       <div style={{ display: 'flex', marginBottom: 12 }}>
         {([['firm', 'By firm'], ['ticker', 'By ticker']] as const).map(([k, label]) => (
           <div key={k} onClick={() => setMode(k)} style={seg(mode === k)}>{label}</div>
@@ -207,9 +211,24 @@ export default function FundPositioning() {
               className="ft-control" style={{ width: '100%', paddingLeft: 24, boxSizing: 'border-box' }} />
           </div>
 
-          {/* Type. Counts come from the data so an empty filter is visible
-              before you apply it rather than after. */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
+          {/* One row per type rather than a wrap of pills: the names run from
+              "Other" to "Securitized assets", so a flowing row leaves ragged
+              gaps and the counts never line up to be compared. */}
+          <div style={{ marginTop: 10, border: `1px solid ${T.border}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '5px 8px', borderBottom: `1px solid ${T.borderFaint}` }}>
+              <span style={{ fontFamily: SANS, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.14em',
+                textTransform: 'uppercase', color: T.muted }}>Type</span>
+              {picked.size > 0 && (
+                <button onClick={() => setPicked(new Set())}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                    fontFamily: SANS, fontSize: 9, color: T.gold }}>clear</button>
+              )}
+            </div>
+            {/* Half height with a scroll: twelve rows pushed the size and order
+                controls below the fold, and the list is browsed rather than
+                read end to end. */}
+            <div style={{ maxHeight: 132, overflowY: 'auto' }}>
             {(kinds.data?.kinds ?? []).filter(k => k.count > 0).map(k => {
               const on = picked.has(k.kind)
               const c = KIND_TONE[k.kind] ?? T.muted
@@ -220,42 +239,40 @@ export default function FundPositioning() {
                     if (!next.delete(k.kind)) next.add(k.kind)
                     return next
                   })}
-                  title={`${k.count.toLocaleString()} filers · ${k.confirmed.toLocaleString()} confirmed by Form ADV`}
-                  style={{ fontFamily: SANS, fontSize: 9.5, padding: '3px 7px', cursor: 'pointer',
-                    background: on ? mix(c, 16) : 'transparent',
-                    border: `1px solid ${on ? c : T.border}`, color: on ? c : T.muted }}>
-                  {k.kind} <span style={{ fontFamily: MONO, fontSize: 8.5, opacity: 0.75 }}>{k.count.toLocaleString()}</span>
+                  title={`${k.confirmed.toLocaleString()} of ${k.count.toLocaleString()} confirmed by Form ADV`}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    width: '100%', gap: 8, padding: '4px 8px', cursor: 'pointer', textAlign: 'left',
+                    background: on ? mix(c, 14) : 'transparent', border: 'none',
+                    // The selected row is marked on its edge, so the rows stay a
+                    // single column of aligned text instead of shifting when a
+                    // border appears.
+                    boxShadow: on ? `inset 2px 0 0 ${c}` : 'none',
+                    color: on ? c : T.text }}>
+                  <span style={{ fontFamily: SANS, fontSize: 10.5, whiteSpace: 'nowrap',
+                    overflow: 'hidden', textOverflow: 'ellipsis' }}>{k.kind}</span>
+                  <span style={{ fontFamily: MONO, fontSize: 9, color: on ? c : T.muted,
+                    fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                    {k.count.toLocaleString()}
+                  </span>
                 </button>
               )
             })}
+            </div>
           </div>
 
           {/* Capital and order. */}
-          <div style={{ display: 'flex', marginTop: 8 }}>
+          <div style={{ display: 'flex', marginTop: 10 }}>
             {([[0, 'Any'], [1e9, '$1B+'], [1e10, '$10B+'], [1e11, '$100B+']] as const).map(([v, label]) => (
               <div key={label} onClick={() => setMinValue(v)} style={seg(minValue === v)}>{label}</div>
             ))}
           </div>
-          <div style={{ display: 'flex', marginTop: 5 }}>
+          <div style={{ display: 'flex', marginTop: 4 }}>
             {([['value', 'Largest'], ['name', 'A to Z']] as const).map(([k, label]) => (
               <div key={k} onClick={() => setManagerSort(k)} style={seg(managerSort === k)}>{label}</div>
             ))}
           </div>
 
-          {/* The answer to why some chips are solid and some dashed, made
-              actionable rather than left to a tooltip. */}
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8,
-            fontFamily: SANS, fontSize: 10, color: T.muted, cursor: 'pointer' }}>
-            <input type="checkbox" checked={confirmedOnly}
-              onChange={e => setConfirmedOnly(e.target.checked)} />
-            Only types confirmed by Form ADV
-          </label>
-          <div style={{ fontFamily: SANS, fontSize: 9, color: mix(T.muted, 70), marginTop: 5, lineHeight: 1.5 }}>
-            A solid chip is the manager's own Form ADV registration. A dashed one is implied by the
-            filing itself: a 13F means this book is managed with discretion, but no registration is
-            on the filing to say what kind of manager it is.
-          </div>
-          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 3 }}>
             {(managers.data?.managers ?? []).map(m => {
               const on = m.cik.replace(/^0+/, '') === cik.replace(/^0+/, '')
               return (
@@ -277,7 +294,7 @@ export default function FundPositioning() {
             {managers.isLoading && <div style={{ fontFamily: SANS, fontSize: 10.5, color: T.muted }}>Searching.</div>}
             {!managers.isLoading && (managers.data?.managers ?? []).length === 0 && (
               <div style={{ fontFamily: SANS, fontSize: 10.5, color: T.muted, lineHeight: 1.5 }}>
-                {picked.size || minValue || confirmedOnly
+                {picked.size || minValue
                   ? 'No filer matches those filters. Widen the type, the size, or both.'
                   : 'No 13F filer matches that name.'}
               </div>
@@ -332,6 +349,7 @@ export default function FundPositioning() {
     textAlign: 'right', padding: '7px 10px', fontFamily: SANS, fontSize: 8.5, fontWeight: 700,
     letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted,
     borderBottom: `1px solid ${T.border}`, whiteSpace: 'nowrap',
+    position: 'sticky', top: 0, zIndex: 1, background: T.bg,
   }
   const td: React.CSSProperties = {
     textAlign: 'right', padding: '6px 10px', fontFamily: MONO, fontSize: 11,
@@ -359,8 +377,9 @@ export default function FundPositioning() {
             {!book.isLoading && book.error && <EmptyState title="No filing" variant="unavailable"
               hint="No 13F on record for that filer. Managers under $100M do not file one." />}
             {!book.isLoading && b && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <KpiStrip cells={[
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12,
+                height: FILL, minHeight: 0 }}>
+                <div style={{ flexShrink: 0 }}><KpiStrip cells={[
                   { label: 'Manager', value: b.manager?.length > 22 ? `${b.manager.slice(0, 22)}…` : b.manager,
                     sub: b.kind ? (b.kindShare != null
                         ? `${b.kind} · ${Math.round(b.kindShare)}% ${b.kindBasis}`
@@ -372,13 +391,16 @@ export default function FundPositioning() {
                     sub: b.comparedTo ? 'previous quarter' : 'no earlier filing' },
                   { label: 'Filing rows', value: String(b.filingRows ?? '—'),
                     sub: 'aggregated by CUSIP' },
-                ]} dense />
+                ]} dense /></div>
 
-                <div style={{ border: `1px solid ${T.border}`, background: T.bg, overflowX: 'auto' }}>
+                <div style={{ border: `1px solid ${T.border}`, background: T.bg,
+                  overflow: 'auto', flex: '1 1 auto', minHeight: 0 }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr>
-                        <th style={{ ...th, textAlign: 'left', position: 'sticky', left: 0, background: T.bg }}>Ticker</th>
+                        {/* The header stays put while five hundred rows go past it. */}
+                        <th style={{ ...th, textAlign: 'left', position: 'sticky', left: 0, top: 0,
+                          zIndex: 2, background: T.bg }}>Ticker</th>
                         <th style={{ ...th, textAlign: 'left' }}>Company</th>
                         {sortable('value', 'Value')}
                         {sortable('weight', '% of book')}
@@ -426,7 +448,8 @@ export default function FundPositioning() {
                   </table>
                 </div>
 
-                <div style={{ fontFamily: SANS, fontSize: 9.5, color: T.muted, lineHeight: 1.6 }}>
+                <div style={{ fontFamily: SANS, fontSize: 9.5, color: T.muted, lineHeight: 1.6,
+                  flexShrink: 0 }}>
                   EXITED means no longer reported. The filing cannot say whether a position was sold or
                   simply stopped being reportable.
                   {b.unmapped > 0 && ` ${b.unmapped} position${b.unmapped === 1 ? '' : 's'} show a CUSIP because no US listing maps to it.`}
@@ -447,13 +470,16 @@ export default function FundPositioning() {
                   : `No filer reported ${ticker} for the ${holders.data.asOf} quarter.`} />
             )}
             {!holders.isLoading && holders.data && holders.data.holders.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ fontFamily: SANS, fontSize: 10, color: T.muted, lineHeight: 1.5 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10,
+                height: FILL, minHeight: 0 }}>
+              <div style={{ fontFamily: SANS, fontSize: 10, color: T.muted, lineHeight: 1.5,
+                flexShrink: 0 }}>
                 {(holders.data.holderCount ?? 0).toLocaleString()} filers reported {ticker} for{' '}
                 {holders.data.asOf}, measured against {holders.data.comparedTo ?? 'no earlier quarter'}.
                 Showing the {holders.data.holders.length} largest.
               </div>
-              <div style={{ border: `1px solid ${T.border}`, background: T.bg, overflowX: 'auto' }}>
+              <div style={{ border: `1px solid ${T.border}`, background: T.bg,
+                overflow: 'auto', flex: '1 1 auto', minHeight: 0 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr>

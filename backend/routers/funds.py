@@ -21,13 +21,12 @@ def managers(
     kinds: str = Query("", description="Comma-separated labels to keep"),
     min_value: float = Query(0, ge=0, description="Smallest reported book to include"),
     sort: str = Query("value", pattern="^(value|name)$"),
-    confirmed: bool = Query(False, description="Only labels confirmed by Form ADV"),
     limit: int = Query(40, le=200),
 ):
     """Managers matching a name and filters, largest book first."""
     picked = tuple(k.strip() for k in kinds.split(",") if k.strip())
     return {"query": q, "kinds": list(picked), "minValue": min_value,
-            "managers": thirteenf.search_managers(q, picked, min_value, sort, confirmed)[:limit]}
+            "managers": thirteenf.search_managers(q, picked, min_value, sort)[:limit]}
 
 
 @router.get("/kinds")

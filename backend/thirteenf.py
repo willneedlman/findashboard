@@ -444,9 +444,9 @@ def book(cik: str, accession: str | None = None, limit: int = 500) -> dict:
 # body runs, so deleting the list is not enough to stop them being served.
 # v4: the payload gained the Form ADV label, and a cached v3 copy has no
 # label to show.
-@cached(ttl=_QUARTER, maxsize=512, persist=True, skip_if=lambda r: not r, version=8)
+@cached(ttl=_QUARTER, maxsize=512, persist=True, skip_if=lambda r: not r, version=9)
 def search_managers(query: str, kinds: tuple = (), min_value: float = 0.0,
-                    sort: str = "value", confirmed_only: bool = False) -> list:
+                    sort: str = "value") -> list:
     """Managers matching a name, restricted to filers with a 13F on record.
 
     Names come from the submissions endpoint rather than the search feed:
@@ -457,9 +457,8 @@ def search_managers(query: str, kinds: tuple = (), min_value: float = 0.0,
     """
     import re
     q = (query or "").strip()
-    hits = db_search(q, kinds=list(kinds), min_value=min_value, sort=sort,
-                     confirmed_only=confirmed_only)
-    if hits or kinds or min_value or confirmed_only:
+    hits = db_search(q, kinds=list(kinds), min_value=min_value, sort=sort)
+    if hits or kinds or min_value:
         # A filter that matches nothing is an answer, not a reason to fall back
         # to an unfiltered search that would ignore what was asked.
         return hits
@@ -497,8 +496,7 @@ IMPLIED_KIND = "Asset manager"
 
 
 def db_search(query: str, limit: int = 40, kinds: list | None = None,
-              min_value: float = 0.0, sort: str = "value",
-              confirmed_only: bool = False) -> list:
+              min_value: float = 0.0, sort: str = "value") -> list:
     """Managers matching a name, from the bulk dataset.
 
     Ten thousand filers, answered from disk. Ranked by reported value so the
@@ -521,8 +519,6 @@ def db_search(query: str, limit: int = 40, kinds: list | None = None,
         if q:
             sql.append(" AND f.name LIKE ? COLLATE NOCASE")
             args.append(f"%{q}%")
-        if confirmed_only:
-            sql.append(" AND a.kind IS NOT NULL")
         if kinds:
             marks = ",".join("?" * len(kinds))
             # An unregistered filer has no row to match, so its implied label has
@@ -530,7 +526,7 @@ def db_search(query: str, limit: int = 40, kinds: list | None = None,
             # manager without a registration.
             clause = f" AND (a.kind IN ({marks})"
             args.extend(kinds)
-            if IMPLIED_KIND in kinds and not confirmed_only:
+            if IMPLIED_KIND in kinds:
                 clause += " OR a.kind IS NULL"
             sql.append(clause + ")")
         sql.append(" GROUP BY f.cik")
