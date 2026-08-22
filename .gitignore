@@ -31,6 +31,9 @@ backend/.cache/
 # bounded, pre-built supplier DB shipped with the app
 !data/veridion_nodes.db
 !data/supply_chain.db
+# Built by scripts/build_13f_db.py and shipped to the volume, not through git:
+# 126MB per two quarters, refreshed when SEC publishes.
+backend/data/thirteenf.db
 .playwright-mcp/
 .zshrc
 smoke-test.png

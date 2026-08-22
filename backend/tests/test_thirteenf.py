@@ -78,7 +78,10 @@ def test_foreign_identifiers_are_cins_not_cusip():
     assert not "037833100"[:1].isalpha()
 
 
-def test_holders_reports_how_much_it_actually_read(monkeypatch):
+def test_the_crawl_fallback_reports_how_much_it_actually_read(monkeypatch):
+    # Only reachable with no dataset present, which is a fresh checkout before
+    # scripts/build_13f_db.py has run.
+    monkeypatch.setattr(tf, "_db_path", lambda: None)
     monkeypatch.setattr(tf, "TRACKED", [("1", "One"), ("2", "Two"), ("3", "Three")])
     monkeypatch.setattr(tf, "_cached_book", lambda cik: (
         {"available": True, "manager": "One", "period": "2026-06-30",
@@ -90,3 +93,76 @@ def test_holders_reports_how_much_it_actually_read(monkeypatch):
     # A partial scan must say so, or an absent fund reads as one that does not hold it.
     assert out["warming"] is True
     assert out["holders"][0]["manager"] == "One"
+
+
+# ── The bulk dataset ─────────────────────────────────────────────────────────
+
+def _mini_db(path):
+    """A dataset with the one shape that broke the reverse index: a manager who
+    filed an original and two amendments for the same quarter, one of them a
+    partial restatement covering a fraction of the book."""
+    import sqlite3
+    c = sqlite3.connect(path)
+    c.executescript("""
+      CREATE TABLE filers (id INTEGER PRIMARY KEY, accession TEXT, cik TEXT, name TEXT,
+        period TEXT, amended INT, filed TEXT, total REAL, positions INT, truncated INT,
+        canonical INT DEFAULT 0);
+      CREATE TABLE securities (cusip TEXT PRIMARY KEY, issuer TEXT, class TEXT, ticker TEXT);
+      CREATE TABLE positions (filer_id INT, cusip TEXT, value REAL, shares REAL,
+        calls REAL DEFAULT 0, puts REAL DEFAULT 0);
+    """)
+    c.executemany("INSERT INTO filers VALUES (?,?,?,?,?,?,?,?,?,?,?)", [
+        (1, 'a-1', '99', 'Vanguard Test', '2026-03-31', 0, '2026-05-08', 1000.0, 2, 0, 0),
+        (2, 'a-2', '99', 'Vanguard Test', '2026-03-31', 1, '2026-05-15', 1200.0, 2, 0, 0),
+        (3, 'a-3', '99', 'Vanguard Test', '2026-03-31', 1, '2026-05-15',   50.0, 1, 0, 0),
+        (4, 'a-0', '99', 'Vanguard Test', '2025-12-31', 0, '2026-02-10',  900.0, 2, 0, 0),
+    ])
+    c.execute("INSERT INTO securities VALUES ('037833100','APPLE INC','COM','AAPL')")
+    c.executemany("INSERT INTO positions (filer_id, cusip, value, shares) VALUES (?,?,?,?)", [
+        (1, '037833100', 1000.0, 100), (2, '037833100', 1200.0, 120),
+        (3, '037833100',   50.0,   5), (4, '037833100',  900.0,  90),
+    ])
+    # The canonical pass, exactly as the ETL runs it.
+    c.execute("UPDATE filers SET canonical = 1 WHERE id IN (SELECT id FROM"
+              " (SELECT id, ROW_NUMBER() OVER (PARTITION BY cik, period"
+              "  ORDER BY total DESC, filed DESC) rn FROM filers) WHERE rn = 1)")
+    c.commit()
+    c.close()
+
+
+@pytest.fixture
+def bulk(tmp_path, monkeypatch):
+    path = tmp_path / "t.db"
+    _mini_db(path)
+    monkeypatch.setattr(tf, "_db_path", lambda: path)
+    return path
+
+
+def test_one_filing_per_manager_per_quarter(bulk):
+    # Three filings for one quarter must be one row, or a fund appears several
+    # times in the holder list at several different sizes.
+    out = tf.db_holders("AAPL")
+    assert out["holderCount"] == 1
+    assert len(out["holders"]) == 1
+
+
+def test_the_canonical_filing_is_the_complete_one(bulk):
+    # The largest book, not the newest filing: the last amendment here restates
+    # $50 of a $1,200 book.
+    h = tf.db_holders("AAPL")["holders"][0]
+    assert h["value"] == 1200.0
+    assert h["shares"] == 120
+
+
+def test_the_diff_measures_against_the_previous_quarter(bulk):
+    h = tf.db_holders("AAPL")["holders"][0]
+    assert h["sharesChange"] == pytest.approx(30)     # 120 against 90
+    assert h["pctChange"] == pytest.approx(100 / 3)
+    assert h["status"] == "added"
+
+
+def test_an_unmapped_ticker_says_so_rather_than_reporting_no_holders(bulk):
+    out = tf.db_holders("ZZZZ")
+    assert out["holders"] == []
+    # "nobody holds it" and "we cannot identify it" are different answers.
+    assert out["unmapped"] is True

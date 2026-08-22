@@ -22,11 +22,14 @@ Three facts the raw filings force on any consumer:
 from __future__ import annotations
 
 import logging
+import os
+import sqlite3
 import threading
 import time
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from datetime import date
+from pathlib import Path
 
 import requests
 
@@ -39,6 +42,38 @@ except ImportError:                                   # pragma: no cover
     def disk_set(_k, _v, ttl=0): pass                 # type: ignore
 
 logger = logging.getLogger(__name__)
+
+# Every filer for a quarter, from SEC's own bulk dataset, built by
+# scripts/build_13f_db.py. Crawling EDGAR one manager at a time gave twenty
+# funds and minutes of latency; this gives about ten thousand and answers from
+# disk. The live path below stays for the newest filings, because the bulk file
+# is published a quarter behind.
+# The volume in production, the repo in development. It is 126MB for two
+# quarters, which is too big for git and too slow to rebuild on every deploy, so
+# it lives on the mounted volume and is refreshed when SEC publishes a quarter.
+_DB_PATHS = [Path(os.getenv("THIRTEENF_DB", "/data/thirteenf.db")),
+             Path(__file__).resolve().parent / "data" / "thirteenf.db"]
+
+
+def _db_path() -> Path | None:
+    return next((p for p in _DB_PATHS if p.exists()), None)
+
+
+def _db() -> sqlite3.Connection | None:
+    _DB = _db_path()
+    if _DB is None:
+        return None
+    try:
+        conn = sqlite3.connect(f"file:{_DB}?mode=ro", uri=True, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        return conn
+    except Exception as e:
+        logger.warning("13F database unavailable: %s", e)
+        return None
+
+
+def db_available() -> bool:
+    return _db_path() is not None
 
 _UA = {"User-Agent": "Alphatape Research admin@alphatape.app"}
 _TIMEOUT = 30
@@ -199,7 +234,26 @@ def resolve_cusips(cusips: list[str]) -> dict[str, str]:
     """
     out: dict[str, str] = {}
     pending: list[str] = []
+
+    # The bulk dataset already carries a ticker for every security anyone holds
+    # in size, resolved once at build time. Consulting it first means the live
+    # path almost never touches the rate-limited mapping API.
+    conn = _db()
+    if conn:
+        try:
+            marks = ",".join("?" * len(cusips))
+            for r in conn.execute(
+                f"SELECT cusip, ticker FROM securities WHERE ticker IS NOT NULL"
+                f" AND cusip IN ({marks})", tuple(cusips)).fetchall():
+                out[r["cusip"]] = r["ticker"]
+        except Exception as e:
+            logger.info("ticker lookup from the dataset failed: %s", e)
+        finally:
+            conn.close()
+
     for c in cusips:
+        if c in out:
+            continue
         hit = disk_get(f"figi:v1:{c}")
         if hit:
             out[c] = hit
@@ -275,10 +329,19 @@ def _pct_change(now: float, then: float | None) -> float | None:
 
 
 def book(cik: str, accession: str | None = None, limit: int = 500) -> dict:
-    """A manager's positions for one quarter, against the quarter before it."""
+    """A manager's positions for one quarter, against the quarter before it.
+
+    EDGAR first, because the bulk dataset is published a quarter behind and a
+    manager who filed last week should not read as three months stale. The
+    dataset answers when the live fetch has nothing, which covers every filer it
+    knows and every quarter it stores.
+    """
     meta = filings(cik)
     fl = meta.get("filings") or []
     if not fl:
+        stored = db_book(cik)
+        if stored:
+            return stored
         return {"available": False, "reason": "This filer has no 13F on record."}
 
     idx = 0
@@ -384,6 +447,9 @@ def search_managers(query: str) -> list:
     """
     import re
     q = (query or "").strip()
+    hits = db_search(q)
+    if hits:
+        return hits
     if len(q) < 2:
         return [{"cik": f"{int(c):010d}", "name": n} for c, n in dict(TRACKED).items()]
     try:
@@ -408,6 +474,144 @@ def search_managers(query: str) -> list:
     return out
 
 
+def db_search(query: str, limit: int = 40) -> list:
+    """Managers matching a name, from the bulk dataset.
+
+    Ten thousand filers, answered from disk. Ranked by reported value so the
+    names anyone is looking for come first rather than alphabetically.
+    """
+    conn = _db()
+    if not conn:
+        return []
+    q = (query or "").strip()
+    try:
+        if q:
+            rows = conn.execute(
+                "SELECT cik, name, MAX(period) period, MAX(total) total, COUNT(*) quarters"
+                " FROM filers WHERE canonical = 1 AND name LIKE ? COLLATE NOCASE"
+                " GROUP BY cik ORDER BY total DESC LIMIT ?", (f"%{q}%", limit)).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT cik, name, MAX(period) period, MAX(total) total, COUNT(*) quarters"
+                " FROM filers WHERE canonical = 1 GROUP BY cik ORDER BY total DESC LIMIT ?", (limit,)).fetchall()
+        return [{"cik": f"{int(r['cik']):010d}", "name": r["name"], "latest": r["period"],
+                 "quarters": r["quarters"], "value": r["total"]} for r in rows]
+    finally:
+        conn.close()
+
+
+def db_book(cik: str, period: str | None = None) -> dict | None:
+    """A manager's book for a quarter, against the quarter before, from the DB."""
+    conn = _db()
+    if not conn:
+        return None
+    try:
+        c = str(int(cik))
+        rows = conn.execute(
+            "SELECT * FROM filers WHERE cik = ? AND canonical = 1 ORDER BY period DESC", (c,)).fetchall()
+        if not rows:
+            return None
+        cur = next((r for r in rows if r["period"] == period), rows[0])
+        prev = next((r for r in rows if r["period"] < cur["period"]), None)
+
+        def positions(fid):
+            return {r["cusip"]: r for r in conn.execute(
+                "SELECT p.*, s.issuer, s.class, s.ticker FROM positions p"
+                " JOIN securities s ON s.cusip = p.cusip WHERE p.filer_id = ?", (fid,)).fetchall()}
+
+        now, was = positions(cur["id"]), positions(prev["id"]) if prev else {}
+        total = cur["total"] or sum(r["value"] for r in now.values()) or 1.0
+        out = []
+        for cusip, r in sorted(now.items(), key=lambda kv: -kv[1]["value"]):
+            b = was.get(cusip)
+            chg = r["shares"] - b["shares"] if b else None
+            out.append({
+                "cusip": cusip, "ticker": r["ticker"], "issuer": r["issuer"], "class": r["class"],
+                "value": r["value"], "weight": r["value"] / total * 100, "shares": r["shares"],
+                "calls": r["calls"] or None, "puts": r["puts"] or None,
+                "sharesChange": chg, "pctChange": _pct_change(r["shares"], b["shares"] if b else None),
+                "pctOutstanding": None,
+                "status": "new" if not b else ("added" if (chg or 0) > 0 else
+                                               "trimmed" if (chg or 0) < 0 else "held"),
+            })
+        exited = [{"cusip": k, "ticker": v["ticker"], "issuer": v["issuer"], "class": v["class"],
+                   "value": v["value"], "shares": v["shares"], "status": "exited"}
+                  for k, v in sorted(was.items(), key=lambda kv: -kv[1]["value"])
+                  if k not in now][:50]
+        quarters = [{"accession": r["accession"], "period": r["period"],
+                     "filed": r["filed"], "amended": bool(r["amended"])} for r in rows[:20]]
+        return {
+            "available": True, "source": "bulk", "cik": f"{int(c):010d}", "manager": cur["name"],
+            "period": cur["period"], "filed": cur["filed"], "amended": bool(cur["amended"]),
+            "comparedTo": prev["period"] if prev else None,
+            "positions": cur["positions"], "filingRows": None, "totalValue": total,
+            "truncated": bool(cur["truncated"]), "quarters": quarters,
+            "rows": out, "exited": exited,
+            "unmapped": sum(1 for r in out if not r["ticker"]),
+        }
+    finally:
+        conn.close()
+
+
+def db_holders(ticker: str, limit: int = 25) -> dict | None:
+    """Every filer in the dataset reporting a ticker, biggest position first.
+
+    This is the view the crawl could never give: a real index from security back
+    to holder, over every manager rather than a list of twenty.
+    """
+    conn = _db()
+    if not conn:
+        return None
+    sym = (ticker or "").strip().upper()
+    try:
+        cusips = [r["cusip"] for r in conn.execute(
+            "SELECT cusip FROM securities WHERE ticker = ?", (sym,)).fetchall()]
+        if not cusips:
+            return {"available": True, "ticker": sym, "holders": [], "source": "bulk",
+                    "asOf": None, "scanned": None, "unmapped": True}
+        marks = ",".join("?" * len(cusips))
+        latest = conn.execute("SELECT MAX(period) p FROM filers WHERE canonical = 1").fetchone()["p"]
+        rows = conn.execute(
+            f"SELECT f.cik, f.name, f.period, f.total, p.cusip, p.value, p.shares, s.issuer"
+            f" FROM positions p JOIN filers f ON f.id = p.filer_id"
+            f" JOIN securities s ON s.cusip = p.cusip"
+            f" WHERE p.cusip IN ({marks}) AND f.period = ? AND f.canonical = 1"
+            f" ORDER BY p.value DESC LIMIT ?",
+            (*cusips, latest, limit)).fetchall()
+
+        prior = conn.execute("SELECT MAX(period) p FROM filers WHERE period < ?", (latest,)).fetchone()["p"]
+        before = {}
+        if prior:
+            for r in conn.execute(
+                f"SELECT f.cik, p.shares FROM positions p JOIN filers f ON f.id = p.filer_id"
+                f" WHERE p.cusip IN ({marks}) AND f.period = ? AND f.canonical = 1", (*cusips, prior)).fetchall():
+                before[r["cik"]] = before.get(r["cik"], 0) + r["shares"]
+
+        out = []
+        for r in rows:
+            was = before.get(r["cik"])
+            chg = r["shares"] - was if was is not None else None
+            out.append({
+                "manager": r["name"], "cik": f"{int(r['cik']):010d}", "period": r["period"],
+                "issuer": r["issuer"], "ticker": sym, "cusip": r["cusip"],
+                "value": r["value"], "shares": r["shares"],
+                "weight": (r["value"] / r["total"] * 100) if r["total"] else None,
+                "sharesChange": chg, "pctChange": _pct_change(r["shares"], was),
+                "pctOutstanding": None,
+                "status": "new" if was is None else ("added" if (chg or 0) > 0 else
+                                                     "trimmed" if (chg or 0) < 0 else "held"),
+            })
+        holderCount = conn.execute(
+            f"SELECT COUNT(*) n FROM positions p JOIN filers f ON f.id = p.filer_id"
+            f" WHERE p.cusip IN ({marks}) AND f.period = ? AND f.canonical = 1", (*cusips, latest)).fetchone()["n"]
+        return {"available": True, "source": "bulk", "ticker": sym, "asOf": latest,
+                "comparedTo": prior, "holders": out, "holderCount": holderCount,
+                "filersTotal": conn.execute(
+                    "SELECT COUNT(DISTINCT cik) n FROM filers WHERE period = ? AND canonical = 1", (latest,)).fetchone()["n"]}
+    finally:
+        conn.close()
+
+
 def holders(ticker: str, limit: int = 20) -> dict:
     """Which tracked managers reported a ticker, and how their stake moved.
 
@@ -425,6 +629,10 @@ def holders(ticker: str, limit: int = 20) -> dict:
     sym = (ticker or "").strip().upper()
     if not sym:
         return {"available": False, "reason": "No ticker."}
+
+    full = db_holders(sym, limit)
+    if full is not None:
+        return full
 
     tracked = dict(TRACKED)
     rows, scanned, period = [], 0, None

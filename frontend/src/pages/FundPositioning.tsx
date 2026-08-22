@@ -32,10 +32,10 @@ interface Book {
   quarters: { accession: string; period: string; amended: boolean }[]
   rows: Row[]; exited: Row[]; unmapped: number
 }
-interface Manager { cik: string; name: string; latest?: string; quarters?: number }
+interface Manager { cik: string; name: string; latest?: string; quarters?: number; value?: number }
 interface Holders {
-  ticker: string; scanned: number; trackedTotal: number; asOf: string | null
-  warming: boolean
+  ticker: string; asOf: string | null; comparedTo?: string | null
+  source?: string; holderCount?: number; filersTotal?: number; unmapped?: boolean
   holders: (Row & { manager: string; cik: string; period: string })[]
 }
 
@@ -120,7 +120,7 @@ export default function FundPositioning() {
           <div style={{ position: 'relative' }}>
             <Search size={12} style={{ position: 'absolute', left: 8, top: 9, color: T.muted }} />
             <input value={query} onChange={e => setQuery(e.target.value)}
-              placeholder="Search managers" aria-label="Search managers"
+              placeholder="Search 10,000 filers" aria-label="Search managers"
               className="ft-control" style={{ width: '100%', paddingLeft: 24, boxSizing: 'border-box' }} />
           </div>
           <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -134,7 +134,7 @@ export default function FundPositioning() {
                     fontFamily: SANS, fontSize: 11, lineHeight: 1.35 }}>
                   {m.name}
                   {m.latest && <div style={{ fontFamily: MONO, fontSize: 9, color: T.muted, marginTop: 2 }}>
-                    {m.latest} · {m.quarters} quarters
+                    {m.latest}{m.value ? ` · ${money(m.value)}` : ''}
                   </div>}
                 </button>
               )
@@ -176,8 +176,7 @@ export default function FundPositioning() {
             placeholder="Ticker" aria-label="Ticker"
             style={{ width: '100%', boxSizing: 'border-box' }} />
           <div style={{ fontFamily: SANS, fontSize: 9.5, color: T.muted, marginTop: 10, lineHeight: 1.55 }}>
-            Which tracked managers reported this name. The filings carry no index from a security back
-            to its holders, so this is the funds on the list, not every holder.
+            Every filer that reported this name, biggest position first, from SEC's quarterly dataset.
           </div>
         </>
       )}
@@ -213,7 +212,7 @@ export default function FundPositioning() {
         meta={mode === 'firm' && b
           ? `${b.period} · filed ${b.filed} · ${b.positions} positions`
           : mode === 'ticker' && holders.data
-            ? `${holders.data.scanned} of ${holders.data.trackedTotal} tracked managers`
+            ? `${(holders.data.holderCount ?? 0).toLocaleString()} of ${(holders.data.filersTotal ?? 0).toLocaleString()} filers · ${holders.data.asOf}`
             : undefined} />
       <SidebarLayout sidebar={sidebar} sidebarTitle="Filings" sidebarWidth={252}>
         {mode === 'firm' && (
@@ -300,24 +299,20 @@ export default function FundPositioning() {
         {mode === 'ticker' && (
           <>
             {holders.isLoading && <EmptyState title="Fund Positioning" variant="loading"
-              hint={`Reading the tracked managers' latest filings for ${ticker}.`} />}
+              hint={`Looking up every filer that reported ${ticker}.`} />}
             {!holders.isLoading && holders.data && holders.data.holders.length === 0 && (
               <EmptyState title="Not reported" variant="empty"
-                hint={holders.data.warming
-                  ? `Read ${holders.data.scanned} of ${holders.data.trackedTotal} tracked managers so far, and none of those reported ${ticker}. The rest are still being built in the background.`
-                  : `None of the ${holders.data.trackedTotal} tracked managers reported ${ticker} in their latest 13F.`} />
+                hint={holders.data.unmapped
+                  ? `No security in the dataset maps to ${ticker}. SEC identifies holdings by CUSIP, and the ticker map covers the names institutions hold in size.`
+                  : `No filer reported ${ticker} for the ${holders.data.asOf} quarter.`} />
             )}
             {!holders.isLoading && holders.data && holders.data.holders.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {holders.data.warming && (
-                // A partial answer must say it is partial, or an absent fund
-                // reads as a fund that does not hold the name.
-                <div style={{ fontFamily: SANS, fontSize: 10.5, color: T.warn, lineHeight: 1.5 }}>
-                  {holders.data.scanned} of {holders.data.trackedTotal} tracked managers read so far.
-                  The rest are being built in the background, so a fund missing here may simply not be
-                  ready yet.
-                </div>
-              )}
+              <div style={{ fontFamily: SANS, fontSize: 10, color: T.muted, lineHeight: 1.5 }}>
+                {(holders.data.holderCount ?? 0).toLocaleString()} filers reported {ticker} for{' '}
+                {holders.data.asOf}, measured against {holders.data.comparedTo ?? 'no earlier quarter'}.
+                Showing the {holders.data.holders.length} largest.
+              </div>
               <div style={{ border: `1px solid ${T.border}`, background: T.bg, overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
