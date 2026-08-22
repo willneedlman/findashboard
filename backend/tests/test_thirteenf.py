@@ -78,21 +78,15 @@ def test_foreign_identifiers_are_cins_not_cusip():
     assert not "037833100"[:1].isalpha()
 
 
-def test_the_crawl_fallback_reports_how_much_it_actually_read(monkeypatch):
-    # Only reachable with no dataset present, which is a fresh checkout before
-    # scripts/build_13f_db.py has run.
+def test_without_the_dataset_it_says_so_rather_than_guessing(monkeypatch):
+    """There used to be twenty hand-typed CIKs as a fallback and four were
+    wrong, labelling Soros as AQR and Man Group as Appaloosa. A wrong name
+    beside real holdings reads as fact, so the fallback is now an empty list
+    and an explanation."""
     monkeypatch.setattr(tf, "_db_path", lambda: None)
-    monkeypatch.setattr(tf, "TRACKED", [("1", "One"), ("2", "Two"), ("3", "Three")])
-    monkeypatch.setattr(tf, "_cached_book", lambda cik: (
-        {"available": True, "manager": "One", "period": "2026-06-30",
-         "rows": [{"ticker": "AAPL", "value": 5.0, "shares": 1, "status": "held"}], "exited": []}
-        if cik == "1" else None))
     out = tf.holders("AAPL")
-    assert out["scanned"] == 1
-    assert out["trackedTotal"] == 3
-    # A partial scan must say so, or an absent fund reads as one that does not hold it.
-    assert out["warming"] is True
-    assert out["holders"][0]["manager"] == "One"
+    assert out["available"] is False
+    assert "dataset" in out["reason"]
 
 
 # ── The bulk dataset ─────────────────────────────────────────────────────────

@@ -416,25 +416,6 @@ def book(cik: str, accession: str | None = None, limit: int = 500) -> dict:
 
 # ── Finding a manager ────────────────────────────────────────────────────────
 
-# Seeds for the by-ticker view. SEC publishes no reverse index from security to
-# holder, so "who owns this" can only ever mean "which of the managers we track
-# reported it". The list is the honest scope of that answer, and the UI says so.
-TRACKED = [
-    ("1067983", "Berkshire Hathaway"),      ("1350694", "Bridgewater Associates"),
-    ("1037389", "Renaissance Technologies"), ("1364742", "BlackRock"),
-    ("1364742", "BlackRock"),                ("1423053", "Citadel Advisors"),
-    ("1273087", "Millennium Management"),    ("1167557", "Baupost Group"),
-    ("1418814", "Coatue Management"),        ("1179392", "Lone Pine Capital"),
-    ("1061768", "Viking Global"),            ("1061165", "Soros Fund Management"),
-    ("1336528", "Pershing Square"),          ("1656456", "Tiger Global"),
-    ("1029160", "AQR Capital"),              ("1595082", "Point72"),
-    ("1080528", "Duquesne Family Office"),   ("1637460", "Appaloosa"),
-    ("1006438", "Gates Foundation Trust"),   ("1697748", "Scion Asset Management"),
-]
-
-
-# v2 abandons entries written before skip_if existed: a predicate stops new
-# empties being stored but cannot purge the ones already on disk.
 @cached(ttl=_QUARTER, maxsize=256, persist=True, skip_if=lambda r: not r, version=2)
 def search_managers(query: str) -> list:
     """Managers matching a name, restricted to filers with a 13F on record.
@@ -450,8 +431,12 @@ def search_managers(query: str) -> list:
     hits = db_search(q)
     if hits:
         return hits
+    # Without the dataset there is no list to show. There used to be twenty
+    # hand-typed CIKs here and four of them were wrong, labelling Soros as AQR
+    # and Man Group as Appaloosa, which is worse than showing nothing: a name
+    # typed from memory beside real holdings reads as fact.
     if len(q) < 2:
-        return [{"cik": f"{int(c):010d}", "name": n} for c, n in dict(TRACKED).items()]
+        return []
     try:
         r = requests.get("https://www.sec.gov/cgi-bin/browse-edgar",
                          params={"company": q, "type": "13F-HR", "dateb": "", "owner": "include",
@@ -633,83 +618,6 @@ def holders(ticker: str, limit: int = 20) -> dict:
     full = db_holders(sym, limit)
     if full is not None:
         return full
-
-    tracked = dict(TRACKED)
-    rows, scanned, period = [], 0, None
-    for cik, label in tracked.items():
-        b = _cached_book(cik)
-        if not b:
-            continue
-        scanned += 1
-        period = max(period or "", b.get("period") or "")
-        hit = next((r for r in b["rows"] if r.get("ticker") == sym), None)
-        if hit:
-            rows.append({**hit, "manager": b.get("manager") or label, "cik": cik,
-                         "period": b.get("period")})
-            continue
-        out = next((e for e in b.get("exited", []) if e.get("ticker") == sym), None)
-        if out:
-            rows.append({**out, "manager": b.get("manager") or label, "cik": cik,
-                         "period": b.get("period"), "weight": None,
-                         "sharesChange": None, "pctChange": None, "pctOutstanding": None})
-
-    rows.sort(key=lambda r: -(r.get("value") or 0))
-    return {"available": True, "ticker": sym, "scanned": scanned,
-            "trackedTotal": len(tracked), "asOf": period, "holders": rows[:limit],
-            "warming": scanned < len(tracked)}
-
-
-def _cached_book(cik: str) -> dict | None:
-    """A manager's book only if it is already built. Never fetches."""
-    from cache import _key
-    hit = disk_get(_key("thirteenf.book_cached", (cik,), {}))
-    return hit if isinstance(hit, dict) and hit.get("available") else None
-
-
-@cached(ttl=_QUARTER, maxsize=64, persist=True, skip_if=lambda r: not r.get("available"))
-def book_cached(cik: str) -> dict:
-    """The latest book, built and stored so holders() can read it for free."""
-    return book(cik, limit=1000)
-
-
-# ── Warmer ───────────────────────────────────────────────────────────────────
-# Sequential and slow on purpose. Each manager costs a few SEC reads plus CUSIP
-# resolution against a keyless 25-requests-a-minute mapping API, and the small
-# production VM should never be doing several of those at once. Everything it
-# builds is cached for a quarter, so this runs to completion roughly once per
-# reporting period and then does nothing.
-
-_stop = threading.Event()
-_thread: threading.Thread | None = None
-
-
-def _warm_loop() -> None:
-    _stop.wait(300)
-    while not _stop.is_set():
-        today = date.today().isoformat()
-        if disk_get("13f:warmed") != today:
-            for cik, name in dict(TRACKED).items():
-                if _stop.is_set():
-                    return
-                try:
-                    if not _cached_book(cik):
-                        book_cached(cik)
-                        logger.info("13F warmed %s", name)
-                except Exception as e:
-                    logger.warning("13F warm failed for %s: %s", name, e)
-                _stop.wait(5)
-            disk_set("13f:warmed", today, ttl=3 * 86400)
-        _stop.wait(6 * 3600)
-
-
-def start_warm_loop() -> None:
-    global _thread
-    if _thread and _thread.is_alive():
-        return
-    _stop.clear()
-    _thread = threading.Thread(target=_warm_loop, name="13f-warm", daemon=True)
-    _thread.start()
-
-
-def stop_warm_loop() -> None:
-    _stop.set()
+    return {"available": False, "ticker": sym,
+            "reason": "The 13F dataset is not built on this machine. "
+                      "Run scripts/build_13f_db.py to load it."}

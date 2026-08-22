@@ -66,8 +66,6 @@ async def lifespan(app: FastAPI):
         snapshots.start_snapshot_loop()
         earnings.start_calendar_warm_loop()
         data_audit.start_audit_loop()
-        import thirteenf
-        thirteenf.start_warm_loop()
         # Freighter movements arrive as a single settled 24h window, so a series
         # only exists if something records one sample per day going forward.
         from observatory import air_cargo_history
@@ -85,8 +83,6 @@ async def lifespan(app: FastAPI):
         maritime_kystverket.stop_stream()
         maritime.stop_ais_stream()
     if _ENABLE_BACKGROUND_WARMERS:
-        import thirteenf
-        thirteenf.stop_warm_loop()
         data_audit.stop_audit_loop()
         earnings.stop_calendar_warm_loop()
         snapshots.stop_snapshot_loop()
