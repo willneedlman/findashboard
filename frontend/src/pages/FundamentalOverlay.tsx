@@ -13,7 +13,7 @@ import TickerBasket from '../components/TickerBasket'
 import { useTickerParam } from '../hooks/useTickerParam'
 import { T } from '../lib/theme'
 import { MONO, SANS, mix, seg } from './cockpitKit'
-import { compile, evaluate, lexicon, resultUnit, token } from '../lib/formula'
+import { compile, evaluate, lexicon, resultUnit, token, YEAR_SEP } from '../lib/formula'
 import { TOOLTIP_STYLE } from '../components/ChartTooltip'
 
 // Reported fundamentals over time, plus metrics you define yourself.
@@ -176,7 +176,7 @@ export default function FundamentalOverlay() {
   // is not wrong, so this warns rather than blocks.
   const unitMix = useMemo(() => {
     if (!check?.ok) return null
-    const units = new Set(check.vars.map(v => fields.find(f => f.key === v)?.unit))
+    const units = new Set(check.vars.map(v => fields.find(f => f.key === v.split(YEAR_SEP)[0])?.unit))
     return units.has('$/sh') && (units.has('$') || units.has('sh'))
       ? 'Mixes per-share and whole-company figures. Price over net income is not a P/E; price over EPS is.'
       : null
@@ -273,6 +273,18 @@ export default function FundamentalOverlay() {
   }, [ok])
   const fyLabel = (fy: number) => (estYears.has(fy) ? `${fy}E` : String(fy))
 
+  // A formula can pin a field to one fiscal year, so every year of every
+  // company has to be reachable, not just the row being computed. Keyed per
+  // ticker because "revenue fy25" means that company's FY2025.
+  const byTickerYear = useMemo(() => {
+    const out: Record<string, Record<number, Period>> = {}
+    ok.forEach(l => {
+      out[l.tk] = {}
+      l.data.periods.forEach(p => { out[l.tk][p.fiscalYear] = p })
+    })
+    return out
+  }, [ok])
+
   // Fiscal years rarely line up across filers, so the x axis is the union and a
   // company simply has no point in a year it did not report.
   const rows = useMemo(() => {
@@ -284,13 +296,13 @@ export default function FundamentalOverlay() {
         const p = l.data.periods.find(x => x.fiscalYear === fy)
         for (const m of selected) {
           row[`${l.tk}__${m.key}`] = !p ? null
-            : m.expr ? evaluate(m.expr, p as never, lex)
+            : m.expr ? evaluate(m.expr, p as never, lex, byTickerYear[l.tk] as never)
             : ((p[m.key] as number) ?? null)
         }
       }
       return row
     })
-  }, [ok, selected, lex, estYears])
+  }, [ok, selected, lex, estYears, byTickerYear])
 
   const [scale, setScale] = useState<Scale>('abs')
   // The visible slice of fiscal years. null is the whole history.
@@ -545,7 +557,12 @@ export default function FundamentalOverlay() {
         )}
         {!dropping && check?.ok && (
           <div style={{ fontFamily: SANS, fontSize: 10, color: T.pos, marginTop: 4 }}>
-            uses {check.vars.map(v => lex.label.get(v) ?? v).join(', ')}
+            uses {check.vars.map(v => {
+              // A pinned token is stored as field@year; show it the way it was
+              // typed rather than leaking the internal form.
+              const [f, y] = v.split(YEAR_SEP)
+              return (lex.label.get(f) ?? f) + (y ? ` FY${y}` : '')
+            }).join(', ')}
           </div>
         )}
         {!dropping && unitMix && (
@@ -565,6 +582,14 @@ export default function FundamentalOverlay() {
         <div style={{ fontFamily: SANS, fontSize: 9.5, color: T.muted, marginTop: 7, lineHeight: 1.5 }}>
           Drag any field above into this box, or type its name. Desk shorthand works too:
           price, earnings, sales, cogs, capex, ev. Combine with + − * / ^ and parentheses.
+        </div>
+        <div style={{ fontFamily: SANS, fontSize: 9.5, color: T.muted, marginTop: 6, lineHeight: 1.5 }}>
+          Pin a field to one fiscal year with <span style={{ fontFamily: MONO, color: T.text }}>fy25</span>,
+          {' '}<span style={{ fontFamily: MONO, color: T.text }}>fy2025</span> or
+          {' '}<span style={{ fontFamily: MONO, color: T.text }}>2025</span>, so both halves of a ratio can
+          come from different years:
+          {' '}<span style={{ fontFamily: MONO, color: T.text }}>share price / eps est fy26</span> or
+          {' '}<span style={{ fontFamily: MONO, color: T.text }}>revenue fy25 / enterprise value</span>.
           Saved to this browser.
         </div>
       </div>

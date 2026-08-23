@@ -84,6 +84,22 @@ function closest(word: string, lex: Lexicon): string | null {
   return best
 }
 
+/** Separates a field from the fiscal year it is pinned to, inside a token. */
+export const YEAR_SEP = '@'
+
+/** A fiscal-year qualifier following a field, if there is one.
+ *
+ *  Accepts fy2025, fy25, f25 and a bare 2025. A bare two-digit number is NOT
+ *  accepted: "revenue 2" would become FY2002 rather than the missing-operator
+ *  error it should be. */
+function pinYear(src: string, from: number): { year: number; end: number } | null {
+  const m = /^\s*(?:f\.?y?\.?\s?(\d{2}|\d{4})|(19\d{2}|20\d{2}))(?![\w.])/i.exec(src.slice(from))
+  if (!m) return null
+  const raw = m[1] ?? m[2]
+  const year = raw.length === 2 ? 2000 + Number(raw) : Number(raw)
+  return { year, end: from + m[0].length }
+}
+
 function tokenize(src: string, lex?: Lexicon): Tok[] | string {
   const out: Tok[] = []
   let i = 0
@@ -128,6 +144,16 @@ function tokenize(src: string, lex?: Lexicon): Tok[] | string {
         if (hit) { out.push({ t: 'id', v: hit }); taken = ends[n]; break }
       }
       if (taken < 0) { out.push({ t: 'id', v: src.slice(i, ends[0]) }); taken = ends[0] }
+      // A field may be pinned to one fiscal year: "revenue fy25" is FY2025's
+      // revenue in every row, not the row's own. That is what makes a ratio
+      // like price over FY2026 earnings expressible at all, since the two sides
+      // come from different years.
+      const pinned = pinYear(src, taken)
+      if (pinned) {
+        const last = out[out.length - 1]
+        if (last && last.t === 'id') last.v = `${last.v}${YEAR_SEP}${pinned.year}`
+        taken = pinned.end
+      }
       i = taken; continue
     }
     if (c === '(') { out.push({ t: 'lp' }); i++; continue }
@@ -219,9 +245,10 @@ export function compile(expr: string, lex?: Lexicon): CompileResult {
     if (tk.t === 'num') { depth++; continue }
     if (tk.t === 'id') {
       if (!vars.includes(tk.v)) vars.push(tk.v)
-      if (lex && !lex.label.has(tk.v)) {
-        const near = closest(tk.v.toLowerCase(), lex)
-        return { ok: false, error: `"${tk.v}" is not a field${near ? `. Did you mean ${near}?` : ''}`, vars }
+      const [field] = tk.v.split(YEAR_SEP)
+      if (lex && !lex.label.has(field)) {
+        const near = closest(field.toLowerCase(), lex)
+        return { ok: false, error: `"${field}" is not a field${near ? `. Did you mean ${near}?` : ''}`, vars }
       }
       depth++; continue
     }
@@ -238,14 +265,23 @@ export function compile(expr: string, lex?: Lexicon): CompileResult {
  * a missing line item in one year must leave a GAP in the series, never a zero
  * that reads as a real reported value.
  */
-export function evaluate(expr: string, vars: Vars, lex?: Lexicon): number | null {
+export function evaluate(expr: string, vars: Vars, lex?: Lexicon,
+                         byYear?: Record<number, Vars>): number | null {
   const rpn = rpnFor(expr, lex)
   if (typeof rpn === 'string') return null
   const st: number[] = []
   for (const tk of rpn) {
     if (tk.t === 'num') { st.push(tk.v); continue }
     if (tk.t === 'id') {
-      const v = vars[tk.v]
+      let v: number | null | undefined
+      if (tk.v.includes(YEAR_SEP)) {
+        // A pinned year the data does not have is a gap, the same as a missing
+        // line item, rather than silently falling back to the row's own year.
+        const [field, year] = tk.v.split(YEAR_SEP)
+        v = byYear?.[Number(year)]?.[field]
+      } else {
+        v = vars[tk.v]
+      }
       if (v === null || v === undefined || !Number.isFinite(v)) return null
       st.push(v as number); continue
     }
@@ -274,8 +310,9 @@ export function evaluate(expr: string, vars: Vars, lex?: Lexicon): number | null
 }
 
 /** Run a formula across every period, preserving gaps. */
-export function series<T extends Vars>(expr: string, periods: T[], lex?: Lexicon): (number | null)[] {
-  return periods.map(p => evaluate(expr, p, lex))
+export function series<T extends Vars>(expr: string, periods: T[], lex?: Lexicon,
+                                       byYear?: Record<number, Vars>): (number | null)[] {
+  return periods.map(p => evaluate(expr, p, lex, byYear))
 }
 
 /** A lexicon from the dataset's own fields, plus any extra shorthand. */
@@ -335,7 +372,7 @@ export function resultUnit(
   }
   for (const tk of rpn) {
     if (tk.t === 'num') { st.push('x'); continue }
-    if (tk.t === 'id') { st.push(unitOf(tk.v) ?? null); continue }
+    if (tk.t === 'id') { st.push(unitOf(tk.v.split(YEAR_SEP)[0]) ?? null); continue }
     if (tk.t !== 'op') return null
     if (tk.v === 'u-') continue          // negation cannot change a unit
     const b = st.pop(), a = st.pop()

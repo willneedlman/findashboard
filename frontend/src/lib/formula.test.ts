@@ -170,3 +170,59 @@ describe('series', () => {
     expect(series('revenue / ebitda', periods)).toEqual([5, null, 5])
   })
 })
+
+
+// Pinning a field to a fiscal year, so the two halves of a ratio can come from
+// different years: price today over what FY2026 is expected to earn.
+describe('fiscal-year pinning', () => {
+  const lex = lexicon([
+    { key: 'revenue', label: 'Revenue' },
+    { key: 'epsEstimate', label: 'EPS (est)' },
+    { key: 'enterpriseValue', label: 'Enterprise value' },
+    { key: 'sharePrice', label: 'Share price' },
+  ], { eps: 'epsEstimate' })
+  const BY_YEAR = {
+    2025: { revenue: 400e9, epsEstimate: 7.5, enterpriseValue: 4.0e12, sharePrice: 250 },
+    2026: { revenue: 470e9, epsEstimate: 8.8, enterpriseValue: 4.6e12, sharePrice: 300 },
+  }
+  const row = { revenue: 300e9, epsEstimate: 6.0, enterpriseValue: 3e12, sharePrice: 200 }
+
+  it('reads the pinned year rather than the row', () => {
+    expect(evaluate('revenue fy2025', row, lex, BY_YEAR)).toBe(400e9)
+    expect(evaluate('revenue fy26', row, lex, BY_YEAR)).toBe(470e9)
+    expect(evaluate('revenue f25', row, lex, BY_YEAR)).toBe(400e9)
+    expect(evaluate('revenue 2026', row, lex, BY_YEAR)).toBe(470e9)
+  })
+
+  it("mixes a pinned year with the row's own value", () => {
+    // Price moves row by row; the earnings it is divided by do not.
+    expect(evaluate('share price / eps fy26', row, lex, BY_YEAR))
+      .toBeCloseTo(200 / 8.8, 8)
+  })
+
+  it('takes two different years in one expression', () => {
+    expect(evaluate('revenue fy26 / revenue fy2025', row, lex, BY_YEAR))
+      .toBeCloseTo(470 / 400, 8)
+  })
+
+  it("a year the data does not have is a gap, not the row's year", () => {
+    expect(evaluate('revenue fy2019', row, lex, BY_YEAR)).toBeNull()
+    expect(evaluate('revenue fy2019 / 2', row, lex, BY_YEAR)).toBeNull()
+  })
+
+  it('does not read a bare small number as a year', () => {
+    // "revenue 2" is a missing operator, not FY2002.
+    expect(compile('revenue 2', lex).error).toMatch(/missing operator/)
+  })
+
+  it('keeps the unit of the underlying field', () => {
+    const units: Record<string, string> = { revenue: '$', enterpriseValue: '$', sharePrice: '$/sh' }
+    expect(resultUnit('revenue fy25 / enterprise value', k => units[k], lex)).toBe('x')
+    expect(resultUnit('revenue fy25 - revenue fy26', k => units[k], lex)).toBe('$')
+  })
+
+  it('validates the field half and names a near miss', () => {
+    expect(compile('revenu fy25', lex).error).toMatch(/Did you mean Revenue\?/)
+    expect(compile('revenue fy25', lex).ok).toBe(true)
+  })
+})
