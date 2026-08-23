@@ -105,10 +105,28 @@ function readLocal(key: string): unknown | undefined {
   try { return JSON.parse(raw) } catch { return raw }
 }
 
+/** Keys a mounted page cannot pick up without being re-read from disk.
+ *
+ *  The reload after a pull exists for these. It must not fire for view state:
+ *  opening a tool records it in ft_recents, which then differs from the server
+ *  copy, and reloading for that put the page in a loop about a second long,
+ *  since the freshly mounted page records the visit again. */
+const RELOAD_WORTHY = new Set([
+  'pm-portfolios-v2', 'ft-portfolio-manager', 'pm-options-v1', 'pm-futures-v1',
+  'alerts', 'finance-terminal-dashboard-v3', 'watchlist', 'fdb_custom_strategies',
+  'pe_wl', 'fdb_report_creator_v1', 'fdb_screener_saved_screens_v1', 'ft_custom_metrics_v1',
+])
+
+/** Whether a pull brought down anything worth re-reading the page for. */
+export function worthReloading(changed: string[]): boolean {
+  return changed.some(k => RELOAD_WORTHY.has(k))
+}
+
 /** Pull the account's data into localStorage (server wins for its keys) and seed
- *  the server with any local-only keys. Returns true if localStorage changed, so
- *  the caller can reload once to let mounted pages re-read the hydrated data. */
-export async function sync(userId: string, token: string): Promise<boolean> {
+ *  the server with any local-only keys. Returns the keys that changed, so the
+ *  caller can decide whether a reload is warranted rather than reloading for a
+ *  recents list. */
+export async function sync(userId: string, token: string): Promise<string[]> {
   let serverData: Record<string, unknown> = {}
   try {
     const res = await fetch(`/api/users/appdata/${userId}`, { headers: headers(token) })
@@ -119,15 +137,15 @@ export async function sync(userId: string, token: string): Promise<boolean> {
     if (res.status === 401 || res.status === 403) {
       serverRefused = true
       window.dispatchEvent(new Event('ft:session-rejected'))
-      return false
+      return []
     }
-    if (!res.ok) return false
+    if (!res.ok) return []
     serverData = ((await res.json()).data ?? {}) as Record<string, unknown>
   } catch {
-    return false
+    return []
   }
 
-  let changed = false
+  const changed: string[] = []
   suppress = true
   try {
     for (const key of Object.keys(serverData)) {
@@ -135,7 +153,7 @@ export async function sync(userId: string, token: string): Promise<boolean> {
       const incoming = JSON.stringify(serverData[key])
       if (localStorage.getItem(key) !== incoming) {
         localStorage.setItem(key, incoming)
-        changed = true
+        changed.push(key)
       }
     }
   } finally {
@@ -171,7 +189,7 @@ export async function sync(userId: string, token: string): Promise<boolean> {
   try { localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString()) } catch { /* quota */ }
   window.dispatchEvent(new Event(SYNC_EVENT))
   if (dirty.size) schedule()
-  if (changed) window.dispatchEvent(new Event('ft:portfolio-context'))
+  if (changed.length) window.dispatchEvent(new Event('ft:portfolio-context'))
   return changed
 }
 

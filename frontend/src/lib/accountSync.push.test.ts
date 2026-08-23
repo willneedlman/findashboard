@@ -104,8 +104,8 @@ describe('a device that has not read the account cannot write to it', () => {
     getStatus = 401
     const m = await load()
     m.startAutoPush(() => ({ uid: 'u1', token: 'stale' }))
-    const ok = await m.sync('u1', 'stale')
-    expect(ok).toBe(false)
+    // sync reports the keys it changed; a refused session changes none.
+    expect(await m.sync('u1', 'stale')).toEqual([])
     expect(m.sessionWasRefused()).toBe(true)
     localStorage.setItem('pm-portfolios-v2', JSON.stringify(EMPTY))
     await vi.advanceTimersByTimeAsync(5000)

@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
-import { sync, startAutoPush, reset, clearLocal, sessionWasRefused } from '../lib/accountSync'
+import { sync, startAutoPush, reset, clearLocal, sessionWasRefused, worthReloading } from '../lib/accountSync'
+
+// One reload per tab, whatever else arrives.
+const RELOADED = 'ft_sync_reloaded'
 
 // Drives account-scoped persistence: keeps auto-push pointed at the current
 // session, and on login / app-load pulls the account's saved data into this
@@ -38,11 +41,16 @@ export default function AccountSync() {
     if (!token) return
 
     sync(uid, token).then(changed => {
-      // If the account had data this device didn't, reload once so already-mounted
-      // pages re-read the hydrated localStorage. Same-device users have no diff, so
-      // this is a no-op for them; the hydration leaves local == server, so it can't
-      // loop.
-      if (changed) window.location.reload()
+      // Reload only for saved work the mounted pages cannot pick up on their
+      // own, and only once per tab. Reloading for any change at all looped:
+      // opening a tool records it in ft_recents, the next pull overwrites that
+      // with the server copy, and the reloaded page records the visit again.
+      if (!worthReloading(changed)) return
+      try {
+        if (sessionStorage.getItem(RELOADED)) return
+        sessionStorage.setItem(RELOADED, '1')
+      } catch { /* private mode: fall through and reload once */ }
+      window.location.reload()
     })
   }, [user])
 
