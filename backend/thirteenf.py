@@ -75,6 +75,21 @@ def _db() -> sqlite3.Connection | None:
 def db_available() -> bool:
     return _db_path() is not None
 
+
+def _has(conn, table: str) -> bool:
+    """Whether an optional table is present.
+
+    The dataset and the code deploy separately: the database is 126MB on a
+    volume, refreshed quarterly, while the code ships whenever. A build that
+    predates the Form ADV pass has no advisers table, and joining it blindly
+    turns the whole page into a 500 rather than a page without labels.
+    """
+    try:
+        return conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone() is not None
+    except Exception:
+        return False
+
 _UA = {"User-Agent": "Alphatape Research admin@alphatape.app"}
 _TIMEOUT = 30
 _QUARTER = 30 * 86400          # filings only change quarterly
@@ -334,6 +349,8 @@ def adviser_kind(cik: str) -> dict:
     if not conn:
         return {}
     try:
+        if not _has(conn, "advisers"):
+            return {}
         r = conn.execute(
             "SELECT MAX(a.kind) kind, MAX(a.basis) basis, MAX(a.share) share, MAX(a.filed) filed,"
             " MAX(f.crd) crd FROM filers f LEFT JOIN advisers a ON a.crd = f.crd"
@@ -511,16 +528,19 @@ def db_search(query: str, limit: int = 40, kinds: list | None = None,
         # The label comes from the adviser's own Form ADV registration, joined on
         # the CRD number the cover page carries. Managers without one get no
         # label rather than a guess.
+        labelled = _has(conn, "advisers")
+        join = " LEFT JOIN advisers a ON a.crd = f.crd" if labelled else ""
+        cols = (" MAX(a.kind) kind, MAX(a.basis) basis, MAX(a.share) share, MAX(f.crd) crd"
+                if labelled else " NULL kind, NULL basis, NULL share, NULL crd")
         sql = ["SELECT f.cik, f.name, MAX(f.period) period, MAX(f.total) total,"
-               " COUNT(*) quarters, MAX(a.kind) kind, MAX(a.basis) basis, MAX(a.share) share,"
-               " MAX(f.crd) crd"
-               " FROM filers f LEFT JOIN advisers a ON a.crd = f.crd"
+               " COUNT(*) quarters," + cols +
+               " FROM filers f" + join +
                " WHERE f.canonical = 1"]
         args: list = []
         if q:
             sql.append(" AND f.name LIKE ? COLLATE NOCASE")
             args.append(f"%{q}%")
-        if kinds:
+        if kinds and labelled:
             marks = ",".join("?" * len(kinds))
             # An unregistered filer has no row to match, so its implied label has
             # to be matched explicitly or the filter would silently drop every
@@ -598,6 +618,8 @@ def db_kinds() -> list:
     if not conn:
         return []
     try:
+        if not _has(conn, "advisers"):
+            return []
         latest = conn.execute("SELECT MAX(period) p FROM filers WHERE canonical = 1").fetchone()["p"]
         rows = conn.execute(
             "SELECT COALESCE(a.kind, ?) kind, COUNT(DISTINCT f.cik) n,"
@@ -621,9 +643,11 @@ def db_book(cik: str, period: str | None = None) -> dict | None:
         return None
     try:
         c = str(int(cik))
+        labelled = _has(conn, "advisers")
         rows = conn.execute(
-            "SELECT f.*, a.kind, a.basis, a.share, a.filed adv_filed FROM filers f"
-            " LEFT JOIN advisers a ON a.crd = f.crd"
+            ("SELECT f.*, a.kind, a.basis, a.share, a.filed adv_filed FROM filers f"
+             " LEFT JOIN advisers a ON a.crd = f.crd" if labelled else
+             "SELECT f.*, NULL kind, NULL basis, NULL share, NULL adv_filed FROM filers f") +
             " WHERE f.cik = ? AND f.canonical = 1 ORDER BY f.period DESC", (c,)).fetchall()
         if not rows:
             return None
@@ -663,7 +687,9 @@ def db_book(cik: str, period: str | None = None) -> dict | None:
             "positions": cur["positions"], "filingRows": None, "totalValue": total,
             "truncated": bool(cur["truncated"]), "quarters": quarters,
             **_label(cur), "kindFiled": cur["adv_filed"],
-            "kindMissing": None if cur["kind"] else _why_unlabelled(cur["crd"]),
+            # crd is absent entirely on a database built before the ADV pass.
+            "kindMissing": None if cur["kind"] else _why_unlabelled(
+                cur["crd"] if "crd" in cur.keys() else None),
             "rows": out, "exited": exited,
             "unmapped": sum(1 for r in out if not r["ticker"]),
         }

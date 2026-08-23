@@ -104,7 +104,7 @@ def test_absolute_strikes_are_snapped_not_rescaled(monkeypatch):
     _patch(monkeypatch)
     # Already near spot -> not treated as relative-to-100; just snapped to the ladder.
     draft = {"type": "draft", "name": "Strangle", "legs": [
-        {"option_type": "put", "action": "sell", "K": 188, "premium": 3, "quantity": 1, "ticker": "NVDA", "expiry": "2026-09-18"},
+        {"option_type": "put", "action": "sell", "K": 188, "premium": 3, "quantity": 1, "ticker": "NVDA", "expiry": _EXPS[1]},
         {"option_type": "call", "action": "sell", "K": 213, "premium": 3, "quantity": 1, "ticker": "NVDA", "expiry": _EXPS[1]},
     ]}
     g = _ground_options_draft(draft, "NVDA")
