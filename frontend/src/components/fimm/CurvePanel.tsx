@@ -61,7 +61,7 @@ export default function CurvePanel({ eng, rows, sel, onSel, tick }: {
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <div style={{
             flex: 1, minHeight: 0, position: 'relative',
-            background: 'rgba(0,0,0,0.16)', borderBottom: '1px solid rgba(255,255,255,0.05)',
+            background: T.strip, borderBottom: `1px solid ${T.borderFaint}`,
           }}>
             <Canvas
               height={56}

@@ -8,7 +8,7 @@
 
 import { useRef } from 'react'
 import { T, alpha } from '../../lib/theme'
-import { MONO, LABEL, pnlColor, GOOD, BAD, WARN } from './ui'
+import { MONO, LABEL, pnlColor, lift, band, GOOD, BAD, WARN } from './ui'
 import { DTE_LABELS, DTES, MULT, type ChainRow, type LegView, type Mm2Engine, type QuoteState } from '../../lib/mm2/engine'
 
 export type Highlight = 'none' | 'delta' | 'gamma' | 'vega' | 'theta'
@@ -172,12 +172,14 @@ export function Chain({ eng, rows, sel, onSel, expIdx, highlight, live, spot, ti
 
 const VIOLET = T.violet
 const quoteTint = (c: string) => `color-mix(in srgb, ${c} 10%, ${T.surface})`
-// Opaque literals for the three header bands. They must be opaque so a sticky
-// row can never show body content through it, and the strike band repeats down
-// its own column so it reads as one block rather than three shades.
-const CALLS_BAND = '#16202f'
-const STRIKE_BAND = '#1a2438'
-const PUTS_BAND = '#1b1c33'
+// The three header bands. They must be opaque so a sticky row can never show
+// body content through it, and the strike band repeats down its own column so
+// it reads as one block rather than three shades.
+//
+// `lift`/`band` live in mm2/ui so the fixed-income matrix bands the same way.
+const CALLS_BAND = band(T.blue, 7)
+const STRIKE_BAND = lift(10)
+const PUTS_BAND = band(VIOLET, 7)
 
 // Header geometry is pinned, not inferred, and the offsets are exactly cumulative.
 //
@@ -192,7 +194,7 @@ export const COL_TOP = BAND_H + GROUP_H         // 37
 /** What the three sticky rows cover; must equal the thead's own height. */
 export const HEADER_H = COL_TOP + GROUP_H       // 54
 
-const MODEL_BAND = '#1a1f2e'
+const MODEL_BAND = lift(6)
 
 const BAND: React.CSSProperties = {
   ...LABEL, fontSize: 9, letterSpacing: '0.18em', padding: '0 8px', textAlign: 'center',

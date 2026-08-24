@@ -65,7 +65,7 @@ export function ChainHeader({ eng, tick, reviewT, onScrub, highlight, expLabel }
 
       <div style={{
         flex: 1, minWidth: 200, height: 38, position: 'relative', boxSizing: 'border-box',
-        background: 'rgba(0,0,0,0.16)', borderBottom: '1px solid rgba(255,255,255,0.05)',
+        background: T.strip, borderBottom: `1px solid ${T.borderFaint}`,
         borderLeft: `1px solid ${T.borderFaint}`, borderRight: `1px solid ${T.borderFaint}`,
         padding: '3px 8px',
       }}>

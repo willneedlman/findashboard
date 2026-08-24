@@ -230,7 +230,7 @@ function ChartPanel({ label, height, note, children }: { label: string; height: 
       }}>
         <div style={{
           flex: 1, zIndex: 10,
-          background: 'rgba(46,57,77,0.8)', padding: '3px 8px',
+          background: 'color-mix(in srgb, var(--theme-text, #d7e3fc) 10%, var(--theme-bg, #101c2e))', padding: '3px 8px',
           fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)',
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }}>
@@ -240,7 +240,7 @@ function ChartPanel({ label, height, note, children }: { label: string; height: 
           <div style={{
             padding: '3px 8px', flexShrink: 0,
             fontSize: 10, color: 'var(--theme-text-dim, rgba(255,255,255,0.35))', letterSpacing: '0.06em', zIndex: 10,
-            background: 'rgba(46,57,77,0.8)', borderLeft: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+            background: 'color-mix(in srgb, var(--theme-text, #d7e3fc) 10%, var(--theme-bg, #101c2e))', borderLeft: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
             whiteSpace: 'nowrap',
           }}>
             {note}

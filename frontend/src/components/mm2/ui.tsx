@@ -19,6 +19,19 @@ export const BAD = T.neg
 export const WARN = T.warn
 export const pnlColor = (v: number) => (Math.abs(v) < 0.5 ? T.muted : v > 0 ? GOOD : BAD)
 
+/** Opaque table-header banding, mixed into the surface rather than written as
+ *  navy literals. Both simulators need bands that stay opaque (a sticky header
+ *  that lets body rows show through reads as a rendering fault) AND track the
+ *  theme — as literals they stayed dark slabs on the light presets, which is
+ *  what made the simulators look like a different product from the terminal.
+ *
+ *  `lift` moves away from the surface toward the text colour, so it lightens on
+ *  a dark theme and darkens on a light one. Mixing into an opaque surface is
+ *  itself opaque, so the sticky-header guarantee holds.
+ */
+export const lift = (pct: number) => `color-mix(in srgb, ${T.text} ${pct}%, ${T.surface})`
+export const band = (hue: string, pct: number) => `color-mix(in srgb, ${hue} ${pct}%, ${lift(5)})`
+
 // ── Panel ─────────────────────────────────────────────────────────────────────
 
 export function Panel({ title, right, children, style, bodyStyle, scroll = false }: {

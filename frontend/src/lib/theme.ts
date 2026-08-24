@@ -9,6 +9,7 @@ export const T = {
   border:      'var(--theme-border, rgba(255,255,255,0.08))',
   borderFaint: 'var(--theme-border-faint, rgba(255,255,255,0.05))',
   hover:       'var(--theme-hover, rgba(0,0,0,0.12))',
+  strip:       'var(--theme-strip, rgba(0,0,0,0.16))',
   gold:        'var(--theme-primary, #c9a84c)',
   blue:        'var(--theme-tertiary, #60a5fa)',
   muted:       'var(--theme-secondary, #8099b0)',

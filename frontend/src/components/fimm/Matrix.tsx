@@ -11,12 +11,14 @@
  */
 
 import { T, alpha } from '../../lib/theme'
-import { MONO, LABEL, Canvas, useTokens, GOOD, BAD, WARN } from '../mm2/ui'
+import { MONO, LABEL, Canvas, useTokens, lift, GOOD, BAD, WARN } from '../mm2/ui'
 import { bucketOf, type Bucket, type FiEngine, type NodeView, type Quote } from '../../lib/fimm/engine'
 
-const SURFACE_BAND = '#1a2438'      // Issue and Risk carried
-const MODEL_BAND = '#1a1f2e'        // Model
-const QUOTE_BAND = '#16202f'        // Bid and Ask
+// Opaque, theme-tracking header bands — see `lift` in mm2/ui. These were navy
+// literals, which turned the book's header into a dark slab on the light presets.
+const SURFACE_BAND = lift(10)       // Issue and Risk carried
+const MODEL_BAND = lift(6)          // Model
+const QUOTE_BAND = lift(4)          // Bid and Ask
 
 // ── Header ────────────────────────────────────────────────────────────────────
 
@@ -66,8 +68,8 @@ export function MatrixHeader({ eng, tick, reviewT, onScrub }: {
           becoming the focal point, which is what the sunken box buys. */}
       <div style={{
         flex: 1, minWidth: 200, height: 38, position: 'relative', boxSizing: 'border-box',
-        background: 'rgba(0,0,0,0.16)', padding: '3px 8px',
-        borderBottom: '1px solid rgba(255,255,255,0.05)',
+        background: T.strip, padding: '3px 8px',
+        borderBottom: `1px solid ${T.borderFaint}`,
         borderLeft: `1px solid ${T.borderFaint}`, borderRight: `1px solid ${T.borderFaint}`,
       }}>
         <Canvas
