@@ -99,15 +99,35 @@ def test_half_the_sections_ship_rather_than_falling_back(monkeypatch):
     assert len(dropped) == 6, "and every missing section is named"
 
 
-def test_a_wide_failure_does_not_wait_before_giving_up(monkeypatch):
-    # Waiting only pays when the gap is a tail, not when the pool is dead.
+def test_a_wide_failure_is_retried_rather_than_abandoned(monkeypatch):
+    """This used to assert the opposite: that a wide gap meant the pool was dead
+    and waiting could not pay. Measured on a full bucket, that was backwards. A
+    section costs ~5,000 tokens and a lane allows 8,000 a minute, so a lane
+    writes about one section per window and firing seven at once means MOST are
+    refused. A wide gap is the ordinary rate-limited case, and it is exactly
+    what waiting fixes: five of seven failed, the old gate retried none of them,
+    and the report died."""
     _, slept, _, _ = _run(monkeypatch, 12, set(range(6)), wait_heals=False)
+    assert slept, "a wide gap is a saturated pool, which is what waiting is for"
+
+
+def test_recovery_stops_once_everything_is_written(monkeypatch):
+    # Bounded work: no waiting when the first sweep already wrote everything.
+    _, slept, _, _ = _run(monkeypatch, 8, set())
     assert not slept
 
 
+def test_recovery_is_bounded(monkeypatch):
+    # The browser is holding the connection, so a pool that never recovers must
+    # still terminate.
+    _, slept, _, _ = _run(monkeypatch, 6, set(range(6)), wait_heals=False)
+    assert len(slept) <= ai._FANOUT_RECOVERY_ROUNDS
+
+
 def test_every_pool_lane_starts_a_section_and_overflow_starts_none(monkeypatch):
-    # Overflow is a rescue lane, not a rotation slot: llama-3.1-8b is a weaker
-    # writer, so no section should begin on it while the good buckets have room.
+    # Overflow is a rescue lane, not a rotation slot: it has a far smaller
+    # per-window request budget than the pool, so no section should begin on it
+    # while the metered buckets have room.
     _, _, _, models = _run(monkeypatch, len(MODEL_POOL) * 2, set())
     assert set(models) == set(MODEL_POOL)
     assert not set(models) & set(MODEL_OVERFLOW)

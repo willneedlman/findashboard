@@ -2530,6 +2530,10 @@ _SECTION_MAX_TOKENS = 1_800
 # enough that the request does not look hung. Only ever paid when a section
 # actually failed, and only once per report.
 _FANOUT_RECOVERY_WAIT = float(os.getenv("REPORT_FANOUT_RECOVERY_WAIT", "20"))
+# How many times to wait out the token buckets and retry whatever is still
+# missing. Three rounds at 20s is about a minute of recovery, which is what a
+# seven-section report needs on lanes that refill 8,000 tokens a minute.
+_FANOUT_RECOVERY_ROUNDS = int(os.getenv("REPORT_FANOUT_RECOVERY_ROUNDS", "3"))
 
 
 def _section_payload(payload: dict, section: dict) -> dict:
@@ -2763,19 +2767,37 @@ def _generate_sections_fanned(
     with ThreadPoolExecutor(max_workers=len(MODEL_POOL)) as pool:
         written = list(pool.map(write, enumerate(sections)))
 
-    missing = [i for i, w in enumerate(written) if w is None]
-    # A section fails almost only because both buckets were momentarily out of
-    # tokens, and those refill on a rolling minute. The first sweep spends the
-    # whole allowance at once, so the tail of a long report is what starves.
-    # Waiting out one window and retrying just the gaps is far cheaper than the
-    # alternative below, which throws away every section that did write and asks
-    # one model for the entire report in a single call — the largest request in
-    # the pipeline, aimed at the bucket most likely to still be empty.
-    if missing and len(missing) <= max(1, len(sections) // 3):
+    # A section fails almost only because the lanes were momentarily out of
+    # tokens, and those refill on a rolling minute. Retrying the gaps is far
+    # cheaper than the alternative below, which throws away every section that
+    # did write and asks one model for the entire report in a single call — the
+    # largest request in the pipeline, aimed at the bucket most likely to still
+    # be empty.
+    #
+    # This used to be gated on `len(missing) <= len(sections) // 3`, which
+    # skipped recovery precisely when it was needed. A section costs about 5,000
+    # tokens and a lane allows 8,000 a minute, so a lane writes roughly one
+    # section per window: firing seven at once means most are refused, and "most
+    # are refused" is the case the gate declined to retry. Measured on a full
+    # bucket, five of seven failed, nothing was retried, and the report fell
+    # through to a single call that cannot fit.
+    #
+    # So retry in rounds, waiting out the buckets between them, however many are
+    # missing. Bounded because the browser is holding the connection: this is
+    # the difference between a report that takes two minutes and one that never
+    # arrives.
+    for _round in range(_FANOUT_RECOVERY_ROUNDS):
+        missing = [i for i, w in enumerate(written) if w is None]
+        if not missing:
+            break
         logger.warning("section fan-out short by %d/%d; waiting %.0fs for the "
-                       "token buckets and retrying the gaps",
-                       len(missing), len(sections), _FANOUT_RECOVERY_WAIT)
+                       "token buckets and retrying the gaps (round %d/%d)",
+                       len(missing), len(sections), _FANOUT_RECOVERY_WAIT,
+                       _round + 1, _FANOUT_RECOVERY_ROUNDS)
         time.sleep(_FANOUT_RECOVERY_WAIT)
+        # Sequentially, not in parallel: the reason these are missing is that
+        # the lanes were saturated, and re-firing them all at once reproduces
+        # the saturation that lost them.
         for i in missing:
             written[i] = write((i, sections[i]))
 
