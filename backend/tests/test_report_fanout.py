@@ -31,11 +31,15 @@ def _run(monkeypatch, n, fail_for, *, wait_heals=True):
     tries: dict[str, int] = {}
     models_used: list[str] = []
 
-    def one(payload, section, siblings, model, per_section, valid_ids, must_include="", rule_flags=None):
+    shares: list[tuple[str, int]] = []
+
+    def one(payload, section, siblings, model, per_section, valid_ids,
+            must_include="", rule_flags=None, sharing=1):
         key = section["templateSection"]
         idx = int(key[1:])
         tries[key] = tries.get(key, 0) + 1
         models_used.append(model)
+        shares.append((model, sharing))
         if idx in fail_for and not (wait_heals and tries[key] > per_sweep):
             raise RuntimeError("429 rate limited")
         return {"clipId": "c1", "templateSection": key, "heading": section["heading"]}
@@ -44,6 +48,7 @@ def _run(monkeypatch, n, fail_for, *, wait_heals=True):
     dropped: list[str] = []
     out = ai._generate_sections_fanned(
         {}, _outline(n), "medium", None, {"c1"}, dropped_out=dropped)
+    _run.shares = shares
     return out, slept, dropped, models_used
 
 
@@ -111,7 +116,8 @@ def test_every_pool_lane_starts_a_section_and_overflow_starts_none(monkeypatch):
 def test_overflow_rescues_a_section_the_pool_could_not_write(monkeypatch):
     seen: list[str] = []
 
-    def one(payload, section, siblings, model, per_section, valid_ids, must_include="", rule_flags=None):
+    def one(payload, section, siblings, model, per_section, valid_ids,
+            must_include="", rule_flags=None, sharing=1):
         seen.append(model)
         if model in MODEL_POOL:
             raise RuntimeError("429 rate limited")
@@ -123,3 +129,21 @@ def test_overflow_rescues_a_section_the_pool_could_not_write(monkeypatch):
     out = ai._generate_sections_fanned({}, _outline(4), "medium", None, {"c1"})
     assert out is not None and len(out) == 4, "overflow should have caught every section"
     assert set(seen) & set(MODEL_OVERFLOW)
+
+
+def test_a_pool_lane_is_not_divided(monkeypatch):
+    """A section costs ~4,900 tokens before any evidence, so an 8,000 lane split
+    three ways is below the floor and every section would be refused as
+    unwritable rather than merely rate-limited. An 8k lane cannot do three
+    sections a minute, and pretending otherwise fails closed."""
+    _run(monkeypatch, 7, set())
+    pool_shares = {sh for m, sh in _run.shares if m in MODEL_POOL}
+    assert pool_shares == {1}, f"pool lanes must keep their full budget, got {pool_shares}"
+
+
+def test_the_overflow_lane_is_sized_for_every_section(monkeypatch):
+    """It is where every section falls back to, so all of them can land on it
+    at once and it must be sized for the whole fan-out, not a third of it."""
+    _run(monkeypatch, 7, {0}, wait_heals=False)
+    overflow_shares = {sh for m, sh in _run.shares if m in MODEL_OVERFLOW}
+    assert overflow_shares == {7}, f"expected the whole fan-out, got {overflow_shares}"

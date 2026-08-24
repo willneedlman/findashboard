@@ -79,37 +79,29 @@ _CEREBRAS_MODELS = {
 MODEL_TPM = {MODEL_OSS: 8_000, MODEL_QWEN: 8_000, MODEL_OSS20: 8_000,
              MODEL_COMPOUND: 70_000}
 
-# A per-minute allowance and a per-request size limit are DIFFERENT LIMITS, and
-# a call has to clear both. Measured 2026-08-24 by bisecting real requests until
-# Groq answered 413:
+# Groq's 413 is BUCKET-RELATIVE. A request is "too large" when it does not fit
+# what is LEFT of the per-minute allowance, not when it exceeds some fixed size.
+# Measured 2026-08-24 against a deliberately refilled bucket, gpt-oss-120b
+# accepted 7,000, 10,000 and 11,500-token requests — every one of which 413s
+# once the bucket has been drawn down. Bisecting for a "max request size" only
+# ever measures how much quota the probe itself had just spent.
 #
-#   openai/gpt-oss-120b / -20b / qwen3.6-27b   ~11,500 tokens
-#   groq/compound-mini                          ~6,900 tokens
-#   groq/compound                               ~3,250 tokens
-#
-# compound-mini is metered at 70,000 tokens a minute and still refuses any
-# single call over about 6,900. Reading its TPM as a size allowance is what
-# produced a fitted request of ~60,000 that 413'd on every attempt — the wide
-# lane is wide in RATE, not in SIZE, so it relieves 429s and can never rescue a
-# request that is simply too big.
-MODEL_MAX_INPUT = {
-    MODEL_OSS: 11_500, MODEL_QWEN: 11_500, MODEL_OSS20: 11_500,
-    MODEL_COMPOUND: 6_900,
-}
-
+# So the number that matters is not a size limit. It is each request's fair
+# share of the minute. Sizing every one of a seven-section fan-out to the WHOLE
+# bucket is what made the second and third section on each lane fail: the first
+# request drained the lane, and everything after it was refused as too large.
 _DEFAULT_CEILING = 8_000
 
 
-def request_ceiling(model: str) -> int:
-    """The largest single request `model` will actually accept.
+def request_ceiling(model: str, sharing: int = 1) -> int:
+    """The largest request to build for `model` when `sharing` of them contend
+    for the same per-minute bucket inside one window.
 
-    Anything sizing a request must ask this rather than MODEL_TPM. The pool
-    models stay bound by their per-minute allowance, which is the tighter of the
-    two for them and is what has been keeping them off 429s; compound-mini
-    becomes bound by its size limit, which is the tighter one for it.
+    `sharing` is how many calls will land on this lane before it refills — for a
+    fan-out, the sections per lane. Pass 1 for a call that has the lane to
+    itself.
     """
-    return min(MODEL_TPM.get(model, _DEFAULT_CEILING),
-               MODEL_MAX_INPUT.get(model, _DEFAULT_CEILING))
+    return max(1, MODEL_TPM.get(model, _DEFAULT_CEILING) // max(1, sharing))
 
 # Lanes a fan-out starts on. Same width, close enough in capability that it does
 # not matter which section lands where — the outline fixes the argument before

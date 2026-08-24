@@ -2632,8 +2632,16 @@ def _generate_one_section(
     valid_ids: set[str],
     must_include: str = "",
     rule_flags: set[str] | None = None,
+    sharing: int = 1,
 ) -> dict | None:
-    """Write a single template section on a named model."""
+    """Write a single template section on a named model.
+
+    `sharing` is how many sections will contend for this lane inside one
+    per-minute window. It has to be honoured: Groq refuses a request that does
+    not fit what is LEFT of the bucket, so sizing every section to the whole
+    bucket means the first one drains the lane and the rest are refused as too
+    large. That is what produced a wall of 413s across a seven-section fan-out.
+    """
     from ai_client import request_ceiling
 
     sys_prompt = _section_system_prompt(must_include, section, siblings, rule_flags)
@@ -2642,7 +2650,7 @@ def _generate_one_section(
     # evidence to be shed instead.
     fitted, tokens, fit = _fit_report_request(
         sys_prompt, _section_payload(payload, section), max_tokens,
-        ceiling=request_ceiling(model),
+        ceiling=request_ceiling(model, sharing),
         model=model,
         min_output=_SECTION_MIN_TOKENS,
     )
@@ -2728,7 +2736,20 @@ def _generate_sections_fanned(
             try:
                 written = _generate_one_section(
                     payload, section, siblings, model, per_section,
-                    valid_ids, must_include, rule_flags)
+                    valid_ids, must_include, rule_flags,
+                    # The overflow lane carries the whole fan-out when the pool
+                    # is spent, so every section can land on it, not just this
+                    # lane's share.
+                    #
+                    # The POOL is deliberately not divided. A section costs
+                    # about 4,900 tokens before any evidence (1,855 of prompt,
+                    # ~1,133 of payload skeleton, 1,912 reserved for a 700-token
+                    # answer on a reasoning model), so an 8,000 lane split three
+                    # ways is below the floor and every section would be refused
+                    # as unwritable rather than merely rate-limited. Three
+                    # sections a minute is not something an 8k lane can do; the
+                    # recovery sweep and the overflow lane are what absorb that.
+                    sharing=len(sections) if model in MODEL_OVERFLOW else 1)
                 if written:
                     return written
                 logger.warning("fanned section %r returned nothing on %s",
