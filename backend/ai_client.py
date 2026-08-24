@@ -79,6 +79,38 @@ _CEREBRAS_MODELS = {
 MODEL_TPM = {MODEL_OSS: 8_000, MODEL_QWEN: 8_000, MODEL_OSS20: 8_000,
              MODEL_COMPOUND: 70_000}
 
+# A per-minute allowance and a per-request size limit are DIFFERENT LIMITS, and
+# a call has to clear both. Measured 2026-08-24 by bisecting real requests until
+# Groq answered 413:
+#
+#   openai/gpt-oss-120b / -20b / qwen3.6-27b   ~11,500 tokens
+#   groq/compound-mini                          ~6,900 tokens
+#   groq/compound                               ~3,250 tokens
+#
+# compound-mini is metered at 70,000 tokens a minute and still refuses any
+# single call over about 6,900. Reading its TPM as a size allowance is what
+# produced a fitted request of ~60,000 that 413'd on every attempt — the wide
+# lane is wide in RATE, not in SIZE, so it relieves 429s and can never rescue a
+# request that is simply too big.
+MODEL_MAX_INPUT = {
+    MODEL_OSS: 11_500, MODEL_QWEN: 11_500, MODEL_OSS20: 11_500,
+    MODEL_COMPOUND: 6_900,
+}
+
+_DEFAULT_CEILING = 8_000
+
+
+def request_ceiling(model: str) -> int:
+    """The largest single request `model` will actually accept.
+
+    Anything sizing a request must ask this rather than MODEL_TPM. The pool
+    models stay bound by their per-minute allowance, which is the tighter of the
+    two for them and is what has been keeping them off 429s; compound-mini
+    becomes bound by its size limit, which is the tighter one for it.
+    """
+    return min(MODEL_TPM.get(model, _DEFAULT_CEILING),
+               MODEL_MAX_INPUT.get(model, _DEFAULT_CEILING))
+
 # Lanes a fan-out starts on. Same width, close enough in capability that it does
 # not matter which section lands where — the outline fixes the argument before
 # any of them write, so a lane supplies prose, not judgement.

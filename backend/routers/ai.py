@@ -2634,7 +2634,7 @@ def _generate_one_section(
     rule_flags: set[str] | None = None,
 ) -> dict | None:
     """Write a single template section on a named model."""
-    from ai_client import MODEL_TPM
+    from ai_client import request_ceiling
 
     sys_prompt = _section_system_prompt(must_include, section, siblings, rule_flags)
     # A section may shrink to the section floor, not the whole-report floor: the
@@ -2642,7 +2642,7 @@ def _generate_one_section(
     # evidence to be shed instead.
     fitted, tokens, fit = _fit_report_request(
         sys_prompt, _section_payload(payload, section), max_tokens,
-        ceiling=MODEL_TPM.get(model, _REPORT_TPM_CEILING),
+        ceiling=request_ceiling(model),
         model=model,
         min_output=_SECTION_MIN_TOKENS,
     )
@@ -7488,40 +7488,25 @@ def generate_report(req: ReportGenRequest):
         # The single call writes the report from scratch, so whatever the
         # fan-out gave up on is not missing from what ships here.
         dropped_sections.clear()
-        # Fit to the tightest bucket in the pool, because the call below walks
-        # all of them: a request sized for the roomiest model is refused by the
-        # others, and a 413 is refused outright rather than trimmed.
-        from ai_client import (MODEL_POOL as _POOL, MODEL_TPM as _TPM,
-                               MODEL_OVERFLOW as _OVERFLOW)
+        from ai_client import (MODEL_POOL as _POOL, MODEL_OVERFLOW as _OVERFLOW,
+                               request_ceiling)
 
-        pool_ceiling = min([_TPM[m] for m in _POOL if m in _TPM] or [_REPORT_TPM_CEILING])
-        # Fit from `payload`, never from the result of a previous fit: fitting
-        # sheds evidence, so re-fitting an already-shed payload against a wider
-        # lane cannot bring the clips back. The wide attempt below has to start
-        # from the same request the narrow one did.
-        original_payload = payload
+        # Every lane this call may be sent to, fitted to the tightest of them,
+        # because the loop below walks all of them: a request sized for the
+        # roomiest is refused outright by the others, and a 413 is refused
+        # rather than trimmed.
+        #
+        # The overflow lane is here for its per-minute allowance, not its size:
+        # it is metered at 70,000 a minute but caps a single call at about
+        # 6,900, so it is the one lane with tokens left after a seven-section
+        # fan-out and it is also the tightest thing to fit. There is deliberately
+        # no "re-fit bigger on the wide lane" path — it was tried, and it built
+        # 60,000-token requests that 413'd everywhere, because no lane on this
+        # tier is bigger than the pool.
+        write_order = list(_POOL) + [m for m in _OVERFLOW if m not in _POOL]
+        ceiling = min(request_ceiling(m) for m in write_order)
         payload, max_tokens, fit = _fit_report_request(
-            sys_prompt, original_payload, max_tokens,
-            ceiling=pool_ceiling, model=MODEL_SMART)
-
-        # The pool lanes are 8,000 wide and a reasoning model reserves about two
-        # and a half tokens per token of answer, so the instructions alone can
-        # exceed the lane before a single clip is added — measured at 7,939
-        # against a 7,040 budget on a report whose must-include list was empty.
-        # There is nothing the user can shorten to fix that. The overflow lane is
-        # metered separately and far wider, so write there instead of refusing.
-        write_order = list(_POOL)
-        wide = _OVERFLOW[0] if _OVERFLOW else None
-        if fit.get("unfittable") and wide and _TPM.get(wide, 0) > pool_ceiling:
-            logger.warning(
-                "report does not fit a %d-token lane; re-fitting on %s (%d)",
-                pool_ceiling, wide, _TPM[wide])
-            payload, max_tokens, fit = _fit_report_request(
-                sys_prompt, original_payload, max_tokens,
-                ceiling=_TPM[wide], model=wide)
-            # Only the wide lane can hold a request this size; offering the
-            # narrow ones after it would just collect 413s.
-            write_order = [wide]
+            sys_prompt, payload, max_tokens, ceiling=ceiling, model=MODEL_SMART)
         if fit.get("unfittable"):
             # Say what is actually wrong, and do not tell the user to shorten
             # inputs that are not the problem. Sending it anyway produces a 413
@@ -7530,11 +7515,10 @@ def generate_report(req: ReportGenRequest):
             # does — the user sees "the origin returned an invalid response",
             # which points at the server rather than at the report.
             #
-            # This branch is now only reached when even the widest lane cannot
-            # hold the request, and instructions are counted with evidence
-            # already shed to nothing, so the clips and the must-include list
-            # are provably not what overflowed. The old wording blamed them and
-            # sent people deleting work that could not have helped.
+            # Instructions are counted here with evidence already shed to
+            # nothing, so the clips and the must-include list are provably not
+            # what overflowed. The old wording blamed them and sent people
+            # deleting work that could not have helped.
             raise HTTPException(503, (
                 f"This report needs {fit['instructionTokens']} tokens just for its instructions. "
                 f"One model call holds {fit['budget']}, so nothing is left to write with. "
@@ -7550,12 +7534,6 @@ def generate_report(req: ReportGenRequest):
         # the request was fitted to it. Only the last bucket's failure is worth
         # reporting.
         #
-        # The overflow lane is appended even on the normal path: it is metered
-        # separately, so when every pool bucket answers 429 — which is what a
-        # seven-section fan-out leaves behind — it is the one lane with tokens.
-        if write_order != [wide] and wide:
-            write_order = write_order + [wide]
-
         result, last_exc = None, None
         for model in write_order:
             try:
