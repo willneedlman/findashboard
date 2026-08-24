@@ -7491,34 +7491,73 @@ def generate_report(req: ReportGenRequest):
         # Fit to the tightest bucket in the pool, because the call below walks
         # all of them: a request sized for the roomiest model is refused by the
         # others, and a 413 is refused outright rather than trimmed.
-        from ai_client import MODEL_POOL as _POOL, MODEL_TPM as _TPM
+        from ai_client import (MODEL_POOL as _POOL, MODEL_TPM as _TPM,
+                               MODEL_OVERFLOW as _OVERFLOW)
 
+        pool_ceiling = min([_TPM[m] for m in _POOL if m in _TPM] or [_REPORT_TPM_CEILING])
+        # Fit from `payload`, never from the result of a previous fit: fitting
+        # sheds evidence, so re-fitting an already-shed payload against a wider
+        # lane cannot bring the clips back. The wide attempt below has to start
+        # from the same request the narrow one did.
+        original_payload = payload
         payload, max_tokens, fit = _fit_report_request(
-            sys_prompt, payload, max_tokens,
-            ceiling=min([_TPM[m] for m in _POOL if m in _TPM] or [_REPORT_TPM_CEILING]),
-            model=MODEL_SMART)
+            sys_prompt, original_payload, max_tokens,
+            ceiling=pool_ceiling, model=MODEL_SMART)
+
+        # The pool lanes are 8,000 wide and a reasoning model reserves about two
+        # and a half tokens per token of answer, so the instructions alone can
+        # exceed the lane before a single clip is added — measured at 7,939
+        # against a 7,040 budget on a report whose must-include list was empty.
+        # There is nothing the user can shorten to fix that. The overflow lane is
+        # metered separately and far wider, so write there instead of refusing.
+        write_order = list(_POOL)
+        wide = _OVERFLOW[0] if _OVERFLOW else None
+        if fit.get("unfittable") and wide and _TPM.get(wide, 0) > pool_ceiling:
+            logger.warning(
+                "report does not fit a %d-token lane; re-fitting on %s (%d)",
+                pool_ceiling, wide, _TPM[wide])
+            payload, max_tokens, fit = _fit_report_request(
+                sys_prompt, original_payload, max_tokens,
+                ceiling=_TPM[wide], model=wide)
+            # Only the wide lane can hold a request this size; offering the
+            # narrow ones after it would just collect 413s.
+            write_order = [wide]
         if fit.get("unfittable"):
-            # Say what is actually wrong. Sending it produces a 413 on every
-            # model, each failing over to a rate-limited second provider, and
-            # the request dies at the proxy long before the pipeline does — the
-            # user sees "the origin returned an invalid response", which points
-            # at the server rather than at a report that asks for too much.
+            # Say what is actually wrong, and do not tell the user to shorten
+            # inputs that are not the problem. Sending it anyway produces a 413
+            # on every model, each failing over to a provider that is out of
+            # credit, and the request dies at the proxy long before the pipeline
+            # does — the user sees "the origin returned an invalid response",
+            # which points at the server rather than at the report.
+            #
+            # This branch is now only reached when even the widest lane cannot
+            # hold the request, and instructions are counted with evidence
+            # already shed to nothing, so the clips and the must-include list
+            # are provably not what overflowed. The old wording blamed them and
+            # sent people deleting work that could not have helped.
             raise HTTPException(503, (
-                f"The report instructions leave no room for an answer: they take "
-                f"{fit['instructionTokens']} of the {fit['budget']} tokens one model call allows, "
-                "before any evidence is added. Shorten the must-include list, pick a shorter "
-                "report, or use fewer clips."
+                f"This report needs {fit['instructionTokens']} tokens just for its instructions. "
+                f"One model call holds {fit['budget']}, so nothing is left to write with. "
+                "Your clips are not the cause. They were set aside before this was measured. "
+                "Pick a shorter report or fewer sections."
             ))
         if fit["fitted"]:
             messages[1] = {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}
-        # Walk the pool rather than pinning MODEL_SMART. This is the largest
+        # Walk the lanes rather than pinning MODEL_SMART. This is the largest
         # request in the pipeline and it runs precisely when the fan-out has just
         # spent the buckets, so the model it defaults to is the one least likely
-        # to have room. Only the last bucket's failure is worth reporting.
-        from ai_client import MODEL_POOL
+        # to have room. `write_order` is the pool, or the single wide lane when
+        # the request was fitted to it. Only the last bucket's failure is worth
+        # reporting.
+        #
+        # The overflow lane is appended even on the normal path: it is metered
+        # separately, so when every pool bucket answers 429 — which is what a
+        # seven-section fan-out leaves behind — it is the one lane with tokens.
+        if write_order != [wide] and wide:
+            write_order = write_order + [wide]
 
         result, last_exc = None, None
-        for model in MODEL_POOL:
+        for model in write_order:
             try:
                 resp = groq_chat(messages, model=model, max_tokens=max_tokens, temperature=0.3)
                 result = parse_json((resp.choices[0].message.content or "").strip())

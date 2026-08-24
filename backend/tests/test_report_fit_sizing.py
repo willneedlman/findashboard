@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import routers.ai as ai  # noqa: E402
 from ai_client import (  # noqa: E402
-    MODEL_OSS, MODEL_FAST, MODEL_TPM, answer_tokens_within, completion_cost,
+    MODEL_OSS, MODEL_COMPOUND, MODEL_TPM, answer_tokens_within, completion_cost,
 )
 
 
@@ -33,9 +33,12 @@ def _reserved(sys_prompt, payload, answer, model):
 def test_completion_cost_and_its_inverse_agree():
     for answer in (700, 900, 1800, 4000):
         assert answer_tokens_within(MODEL_OSS, completion_cost(MODEL_OSS, answer)) >= answer - 1
-    # A non-reasoning model reserves exactly what it asks for.
-    assert completion_cost(MODEL_FAST, 1800) == 1800
-    assert answer_tokens_within(MODEL_FAST, 1800) == 1800
+    # A non-reasoning model reserves exactly what it asks for. This used to be
+    # checked on MODEL_FAST, which was llama-3.1-8b; that model is gone and FAST
+    # now points at a reasoning model, so the overflow lane is the non-reasoning
+    # one the accounting has to keep straight.
+    assert completion_cost(MODEL_COMPOUND, 1800) == 1800
+    assert answer_tokens_within(MODEL_COMPOUND, 1800) == 1800
 
 
 def test_a_reasoning_model_reserves_more_than_it_asks_for():

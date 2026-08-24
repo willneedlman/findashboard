@@ -25,7 +25,26 @@ MODEL_OSS = "openai/gpt-oss-120b"
 MODEL_QWEN = "qwen/qwen3.6-27b"
 MODEL_OSS20 = "openai/gpt-oss-20b"
 MODEL_SMART = MODEL_OSS
-MODEL_FAST  = "llama-3.1-8b-instant"
+# Was llama-3.1-8b-instant until Groq withdrew it (confirmed absent from
+# /v1/models on 2026-08-24). It had been 404ing on every call since: the report
+# fan-out spent each section's last rescue attempt on it, and the screener, bond
+# and algo-runtime helpers had no working model at all, because a 404 fails over
+# to Cerebras and that account is out of credit (402). Point FAST at the
+# smallest live pool model instead.
+MODEL_FAST  = MODEL_OSS20
+
+# Groq's agentic system, metered on its own 70,000/min bucket — nearly nine
+# times a pool lane — and not a reasoning model, so it reserves one completion
+# token per token asked instead of roughly two and a half. That makes it the
+# only lane that can absorb a whole report in one call.
+#
+# It can run a web search, which is why it is a rescue lane and not the writer:
+# a grounded report must come from the clips. Measured on the real report task
+# it used no tools and returned schema-clean JSON — it reaches for search only
+# when asked for a fact the prompt does not carry — but "only when it needs to"
+# is the model's judgement, not a guarantee, so it is reached for only once the
+# metered lanes have already failed.
+MODEL_COMPOUND = "groq/compound-mini"
 
 # Cerebras fallback models. gpt-oss-120b is the only model Cerebras lists as
 # production; everything else there is preview and can be withdrawn. FAST used
@@ -42,7 +61,6 @@ _CEREBRAS_MODELS = {
     MODEL_SMART:  "gpt-oss-120b",
     MODEL_QWEN:   "gpt-oss-120b",
     MODEL_OSS20:  "gpt-oss-120b",
-    MODEL_FAST:   "gpt-oss-120b",
 }
 
 # Groq meters tokens per model, not per organisation: burning a model's budget
@@ -56,18 +74,20 @@ _CEREBRAS_MODELS = {
 # some: measured 2026-08-15, every one of these is metered independently, so the
 # pool is back to 24k across three equal buckets (30k counting overflow) against
 # the 28k it had before.
-MODEL_TPM = {MODEL_OSS: 8_000, MODEL_QWEN: 8_000, MODEL_OSS20: 8_000, MODEL_FAST: 6_000}
+# No MODEL_FAST entry: it is MODEL_OSS20 now, and a second key for the same
+# model would have overwritten the real 8,000 with a stale 6,000.
+MODEL_TPM = {MODEL_OSS: 8_000, MODEL_QWEN: 8_000, MODEL_OSS20: 8_000,
+             MODEL_COMPOUND: 70_000}
 
 # Lanes a fan-out starts on. Same width, close enough in capability that it does
 # not matter which section lands where — the outline fixes the argument before
 # any of them write, so a lane supplies prose, not judgement.
 MODEL_POOL = (MODEL_OSS, MODEL_QWEN, MODEL_OSS20)
 
-# Tried only after every pool lane has failed. llama-3.1-8b is a real bucket but
-# a visibly weaker writer, so it is worth having as the thing that keeps a
-# section from being dropped, and not worth having as a lane that one section in
-# four starts on.
-MODEL_OVERFLOW = (MODEL_FAST,)
+# Tried only after every pool lane has failed. Its bucket is metered separately
+# and is wide enough that a section which the 8k lanes all refused still fits,
+# so it is what keeps a section from being dropped when the pool is spent.
+MODEL_OVERFLOW = (MODEL_COMPOUND,)
 
 # These spend completion tokens thinking before answering, so a caller's budget
 # has to cover the scratchpad as well as the answer or the content comes back
