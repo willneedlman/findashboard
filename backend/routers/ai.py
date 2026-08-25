@@ -2535,6 +2535,20 @@ _FANOUT_RECOVERY_WAIT = float(os.getenv("REPORT_FANOUT_RECOVERY_WAIT", "20"))
 # seven-section report needs on lanes that refill 8,000 tokens a minute.
 _FANOUT_RECOVERY_ROUNDS = int(os.getenv("REPORT_FANOUT_RECOVERY_ROUNDS", "3"))
 
+# The edge closes the connection at 120 seconds, and a report that is still
+# being written when that happens is lost entirely — the user sees "the origin
+# took too long to respond" and gets nothing, having waited two minutes for it.
+# Recovery rounds are what pushed a seven-section report past that.
+#
+# So the fan-out works to a wall clock, not just a round count. When the
+# deadline passes it stops retrying and ships whatever is written, naming the
+# sections it gave up on. A report missing two of seven sections, delivered,
+# beats a complete one the browser never receives.
+_FANOUT_DEADLINE = float(os.getenv("REPORT_FANOUT_DEADLINE", "95"))
+# Headroom a recovery round needs after its wait: the retries themselves, plus
+# the report frame that still has to be written once the sections are in.
+_FANOUT_ROUND_RESERVE = float(os.getenv("REPORT_FANOUT_ROUND_RESERVE", "18"))
+
 
 def _section_payload(payload: dict, section: dict) -> dict:
     """The same evidence, ordered for the section about to be written.
@@ -2722,6 +2736,10 @@ def _generate_sections_fanned(
     if len(sections) < 2:
         return None
 
+    # Everything below works to this clock. Started before the first sweep, not
+    # before the recovery rounds, because the first sweep is most of the time.
+    deadline = time.monotonic() + _FANOUT_DEADLINE
+
     total = _report_token_budget(length_key, len(sections), depth)
     per_section = max(_SECTION_MIN_TOKENS, min(_SECTION_MAX_TOKENS, total // len(sections)))
     headings = [str(s.get("heading") or s.get("templateSection") or "") for s in sections]
@@ -2790,15 +2808,27 @@ def _generate_sections_fanned(
         missing = [i for i, w in enumerate(written) if w is None]
         if not missing:
             break
+        left = deadline - time.monotonic()
+        # Needs room for the wait AND for the work after it, or the round is
+        # started only to be cut off by the edge mid-request.
+        if left < _FANOUT_RECOVERY_WAIT + _FANOUT_ROUND_RESERVE:
+            logger.warning("section fan-out out of time with %d/%d missing; "
+                           "shipping what is written rather than losing the "
+                           "whole report to the edge timeout",
+                           len(missing), len(sections))
+            break
         logger.warning("section fan-out short by %d/%d; waiting %.0fs for the "
-                       "token buckets and retrying the gaps (round %d/%d)",
+                       "token buckets and retrying the gaps (round %d/%d, %.0fs left)",
                        len(missing), len(sections), _FANOUT_RECOVERY_WAIT,
-                       _round + 1, _FANOUT_RECOVERY_ROUNDS)
+                       _round + 1, _FANOUT_RECOVERY_ROUNDS, left)
         time.sleep(_FANOUT_RECOVERY_WAIT)
         # Sequentially, not in parallel: the reason these are missing is that
         # the lanes were saturated, and re-firing them all at once reproduces
-        # the saturation that lost them.
+        # the saturation that lost them. Stop mid-list if the clock runs out.
         for i in missing:
+            if time.monotonic() >= deadline:
+                logger.warning("section fan-out deadline reached mid-round")
+                break
             written[i] = write((i, sections[i]))
 
     kept = [w for w in written if w is not None]

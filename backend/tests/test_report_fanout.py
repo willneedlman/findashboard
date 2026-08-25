@@ -167,3 +167,48 @@ def test_the_overflow_lane_is_sized_for_every_section(monkeypatch):
     _run(monkeypatch, 7, {0}, wait_heals=False)
     overflow_shares = {sh for m, sh in _run.shares if m in MODEL_OVERFLOW}
     assert overflow_shares == {7}, f"expected the whole fan-out, got {overflow_shares}"
+
+
+class TestTheEdgeTimeoutIsRespected:
+    """The edge closes the connection at 120 seconds. Recovery rounds pushed a
+    seven-section report to ~190s, so the user waited two minutes and got
+    nothing at all: "the origin took too long to respond". A report missing two
+    sections, delivered, beats a complete one the browser never receives."""
+
+    def _fail_two(self, monkeypatch, deadline):
+        monkeypatch.setattr(ai, "_FANOUT_DEADLINE", deadline)
+        monkeypatch.setattr(ai, "_FANOUT_RECOVERY_WAIT", 20)
+        slept = []
+        monkeypatch.setattr(ai.time, "sleep", lambda x: slept.append(x))
+
+        def one(payload, section, siblings, model, per_section, valid_ids,
+                must_include="", rule_flags=None, sharing=1):
+            if section["templateSection"] in {"s5", "s6"}:
+                raise RuntimeError("429 rate limited")
+            return {"clipId": "c1", "templateSection": section["templateSection"],
+                    "heading": section["heading"]}
+
+        monkeypatch.setattr(ai, "_generate_one_section", one)
+        dropped = []
+        out = ai._generate_sections_fanned(
+            {}, _outline(7), "medium", None, {"c1"}, dropped_out=dropped)
+        return out, slept, dropped
+
+    def test_no_recovery_is_attempted_once_the_clock_is_gone(self, monkeypatch):
+        out, slept, dropped = self._fail_two(monkeypatch, deadline=0)
+        assert not slept, "a round must not start when there is no time to finish it"
+        assert out is not None and len(out) == 5, "the written sections still ship"
+        assert len(dropped) == 2, "and the ones given up on are named"
+
+    def test_recovery_runs_when_there_is_time(self, monkeypatch):
+        out, slept, _ = self._fail_two(monkeypatch, deadline=600)
+        assert slept, "with the clock available the gaps are retried"
+
+    def test_the_deadline_leaves_room_for_the_round_itself(self):
+        # A round is a wait plus the retries plus the closing frame call, so the
+        # gate has to reserve more than the wait alone or the round is started
+        # only to be cut off mid-request.
+        assert ai._FANOUT_ROUND_RESERVE > 0
+        assert ai._FANOUT_DEADLINE + ai._FANOUT_ROUND_RESERVE < 120, (
+            "the whole fan-out plus its reserve must finish inside the edge window"
+        )
