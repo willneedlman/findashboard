@@ -1,18 +1,25 @@
 """Shared LLM utility used by ai.py and any router that needs LLM access.
 
-Groq is the primary provider (free, fast). When Groq is rate-limited (429),
-rejects an oversized request (413), or has a server/connection error, calls fall
-over to Cerebras, which serves the same Llama models on a separate quota. Each
-provider gets jittered exponential backoff for transient errors first; only a
-sustained failure trips the fail-over. System/user messages stay split so the
-static instruction prefix can be cached across calls.
+Two providers, and which one serves a call is decided by the model id, not by a
+fixed order: Groq models go to Groq, Mistral models go to Mistral. A call falls
+over to the OTHER provider's equivalent model when its own is rate-limited (429),
+refuses an oversized request (413), or errors. Each provider gets jittered
+exponential backoff for transient errors first; only a sustained failure trips
+the fail-over. System/user messages stay split so the static instruction prefix
+can be cached across calls.
+
+Cerebras used to be the fail-over. Its account has been out of credit (402) since
+at least 2026-08-24, so every Groq 429 was falling through to a provider that
+could not answer, which is why a rate-limited Groq surfaced as a total failure.
+It is out of the chain. ANTHROPIC_API_KEY is in the Fly secrets and is likewise
+out of credit; nothing has ever called it.
 """
 import os, json, re, time, random, logging
 from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
 _GROQ_KEY = os.getenv("GROQ_API_KEY", "")
-_CEREBRAS_KEY = os.getenv("CEREBRAS_API_KEY", "")
+_MISTRAL_KEY = os.getenv("MISTRAL_API_KEY", "")
 
 #
 # Groq decommissioned llama-3.3-70b-versatile on 2026-08-16 and named gpt-oss-120b
@@ -46,22 +53,21 @@ MODEL_FAST  = MODEL_OSS20
 # metered lanes have already failed.
 MODEL_COMPOUND = "groq/compound-mini"
 
-# Cerebras fallback models. gpt-oss-120b is the only model Cerebras lists as
-# production; everything else there is preview and can be withdrawn. FAST used
-# to map to zai-glm-4.7, which Cerebras scheduled for deprecation on
-# 2026-08-17 — a fallback that would have failed silently the moment Groq
-# rate-limited a structured-JSON call. Both tiers now land on the production
-# model; losing a little speed on the fallback path is the right trade.
-# Cerebras lists gemma-4-31b and zai-glm-4.7 beside it, but both are preview and
-# zai-glm-4.7 is the one already scheduled for withdrawal, so every Groq model
-# maps to the production one rather than buying a second fallback bucket that
-# disappears without warning. Fail-over is for staying up, not for headroom —
-# the headroom lives in MODEL_POOL, where the buckets are metered separately.
-_CEREBRAS_MODELS = {
-    MODEL_SMART:  "gpt-oss-120b",
-    MODEL_QWEN:   "gpt-oss-120b",
-    MODEL_OSS20:  "gpt-oss-120b",
-}
+# Mistral's free "Experiment" tier: ~500,000 tokens a minute against Groq's
+# 8,000, one request a second, and about a billion tokens a month. That is the
+# lane that makes a whole report writable — seven sections need ~35,000 tokens
+# and the Groq pool supplies 24,000 a minute, so the fan-out was starving by
+# arithmetic, not by any bug left to find.
+#
+# The tier is free because you opt into Mistral training on what you send it.
+# That is a deliberate choice, made 2026-08-25, and it is the reason this is not
+# simply the default for every caller: it carries the report's portfolio clips.
+MODEL_MISTRAL = os.getenv("MISTRAL_MODEL", "mistral-medium-latest")
+MODEL_MISTRAL_SMALL = os.getenv("MISTRAL_MODEL_SMALL", "mistral-small-latest")
+_MISTRAL_MODELS = frozenset({MODEL_MISTRAL, MODEL_MISTRAL_SMALL})
+_MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions"
+_MISTRAL_TIMEOUT = float(os.getenv("MISTRAL_TIMEOUT", "120"))
+
 
 # Groq meters tokens per model, not per organisation: burning a model's budget
 # leaves the others untouched (measured — llama fell 11963→9845 while qwen and
@@ -77,7 +83,8 @@ _CEREBRAS_MODELS = {
 # No MODEL_FAST entry: it is MODEL_OSS20 now, and a second key for the same
 # model would have overwritten the real 8,000 with a stale 6,000.
 MODEL_TPM = {MODEL_OSS: 8_000, MODEL_QWEN: 8_000, MODEL_OSS20: 8_000,
-             MODEL_COMPOUND: 70_000}
+             MODEL_COMPOUND: 70_000,
+             MODEL_MISTRAL: 500_000, MODEL_MISTRAL_SMALL: 500_000}
 
 # Groq's 413 is BUCKET-RELATIVE. A request is "too large" when it does not fit
 # what is LEFT of the per-minute allowance, not when it exceeds some fixed size.
@@ -102,7 +109,17 @@ _DEFAULT_CEILING = 8_000
 # Do not "measure" these by bisection while spending the quota you are
 # measuring. That produced two wrong numbers already. Confirm on a full bucket,
 # and treat a 429 as "no information about size".
-MODEL_MAX_INPUT = {MODEL_COMPOUND: 7_000}
+MODEL_MAX_INPUT = {
+    MODEL_COMPOUND: 7_000,
+    # Not a provider limit — Mistral's context is far larger. This is a
+    # deliberate cap: a 500,000 share would let one section build a request of
+    # 440,000 tokens, which is how the compound lane produced 413s. 32,000 is
+    # roughly fifteen times what a section can carry on a Groq lane, so the
+    # evidence stops being the thing that gets shed, and seven of them still sit
+    # well inside a minute.
+    MODEL_MISTRAL: 32_000,
+    MODEL_MISTRAL_SMALL: 32_000,
+}
 
 
 def request_ceiling(model: str, sharing: int = 1) -> int:
@@ -116,10 +133,33 @@ def request_ceiling(model: str, sharing: int = 1) -> int:
     share = MODEL_TPM.get(model, _DEFAULT_CEILING) // max(1, sharing)
     return max(1, min(share, MODEL_MAX_INPUT.get(model, share)))
 
-# Lanes a fan-out starts on. Same width, close enough in capability that it does
-# not matter which section lands where — the outline fixes the argument before
-# any of them write, so a lane supplies prose, not judgement.
-MODEL_POOL = (MODEL_OSS, MODEL_QWEN, MODEL_OSS20)
+# Lanes a fan-out starts on. Close enough in capability that it does not matter
+# which section lands where — the outline fixes the argument before any of them
+# write, so a lane supplies prose, not judgement.
+#
+# They are NOT the same width any more. Mistral is metered at 500,000 tokens a
+# minute against a Groq lane's 8,000, which is the whole reason it is here: a
+# seven-section report needs ~35,000 tokens and the three Groq lanes supply
+# 24,000 a minute between them, so the fan-out starved by arithmetic. Sizing is
+# per-lane (request_ceiling), so a wide lane carries a section with fifteen
+# times the evidence rather than the same section with room to spare.
+#
+# Mistral is listed first so section 0 starts there and the round-robin gives it
+# the most work. Present only when its key is set, so a deploy without
+# MISTRAL_API_KEY still runs on the Groq pool exactly as before.
+def build_pool(mistral_key: str) -> tuple[str, ...]:
+    """The fan-out lanes for a given configuration.
+
+    A function, not an expression, so it can be tested at both configurations
+    without reloading the module — reloading rebinds MODEL_POOL while other
+    modules still hold the old object, and the mismatch surfaces as a failure in
+    an unrelated test that only appears in certain orders.
+    """
+    return tuple(([MODEL_MISTRAL] if mistral_key else [])
+                 + [MODEL_OSS, MODEL_QWEN, MODEL_OSS20])
+
+
+MODEL_POOL = build_pool(_MISTRAL_KEY)
 
 # Tried only after every pool lane has failed. Its bucket is metered separately
 # and is wide enough that a section which the 8k lanes all refused still fits,
@@ -133,7 +173,6 @@ MODEL_OVERFLOW = (MODEL_COMPOUND,)
 _GROQ_REASONING = frozenset({MODEL_OSS, MODEL_QWEN, "openai/gpt-oss-20b"})
 
 _client = None
-_cerebras_client = None
 
 
 def get_client():
@@ -152,20 +191,6 @@ def get_client():
         # groq_chat owns failover.
         _client = Groq(api_key=_GROQ_KEY, max_retries=0)
     return _client
-
-
-def get_cerebras():
-    global _cerebras_client
-    if not _CEREBRAS_KEY:
-        raise HTTPException(503, "CEREBRAS_API_KEY not configured")
-    if _cerebras_client is None:
-        from cerebras.cloud.sdk import Cerebras
-        # See get_client(): our backoff and failover own retries, not the SDK's.
-        _cerebras_client = Cerebras(api_key=_CEREBRAS_KEY, max_retries=0)
-    return _cerebras_client
-
-
-_CONN_ERRORS = ("APIConnectionError", "APITimeoutError", "Timeout", "ConnectionError")
 
 
 def _is_retryable(exc: Exception) -> bool:
@@ -275,6 +300,11 @@ def answer_tokens_within(model: str, available: int) -> int:
 
 
 def _groq_call(model, messages, max_tokens, temperature):
+    # Substitute when handed a model Groq does not serve. This runs when a
+    # Mistral call fails over: sending "mistral-medium-latest" to Groq spends a
+    # request to be told the model does not exist.
+    if model in _MISTRAL_MODELS:
+        model = MODEL_SMART
     kwargs: dict = {"model": model, "max_tokens": max_tokens, "messages": messages}
     if temperature is not None:
         kwargs["temperature"] = temperature
@@ -291,20 +321,64 @@ def _groq_call(model, messages, max_tokens, temperature):
     return get_client().chat.completions.create(**kwargs)
 
 
-def _cerebras_call(model, messages, max_tokens, temperature):
-    cmodel = _CEREBRAS_MODELS.get(model, _CEREBRAS_MODELS[MODEL_SMART])
-    kwargs: dict = {"model": cmodel, "messages": messages}
+def _mistral_call(model, messages, max_tokens, temperature):
+    """Mistral's chat-completions endpoint, which is OpenAI-shaped.
+
+    Called over httpx rather than through a vendor SDK: the SDK would be a new
+    dependency on a 1GB machine, and the only thing needed here is one POST
+    whose response already matches what every caller reads. The response is
+    wrapped so `resp.choices[0].message.content` works exactly as it does for
+    Groq.
+    """
+    import httpx
+
+    if not _MISTRAL_KEY:
+        raise HTTPException(503, "MISTRAL_API_KEY not configured")
+    body: dict = {
+        "model": model if model in _MISTRAL_MODELS else MODEL_MISTRAL,
+        "messages": messages,
+        "max_tokens": max_tokens,
+    }
     if temperature is not None:
-        kwargs["temperature"] = temperature
-    if cmodel == "gpt-oss-120b":
-        # Reasoning model: spends completion tokens thinking before the answer.
-        # Keep that minimal for our structured/JSON tasks and add headroom so the
-        # final content isn't starved by the caller's tight token budget.
-        kwargs["reasoning_effort"] = "low"
-        kwargs["max_completion_tokens"] = max_tokens + 1024
-    else:
-        kwargs["max_completion_tokens"] = max_tokens
-    return get_cerebras().chat.completions.create(**kwargs)
+        body["temperature"] = temperature
+    r = httpx.post(_MISTRAL_URL, timeout=_MISTRAL_TIMEOUT, json=body,
+                   headers={"Authorization": f"Bearer {_MISTRAL_KEY}",
+                            "Content-Type": "application/json"})
+    if r.status_code >= 400:
+        # Carry the provider's status so _should_failover, _is_retryable and
+        # _exhausted all read it the same way they read a vendor SDK error.
+        raise _ProviderError(r.status_code, (r.text or "")[:400])
+    return _shape(r.json())
+
+
+class _ProviderError(Exception):
+    """A raw-HTTP provider failure, shaped like the vendor SDK errors so the
+    retry, fail-over and diagnosis paths do not need to know the difference."""
+
+    def __init__(self, status_code: int, detail: str = ""):
+        super().__init__(f"{status_code}: {detail}")
+        self.status_code = status_code
+
+
+class _Msg:
+    def __init__(self, d): self.content = d.get("content") or ""
+
+
+class _Choice:
+    def __init__(self, d):
+        self.message = _Msg(d.get("message") or {})
+        self.finish_reason = d.get("finish_reason")
+
+
+class _Resp:
+    def __init__(self, d):
+        self.choices = [_Choice(c) for c in (d.get("choices") or [])]
+        self.usage = d.get("usage")
+
+
+def _shape(payload: dict):
+    """Give a raw JSON completion the same attribute access the SDKs return."""
+    return _Resp(payload)
 
 
 def _exhausted(exc: Exception, provider: str,
@@ -348,6 +422,27 @@ def _exhausted(exc: Exception, provider: str,
     return exc
 
 
+def _providers_for(model: str) -> list[tuple[str, object]]:
+    """Providers to try for `model`, in order, own-provider first.
+
+    Which provider serves a call follows the MODEL, not a fixed order. Groq ids
+    go to Groq and Mistral ids go to Mistral; the other is the fail-over, and
+    _mistral_call/_groq_call each substitute their own equivalent model when
+    handed one they do not serve. Trying Groq first for a Mistral model was the
+    obvious shape and it is wrong: it spends the Groq bucket to learn the model
+    does not exist there, and Groq's bucket is the scarce one.
+    """
+    mistral = ("mistral", _mistral_call) if _MISTRAL_KEY else None
+    groq = ("groq", _groq_call) if _GROQ_KEY else None
+    order = [mistral, groq] if model in _MISTRAL_MODELS else [groq, mistral]
+    live = [p for p in order if p]
+    # Skip anything known to be out of credit, but keep one thing to try: a
+    # request that fails reports why, where a request with nothing left to try
+    # reports only that there was nothing to try.
+    payable = [p for p in live if not _is_unpaid(p[0])]
+    return payable or live[-1:]
+
+
 def groq_chat(messages: list[dict], *, model: str = MODEL_SMART,
               max_tokens: int = 512, temperature: float | None = None,
               retries: int | None = None):
@@ -362,19 +457,9 @@ def groq_chat(messages: list[dict], *, model: str = MODEL_SMART,
     models is better off moving to the next one immediately and letting its own
     retry loop do the waiting.
     """
-    providers = []
-    if _GROQ_KEY:
-        providers.append(("groq", _groq_call))
-    if _CEREBRAS_KEY:
-        providers.append(("cerebras", _cerebras_call))
+    providers = _providers_for(model)
     if not providers:
-        raise HTTPException(503, "No LLM provider configured (set GROQ_API_KEY or CEREBRAS_API_KEY)")
-    # Skip anything known to be out of credit. Keep at least one provider in the
-    # list even so: a request that tries and fails reports why, where a request
-    # with nothing left to try reports only that there was nothing to try.
-    payable = [p for p in providers if not _is_unpaid(p[0])]
-    providers = payable or providers[-1:]
-
+        raise HTTPException(503, "No LLM provider configured (set GROQ_API_KEY or MISTRAL_API_KEY)")
     import metrics
     last_exc: Exception | None = None
     tried: list[tuple[str, str]] = []

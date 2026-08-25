@@ -61,15 +61,22 @@ def _groq() -> dict:
     return {"status": "up", "latency_ms": round(ms, 0), "detail": "models reachable"}
 
 
-def _cerebras() -> dict:
-    key = os.getenv("CEREBRAS_API_KEY", "").strip()
+def _mistral() -> dict:
+    """The wide lane. Reports unconfigured rather than failing when the key is
+    absent, because the app runs on the Groq pool without it."""
+    key = os.getenv("MISTRAL_API_KEY", "").strip()
     if not key:
-        return {"status": "unconfigured", "latency_ms": None, "detail": "no key (fallback off)"}
-    from cerebras.cloud.sdk import Cerebras
+        return {"status": "unconfigured", "latency_ms": None,
+                "detail": "no MISTRAL_API_KEY (report fan-out runs on Groq only)"}
+    import httpx
     t0 = time.perf_counter()
-    Cerebras(api_key=key).models.list()
+    r = httpx.get("https://api.mistral.ai/v1/models", timeout=15,
+                  headers={"Authorization": f"Bearer {key}"})
     ms = (time.perf_counter() - t0) * 1000
-    return {"status": "up", "latency_ms": round(ms, 0), "detail": "fallback ready"}
+    if r.status_code >= 400:
+        return {"status": "down", "latency_ms": round(ms, 0),
+                "detail": f"{r.status_code}: {(r.text or '')[:120]}"}
+    return {"status": "up", "latency_ms": round(ms, 0), "detail": "wide lane ready"}
 
 
 # Config-only key check, BUT we surface real throttling passively: fmp records
@@ -103,7 +110,7 @@ _PROBES = {
     "FMP":      _fmp,
     "FRED":     _fred,
     "Groq":     _groq,
-    "Cerebras": _cerebras,
+    "Mistral":  _mistral,
     "Tradier":  _tradier,
 }
 

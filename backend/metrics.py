@@ -25,9 +25,12 @@ _slow = 0                              # requests slower than _SLOW_MS
 _MINUTES = 60
 _minute_ring: deque[list] = deque(maxlen=_MINUTES)  # [epoch_minute, count]
 
-# AI provider usage (answers "is the Groq->Cerebras failover firing?")
+# AI provider usage (answers "is the Groq<->Mistral failover firing?"). Cerebras
+# stays as a bucket so a machine that has not been redeployed still reports
+# consistently; nothing routes to it any more.
 _ai: dict[str, dict] = {
     "groq":     {"ok": 0, "fail": 0},
+    "mistral":  {"ok": 0, "fail": 0},
     "cerebras": {"ok": 0, "fail": 0},
 }
 _ai_last_error: str | None = None
@@ -124,6 +127,7 @@ def snapshot() -> dict:
             "sparkline": spark,
             "ai": {
                 "groq":     dict(_ai["groq"]),
+                "mistral": dict(_ai["mistral"]),
                 "cerebras": dict(_ai["cerebras"]),
                 "last_error": _ai_last_error,
             },
