@@ -336,10 +336,19 @@ def _exhausted(exc: Exception, provider: str,
 
 
 def groq_chat(messages: list[dict], *, model: str = MODEL_SMART,
-              max_tokens: int = 512, temperature: float | None = None):
+              max_tokens: int = 512, temperature: float | None = None,
+              retries: int | None = None):
     """Low-level completion with retry and cross-provider fail-over. Returns the
     raw (OpenAI-shaped) response so callers can read finish_reason / usage.
-    Prefer groq_complete() for simple text."""
+    Prefer groq_complete() for simple text.
+
+    `retries` overrides the per-provider backoff count. Pass 0 when the CALLER
+    has somewhere better to go: a 429 means this model's bucket is empty, and
+    sitting on it through three backoffs costs about four seconds to learn
+    something the first response already said. A caller that walks several
+    models is better off moving to the next one immediately and letting its own
+    retry loop do the waiting.
+    """
     providers = []
     if _GROQ_KEY:
         providers.append(("groq", _groq_call))
@@ -362,6 +371,7 @@ def groq_chat(messages: list[dict], *, model: str = MODEL_SMART,
             resp = with_backoff(
                 lambda c=call: c(model, messages, max_tokens, temperature),
                 deadline=deadline,
+                **({} if retries is None else {"retries": retries}),
             )
             metrics.record_ai(name, ok=True)
             return resp

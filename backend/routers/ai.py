@@ -2685,7 +2685,12 @@ def _generate_one_section(
         {"role": "system", "content": sys_prompt},
         {"role": "user", "content": json.dumps(fitted, ensure_ascii=False)},
     ]
-    resp = groq_chat(messages, model=model, max_tokens=tokens, temperature=0.3)
+    # No per-model backoff: this call is one stop on a walk across every lane,
+    # and a 429 means this bucket is empty right now. Three backoffs on an empty
+    # bucket cost about four seconds each and, across four lanes and seven
+    # sections, are most of why a report ran past the edge timeout. Move to the
+    # next lane immediately; the fan-out's recovery rounds are what wait.
+    resp = groq_chat(messages, model=model, max_tokens=tokens, temperature=0.3, retries=0)
     out = parse_json((resp.choices[0].message.content or "").strip())
     if not isinstance(out, dict) or not str(out.get("analysis", "")).strip():
         return None

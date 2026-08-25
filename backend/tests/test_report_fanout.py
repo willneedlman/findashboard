@@ -212,3 +212,29 @@ class TestTheEdgeTimeoutIsRespected:
         assert ai._FANOUT_DEADLINE + ai._FANOUT_ROUND_RESERVE < 120, (
             "the whole fan-out plus its reserve must finish inside the edge window"
         )
+
+
+def test_a_section_does_not_back_off_on_a_lane_it_is_about_to_leave(monkeypatch):
+    """A 429 means this model's bucket is empty. Three backoffs on an empty
+    bucket cost ~4s each, and across four lanes and seven sections that was most
+    of why a report ran past the 120s edge timeout. The section walks lanes; the
+    fan-out's recovery rounds do the waiting."""
+    seen = {}
+
+    def fake_groq_chat(messages, *, model, max_tokens, temperature=None, retries=None):
+        seen["retries"] = retries
+        raise RuntimeError("stop here")
+
+    monkeypatch.setattr(ai, "groq_chat", fake_groq_chat)
+    monkeypatch.setattr(ai, "_section_system_prompt", lambda *a, **k: "sys")
+    try:
+        ai._generate_one_section(
+            {"dataBank": {"evidence": []}},
+            {"templateSection": "s0", "heading": "H0", "argues": "x"},
+            [], MODEL_POOL[0], 700, {"c1"})
+    except RuntimeError:
+        pass
+    assert seen["retries"] == 0, (
+        "the section writer must not sit on an empty bucket when it has three "
+        "more lanes to try"
+    )
