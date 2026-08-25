@@ -69,7 +69,21 @@ class TestASharedLaneIsSizedByTheShare:
 
     def test_sharing_divides_the_bucket(self):
         assert request_ceiling(MODEL_OSS, 3) == MODEL_TPM[MODEL_OSS] // 3
-        assert request_ceiling(MODEL_COMPOUND, 7) == MODEL_TPM[MODEL_COMPOUND] // 7
+
+    def test_a_hard_per_request_cap_wins_over_the_share(self):
+        # compound-mini 413s a 10,000-token request with 63,000 still left in
+        # its bucket: it is an agentic system with its own context budget, so
+        # its share of the meter overstates what it will accept.
+        from ai_client import MODEL_MAX_INPUT
+        assert MODEL_TPM[MODEL_COMPOUND] // 7 > MODEL_MAX_INPUT[MODEL_COMPOUND]
+        assert request_ceiling(MODEL_COMPOUND, 7) == MODEL_MAX_INPUT[MODEL_COMPOUND]
+
+    def test_a_model_with_no_hard_cap_is_bound_by_its_meter(self):
+        # Measured on a full bucket the pool models accept 11,500 tokens, so
+        # there is no independent size limit to apply to them.
+        from ai_client import MODEL_MAX_INPUT
+        assert MODEL_OSS not in MODEL_MAX_INPUT
+        assert request_ceiling(MODEL_OSS, 1) == MODEL_TPM[MODEL_OSS]
 
     def test_dividing_a_pool_lane_would_fall_below_what_a_section_costs(self):
         # Why the pool is left undivided: a section costs ~4,900 tokens before a

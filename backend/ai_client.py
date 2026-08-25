@@ -92,6 +92,18 @@ MODEL_TPM = {MODEL_OSS: 8_000, MODEL_QWEN: 8_000, MODEL_OSS20: 8_000,
 # request drained the lane, and everything after it was refused as too large.
 _DEFAULT_CEILING = 8_000
 
+# A hard per-request size, for models that have one INDEPENDENT of their meter.
+# The pool models do not: measured on a full bucket they accept 11,500 tokens,
+# so their per-minute allowance is what binds and there is nothing to add here.
+# compound-mini does: it 413s a 10,000-token request with 63,000 tokens still
+# left in its bucket, because it is an agentic system with its own context
+# budget rather than a bare model.
+#
+# Do not "measure" these by bisection while spending the quota you are
+# measuring. That produced two wrong numbers already. Confirm on a full bucket,
+# and treat a 429 as "no information about size".
+MODEL_MAX_INPUT = {MODEL_COMPOUND: 7_000}
+
 
 def request_ceiling(model: str, sharing: int = 1) -> int:
     """The largest request to build for `model` when `sharing` of them contend
@@ -101,7 +113,8 @@ def request_ceiling(model: str, sharing: int = 1) -> int:
     fan-out, the sections per lane. Pass 1 for a call that has the lane to
     itself.
     """
-    return max(1, MODEL_TPM.get(model, _DEFAULT_CEILING) // max(1, sharing))
+    share = MODEL_TPM.get(model, _DEFAULT_CEILING) // max(1, sharing)
+    return max(1, min(share, MODEL_MAX_INPUT.get(model, share)))
 
 # Lanes a fan-out starts on. Same width, close enough in capability that it does
 # not matter which section lands where — the outline fixes the argument before
