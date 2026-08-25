@@ -2550,6 +2550,56 @@ _FANOUT_DEADLINE = float(os.getenv("REPORT_FANOUT_DEADLINE", "95"))
 _FANOUT_ROUND_RESERVE = float(os.getenv("REPORT_FANOUT_ROUND_RESERVE", "18"))
 
 
+# A section is named in abstract language and a clip is titled in concrete
+# language, so literal word overlap between them finds almost nothing. Measured
+# on a real report: the section "Concentration and Exposure" scored ZERO against
+# a bank containing "Direct Issuer Sector Weights" and "Holding-level beta and
+# portfolio risk contribution". It was therefore written from the globally
+# top-ranked clips, and printed "no sector weights are present" directly above
+# the sector-weights chart its own figure slot was showing.
+#
+# These map a section's vocabulary onto the words clips actually use. A direct
+# hit still outranks a concept hit, so this widens the net without flattening
+# the ordering.
+_SECTION_CONCEPTS: dict[str, set[str]] = {
+    "concentration": {"weight", "weights", "holding", "holdings", "position", "positions",
+                      "sector", "issuer", "allocation", "largest", "share", "top"},
+    "exposure": {"sector", "factor", "beta", "allocation", "weight", "weights", "issuer",
+                 "industry", "loading", "look-through"},
+    "diversification": {"correlation", "sector", "weight", "weights", "factor", "beta"},
+    "correlation": {"correlation", "beta", "factor", "regression", "covariance", "r2"},
+    "factor": {"factor", "beta", "regression", "momentum", "value", "size", "loading",
+               "decomposition"},
+    "return": {"return", "returns", "performance", "cumulative", "active", "total"},
+    "drawdown": {"drawdown", "loss", "losses", "decline", "peak", "trough"},
+    "downside": {"drawdown", "shock", "scenario", "scenarios", "stress", "var", "cvar",
+                 "loss", "losses", "tail"},
+    "upside": {"target", "valuation", "forecast", "estimate", "estimates", "growth",
+               "catalyst", "catalysts"},
+    "outlook": {"forecast", "estimate", "estimates", "schedule", "calendar", "catalyst",
+                "catalysts", "target", "guidance"},
+    "forward": {"forecast", "estimate", "estimates", "schedule", "calendar", "catalyst",
+                "catalysts", "target"},
+    "performance": {"return", "returns", "performance", "cumulative", "sharpe",
+                    "volatility"},
+    "risk": {"beta", "volatility", "drawdown", "var", "variance", "shock", "risk"},
+    "scenarios": {"shock", "scenario", "scenarios", "stress", "var", "cvar"},
+    "action": {"schedule", "calendar", "catalyst", "catalysts", "target", "valuation"},
+    "actions": {"schedule", "calendar", "catalyst", "catalysts", "target", "valuation"},
+    "gaps": {"methodology", "coverage"},
+    "verdict": {"return", "beta", "drawdown", "sharpe", "performance"},
+    "valuation": {"valuation", "peer", "multiple", "multiples", "dcf", "target"},
+}
+
+
+def expand_section_terms(terms: set[str]) -> set[str]:
+    """The clip vocabulary a section's own words stand for."""
+    out: set[str] = set()
+    for term in terms:
+        out |= _SECTION_CONCEPTS.get(term, set())
+    return out - terms
+
+
 def _section_payload(payload: dict, section: dict) -> dict:
     """The same evidence, ordered for the section about to be written.
 
@@ -2586,13 +2636,22 @@ def _section_payload(payload: dict, section: dict) -> dict:
     if not wanted:
         return payload
 
+    concepts = expand_section_terms(wanted)
+
     def affinity(index_and_clip):
         index, clip = index_and_clip
         text = " ".join(str(clip.get(k, "")) for k in ("title", "sourceTab", "dataSummary"))
-        hits = len(wanted & requirement_terms(text))
+        clip_terms = requirement_terms(text)
+        # A word the section itself used counts three times one it merely
+        # stands for. Without the second term a section scores zero against
+        # every clip that argues its own case in different words; without the
+        # weighting, a clip that merely shares the section's general subject
+        # ties with one that names it — "Sector Weights" drew level with
+        # "Holding-level beta" for a section about factor risk.
+        score = 3 * len(wanted & clip_terms) + len(concepts & clip_terms)
         # Ties keep the original decision-value order, which already ranks the
         # user's requirements first.
-        return (-hits, index)
+        return (-score, index)
 
     ordered = [clip for _, clip in sorted(enumerate(evidence), key=affinity)]
     return {**payload, "dataBank": {**bank, "evidence": ordered}}
@@ -3224,6 +3283,9 @@ _RULES_ALWAYS = [
     "stance object required (see schema). Tone and keyResult must agree: no strong lean under a hedged keyResult.",
     "Writing: spartan, flowing paragraphs, no bullet lists inside prose, no emoji, no semicolons. Do not restate Purpose or Goal as labels.",
     "Cover the key risks in plain prose. Never write a falsification trigger or invent a threshold, cutoff, or trigger date to build one.",
+    "Never express the change in a quantity that is ALREADY a percent, percentage point, ratio, multiple, or beta as a percent change of itself. Active return moving from 1.95pp to 27.38pp is a rise of 25.4 percentage points, not a 1304% gain. Give the two levels and their difference in the unit they are already in.",
+    "Where one measure is supplied twice on different windows or methods (a single-factor beta beside a holdings-weighted beta, a realised vol beside an implied one), never headline one as though it were the measure. Name both, say plainly they are not the same measurement, and argue from the one this section's own evidence derives.",
+    "Before writing that a figure is missing, check the clips you were given for it under another name: sector weights ARE concentration evidence, holding weights ARE position-share evidence, a drawdown series IS drawdown evidence. Say a thing is unavailable only when nothing in your clips carries it.",
 ]
 
 # (predicate key, rule) — attached to evidence rather than shipped every time.

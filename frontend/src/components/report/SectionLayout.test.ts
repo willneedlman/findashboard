@@ -264,11 +264,28 @@ describe('assignBodyVisuals', () => {
 
   it('preferChartVisual skips used chart ids', () => {
     const cone = chart('c1', 'Volatility Cone — NVDA')
-    const density = chart('c2', 'Probability Density — NVDA')
+    // The stand-in has to be on-topic as well as unused. It used to be
+    // "Probability Density", which matches nothing in the hint and was handed
+    // over anyway — the behaviour that printed a Fed Funds path inside a
+    // section about factor betas.
+    const bands = chart('c2', 'Volatility Cone Detail — NVDA')
     const s = kpi('k1')
     const used = new Set(['c1'])
-    const { visual } = preferChartVisual(s, [s, cone, density], used, 'volatility cone upper bound')
+    const { visual } = preferChartVisual(s, [s, cone, bands], used, 'volatility cone upper bound')
     expect(visual?.id).toBe('c2')
+  })
+
+  it('refuses a sibling chart that matches nothing in the section', () => {
+    // Observed in a real report: "Market-implied Fed Funds path" printed inside
+    // "Correlation and Factor Risk", whose prose is entirely about market,
+    // value and momentum betas. No figure is the honest answer.
+    const unrelated = chart('c9', 'Market-implied Fed Funds path')
+    const s = kpi('k1')
+    const { visual, showKeyFigures } = preferChartVisual(
+      s, [s, unrelated], new Set<string>(), 'market value and momentum factor betas',
+    )
+    expect(visual).toBeUndefined()
+    expect(showKeyFigures).toBe(true)
   })
 
   it('does not hand an unrelated sibling chart to a section on a bare ticker mention alone', () => {

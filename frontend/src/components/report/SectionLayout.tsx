@@ -868,7 +868,7 @@ function researchTarget(clip: ReportClip): string {
 }
 
 /** Score how well a chart matches section heading/analysis for unique assignment. */
-function scoreChartForHint(chart: ReportClip, hint: string): number {
+function hintMatch(chart: ReportClip, hint: string): { score: number; titleHits: number } {
   const title = chartTitle(chart).toLowerCase()
   const hay = `${title} ${chart.sourceTab} ${chart.dataType}`.toLowerCase()
   // A bare ticker (e.g. "NVDA") mentioned in the hint is not evidence this
@@ -883,16 +883,35 @@ function scoreChartForHint(chart: ReportClip, hint: string): number {
     .split(/\s+/)
     .filter(w => w.length > 2 && !tickerLike.has(w) && !/^(the|and|for|with|from|that|this|near|sets|shows|signals)$/.test(w))
   let score = 0
+  // Distinct hint words found in the TITLE, counted separately from the score.
+  // One shared word is not evidence a chart is on topic: "Market-implied Fed
+  // Funds path" and "market value and momentum factor betas" share "market"
+  // and nothing else, which was enough to print the former inside the latter.
+  const titleSeen = new Set<string>()
   for (const w of tokens) {
-    if (title.includes(w)) score += w.length >= 5 ? 4 : 2
-    else if (hay.includes(w)) score += 1
+    if (title.includes(w)) {
+      score += w.length >= 5 ? 4 : 2
+      titleSeen.add(w)
+    } else if (hay.includes(w)) score += 1
   }
   if (title.length >= 8) {
     const titleWords = title.split(/[^a-z0-9]+/).filter(w => w.length > 3 && !tickerLike.has(w))
     const phraseHits = titleWords.filter(w => hint.toLowerCase().includes(w)).length
     score += phraseHits * 3
   }
-  return score
+  return { score, titleHits: titleSeen.size }
+}
+
+function scoreChartForHint(chart: ReportClip, hint: string): number {
+  return hintMatch(chart, hint).score
+}
+
+/** Whether a chart is related enough to stand in for one the section did not
+ *  pick. Two distinct title words, or one overwhelming score, because a single
+ *  common word matches almost anything. */
+function chartFitsSection(chart: ReportClip, hint: string): boolean {
+  const { score, titleHits } = hintMatch(chart, hint)
+  return titleHits >= 2 || score >= 8
 }
 
 /**
@@ -933,7 +952,15 @@ export function preferChartVisual(
         bestScore = s
       }
     }
-    return { visual: best, showKeyFigures: true }
+    // A sibling was substituted whatever it scored, so a section whose own clip
+    // had no chart got the first chart from the same source tab even when
+    // nothing about it matched. Observed: a "Market-implied Fed Funds path"
+    // chart printed inside "Correlation and Factor Risk", whose prose is
+    // entirely about market, value and momentum betas. Below the floor the
+    // honest answer is no figure — the key figures still carry the section.
+    if (chartFitsSection(best, sectionHint)) {
+      return { visual: best, showKeyFigures: true }
+    }
   }
 
   if (kind === 'chart' && used.has(sectionClip.id)) {

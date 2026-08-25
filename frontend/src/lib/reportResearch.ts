@@ -1451,14 +1451,18 @@ async function runSource(
           'Peer Comparison',
           `${ticker} peer evidence`,
           ['Ticker', 'P/E', 'EV/EBITDA', 'P/S', 'ROE %', 'Rev growth %', 'Target'],
+          // Rounded here, not left to the renderer: these went into the report
+          // as raw floats and printed as "32.499233" and "20.27852" beside ROE
+          // and revenue growth, which were already being rounded one line down.
+          // A multiple carries one decimal and a price target carries two.
           peers.slice(0, 9).map(peer => [
             plain(peer.ticker),
-            finite(peer.pe),
-            finite(peer.ev_ebitda),
-            finite(peer.ps),
-            finite(peer.roe) == null ? null : +(finite(peer.roe)! * 100).toFixed(1),
-            finite(peer.revenue_growth) == null ? null : +(finite(peer.revenue_growth)! * 100).toFixed(1),
-            finite(peer.target_mean_price),
+            round(peer.pe, 1),
+            round(peer.ev_ebitda, 1),
+            round(peer.ps, 1),
+            round(finite(peer.roe) == null ? null : finite(peer.roe)! * 100, 1),
+            round(finite(peer.revenue_growth) == null ? null : finite(peer.revenue_growth)! * 100, 1),
+            round(peer.target_mean_price, 2),
           ]),
         ), source, `${ticker}:table`, ticker))
         return clips
