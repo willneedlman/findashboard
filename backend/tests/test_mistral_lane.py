@@ -97,20 +97,28 @@ def test_an_empty_completion_is_a_string_not_none():
 
 
 class TestTheLaneIsSizedDeliberately:
-    def test_the_share_is_capped_well_below_the_meter(self):
-        # A 500,000 share would let one section build a 440,000-token request,
-        # which is exactly how the compound lane produced 413s.
-        assert ai_client.MODEL_TPM[ai_client.MODEL_MISTRAL] == 500_000
-        assert ai_client.request_ceiling(ai_client.MODEL_MISTRAL, 7) == \
-            ai_client.MODEL_MAX_INPUT[ai_client.MODEL_MISTRAL]
+    def test_the_meter_matches_what_the_provider_reports(self):
+        # Measured from x-ratelimit-limit-tokens-minute on the real key. The
+        # published tier tables say 500,000 and are wrong for this account by
+        # twenty times; the fitter sizes requests from this number, so an
+        # optimistic value here is what a wall of 413s looks like.
+        assert ai_client.MODEL_TPM[ai_client.MODEL_MISTRAL] == 25_000
 
-    def test_it_still_carries_far_more_evidence_than_a_groq_lane(self):
-        assert (ai_client.request_ceiling(ai_client.MODEL_MISTRAL, 7)
-                > ai_client.request_ceiling(ai_client.MODEL_OSS, 1) * 3)
+    def test_a_section_does_not_swallow_the_whole_minute(self):
+        # Sized to the whole meter, the first section spends the minute and the
+        # rest are refused.
+        ceiling = ai_client.request_ceiling(ai_client.MODEL_MISTRAL, 1)
+        assert ceiling * 2 <= ai_client.MODEL_TPM[ai_client.MODEL_MISTRAL]
 
-    def test_seven_sections_fit_one_minute(self):
-        assert (ai_client.request_ceiling(ai_client.MODEL_MISTRAL, 7) * 7
-                <= ai_client.MODEL_TPM[ai_client.MODEL_MISTRAL])
+    def test_it_still_carries_more_evidence_than_a_groq_lane(self):
+        assert (ai_client.request_ceiling(ai_client.MODEL_MISTRAL, 1)
+                > ai_client.request_ceiling(ai_client.MODEL_OSS, 1))
+
+    def test_the_pool_now_supplies_what_a_report_needs(self):
+        # Seven sections need ~35,000 tokens in a window. Three Groq lanes give
+        # 24,000, which is why the fan-out starved; with Mistral it is 49,000.
+        total = sum(ai_client.MODEL_TPM[m] for m in ai_client.build_pool("a-key"))
+        assert total >= 35_000
 
 
 class TestTheDeployDegradesWithoutTheKey:

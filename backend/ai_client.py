@@ -53,11 +53,20 @@ MODEL_FAST  = MODEL_OSS20
 # metered lanes have already failed.
 MODEL_COMPOUND = "groq/compound-mini"
 
-# Mistral's free "Experiment" tier: ~500,000 tokens a minute against Groq's
-# 8,000, one request a second, and about a billion tokens a month. That is the
-# lane that makes a whole report writable — seven sections need ~35,000 tokens
-# and the Groq pool supplies 24,000 a minute, so the fan-out was starving by
-# arithmetic, not by any bug left to find.
+# Mistral's free "Experiment" tier. MEASURED off the real key's response headers
+# on 2026-08-25, not taken from the published tier tables, which say 500,000 a
+# minute and are wrong for this account by twenty times:
+#
+#     x-ratelimit-limit-tokens-minute = 25000
+#     x-ratelimit-limit-req-minute    = 50
+#
+# Always read the headers. An overstated meter is not a harmless optimism: the
+# fitter sizes requests from it, and the compound lane produced a wall of 413s
+# precisely because its 70,000/min was read as a request size.
+#
+# Still the widest single lane there is — 25,000 against a Groq lane's 8,000 —
+# and it takes the pool from 24,000 tokens a minute to 49,000, which is what a
+# seven-section report needs (~35,000) in one window.
 #
 # The tier is free because you opt into Mistral training on what you send it.
 # That is a deliberate choice, made 2026-08-25, and it is the reason this is not
@@ -84,7 +93,7 @@ _MISTRAL_TIMEOUT = float(os.getenv("MISTRAL_TIMEOUT", "120"))
 # model would have overwritten the real 8,000 with a stale 6,000.
 MODEL_TPM = {MODEL_OSS: 8_000, MODEL_QWEN: 8_000, MODEL_OSS20: 8_000,
              MODEL_COMPOUND: 70_000,
-             MODEL_MISTRAL: 500_000, MODEL_MISTRAL_SMALL: 500_000}
+             MODEL_MISTRAL: 25_000, MODEL_MISTRAL_SMALL: 25_000}
 
 # Groq's 413 is BUCKET-RELATIVE. A request is "too large" when it does not fit
 # what is LEFT of the per-minute allowance, not when it exceeds some fixed size.
@@ -111,14 +120,15 @@ _DEFAULT_CEILING = 8_000
 # and treat a 429 as "no information about size".
 MODEL_MAX_INPUT = {
     MODEL_COMPOUND: 7_000,
-    # Not a provider limit — Mistral's context is far larger. This is a
-    # deliberate cap: a 500,000 share would let one section build a request of
-    # 440,000 tokens, which is how the compound lane produced 413s. 32,000 is
-    # roughly fifteen times what a section can carry on a Groq lane, so the
-    # evidence stops being the thing that gets shed, and seven of them still sit
-    # well inside a minute.
-    MODEL_MISTRAL: 32_000,
-    MODEL_MISTRAL_SMALL: 32_000,
+    # Not a provider limit — Mistral's context is far larger. A deliberate cap,
+    # and the number is a throughput choice rather than a size one: at 10,000 a
+    # section carries about 25 percent more evidence than it can on a Groq lane
+    # AND the lane still writes two or three sections inside its 25,000-a-minute
+    # meter. Sized to the whole meter instead, the first section would spend the
+    # minute and the rest would be refused, which is the mistake that produced
+    # 413s on the compound lane.
+    MODEL_MISTRAL: 10_000,
+    MODEL_MISTRAL_SMALL: 10_000,
 }
 
 
