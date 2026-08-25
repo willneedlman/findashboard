@@ -646,3 +646,67 @@ describe('assignBodyVisuals', () => {
     if (allocation.payload.kind === 'table') expect(allocation.payload.rows).toHaveLength(16)
   })
 })
+
+// Reported 2026-08-25: "no matter what layout I choose it just lays out
+// paragraphs then visuals then repeats with no stylistic design." Editorial is
+// the DEFAULT preset and it returned the model's hint unchanged. The hint is
+// usually absent, and the density veto replaces anything outside
+// READABLE_WHEN_DENSE with full-width — which real financial visuals always
+// trigger, since a time series has more than ten points. Every section fell to
+// full-width, so the preset promising "one visual beside each argument" stacked
+// everything instead.
+describe('editorial preset', () => {
+  const denseChart = {
+    payload: {
+      kind: 'chart', chartType: 'line', xKey: 'date',
+      series: [{ key: 'v' }],
+      data: Array.from({ length: 40 }, (_, i) => ({ date: `d${i}`, v: i })),
+    },
+  } as never
+  const figures = [
+    { label: 'Beta', value: '2.31' },
+    { label: 'Drawdown', value: '-27.1%' },
+    { label: 'Sharpe', value: '1.78' },
+  ]
+  const pick = (index: number, requested?: unknown) =>
+    applyReportLayoutPreset({ preset: 'editorial', requested, visual: denseChart, keyFigures: figures, index })
+
+  it('does not leave a dense visual to be vetoed into full-width', () => {
+    const out = pick(0)
+    expect(out).toBeDefined()
+    expect(resolveReportSectionLayout({
+      requested: out, visual: denseChart, analysis: 'x '.repeat(60), keyFigures: figures, index: 0,
+    })).not.toBe('full-width')
+  })
+
+  it('varies the composition across consecutive sections', () => {
+    const seven = Array.from({ length: 7 }, (_, i) => pick(i))
+    expect(new Set(seven).size).toBeGreaterThan(2)
+    for (let i = 1; i < seven.length; i++) {
+      expect(seven[i]).not.toBe(seven[i - 1])
+    }
+  })
+
+  it('keeps a hint the veto would not overrule', () => {
+    expect(pick(0, 'metric-rail')).toBe('metric-rail')
+  })
+
+  it('replaces a hint the veto would overrule', () => {
+    // visual-left is not readable for a dense chart, so passing it through is
+    // what produced full-width.
+    expect(pick(0, 'visual-left')).not.toBe('visual-left')
+  })
+
+  it('still stacks a table full-width, which is the veto worth keeping', () => {
+    const table = { payload: { kind: 'table', columns: ['a', 'b', 'c', 'd', 'e'], rows: [] } } as never
+    expect(applyReportLayoutPreset({
+      preset: 'editorial', requested: 'metric-rail', visual: table, keyFigures: figures, index: 0,
+    })).toBe('full-width')
+  })
+
+  it('falls back to full-width when there are no figures to place beside', () => {
+    expect(applyReportLayoutPreset({
+      preset: 'editorial', requested: undefined, visual: denseChart, keyFigures: [], index: 0,
+    })).toBe('full-width')
+  })
+})

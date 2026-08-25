@@ -31,6 +31,20 @@ const REPORT_SECTION_LAYOUTS = new Set<ReportSectionLayout>([
   'analysis-first',
 ])
 
+// Kept in step with the density veto in resolveReportSectionLayout: once a
+// visual is dense, a layout outside this set is replaced by full-width. Any
+// preset that wants to survive on real financial data has to land inside it.
+const READABLE_WHEN_DENSE = new Set<ReportSectionLayout>([
+  'metric-rail', 'metric-rail-left', 'evidence-band', 'analysis-first',
+])
+
+// The editorial rotation. Six entries rather than four so the cycle does not
+// line up with a report's section count and repeat the same pairing every time.
+const EDITORIAL_RHYTHM: ReportSectionLayout[] = [
+  'analysis-first', 'evidence-band', 'metric-rail-left',
+  'analysis-first', 'metric-rail', 'evidence-band',
+]
+
 export function normalizeReportSectionLayout(value: unknown): ReportSectionLayout | undefined {
   return typeof value === 'string' && REPORT_SECTION_LAYOUTS.has(value as ReportSectionLayout)
     ? value as ReportSectionLayout
@@ -51,11 +65,37 @@ export function applyReportLayoutPreset({
   index?: number
 }): ReportSectionLayout | undefined {
   const normalized = normalizeReportSectionLayout(requested)
-  if (!preset || preset === 'editorial' || !visual || visual.payload.kind === 'text') return normalized
+  if (!preset || !visual || visual.payload.kind === 'text') return normalized
+  // A table stays full-width whatever the preset asks: five to seven columns at
+  // 68% of the column is not readable, and that is the one veto worth keeping.
   if (visual.payload.kind === 'table') return 'full-width'
+  const figureCount = keyFigures?.filter(figure => figure.label || figure.value).length ?? 0
+
+  if (preset === 'editorial') {
+    // Editorial used to return `normalized` unchanged, which is why it was the
+    // one preset that changed nothing — and it is the default. The model's hint
+    // is usually absent, and resolveReportSectionLayout replaces anything
+    // outside READABLE_WHEN_DENSE with full-width as soon as a visual is dense.
+    // Real financial visuals nearly always are: a time series has more than ten
+    // points, a sector bar has a label longer than eighteen characters. So the
+    // veto fired on every section and the whole report came out as prose,
+    // figure, prose, figure — which is exactly what this preset promises not to
+    // be ("one visual beside each argument").
+    //
+    // Honour a hint that will survive the veto; otherwise rotate, so
+    // consecutive sections do not repeat one composition.
+    if (normalized && (!visualIsDense(visual) || READABLE_WHEN_DENSE.has(normalized))) {
+      return normalized
+    }
+    // The rail and the band both put figures beside the visual, so they need
+    // figures to put there. With none, full-width is the honest composition.
+    if (figureCount >= 2) return EDITORIAL_RHYTHM[index % EDITORIAL_RHYTHM.length]
+    if (figureCount === 1) return index % 2 === 0 ? 'analysis-first' : 'evidence-band'
+    return 'full-width'
+  }
+
   if (preset === 'visual-first') return 'evidence-band'
   if (preset === 'narrative') return 'analysis-first'
-  const figureCount = keyFigures?.filter(figure => figure.label || figure.value).length ?? 0
   if (figureCount < 2) return 'evidence-band'
   return index % 2 === 0 ? 'metric-rail-left' : 'metric-rail'
 }
