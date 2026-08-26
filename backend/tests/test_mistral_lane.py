@@ -104,11 +104,31 @@ class TestTheLaneIsSizedDeliberately:
         # optimistic value here is what a wall of 413s looks like.
         assert ai_client.MODEL_TPM[ai_client.MODEL_MISTRAL] == 25_000
 
-    def test_a_section_does_not_swallow_the_whole_minute(self):
-        # Sized to the whole meter, the first section spends the minute and the
-        # rest are refused.
-        ceiling = ai_client.request_ceiling(ai_client.MODEL_MISTRAL, 1)
-        assert ceiling * 2 <= ai_client.MODEL_TPM[ai_client.MODEL_MISTRAL]
+    def test_contention_is_expressed_by_sharing_not_by_a_blanket_cap(self):
+        # It WAS a blanket cap of 10,000, chosen so the lane could write two or
+        # three sections a minute. But a cap applies to every call, including
+        # the whole-report call, which has no contention to protect it from —
+        # and that call was then refused for want of 243 tokens. A lane with the
+        # meter to itself must be allowed the meter.
+        from routers.ai import _lane_sharing
+        alone = ai_client.request_ceiling(ai_client.MODEL_MISTRAL, 1)
+        assert alone == ai_client.MODEL_TPM[ai_client.MODEL_MISTRAL]
+
+        # Under contention it is divided, and the sections still fit together.
+        shared = _lane_sharing(ai_client.MODEL_MISTRAL, 7, len(ai_client.MODEL_POOL))
+        assert shared > 1
+        per = ai_client.request_ceiling(ai_client.MODEL_MISTRAL, shared)
+        assert per * shared <= ai_client.MODEL_TPM[ai_client.MODEL_MISTRAL]
+
+    def test_a_lane_is_only_divided_if_it_survives_division(self):
+        # A Groq lane's 8,000 split two ways is below what a section costs, so
+        # every section would be refused as unwritable rather than merely
+        # rate-limited. It keeps its whole allowance instead.
+        from routers.ai import _lane_sharing, _SECTION_FLOOR
+        assert _lane_sharing(ai_client.MODEL_OSS, 7, len(ai_client.MODEL_POOL)) == 1
+        for model in ai_client.MODEL_POOL:
+            share = _lane_sharing(model, 7, len(ai_client.MODEL_POOL))
+            assert ai_client.request_ceiling(model, share) >= _SECTION_FLOOR
 
     def test_it_still_carries_more_evidence_than_a_groq_lane(self):
         assert (ai_client.request_ceiling(ai_client.MODEL_MISTRAL, 1)

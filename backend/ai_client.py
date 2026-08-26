@@ -120,15 +120,16 @@ _DEFAULT_CEILING = 8_000
 # and treat a 429 as "no information about size".
 MODEL_MAX_INPUT = {
     MODEL_COMPOUND: 7_000,
-    # Not a provider limit — Mistral's context is far larger. A deliberate cap,
-    # and the number is a throughput choice rather than a size one: at 10,000 a
-    # section carries about 25 percent more evidence than it can on a Groq lane
-    # AND the lane still writes two or three sections inside its 25,000-a-minute
-    # meter. Sized to the whole meter instead, the first section would spend the
-    # minute and the rest would be refused, which is the mistake that produced
-    # 413s on the compound lane.
-    MODEL_MISTRAL: 10_000,
-    MODEL_MISTRAL_SMALL: 10_000,
+    # A sanity bound, not a provider limit and NOT a throughput cap. It was
+    # 10,000, chosen so the lane could write two or three sections inside its
+    # 25,000-a-minute meter — but a cap applies to every call, and the
+    # whole-report call has no contention to protect it from. It made the one
+    # request that needs the most room the most restricted, and the report was
+    # refused for want of 243 tokens. Contention belongs in `sharing`, which
+    # knows how many calls are actually competing; this only stops a single
+    # request running away with a meter far larger than any prompt should be.
+    MODEL_MISTRAL: 32_000,
+    MODEL_MISTRAL_SMALL: 32_000,
 }
 
 

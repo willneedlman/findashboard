@@ -101,3 +101,70 @@ class TestASharedLaneIsSizedByTheShare:
         # Rate is the whole point of that lane: a 70k/min bucket split seven
         # ways is still far more per section than an 8k lane split three ways.
         assert request_ceiling(MODEL_COMPOUND, 7) > request_ceiling(MODEL_OSS, 3)
+
+
+class TestTheWholeReportCallIsSizedToTheWidestLane:
+    """Reported 2026-08-26: "This report needs 8557 tokens just for its
+    instructions. One model call holds 6160."
+
+    6160 is 7,000 x 0.88 — compound-mini's cap. The single-call writer fitted to
+    the TIGHTEST lane in its rotation, so adding a narrow rescue lane made the
+    largest request in the pipeline narrower than every lane it would actually
+    use. The pool's widest lane had 8,800 and the report was refused anyway.
+    """
+
+    def _ceilings(self, mistral_key="a-key"):
+        # build_pool rather than MODEL_POOL: the live pool depends on whether
+        # MISTRAL_API_KEY is set in the environment running the tests, and the
+        # configuration this regression happened on is the one WITH it.
+        from ai_client import build_pool
+        lanes = list(build_pool(mistral_key))
+        lanes += [m for m in MODEL_OVERFLOW if m not in lanes]
+        return lanes, [request_ceiling(m) for m in lanes]
+
+    def test_the_rescue_lane_is_narrower_than_the_pool(self):
+        # The premise. Without it this regression cannot occur and the tests
+        # below are not testing anything.
+        _, ceilings = self._ceilings()
+        assert request_ceiling(MODEL_COMPOUND) < max(ceilings)
+
+    def test_without_the_wide_lane_a_long_prompt_genuinely_does_not_fit(self):
+        # Not a regression, a real limit: on the Groq pool alone an 8,557-token
+        # instruction set leaves no room for a report, whatever it is fitted to.
+        # This is why the wide lane exists, and why the message must not blame
+        # the user's clips.
+        _, groq_only = self._ceilings(mistral_key="")
+        assert int(max(groq_only) * ai._REPORT_TPM_SAFETY) < 8_557
+
+    def test_fitting_to_the_tightest_would_lose_capacity_the_pool_has(self):
+        _, ceilings = self._ceilings()
+        assert min(ceilings) < max(ceilings), (
+            "the lanes must differ in width or this says nothing"
+        )
+
+    def test_the_widest_lane_can_hold_a_real_report_prompt(self):
+        # The instructions that were refused, plus a full-length answer.
+        _, ceilings = self._ceilings()
+        budget = int(max(ceilings) * ai._REPORT_TPM_SAFETY)
+        assert budget > 8_557 + ai._REPORT_MIN_OUTPUT_TOKENS, (
+            f"widest budget is {budget}; the report that failed needed 8,557 "
+            f"for instructions alone"
+        )
+
+    def test_that_report_now_fits(self):
+        sys_prompt = "S" * int(8_557 * 3.4)
+        _, ceilings = self._ceilings()
+        _, tokens, fit = ai._fit_report_request(
+            sys_prompt, {"dataBank": {"evidence": []}}, 1800,
+            ceiling=max(ceilings), model=MODEL_COMPOUND)
+        assert not fit.get("unfittable")
+        assert tokens >= ai._REPORT_MIN_OUTPUT_TOKENS
+
+    def test_and_would_still_be_refused_on_the_narrowest(self):
+        # Guards the direction of the fix: if this ever passes, the fitter is no
+        # longer sizing to anything meaningful.
+        sys_prompt = "S" * int(8_557 * 3.4)
+        _, _, fit = ai._fit_report_request(
+            sys_prompt, {"dataBank": {"evidence": []}}, 1800,
+            ceiling=request_ceiling(MODEL_COMPOUND), model=MODEL_COMPOUND)
+        assert fit.get("unfittable") is True

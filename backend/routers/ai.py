@@ -2700,6 +2700,29 @@ def _section_system_prompt(
     ])
 
 
+# What a section costs before a single clip: ~1,855 of section prompt, ~1,133 of
+# payload skeleton, and 1,912 reserved for a 700-token answer on a reasoning
+# model. A lane whose share falls below this cannot carry a section at all, so
+# the section is refused as unwritable rather than merely rate-limited.
+_SECTION_FLOOR = 4_900
+
+
+def _lane_sharing(model: str, sections: int, lanes: int) -> int:
+    """How many sections may contend for `model` inside one window.
+
+    Only divide a lane wide enough to survive being divided. Mistral's 25,000
+    splits two ways and still clears the floor comfortably; a Groq lane's 8,000
+    does not survive any division at all, so it keeps its whole allowance and
+    the recovery rounds absorb the contention instead.
+    """
+    from ai_client import request_ceiling
+
+    per_lane = max(1, -(-sections // max(1, lanes)))
+    if per_lane <= 1:
+        return 1
+    return per_lane if request_ceiling(model, per_lane) >= _SECTION_FLOOR else 1
+
+
 def _generate_one_section(
     payload: dict,
     section: dict,
@@ -2835,7 +2858,8 @@ def _generate_sections_fanned(
                     # as unwritable rather than merely rate-limited. Three
                     # sections a minute is not something an 8k lane can do; the
                     # recovery sweep and the overflow lane are what absorb that.
-                    sharing=len(sections) if model in MODEL_OVERFLOW else 1)
+                    sharing=(len(sections) if model in MODEL_OVERFLOW
+                             else _lane_sharing(model, len(sections), len(MODEL_POOL))))
                 if written:
                     return written
                 logger.warning("fanned section %r returned nothing on %s",
@@ -7631,22 +7655,35 @@ def generate_report(req: ReportGenRequest):
         from ai_client import (MODEL_POOL as _POOL, MODEL_OVERFLOW as _OVERFLOW,
                                request_ceiling)
 
-        # Every lane this call may be sent to, fitted to the tightest of them,
-        # because the loop below walks all of them: a request sized for the
-        # roomiest is refused outright by the others, and a 413 is refused
-        # rather than trimmed.
+        # Fit to the WIDEST lane, then walk only the lanes that can hold what
+        # was built. Fitting to the tightest was the obvious shape and it is
+        # backwards: it sizes the largest request in the pipeline to the
+        # smallest bucket available, so adding a narrow rescue lane made the
+        # whole-report call narrower than every lane it would actually use.
+        # Measured after compound-mini joined the rotation: the budget fell from
+        # 7,040 to 6,160 — compound's cap — and reports were refused as
+        # unwritable on a pool whose widest lane had 8,800.
         #
-        # The overflow lane is here for its per-minute allowance, not its size:
-        # it is metered at 70,000 a minute but caps a single call at about
-        # 6,900, so it is the one lane with tokens left after a seven-section
-        # fan-out and it is also the tightest thing to fit. There is deliberately
-        # no "re-fit bigger on the wide lane" path — it was tried, and it built
-        # 60,000-token requests that 413'd everywhere, because no lane on this
-        # tier is bigger than the pool.
-        write_order = list(_POOL) + [m for m in _OVERFLOW if m not in _POOL]
-        ceiling = min(request_ceiling(m) for m in write_order)
+        # A lane too small for the fitted request is dropped rather than
+        # attempted: it would answer 413, and a 413 is refused outright rather
+        # than trimmed.
+        lanes = list(_POOL) + [m for m in _OVERFLOW if m not in _POOL]
+        ceiling = max(request_ceiling(m) for m in lanes)
         payload, max_tokens, fit = _fit_report_request(
             sys_prompt, payload, max_tokens, ceiling=ceiling, model=MODEL_SMART)
+        # What the fitted request actually costs, so a lane is offered it only
+        # if it can hold it. Widest first, so the lane it was sized for is tried
+        # before any narrower one.
+        from ai_client import completion_cost
+
+        need = (_estimate_tokens(sys_prompt)
+                + _estimate_tokens(json.dumps(payload, ensure_ascii=False))
+                + completion_cost(MODEL_SMART, max_tokens))
+        write_order = [m for m in sorted(lanes, key=request_ceiling, reverse=True)
+                       if request_ceiling(m) * _REPORT_TPM_SAFETY >= need]
+        # Never leave nothing to try: a request that is attempted and fails says
+        # why, where one with no lane left says only that there was none.
+        write_order = write_order or [max(lanes, key=request_ceiling)]
         if fit.get("unfittable"):
             # Say what is actually wrong, and do not tell the user to shorten
             # inputs that are not the problem. Sending it anyway produces a 413
