@@ -433,6 +433,26 @@ def _exhausted(exc: Exception, provider: str,
     return exc
 
 
+def _effective_model(provider: str, model: str) -> str:
+    """The model `provider` will actually be asked for.
+
+    Each provider substitutes its own equivalent when handed one it does not
+    serve, so on fail-over the ceiling that matters is the SUBSTITUTE's, not the
+    model the caller named.
+    """
+    if provider == "mistral":
+        return model if model in _MISTRAL_MODELS else MODEL_MISTRAL
+    return MODEL_SMART if model in _MISTRAL_MODELS else model
+
+
+def _request_tokens(messages: list[dict], model: str, max_tokens: int) -> int:
+    """Rough size of a built request, on the same 3.4-chars-per-token basis the
+    report fitter budgets with, so a request built to fit one lane is measured
+    here the way it was measured there."""
+    text = "".join(str(m.get("content") or "") for m in messages)
+    return int(len(text) / 3.4) + 1 + completion_cost(model, max_tokens)
+
+
 def _providers_for(model: str) -> list[tuple[str, object]]:
     """Providers to try for `model`, in order, own-provider first.
 
@@ -471,6 +491,24 @@ def groq_chat(messages: list[dict], *, model: str = MODEL_SMART,
     providers = _providers_for(model)
     if not providers:
         raise HTTPException(503, "No LLM provider configured (set GROQ_API_KEY or MISTRAL_API_KEY)")
+
+    # Never fail over to a provider that cannot hold this request. Lanes are no
+    # longer the same width: a section built for Mistral's 25,000-a-minute meter
+    # is roughly 11,000 tokens, and handing that to a Groq lane metered at 8,000
+    # gets a 413 — which _exhausted then reports as a SIZE problem, telling the
+    # user to use fewer clips about a request that fit the lane it was built
+    # for. The real failure was the first provider's quota, and that is what
+    # should be reported.
+    need = _request_tokens(messages, model, max_tokens)
+    roomy = [p for p in providers
+             if request_ceiling(_effective_model(p[0], model)) >= need]
+    if len(roomy) < len(providers):
+        dropped = [p[0] for p in providers if p not in roomy]
+        logger.debug("skipping %s for a %d-token request they cannot hold",
+                     ", ".join(dropped), need)
+    # Keep the provider the request was built for even if nothing qualifies, so
+    # a failure reports why rather than reporting that there was nothing to try.
+    providers = roomy or providers[:1]
     import metrics
     last_exc: Exception | None = None
     tried: list[tuple[str, str]] = []

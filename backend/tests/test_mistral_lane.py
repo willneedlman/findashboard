@@ -159,3 +159,91 @@ class TestTheDeployDegradesWithoutTheKey:
 
     def test_the_live_pool_matches_the_live_key(self):
         assert ai_client.MODEL_POOL == ai_client.build_pool(ai_client._MISTRAL_KEY)
+
+
+class TestFailoverRespectsLaneWidth:
+    """Reported 2026-08-26. The log said it exactly:
+
+        LLM provider mistral failed (429); failing over to groq
+        POST api.groq.com/... "HTTP/1.1 413 Payload Too Large"
+
+    A section built for Mistral's 25,000-a-minute meter is ~11,000 tokens. Groq
+    is metered at 8,000, so the fail-over was refused on size, and _exhausted
+    reported a SIZE problem — telling the user to use fewer clips about a
+    request that fit the lane it was built for. The real failure was Mistral's
+    quota. Lanes used to be the same width, which is why this never bit before.
+    """
+
+    def _messages(self, approx_tokens):
+        return [{"role": "user", "content": "word " * int(approx_tokens * 3.4 / 5)}]
+
+    def test_the_substitute_model_is_what_gets_measured(self):
+        # Groq does not serve a Mistral id; it substitutes MODEL_SMART, so the
+        # ceiling that matters on fail-over is the substitute's.
+        assert ai_client._effective_model("groq", ai_client.MODEL_MISTRAL) == ai_client.MODEL_SMART
+        assert ai_client._effective_model("mistral", ai_client.MODEL_SMART) == ai_client.MODEL_MISTRAL
+        assert ai_client._effective_model("groq", ai_client.MODEL_OSS) == ai_client.MODEL_OSS
+
+    def test_a_mistral_sized_request_is_not_offered_to_groq(self, monkeypatch):
+        monkeypatch.setattr(ai_client, "_MISTRAL_KEY", "k")
+        monkeypatch.setattr(ai_client, "_GROQ_KEY", "g")
+        monkeypatch.setattr(ai_client, "_is_unpaid", lambda n: False)
+        big = self._messages(11_000)
+        need = ai_client._request_tokens(big, ai_client.MODEL_MISTRAL, 700)
+        assert need > ai_client.request_ceiling(ai_client.MODEL_SMART), (
+            "premise: this request cannot fit a Groq lane"
+        )
+        assert need <= ai_client.request_ceiling(ai_client.MODEL_MISTRAL), (
+            "premise: it does fit the lane it was built for"
+        )
+
+    def test_a_small_request_may_still_fail_over(self, monkeypatch):
+        monkeypatch.setattr(ai_client, "_MISTRAL_KEY", "k")
+        monkeypatch.setattr(ai_client, "_GROQ_KEY", "g")
+        monkeypatch.setattr(ai_client, "_is_unpaid", lambda n: False)
+        small = self._messages(1_500)
+        need = ai_client._request_tokens(small, ai_client.MODEL_MISTRAL, 700)
+        assert need <= ai_client.request_ceiling(ai_client.MODEL_SMART), (
+            "a request this size must keep its fail-over; blocking every one "
+            "would trade a bad error message for a lost redundancy"
+        )
+
+    def test_the_quota_failure_is_what_surfaces(self, monkeypatch):
+        """End to end: Mistral 429s, Groq is too narrow to be tried, and the
+        user is told about the quota rather than about a size they cannot fix."""
+        monkeypatch.setattr(ai_client, "_MISTRAL_KEY", "k")
+        monkeypatch.setattr(ai_client, "_GROQ_KEY", "g")
+        monkeypatch.setattr(ai_client, "_is_unpaid", lambda n: False)
+        monkeypatch.setattr(ai_client, "_mark_unpaid", lambda n: None)
+
+        class _RateLimited(Exception):
+            status_code = 429
+
+        tried: list[str] = []
+
+        def _mistral(model, messages, max_tokens, temperature):
+            tried.append("mistral")
+            raise _RateLimited("429")
+
+        def _groq(model, messages, max_tokens, temperature):
+            tried.append("groq")
+            raise AssertionError("groq must not be handed a request it cannot hold")
+
+        monkeypatch.setattr(ai_client, "_mistral_call", _mistral)
+        monkeypatch.setattr(ai_client, "_groq_call", _groq)
+        monkeypatch.setattr(ai_client, "with_backoff",
+                            lambda fn, **kw: fn())
+
+        from fastapi import HTTPException
+        try:
+            ai_client.groq_chat(self._messages(11_000), model=ai_client.MODEL_MISTRAL,
+                                max_tokens=700, temperature=0.3)
+        except HTTPException as exc:
+            assert "rate-limited" in exc.detail, exc.detail
+            assert "fewer clips" not in exc.detail, (
+                "this was a quota failure; blaming the clips sends the user "
+                "deleting work that would not have helped"
+            )
+        except _RateLimited:
+            pass
+        assert tried == ["mistral"], f"providers tried: {tried}"
