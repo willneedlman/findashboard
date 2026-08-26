@@ -346,3 +346,68 @@ def test_the_evidence_budget_scales_with_a_custom_section_count():
     large, _ = budget_for("custom", 7)
     assert small < large
     assert budget_for("custom", 0) == budget_for("medium"), "no count means no custom size"
+
+
+class TestAShortReportValidatesAsShort:
+    """Reported 2026-08-26: "Generated report did not satisfy the selected
+    template: Template sections must be portfolio-verdict, return-and-drawdown,
+    ... in order".
+
+    Two parts of the pipeline disagreed about whether a short report is valid.
+    The fan-out ships what it managed to write and names what it could not, and
+    the endpoint writes "This report is incomplete: N planned sections could not
+    be written" onto the conclusion. The validator then required all seven in
+    order and 503'd the whole thing, so a usable report was discarded and the
+    user got an error naming section keys they cannot act on.
+    """
+
+    def _contract(self):
+        return template_contract("portfolio-review", "long")
+
+    def _written(self, keys):
+        contract = self._contract()
+        label = {s["key"]: s["label"] for s in contract["sections"]}
+        return [
+            {"templateSection": k, "heading": label[k], "analysis": "Evidence-backed."}
+            for k in keys
+        ]
+
+    def test_a_gap_is_accepted_when_the_caller_declared_one(self):
+        keys = [s["key"] for s in self._contract()["sections"]]
+        short = self._written(keys[:3] + keys[5:])       # two sections missing
+        assert validate_template_sections(short, self._contract(), allow_missing=True) == []
+
+    def test_the_same_gap_is_still_rejected_by_default(self):
+        # Strict stays strict: a whole-report call that silently drops sections
+        # is a model failure, not a disclosed shortfall.
+        keys = [s["key"] for s in self._contract()["sections"]]
+        short = self._written(keys[:3] + keys[5:])
+        assert validate_template_sections(short, self._contract()) != []
+
+    def test_a_short_report_still_cannot_reorder(self):
+        keys = [s["key"] for s in self._contract()["sections"]]
+        swapped = self._written([keys[2], keys[0], keys[4]])
+        errors = validate_template_sections(swapped, self._contract(), allow_missing=True)
+        assert any("order" in e for e in errors)
+
+    def test_a_short_report_still_cannot_repeat_a_section(self):
+        keys = [s["key"] for s in self._contract()["sections"]]
+        dupe = self._written([keys[0], keys[1], keys[1]])
+        errors = validate_template_sections(dupe, self._contract(), allow_missing=True)
+        assert any("repeat" in e for e in errors)
+
+    def test_a_short_report_still_cannot_invent_a_section(self):
+        keys = [s["key"] for s in self._contract()["sections"]]
+        made_up = self._written(keys[:2]) + [
+            {"templateSection": "executive-outlook", "heading": "Executive Outlook",
+             "analysis": "Evidence-backed."},
+        ]
+        errors = validate_template_sections(made_up, self._contract(), allow_missing=True)
+        assert any("Unknown" in e for e in errors)
+
+    def test_headings_are_checked_against_the_right_section_across_a_gap(self):
+        # Positional heading checks would report every section after the gap as
+        # wrong, turning one missing section into five spurious errors.
+        keys = [s["key"] for s in self._contract()["sections"]]
+        short = self._written(keys[:1] + keys[4:])
+        assert validate_template_sections(short, self._contract(), allow_missing=True) == []

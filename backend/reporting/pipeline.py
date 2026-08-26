@@ -307,18 +307,52 @@ def validate_data_bank(data_bank: ReportDataBankIn, clip_ids: set[str]) -> list[
     return errors
 
 
-def validate_template_sections(sections: list[dict], contract: dict) -> list[str]:
+def validate_template_sections(sections: list[dict], contract: dict,
+                               *, allow_missing: bool = False) -> list[str]:
+    """Check a written report against the template it was written to.
+
+    `allow_missing` permits a SHORT report: the sections present must still be
+    real template sections, in template order, with no repeats, but the set need
+    not be complete. The fan-out deliberately ships what it managed to write and
+    names what it could not, and the caller has already disclosed that on the
+    report itself — so rejecting it here threw away a usable report and gave the
+    user a 503 mentioning section keys they have no way to act on.
+    """
     expected = [section["key"] for section in contract["sections"]]
-    expected_labels = [section["label"] for section in contract["sections"]]
+    label_for = {section["key"]: section["label"] for section in contract["sections"]}
     actual = [str(section.get("templateSection", "")) for section in sections]
     errors: list[str] = []
-    if actual != expected:
+
+    if allow_missing:
+        unknown = [key for key in actual if key not in expected]
+        if unknown:
+            errors.append(f"Unknown template sections: {', '.join(unknown)}")
+        else:
+            order = [expected.index(key) for key in actual]
+            if len(set(order)) != len(order):
+                errors.append("Template sections must not repeat")
+            elif order != sorted(order):
+                errors.append(f"Template sections must follow the order {', '.join(expected)}")
+    elif actual != expected:
         errors.append(f"Template sections must be {', '.join(expected)} in order")
+
+    expected_labels = [section["label"] for section in contract["sections"]]
     for index, section in enumerate(sections):
-        if not str(section.get("heading", "")).strip():
+        heading = str(section.get("heading", "")).strip()
+        if allow_missing:
+            # Keyed by the section's own template key. With a section missing,
+            # position no longer lines up with the contract, so every heading
+            # after the gap would otherwise be reported as wrong.
+            wanted = label_for.get(actual[index] if index < len(actual) else "")
+        else:
+            # Positional, as before: in strict mode the report is required to
+            # match the contract exactly, so position IS the contract and the
+            # message names what belongs at this one.
+            wanted = expected_labels[index] if index < len(expected_labels) else None
+        if not heading:
             errors.append(f"Section {index + 1} is missing a heading")
-        elif index < len(expected_labels) and str(section.get("heading", "")).strip() != expected_labels[index]:
-            errors.append(f"Section {index + 1} heading must be {expected_labels[index]}")
+        elif wanted and heading != wanted:
+            errors.append(f"Section {index + 1} heading must be {wanted}")
         if not str(section.get("analysis", "")).strip():
             errors.append(f"Section {index + 1} is missing analysis")
     return errors

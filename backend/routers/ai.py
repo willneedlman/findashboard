@@ -7917,7 +7917,12 @@ def generate_report(req: ReportGenRequest):
         {str(section.get("clipId")) for section in sections if section.get("clipId")},
     )
     _record_evidence_utilisation(contract["id"], utilisation)
-    template_errors = validate_template_sections(sections, contract)
+    # A report the fan-out deliberately shipped short is validated as short.
+    # dropped_sections is the pipeline's own record of what it gave up on, and
+    # it has already been written onto the conclusion above, so failing it here
+    # would discard a usable report over a gap the reader has been told about.
+    template_errors = validate_template_sections(
+        sections, contract, allow_missing=bool(dropped_sections))
     if template_errors:
         logger.error("report template validation failed: %s", template_errors)
         raise HTTPException(503, {"message": "Generated report did not satisfy the selected template", "errors": template_errors})
