@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { divergingBarLabel } from './chartLabels'
 import type { ClipPalette } from '../../lib/reportTheme'
 import TickerLogo from '../TickerLogo'
 import ClipRenderer, { categoricalAxisIsCrowded, HorizontalCategoryTick, reportChartHeight } from './ClipRenderer'
@@ -185,5 +186,37 @@ describe('expanded chart repertoire', () => {
       series: [{ key: 'value', label: 'Upside', unit: 'percent' }],
     })
     expect(markup).toContain('0%')
+  })
+})
+
+// Printed in a real report as "XLU Utiliti-4.41 pp": the value label read back
+// across its own bar and out of the plot, onto the category axis.
+describe('diverging bar value labels', () => {
+  const PLOT_LEFT = 90
+
+  it('anchors a negative label to the bar tip, not the zero line', () => {
+    // Recharts gives [x, x + width] with width positive, so for a negative bar
+    // x + width is ZERO and x is the outer tip.
+    const place = divergingBarLabel({ x: 200, width: 60, value: -4.41, plotLeft: PLOT_LEFT, text: '-4.41 pp' })
+    expect(place.x).toBeLessThan(200)
+    expect(place.anchor).toBe('end')
+  })
+
+  it('anchors a positive label past the far end of the bar', () => {
+    const place = divergingBarLabel({ x: 260, width: 80, value: 7.47, plotLeft: PLOT_LEFT, text: '+7.47 pp' })
+    expect(place.x).toBeGreaterThan(340)
+    expect(place.anchor).toBe('start')
+  })
+
+  it('never lets a label cross into the category axis', () => {
+    // A long bar reaching near the axis has no room to its left.
+    const place = divergingBarLabel({ x: PLOT_LEFT + 6, width: 120, value: -4.41, plotLeft: PLOT_LEFT, text: '-4.41 pp' })
+    expect(place.inside).toBe(true)
+    expect(place.x).toBeGreaterThanOrEqual(PLOT_LEFT)
+  })
+
+  it('keeps a label outside the bar when there is room for it', () => {
+    const place = divergingBarLabel({ x: 300, width: 40, value: -1.88, plotLeft: PLOT_LEFT, text: '-1.88 pp' })
+    expect(place.inside).toBe(false)
   })
 })

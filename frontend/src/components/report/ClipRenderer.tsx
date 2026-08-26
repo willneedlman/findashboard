@@ -9,7 +9,7 @@ import TickerLogo from '../TickerLogo'
 import type { ChartUnit, ClipPayload, ChartPayload, TablePayload, KpiPayload, TextPayload } from '../../lib/reportCreator'
 import type { ClipPalette } from '../../lib/reportTheme'
 import { isTickerSymbol } from '../../lib/tickerLogos'
-import { formatHorizontalCategoryLabel, horizontalCategoryAxisWidth } from './chartLabels'
+import { divergingBarLabel, formatHorizontalCategoryLabel, horizontalCategoryAxisWidth } from './chartLabels'
 import { formatReportCell, tidyNumbersInText, niceAxisMax, niceBarDomain } from '../../lib/reportFigures'
 
 // One renderer for every clip payload, shared by capture preview, workspace,
@@ -860,16 +860,22 @@ function ChartClip({
     const y = Number(view.y ?? 0)
     const width = Number(view.width ?? 0)
     const height = Number(view.height ?? 0)
-    const negative = value < 0
     const formatted = `${value > 0 ? '+' : ''}${fmtTick(value, horizontalKind)}`
-    const barEnd = x + width
+    const place = divergingBarLabel({
+      x, width, value,
+      // Where the plot starts: the category axis owns everything left of this,
+      // and a value label that lands on it is unreadable.
+      plotLeft: horizontalCategoryWidth + 2,
+      charWidth: valueLabelFontSize * 0.62,
+      text: formatted,
+    })
     return (
       <text
-        x={barEnd + (negative ? -4 : 4)}
+        x={place.x}
         y={y + height / 2}
         dy="0.35em"
-        textAnchor={negative ? 'end' : 'start'}
-        fill={pal.ink}
+        textAnchor={place.anchor}
+        fill={place.inside ? pal.cellBg : pal.ink}
         fontSize={valueLabelFontSize}
         fontFamily={MONO}
         fontWeight={700}
@@ -1076,9 +1082,15 @@ function ChartClip({
                 stroke={pal.muted}
                 strokeDasharray="4 3"
                 strokeWidth={1}
+                // Was insideTopRight, which lands the label on the FIRST
+                // category's row — the top row is data, not spare space, and it
+                // printed as "NVDA" and the marker overlapping each other.
+                // The bottom margin is reserved for the axis, so the label sits
+                // there instead, clear of every bar.
                 label={referenceLabel ? {
                   value: referenceLabel,
-                  position: 'insideTopRight',
+                  position: 'bottom',
+                  offset: print ? 6 : 8,
                   fill: pal.muted,
                   fontFamily: MONO,
                   fontSize: print ? 7 : 8,

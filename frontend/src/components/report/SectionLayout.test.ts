@@ -10,6 +10,7 @@ import {
   reportSectionAssignmentKey,
   normalizeReportSectionLayout,
   resolveReportSectionLayout,
+  tableIsLong,
 } from './SectionLayout'
 import type { ReportClip } from '../../lib/reportCreator'
 import portfolioReviewFixture from '../../fixtures/portfolioReview16.json'
@@ -725,5 +726,69 @@ describe('editorial preset', () => {
     expect(applyReportLayoutPreset({
       preset: 'editorial', requested: undefined, visual: denseChart, keyFigures: [], index: 0,
     })).toBe('full-width')
+  })
+})
+
+// A real report printed a "Correlation and Factor Risk" section quoting holding
+// betas of 2.97 and 2.47 from the factor decomposition, beside a correlation
+// chart showing 4.03 and 3.18 for the same holdings. Both numbers were right;
+// they were different measurements on different windows, and nothing said so.
+// The writer had argued from a table, and the table was swapped for a sibling
+// chart it had never read.
+describe('the figure comes from the clip the writer used', () => {
+  function table(id: string, sourceTab = 'Factor Decomposition'): ReportClip {
+    return {
+      id, sourceTab, dataType: 'table', capturedAt: '', projectId: 'p1',
+      payload: { kind: 'table', title: 'Holding-level beta', columns: ['Holding', 'Beta'], rows: [['NVDA', '1.49']] },
+    }
+  }
+
+  it('shows the table the section argued from, not a sibling chart', () => {
+    const own = table('t1')
+    const sibling = chart('c1', 'Beta vs SPY', 'Factor Decomposition')
+    const { visual } = preferChartVisual(own, [own, sibling], new Set<string>(), 'holding level beta and factor risk')
+    expect(visual?.id).toBe('t1')
+  })
+
+  it('still stands in for a clip with nothing to draw', () => {
+    const own = kpi('k1', 'Factor Decomposition')
+    const sibling = chart('c1', 'Factor Beta Decomposition', 'Factor Decomposition')
+    const { visual } = preferChartVisual(own, [own, sibling], new Set<string>(), 'factor beta decomposition')
+    expect(visual?.id).toBe('c1')
+  })
+
+  it('keeps showing a chart the section chose itself', () => {
+    const own = chart('c1', 'Beta vs SPY', 'Correlation')
+    const other = chart('c2', 'Rolling Beta', 'Correlation')
+    const { visual } = preferChartVisual(own, [own, other], new Set<string>(), 'beta vs spy')
+    expect(visual?.id).toBe('c1')
+  })
+})
+
+// A 15-row table that will not fit the space left on a page jumped whole to the
+// next one, leaving the half-empty page it was trying to avoid. Charts must
+// stay atomic — half a chart says nothing — but a long table splitting with a
+// repeating header is ordinary in a research document.
+describe('page breaks', () => {
+  const rows = (n: number) => Array.from({ length: n }, (_, i) => [`R${i}`, `${i}`])
+  const tableClip = (n: number): ReportClip => ({
+    id: 't', sourceTab: 'Factor Decomposition', dataType: 'table', capturedAt: '', projectId: 'p1',
+    payload: { kind: 'table', title: 'Holding-level beta', columns: ['Holding', 'Beta'], rows: rows(n) },
+  })
+
+  it('lets a long table break', () => {
+    expect(tableIsLong(tableClip(15))).toBe(true)
+  })
+
+  it('keeps a short table whole, which fits most gaps anyway', () => {
+    expect(tableIsLong(tableClip(4))).toBe(false)
+  })
+
+  it('never breaks a chart', () => {
+    expect(tableIsLong(chart('c1', 'Beta vs SPY'))).toBe(false)
+  })
+
+  it('is safe with no visual at all', () => {
+    expect(tableIsLong(undefined)).toBe(false)
   })
 })

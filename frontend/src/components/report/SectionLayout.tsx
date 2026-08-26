@@ -297,6 +297,16 @@ function KeyFiguresRail({
   )
 }
 
+/** Rows past which a table is worth breaking rather than pushing whole to the
+ *  next page. Below it the table fits most gaps anyway, so keeping it atomic
+ *  costs nothing. */
+const BREAKABLE_TABLE_ROWS = 10
+
+export function tableIsLong(visual?: ReportClip): boolean {
+  return visual?.payload.kind === 'table'
+    && (visual.payload.rows?.length ?? 0) > BREAKABLE_TABLE_ROWS
+}
+
 function FigureFrame({
   title,
   source,
@@ -304,6 +314,7 @@ function FigureFrame({
   children,
   palette,
   style,
+  breakable = false,
 }: {
   title?: string
   source?: string
@@ -311,9 +322,14 @@ function FigureFrame({
   children: React.ReactNode
   palette: ReportPalette
   style?: React.CSSProperties
+  /** Let this figure split across a page boundary. Charts must never do that —
+   *  half a chart says nothing — but a long table is ordinary in a research
+   *  document, and forcing one whole onto the next page leaves the half-empty
+   *  page it was trying to avoid. */
+  breakable?: boolean
 }) {
   return (
-    <figure className="rc-keep rc-atomic rc-figure" style={{
+    <figure className={breakable ? 'rc-figure rc-breakable' : 'rc-keep rc-atomic rc-figure'} style={{
       margin: 0,
       padding: 0,
       border: `1px solid ${palette.border}`,
@@ -935,6 +951,20 @@ export function preferChartVisual(
     return { visual: sectionClip, showKeyFigures: false }
   }
 
+  // The writer's OWN clip wins whenever it can be drawn. A table used to fall
+  // through to the sibling search below and be replaced by some other chart
+  // from the same tab, so the prose argued from one source while the figure
+  // beside it showed another. Printed in a real report: a Correlation and
+  // Factor Risk section quoting holding betas of 2.97 and 2.47 from the factor
+  // decomposition, beside a correlation chart showing 4.03 and 3.18 for the
+  // same holdings. Both were right; they were different measurements, and
+  // nothing said so.
+  //
+  // Only a clip with nothing to draw (a kpi, or text) may be stood in for.
+  if (kind === 'table') {
+    return { visual: sectionClip, showKeyFigures: false }
+  }
+
   const siblings = projectClips.filter(
     c => c.id !== sectionClip.id
       && c.sourceTab === sectionClip.sourceTab
@@ -968,9 +998,6 @@ export function preferChartVisual(
   }
   if (kind === 'kpi') {
     return { visual: undefined, showKeyFigures: true }
-  }
-  if (kind === 'table') {
-    return { visual: sectionClip, showKeyFigures: false }
   }
   return { visual: sectionClip, showKeyFigures: true }
 }
@@ -1394,7 +1421,8 @@ export default function SectionLayout({
     return (
       <div style={stack}>
         {textNode}
-        <FigureFrame title={numberedFigTitle} source={figureSource} notes={figureNoteList} palette={palette}>
+        <FigureFrame title={numberedFigTitle} source={figureSource} notes={figureNoteList}
+          palette={palette} breakable={tableIsLong(visual)}>
           <Visual
             clip={visual}
             clipPal={clipPal}

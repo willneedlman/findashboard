@@ -392,6 +392,12 @@ export default function ReportPrint() {
                the generated PDF break in the same places. */
             .rc-keep { break-inside: avoid; page-break-inside: avoid; }
             .rc-section-heading, .rc-keep-tight { break-after: avoid; page-break-after: avoid; }
+            /* A long table may split rather than jump whole to the next page
+               and leave the gap it was avoiding. Its header repeats on each
+               page, and no row is allowed to break down its middle. */
+            .rc-breakable { break-inside: auto; page-break-inside: auto; }
+            .rc-breakable thead { display: table-header-group; }
+            .rc-breakable tr { break-inside: avoid; page-break-inside: avoid; }
           `}</style>
           <header className="rc-keep" style={{ background: palette.masthead, color: palette.onMasthead }}>
             <div style={{

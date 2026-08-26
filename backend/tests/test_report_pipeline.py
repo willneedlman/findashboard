@@ -411,3 +411,36 @@ class TestAShortReportValidatesAsShort:
         keys = [s["key"] for s in self._contract()["sections"]]
         short = self._written(keys[:1] + keys[4:])
         assert validate_template_sections(short, self._contract(), allow_missing=True) == []
+
+
+class TestConductRulesAreNotAudited:
+    """A delivered report's printed conclusion said it did not cover "name every
+    measurement the clips do not contain", beside a section doing exactly that.
+
+    A coverage check asks whether the report talks about a thing, with a
+    measurement, anywhere. A rule about HOW to write is satisfied by conduct, so
+    there is nothing for it to find and it flags every time.
+    """
+
+    def test_a_conduct_rule_is_exempt(self):
+        from routers.ai import _auditable_requirements
+        assert _auditable_requirements(
+            "Name every measurement the clips do not contain instead of estimating it") == []
+
+    def test_a_negative_instruction_stays_exempt(self):
+        from routers.ai import _auditable_requirements
+        assert _auditable_requirements("Do not invent a price target") == []
+
+    def test_a_real_requirement_is_still_audited(self):
+        from routers.ai import _auditable_requirements
+        lines = _auditable_requirements(
+            "Max drawdown and annualised volatility for both the portfolio and SPY")
+        assert len(lines) == 1
+
+    def test_a_content_request_carrying_a_conduct_clause_is_still_audited(self):
+        # "as a percent of book value, never dollars" is a unit instruction
+        # attached to a figure that IS being asked for, so it must still count.
+        from routers.ai import _auditable_requirements
+        lines = _auditable_requirements(
+            "Loss under the supplied market-shock scenarios as a percent of book value, never dollars")
+        assert len(lines) == 1

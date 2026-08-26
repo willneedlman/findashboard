@@ -4344,6 +4344,19 @@ def _requirement_lines(raw: str | None, extra: list[str] | None = None) -> list[
 # so a coverage check reports it as missing every single time.
 _PROHIBITION = re.compile(r"^\s*(?:do\s*n[o']?t|don't|never|avoid|no\b|refrain)\b", re.I)
 
+# A requirement about HOW to write rather than WHAT to report. It is satisfied
+# by conduct, so a coverage check that looks for the thing being discussed finds
+# nothing and reports it uncovered on a report that obeyed it perfectly.
+# Measured on a delivered report: "Name every measurement the clips do not
+# contain instead of estimating it" was reported as an unmet requirement in the
+# printed conclusion, beside a section that did exactly that.
+_CONDUCT_REQUIREMENT = re.compile(
+    r"\b(?:instead of|rather than|without (?:inventing|estimating|fabricating)|"
+    r"if (?:the )?data|when (?:the )?(?:data|evidence)|say so|state so|"
+    r"express (?:any|every|all)|only (?:when|if))\b",
+    re.I,
+)
+
 
 def _requirement_label(line: str) -> str:
     """A few words naming a requirement, for a sentence on the printed page.
@@ -4367,9 +4380,14 @@ def _auditable_requirements(raw: str | None) -> list[str]:
 
     Only their own text, and only the lines that ask for something. A negative
     instruction has no evidence to find, and reporting it as uncovered turns a
-    report that obeyed it into a report that failed.
+    report that obeyed it into a report that failed. The same is true of a rule
+    about conduct: "name every measurement the clips do not contain" is obeyed
+    by writing a certain way, and there is no figure to go looking for.
     """
-    return [line for line in _requirement_lines(raw) if not _PROHIBITION.match(line)]
+    return [
+        line for line in _requirement_lines(raw)
+        if not _PROHIBITION.match(line) and not _CONDUCT_REQUIREMENT.search(line)
+    ]
 
 
 # Quantities that only exist once you have chosen a basket. They describe the
