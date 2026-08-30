@@ -1764,6 +1764,15 @@ def _priceless(result) -> bool:
     return not any(p.get("sharePrice") for p in (result or {}).get("periods", []))
 
 
+@router.get("/quote-detail")
+def quote_detail(ticker: str):
+    """The overview stat grid's 16 cells. /market/quote carries only the price
+    block, so open, bid, ask, both ranges and the volumes had no source."""
+    from company_outlook import get_quote_detail
+
+    return get_quote_detail(ticker)
+
+
 @router.get("/estimates-grid")
 def estimates_grid(ticker: str):
     """Revenue and EPS consensus with the recent beat/miss record.

@@ -81,6 +81,7 @@ const ReverseDCF         = lazyWithReload(() => import('./pages/ReverseDCF'))
 const OptionsScanner     = lazyWithReload(() => import('./pages/OptionsScanner'))
 const OptionsMM2         = lazyWithReload(() => import('./pages/OptionsMM2'))
 const FixedIncomeMM2     = lazyWithReload(() => import('./pages/FixedIncomeMM2'))
+const CompanyProfileNext = lazyWithReload(() => import('./pages/CompanyProfile'))
 const RegressionAnalysis = lazyWithReload(() => import('./pages/RegressionAnalysis'))
 const CorrelationAnalysis = lazyWithReload(() => import('./pages/CorrelationAnalysis'))
 const PortfolioBacktester = lazyWithReload(() => import('./pages/PortfolioBacktester'))
@@ -360,6 +361,7 @@ export default function App() {
               <Route path="/relative-valuation"  element={<KeepQuery to="/peer-comparison" />} />
               <Route path="/mover-radar"          element={<MoverRadar />} />
               <Route path="/company-profile"     element={<SupplyChain />} />
+              <Route path="/company-profile-next" element={<CompanyProfileNext />} />
               <Route path="/supply-chain"        element={<RedirectWithSearch to="/company-profile" />} />
               {/* Retired from the Trade Routes hub 2026-08-19: the "verified" tier is a
                   10-record hand-curated ledger covering AAPL and MSFT, so the board could

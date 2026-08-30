@@ -182,3 +182,57 @@ def get_valuation(ticker: str) -> dict:
         "rows": rows,
         "source": "Yahoo Finance",
     }
+
+
+# The overview header's 16-cell stat grid. /market/quote carries the price block
+# (current, prior close, session) and nothing else, so the grid had no source at
+# all: open, bid, ask, both ranges, volume and average volume exist only on the
+# vendor info blob.
+_QUOTE_FIELDS = [
+    "regularMarketPreviousClose", "regularMarketOpen", "bid", "bidSize", "ask", "askSize",
+    "dayLow", "dayHigh", "fiftyTwoWeekLow", "fiftyTwoWeekHigh", "volume", "averageVolume",
+    "marketCap", "enterpriseValue", "beta", "trailingPE", "trailingEps",
+    "targetMeanPrice", "sharesOutstanding", "impliedSharesOutstanding",
+    "dividendRate", "dividendYield", "currency", "exchange", "quoteType",
+]
+
+
+@cached(ttl=900, maxsize=200, persist=True)
+def get_quote_detail(ticker: str) -> dict:
+    """Everything the overview stat grid prints, in one call.
+
+    Values are returned raw. Formatting and the em-dash-versus-reason decision
+    belong to the view, which knows the cell it is filling: an absent dividend
+    is "None declared" because no dividend exists, while an absent bid is simply
+    unavailable, and only the caller can tell those apart.
+    """
+    sym = (ticker or "").strip().upper()
+    if not sym:
+        return {"available": False, "reason": "no_ticker"}
+
+    # Imported here rather than at the top of the call: yfinance takes seconds
+    # to import, and a request with no ticker should pay nothing.
+    import yfinance as yf
+
+    try:
+        info = _run_yf(f"quote detail {sym}", lambda: yf.Ticker(sym).info) or {}
+    except Exception as e:
+        logger.warning("quote detail failed for %s: %s", sym, e)
+        return {"available": False, "reason": "source_error", "ticker": sym}
+
+    out = {k: _num(info.get(k)) for k in _QUOTE_FIELDS if k not in
+           ("currency", "exchange", "quoteType")}
+    for k in ("currency", "exchange", "quoteType"):
+        out[k] = info.get(k)
+
+    if not any(v is not None for v in out.values()):
+        return {"available": False, "reason": "no_coverage", "ticker": sym}
+
+    # Diluted shares are what a market cap should be built on, and naming the
+    # basis is the difference between a figure and a figure you can check.
+    shares = out.get("impliedSharesOutstanding") or out.get("sharesOutstanding")
+    out["marketCapBasis"] = shares
+    out["available"] = True
+    out["ticker"] = sym
+    out["source"] = "Yahoo Finance"
+    return out
