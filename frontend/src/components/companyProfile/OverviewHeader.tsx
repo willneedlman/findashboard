@@ -97,10 +97,13 @@ export default function OverviewHeader({ ticker }: { ticker: string }) {
   const pctChange = absChange != null && prev ? (absChange / prev) * 100 : null
 
   const series = useMemo(() => {
-    const rows = (history.data?.history ?? history.data?.data ?? []) as { date?: string; close?: number }[]
+    // /market/history returns { ticker, metrics, price: [{ date, value }] }.
+    // Guessing `history[].close` cost a silently empty chart: the request
+    // succeeded, the array was simply never found.
+    const rows = (history.data?.price ?? []) as { date?: string; value?: number }[]
     return rows
-      .filter(r => typeof r.close === 'number')
-      .map(r => ({ date: String(r.date ?? ''), close: r.close as number }))
+      .filter(r => typeof r.value === 'number')
+      .map(r => ({ date: String(r.date ?? ''), close: r.value as number }))
   }, [history.data])
 
   // The reference is the previous close on an intraday window and the window's
