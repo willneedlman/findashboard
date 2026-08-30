@@ -110,11 +110,13 @@ def _rows(df: "pd.DataFrame", statement: str) -> list[dict]:
 @cached(ttl=21_600, maxsize=120, persist=True)
 def get_statements(ticker: str, freq: str = "annual") -> dict:
     """Income, balance sheet and cash flow for one ticker at one frequency."""
-    import yfinance as yf
-
     sym = (ticker or "").strip().upper()
     if not sym:
         return {"available": False, "reason": "no_ticker"}
+
+    # Imported here rather than at the top of the call: yfinance takes
+    # seconds to import, and a request with no ticker should pay nothing.
+    import yfinance as yf
     freq = "quarterly" if str(freq).lower().startswith("q") else "annual"
 
     def pull():

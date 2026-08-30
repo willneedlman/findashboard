@@ -19,6 +19,7 @@ import ErrorState from '../components/ErrorState'
 import LoadingState from '../components/LoadingState'
 import FactSetFinancials from '../components/FactSetFinancials'
 import CompanyFinancials from '../components/CompanyFinancials'
+import CompanyOutlook from '../components/CompanyOutlook'
 import HelpTip from '../components/HelpTip'
 import ToolTabs, { type ToolTab } from '../components/ToolTabs'
 import type { ClipDraft } from '../lib/reportCreator'
@@ -755,10 +756,11 @@ export function SupplyChainContent() {
   const [deals, setDeals] = useState<any>(null)
   const [dealsLoading, setDealsLoading] = useState(false)
 
-  const [profileTab, setProfileTab] = useState<'overview' | 'financials' | 'risk' | 'performance'>('overview')
+  const [profileTab, setProfileTab] = useState<'overview' | 'financials' | 'outlook' | 'risk' | 'performance'>('overview')
   const PROFILE_TABS: ToolTab[] = [
     { key: 'overview', label: 'Overview' },
     { key: 'financials', label: 'Financials' },
+    { key: 'outlook', label: 'Estimates & Valuation' },
     { key: 'risk', label: 'Risk & Ownership' },
     { key: 'performance', label: 'Market Performance' },
   ]
@@ -1050,6 +1052,12 @@ export function SupplyChainContent() {
             {visitedTabs.has('financials') && (
               <div style={{ display: profileTab === 'financials' ? 'block' : 'none' }}>
                 <CompanyFinancials ticker={data.ticker} />
+              </div>
+            )}
+
+            {visitedTabs.has('outlook') && (
+              <div style={{ display: profileTab === 'outlook' ? 'block' : 'none' }}>
+                <CompanyOutlook ticker={data.ticker} />
               </div>
             )}
 

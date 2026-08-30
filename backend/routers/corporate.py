@@ -1764,6 +1764,26 @@ def _priceless(result) -> bool:
     return not any(p.get("sharePrice") for p in (result or {}).get("periods", []))
 
 
+@router.get("/estimates-grid")
+def estimates_grid(ticker: str):
+    """Revenue and EPS consensus with the recent beat/miss record.
+
+    Distinct from /hub/estimates, which answers whether consensus is drifting up
+    or down. This answers what the number actually is.
+    """
+    from company_outlook import get_estimates
+
+    return get_estimates(ticker)
+
+
+@router.get("/valuation-measures")
+def valuation_measures(ticker: str):
+    """Current valuation multiples, in Yahoo's row order."""
+    from company_outlook import get_valuation
+
+    return get_valuation(ticker)
+
+
 @router.get("/statements")
 def statements(ticker: str, freq: str = "annual"):
     """Full income statement, balance sheet and cash flow, as Yahoo presents them.
