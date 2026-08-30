@@ -6,6 +6,12 @@ import EmptyState from '../components/EmptyState'
 import { useTickerParam } from '../hooks/useTickerParam'
 import { recordRecentTicker } from '../lib/recentTickers'
 import OverviewHeader from '../components/companyProfile/OverviewHeader'
+import SummaryTab from '../components/companyProfile/SummaryTab'
+import ValuationTab from '../components/companyProfile/ValuationTab'
+import RiskTab from '../components/companyProfile/RiskTab'
+import OwnershipTab from '../components/companyProfile/OwnershipTab'
+import PeersTab from '../components/companyProfile/PeersTab'
+import NewsTab from '../components/companyProfile/NewsTab'
 import CompanyFinancials from '../components/CompanyFinancials'
 import CompanyOutlook from '../components/CompanyOutlook'
 
@@ -77,10 +83,10 @@ export default function CompanyProfile() {
           </div>
 
           {visited.has('summary') && (
-            <Panel show={tab === 'summary'}><Pending name="Summary" /></Panel>
+            <Panel show={tab === 'summary'}><SummaryTab ticker={ticker} /></Panel>
           )}
           {visited.has('valuation') && (
-            <Panel show={tab === 'valuation'}><Pending name="Valuation" /></Panel>
+            <Panel show={tab === 'valuation'}><ValuationTab ticker={ticker} /></Panel>
           )}
           {visited.has('financials') && (
             <Panel show={tab === 'financials'}><CompanyFinancials ticker={ticker} /></Panel>
@@ -89,16 +95,16 @@ export default function CompanyProfile() {
             <Panel show={tab === 'estimates'}><CompanyOutlook ticker={ticker} /></Panel>
           )}
           {visited.has('risk') && (
-            <Panel show={tab === 'risk'}><Pending name="Risk" /></Panel>
+            <Panel show={tab === 'risk'}><RiskTab ticker={ticker} /></Panel>
           )}
           {visited.has('ownership') && (
-            <Panel show={tab === 'ownership'}><Pending name="Ownership" /></Panel>
+            <Panel show={tab === 'ownership'}><OwnershipTab ticker={ticker} /></Panel>
           )}
           {visited.has('peers') && (
-            <Panel show={tab === 'peers'}><Pending name="Peers & Comps" /></Panel>
+            <Panel show={tab === 'peers'}><PeersTab ticker={ticker} /></Panel>
           )}
           {visited.has('news') && (
-            <Panel show={tab === 'news'}><Pending name="News & Filings" /></Panel>
+            <Panel show={tab === 'news'}><NewsTab ticker={ticker} /></Panel>
           )}
         </>
       )}
@@ -108,16 +114,4 @@ export default function CompanyProfile() {
 
 function Panel({ show, children }: { show: boolean; children: React.ReactNode }) {
   return <div style={{ display: show ? 'block' : 'none' }}>{children}</div>
-}
-
-/** A section still being built. Named rather than blank, so the tab does not
- *  read as broken while the rest of the rebuild lands. */
-function Pending({ name }: { name: string }) {
-  return (
-    <div className="ft-panel" style={{ padding: 18 }}>
-      <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-secondary)' }}>
-        {name} is not built yet. The tab is here so the navigation is complete.
-      </div>
-    </div>
-  )
 }
