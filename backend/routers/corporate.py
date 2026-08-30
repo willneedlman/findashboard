@@ -1796,12 +1796,19 @@ def fundamental_history(ticker: str):
     def add(a, b):
         return None if a is None or b is None else a + b
 
+    # One currency for the whole history; rows cannot disagree.
+    reported_ccy = str((rows[0] or {}).get("reportedCurrency") or "USD") if rows else "USD"
+
     periods = []
     for r in rows:
         rev, gp = r.get("revenue"), r.get("grossProfit")
         oi, da = r.get("operatingIncome"), r.get("depreciationAndAmortization")
         debt, cash = r.get("totalDebt"), r.get("cashAndCashEquivalents")
-        px = closes.get(r["date"])
+        # A share price is USD. Against a statement filed in another currency
+        # every derived market figure is a category error: SAP's profit is in
+        # EUR, so a P/E built from it and a USD price is simply wrong, and wrong
+        # without saying so. Leave them out and let the statements stand.
+        px = closes.get(r["date"]) if reported_ccy == "USD" else None
         # Per-share figures move onto today's split basis, because the price
         # already is: an as-filed share count against an adjusted price is off by
         # every split since.
@@ -1874,6 +1881,11 @@ def fundamental_history(ticker: str):
     return {
         "ticker": sym,
         "source": "SEC companyfacts",
+        # What the statements are denominated in. A foreign private issuer files
+        # its 20-F in its own currency, so a caller that assumes dollars would
+        # label EUR 36.8bn as $36.8bn. The market and multiple fields are null
+        # for these filers rather than wrong.
+        "reportedCurrency": reported_ccy,
         "fields": [{"key": k, "label": l, "unit": u, "group": g} for k, l, u, g in _FUND_FIELDS],
         "periods": periods,
     }

@@ -36,35 +36,47 @@ _SEARCH_TIMEOUT = 30
 _CACHE_TTL = 30 * 86400                                # statements change quarterly
 _MISS_TTL = 10 * 60
 
-# us-gaap concepts mapped to the FMP field names the DCF engine consumes. Ordered
-# synonyms: the first concept present in the filing wins (taxonomies vary by filer).
+# us-gaap AND ifrs-full concepts mapped to the FMP field names the DCF engine
+# consumes. Ordered synonyms: the first concept present in the filing wins, so a
+# domestic filer keeps matching on its us-gaap name and a 20-F filer falls
+# through to the IFRS one. Every IFRS name here was read off a real filer's
+# companyfacts, not guessed.
 _INCOME = {
     "revenue": ["RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues",
-                "RevenueFromContractWithCustomerIncludingAssessedTax", "SalesRevenueNet"],
+                "RevenueFromContractWithCustomerIncludingAssessedTax", "SalesRevenueNet",
+                "Revenue"],
     "grossProfit": ["GrossProfit"],
-    "operatingIncome": ["OperatingIncomeLoss"],
-    "netIncome": ["NetIncomeLoss"],
-    "epsdiluted": ["EarningsPerShareDiluted"],
+    "operatingIncome": ["OperatingIncomeLoss", "ProfitLossFromOperatingActivities"],
+    "netIncome": ["NetIncomeLoss", "ProfitLoss", "ProfitLossAttributableToOwnersOfParent"],
+    "epsdiluted": ["EarningsPerShareDiluted", "DilutedEarningsLossPerShare"],
     "weightedAverageShsOutDil": ["WeightedAverageNumberOfDilutedSharesOutstanding",
-                                 "WeightedAverageNumberOfSharesOutstandingBasic"],
+                                 "WeightedAverageNumberOfSharesOutstandingBasic",
+                                 "AdjustedWeightedAverageShares"],
     "incomeBeforeTax": [
         "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
-        "IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments"],
-    "incomeTaxExpense": ["IncomeTaxExpenseBenefit"],
+        "IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments",
+        "ProfitLossBeforeTax"],
+    "incomeTaxExpense": ["IncomeTaxExpenseBenefit", "IncomeTaxExpenseContinuingOperations"],
 }
 _BALANCE = {   # instants
     "cashAndCashEquivalents": ["CashAndCashEquivalentsAtCarryingValue",
-                               "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"],
+                               "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+                               "CashAndCashEquivalents"],
     "totalStockholdersEquity": ["StockholdersEquity",
-                                "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"],
+                                "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+                                "EquityAttributableToOwnersOfParent", "Equity"],
 }
 # totalDebt is composed (no single us-gaap tag): long-term + current portion.
-_DEBT_LT = ["LongTermDebtNoncurrent", "LongTermDebt", "LongTermDebtAndCapitalLeaseObligations"]
-_DEBT_CUR = ["LongTermDebtCurrent", "DebtCurrent"]
+_DEBT_LT = ["LongTermDebtNoncurrent", "LongTermDebt", "LongTermDebtAndCapitalLeaseObligations",
+            "LongtermBorrowings"]
+_DEBT_CUR = ["LongTermDebtCurrent", "DebtCurrent",
+             "CurrentBorrowingsAndCurrentPortionOfNoncurrentBorrowings"]
 _CASHFLOW = {   # durations
-    "capitalExpenditure": ["PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets"],
+    "capitalExpenditure": ["PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets",
+                           "PurchaseOfPropertyPlantAndEquipmentIntangibleAssetsOtherThanGoodwillInvestmentPropertyAndOtherNoncurrentAssets"],
     "depreciationAndAmortization": ["DepreciationDepletionAndAmortization",
-                                    "DepreciationAmortizationAndAccretionNet", "DepreciationAndAmortization"],
+                                    "DepreciationAmortizationAndAccretionNet", "DepreciationAndAmortization",
+                                    "AdjustmentsForDepreciationAndAmortisationExpense"],
     "changeInWorkingCapital": ["IncreaseDecreaseInOperatingCapital"],
 }
 # Filers that never tag a combined D&A line (Microsoft is one) report the pieces
@@ -105,8 +117,36 @@ _DPS = ["CommonStockDividendsPerShareDeclared"]
 _SHARE_FIELDS = {"weightedAverageShsOutDil"}
 
 
+# The monetary units SEC facts are actually reported in. A domestic filer is
+# always USD; a foreign private issuer reports in its own currency, so the USD
+# bucket is empty or holds a single stray fact. SAP tags 27 annual Revenue facts
+# in EUR and exactly one in USD, which is why filtering to USD returned a single
+# 2017 period for a company with nine years on file. Novo Nordisk reports in DKK
+# and returned nothing at all.
+def reporting_currency(us: dict, concepts: list[str]) -> str:
+    """The currency this filer reports money in. USD when it has any, else the
+    currency carrying the most annual facts."""
+    counts: dict[str, int] = {}
+    for concept in concepts:
+        for unit, facts in ((us.get(concept) or {}).get("units") or {}).items():
+            if unit == "shares" or "/" in unit:
+                continue
+            annual = sum(1 for f in facts if f.get("fp") == "FY" and _is_annual(f.get("form")))
+            if annual:
+                counts[unit] = counts.get(unit, 0) + annual
+    # The unit the filer actually reports in, which is the one carrying the most
+    # annual facts. A threshold on USD is not enough: SAP files a handful of
+    # convenience translations alongside its real statements (EUR 82 annual
+    # facts against USD 3), so any "USD if present" rule picks the three and
+    # throws away the nine years behind them. USD only wins a genuine tie, which
+    # is what a domestic filer produces.
+    if not counts:
+        return "USD"
+    return max(counts, key=lambda unit: (counts[unit], unit == "USD"))
+
+
 def _annual_map(us: dict, concepts: list[str], want_shares: bool, instant: bool,
-                unit: str | None = None) -> dict[int, float]:
+                unit: str | None = None, currency: str | None = None) -> dict[int, float]:
     """{fiscal_year: value} from annual (10-K, fp=FY) facts, merged across concept
     synonyms: the earliest-listed concept wins for any year it covers, and later
     synonyms only fill years it does not. Filers switch tags mid-history (Nvidia
@@ -119,12 +159,19 @@ def _annual_map(us: dict, concepts: list[str], want_shares: bool, instant: bool,
         node = us.get(concept)
         if not node:
             continue
-        facts = node.get("units", {}).get(unit or ("shares" if want_shares else "USD"))
+        units = node.get("units", {})
+        if want_shares:
+            wanted = "shares"
+        elif unit:
+            wanted = unit
+        else:
+            wanted = currency or "USD"
+        facts = units.get(wanted)
         if not facts:
             continue
         picked: dict[int, tuple[str, float]] = {}
         for f in facts:
-            if f.get("fp") != "FY" or not str(f.get("form", "")).startswith("10-K"):
+            if f.get("fp") != "FY" or not _is_annual(f.get("form")):
                 continue
             fy = f.get("fy")
             val = f.get("val")
@@ -182,7 +229,7 @@ def debt_maturity_schedule(sym: str) -> dict | None:
         if not node:
             continue
         for f in node.get("units", {}).get("USD", []):
-            if str(f.get("form", "")).startswith("10-K") and f.get("val") is not None and f.get("end"):
+            if _is_annual(f.get("form")) and f.get("val") is not None and f.get("end"):
                 all_facts.append(f)
     if not all_facts:
         return None
@@ -195,7 +242,7 @@ def debt_maturity_schedule(sym: str) -> dict | None:
         val = None
         if node:
             for f in node.get("units", {}).get("USD", []):
-                if f.get("end") == as_of and str(f.get("form", "")).startswith("10-K") and f.get("val") is not None:
+                if f.get("end") == as_of and _is_annual(f.get("form")) and f.get("val") is not None:
                     val = f["val"]
                     break
         buckets.append({"label": label, "amount": val or 0})
@@ -206,14 +253,41 @@ def debt_maturity_schedule(sym: str) -> dict | None:
         "filed": anchor.get("filed"),
         "buckets": buckets,
         "total": sum(b["amount"] for b in buckets),
-        "source": "SEC EDGAR 10-K (XBRL)",
+        "source": "SEC EDGAR annual report (XBRL)",
     }
     disk_set(cache_key, result, ttl=_CACHE_TTL)
     return result
 
 
+# Annual report forms. 10-K is the domestic one; a foreign private issuer files
+# a 20-F and a Canadian MJDS filer a 40-F. Filtering on 10-K alone rejected
+# every fact a foreign filer has, so their history came back empty even with the
+# IFRS taxonomy being read: the taxonomy and the form are two separate gates and
+# both had to open.
+_ANNUAL_FORMS = ("10-K", "20-F", "40-F")
+
+
+def _is_annual(form: object) -> bool:
+    return str(form or "").startswith(_ANNUAL_FORMS)
+
+
 def _companyfacts(cik: str) -> tuple[dict | None, str]:
-    """(us-gaap facts, entityName) for one CIK."""
+    """(facts, entityName) for one CIK, us-gaap and ifrs-full merged.
+
+    A foreign private issuer files a 20-F under IFRS and carries ZERO us-gaap
+    concepts, so reading only us-gaap returned nothing for every one of them and
+    the endpoint 404'd. Measured against SEC on 2026-08-30:
+
+        SAP  CIK 0001000184   us-gaap 0   ifrs-full 368
+        TSM  CIK 0001046179   us-gaap 0   ifrs-full 334
+        NVO  CIK 0000353278   us-gaap 0   ifrs-full 253
+
+    The data was always there. Merging rather than branching keeps one code
+    path: the field maps below carry IFRS names as further synonyms, and
+    first-present-wins already handles taxonomies varying by filer.
+
+    us-gaap wins any shared key, so nothing changes for a domestic filer.
+    """
     try:
         r = requests.get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json",
                          headers=_UA, timeout=_TIMEOUT)
@@ -221,7 +295,11 @@ def _companyfacts(cik: str) -> tuple[dict | None, str]:
             return None, ""
         r.raise_for_status()
         j = r.json()
-        return j.get("facts", {}).get("us-gaap"), j.get("entityName") or ""
+        facts = j.get("facts") or {}
+        gaap = facts.get("us-gaap") or {}
+        ifrs = facts.get("ifrs-full") or {}
+        merged = {**ifrs, **gaap} if (gaap or ifrs) else None
+        return merged, j.get("entityName") or ""
     except Exception as e:
         logger.warning("SEC companyfacts failed for CIK%s: %s", cik, e)
         return None, ""
@@ -383,19 +461,28 @@ def _history(sym: str) -> list[dict] | None:
     if not us:
         return None
 
+    # Everything monetary in a row has to come from ONE currency. Reading
+    # revenue out of the EUR bucket and cash out of the USD one would build a
+    # row that balances against nothing.
+    #
+    # _build is deliberately NOT given this: it feeds the DCF, which values a
+    # company against USD market data, and quietly handing it EUR statements
+    # would produce a wrong number rather than no number.
+    ccy = reporting_currency(us, _INCOME["revenue"] + _INCOME["netIncome"])
+
     income_maps = {
         k: _annual_map(us, c, k in _SHARE_FIELDS, instant=False,
-                       unit="USD/shares" if k == "epsdiluted" else None)
+                       unit=f"{ccy}/shares" if k == "epsdiluted" else None, currency=ccy)
         for k, c in _INCOME.items()
     }
-    balance_maps = {k: _annual_map(us, c, False, instant=True) for k, c in _BALANCE.items()}
-    debt_lt = _annual_map(us, _DEBT_LT, False, instant=True)
-    debt_cur = _annual_map(us, _DEBT_CUR, False, instant=True)
-    cash_maps = {k: _annual_map(us, c, False, instant=False) for k, c in _CASHFLOW.items()}
-    da_parts = [_annual_map(us, c, False, instant=False) for c in _DA_PARTS]
-    x_income = {k: _annual_map(us, c, False, instant=False) for k, c in _EXTRA_INCOME.items()}
-    x_balance = {k: _annual_map(us, c, False, instant=True) for k, c in _EXTRA_BALANCE.items()}
-    x_cash = {k: _annual_map(us, c, False, instant=False) for k, c in _EXTRA_CASHFLOW.items()}
+    balance_maps = {k: _annual_map(us, c, False, instant=True, currency=ccy) for k, c in _BALANCE.items()}
+    debt_lt = _annual_map(us, _DEBT_LT, False, instant=True, currency=ccy)
+    debt_cur = _annual_map(us, _DEBT_CUR, False, instant=True, currency=ccy)
+    cash_maps = {k: _annual_map(us, c, False, instant=False, currency=ccy) for k, c in _CASHFLOW.items()}
+    da_parts = [_annual_map(us, c, False, instant=False, currency=ccy) for c in _DA_PARTS]
+    x_income = {k: _annual_map(us, c, False, instant=False, currency=ccy) for k, c in _EXTRA_INCOME.items()}
+    x_balance = {k: _annual_map(us, c, False, instant=True, currency=ccy) for k, c in _EXTRA_BALANCE.items()}
+    x_cash = {k: _annual_map(us, c, False, instant=False, currency=ccy) for k, c in _EXTRA_CASHFLOW.items()}
     dps = _annual_map(us, _DPS, False, instant=False, unit="USD/shares")
 
     years = sorted(income_maps.get("revenue", {}).keys())
@@ -432,6 +519,11 @@ def _history(sym: str) -> list[dict] | None:
         row["freeCashFlow"] = ocf - capex if ocf is not None and capex is not None else None
         ca, cl = row.get("currentAssets"), row.get("currentLiabilities")
         row["workingCapital"] = ca - cl if ca is not None and cl is not None else None
+
+        # Carried on every row so nothing downstream has to guess. A statement
+        # in EUR beside a share price in USD produces a P/E that is simply
+        # wrong, and wrong quietly.
+        row["reportedCurrency"] = ccy
 
         rows.append(row)
     return rows
