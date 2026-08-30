@@ -1764,6 +1764,21 @@ def _priceless(result) -> bool:
     return not any(p.get("sharePrice") for p in (result or {}).get("periods", []))
 
 
+@router.get("/statements")
+def statements(ticker: str, freq: str = "annual"):
+    """Full income statement, balance sheet and cash flow, as Yahoo presents them.
+
+    Separate from /fundamental-history, which is the as-filed SEC series the DCF
+    and the Fundamental Overlay read. That one is narrow by design (39 lines the
+    valuation engine consumes) and long (seventeen years). This one is wide (39
+    income, 69 balance, 53 cash-flow lines) and short (five periods), and it
+    carries quarterly, which SEC companyfacts does not give per-period here.
+    """
+    from statements import get_statements
+
+    return get_statements(ticker, freq)
+
+
 @router.get("/fundamental-history")
 @cached(ttl=6 * 3600, maxsize=64, skip_if=_priceless)
 def fundamental_history(ticker: str):
