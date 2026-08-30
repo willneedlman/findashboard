@@ -7,12 +7,12 @@ import { useTickerParam } from '../hooks/useTickerParam'
 import { recordRecentTicker } from '../lib/recentTickers'
 import OverviewHeader from '../components/companyProfile/OverviewHeader'
 import SummaryTab from '../components/companyProfile/SummaryTab'
+import FinancialsTab from '../components/companyProfile/FinancialsTab'
 import ValuationTab from '../components/companyProfile/ValuationTab'
 import RiskTab from '../components/companyProfile/RiskTab'
 import OwnershipTab from '../components/companyProfile/OwnershipTab'
 import PeersTab from '../components/companyProfile/PeersTab'
 import NewsTab from '../components/companyProfile/NewsTab'
-import CompanyFinancials from '../components/CompanyFinancials'
 import CompanyOutlook from '../components/CompanyOutlook'
 
 // Eight sections, in the order the handoff fixes. Risk and Ownership are split
@@ -89,7 +89,7 @@ export default function CompanyProfile() {
             <Panel show={tab === 'valuation'}><ValuationTab ticker={ticker} /></Panel>
           )}
           {visited.has('financials') && (
-            <Panel show={tab === 'financials'}><CompanyFinancials ticker={ticker} /></Panel>
+            <Panel show={tab === 'financials'}><FinancialsTab ticker={ticker} /></Panel>
           )}
           {visited.has('estimates') && (
             <Panel show={tab === 'estimates'}><CompanyOutlook ticker={ticker} /></Panel>
