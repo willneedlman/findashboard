@@ -8,7 +8,7 @@ import { T } from '../../lib/theme'
 import HelpTip from '../HelpTip'
 import { MONO, SANS, BRIGHT } from './ui'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../ChartTooltip'
-import { fetchBetaSuite, fetchMarketHistory } from '../../hooks/useApi'
+import { fetchMarketHistory } from '../../hooks/useApi'
 import { stableValueDomain } from '../../lib/chartDomain'
 import { MARKETS, marketStatus, PHASE_COLOR, PHASE_LABEL } from '../../lib/marketHours'
 import {
@@ -176,15 +176,6 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
     staleTime: 10_000, retry: 0, enabled: !!ticker && session.open,
     refetchInterval: session.open ? 15_000 : false,
   })
-  // Recomputed over the SELECTED window. This is the honest counterpart to the
-  // vendor beta in the stat grid below, whose methodology is undisclosed, so
-  // both are shown and each says which it is.
-  const beta = useQuery({
-    queryKey: ['cp-beta', ticker, start],
-    queryFn: () => fetchBetaSuite(ticker, start, iso(new Date()), 'ff3'),
-    staleTime: 300_000, retry: 0, enabled: !!ticker,
-  })
-
   const q = quote.data ?? {}
   const p = profile.data ?? {}
   const t = tape.data ?? {}
@@ -279,26 +270,15 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
     const chg = first > 0 ? (lastClose / first - 1) * 100 : null
     return [
       { label: 'Change in window', value: chg == null ? DASH : `${chg > 0 ? '+' : ''}${chg.toFixed(2)}%`, tone: tone(chg) },
-      // The vendor beta in the stat grid has an undisclosed methodology. This
-      // one is computed over the window on screen, which is the honest
-      // counterpart, so both are shown rather than one standing for the other.
       { label: 'Annualized vol', value: `${vol.toFixed(1)}%`, tone: 'var(--theme-text)' },
       { label: 'Max drawdown', value: `${(maxDd * 100).toFixed(1)}%`, tone: 'var(--theme-negative)' },
     ]
   }, [series])
 
-  const computedBeta = beta.data?.capm?.betas?.mktrf
-  const stats = useMemo(() => {
-    if (!windowStats.length) return windowStats
-    const b = typeof computedBeta === 'number' ? computedBeta.toFixed(2) : DASH
-    // Inserted second, beside the change it helps explain, rather than appended
-    // after the drawdown.
-    return [
-      windowStats[0],
-      { label: 'Computed CAPM beta', value: b, tone: 'var(--theme-text)' },
-      ...windowStats.slice(1),
-    ]
-  }, [windowStats, computedBeta])
+  // Beta belongs to the stat grid, on the standard 5Y monthly basis, and is not
+  // recomputed here. Everything left in this strip genuinely moves with the
+  // selected window.
+  const stats = windowStats
 
   const stampDay = (iso?: string) => {
     if (!iso) return null
