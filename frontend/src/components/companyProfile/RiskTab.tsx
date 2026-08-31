@@ -93,6 +93,7 @@ export default function RiskTab({ ticker }: { ticker: string }) {
         ) : (
           <EmptyState
             title="Credit quality"
+            size="compact"
             hint="No income-statement data to model a rating from. Expected for an ETF, a fund, or a name that does not report earnings."
           />
         )}
@@ -136,7 +137,7 @@ export default function RiskTab({ ticker }: { ticker: string }) {
         </Panel>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 1fr)', gap: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 1fr)', gap: 20, alignItems: 'start' }}>
         <Panel
           title="Debt maturity wall"
           meta={debt.data?.fiscal_year
@@ -149,6 +150,7 @@ export default function RiskTab({ ticker }: { ticker: string }) {
           ) : (
             <EmptyState
               title="Debt maturity"
+              size="compact"
               hint="No maturity schedule resolved for this name. It reads the debt-schedule tags in the annual filing, which many filers, including large US ones, do not tag in a machine-readable form."
             />
           )}
@@ -173,7 +175,7 @@ export default function RiskTab({ ticker }: { ticker: string }) {
               <Row label="Exchange" value={short.data.exchange ?? DASH} last />
             </div>
           ) : (
-            <EmptyState title="Short interest" hint="No FINRA short interest reported for this symbol." />
+            <EmptyState size="compact" title="Short interest" hint="No FINRA short interest reported for this symbol." />
           )}
         </Panel>
       </div>
@@ -190,12 +192,15 @@ export default function RiskTab({ ticker }: { ticker: string }) {
               (d.role ?? '').toLowerCase().includes('acquir')
                 ? (d.target_name ?? DASH)
                 : (d.acquirer_name ?? d.target_name ?? DASH),
-              d.deal_value == null ? (d.deal_terms || DASH) : compact(d.deal_value),
+              // The feed reports deal value in millions, so a $2bn transaction
+              // arrives as 2000 and printed as "2.0K". Zero is how it records an
+              // undisclosed price, which is not a $0 deal.
+              d.deal_value ? compact(d.deal_value * 1e6) : (d.deal_terms || 'Undisclosed'),
               d.deal_status ?? DASH,
             ])}
           />
         ) : (
-          <EmptyState title="Deal history" hint="No transactions recorded for this name." />
+          <EmptyState size="compact" title="Deal history" hint="No transactions recorded for this name." />
         )}
       </Panel>
     </div>

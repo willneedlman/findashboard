@@ -228,6 +228,17 @@ def get_quote_detail(ticker: str) -> dict:
     if not any(v is not None for v in out.values()):
         return {"available": False, "reason": "no_coverage", "ticker": sym}
 
+    # The overview prints a next-earnings row, and info alone does not carry a
+    # reliable date. The hub's extractor already reads the calendar, so reuse it
+    # rather than growing a second reading of the same source.
+    try:
+        from routers.corporate import _extract_earnings_date
+        d, horizon = _extract_earnings_date(yf.Ticker(sym))
+        out["earningsDate"], out["earningsHorizon"] = d, horizon
+    except Exception as e:
+        logger.debug("earnings date unavailable for %s: %s", sym, e)
+        out["earningsDate"] = out["earningsHorizon"] = None
+
     # Diluted shares are what a market cap should be built on, and naming the
     # basis is the difference between a figure and a figure you can check.
     shares = out.get("impliedSharesOutstanding") or out.get("sharesOutstanding")

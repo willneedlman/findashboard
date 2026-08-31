@@ -104,9 +104,35 @@ export default function FinancialsTab({ ticker }: { ticker: string }) {
     staleTime: 600_000, retry: 0, enabled: !!ticker,
   })
 
-  const rows = q.data?.statements?.[statement] ?? []
-  const periods = q.data?.periods ?? []
+  const rawRows = q.data?.statements?.[statement] ?? []
+  const rawPeriods = q.data?.periods ?? []
+
+  // Yahoo pads its period list to a fixed width, so the oldest column often
+  // carries a label and no figures on any line. A column of em-dashes is not a
+  // fact about the company, so drop the periods nothing reports.
+  const { rows, periods, sparse } = useMemo(() => {
+    const filled = rawPeriods.map((_, i) => rawRows.filter(r => r.values?.[i] != null).length)
+    const keep = filled.map(n => n > 0)
+    // A period reported on a handful of lines is kept, because those figures are
+    // real, but it is named below the table so a column of em-dashes reads as
+    // the source's coverage rather than as a broken render.
+    const sparse = rawPeriods
+      .map((p, i) => ({ p, i, n: filled[i] }))
+      .filter(x => x.n > 0 && rawRows.length > 0 && x.n / rawRows.length < 0.25)
+    if (keep.every(Boolean)) return { rows: rawRows, periods: rawPeriods, sparse }
+    return {
+      rows: rawRows.map(r => ({ ...r, values: r.values.filter((_, i) => keep[i]) })),
+      periods: rawPeriods.filter((_, i) => keep[i]),
+      sparse: sparse.filter(x => keep[x.i]),
+    }
+  }, [rawRows, rawPeriods])
+
   const labels = useMemo(() => periods.map(p => periodLabel(p, freq)), [periods, freq])
+
+  const sparseNote = sparse.length
+    ? `${sparse.map(x => periodLabel(x.p, freq)).join(' and ')} ${sparse.length > 1 ? 'are' : 'is'} only partly reported by this source: `
+      + sparse.map(x => `${x.n} of ${rows.length} lines`).join(', ') + '.'
+    : ''
 
   const controls = (
     <div style={{
@@ -146,13 +172,13 @@ export default function FinancialsTab({ ticker }: { ticker: string }) {
     <>
       {controls}
       {view === 'table'
-        ? <TableView rows={rows} labels={labels} />
+        ? <TableView rows={rows} labels={labels} sparseNote={sparseNote} />
         : <TrendView rows={rows} labels={labels} statement={statement} />}
     </>
   )
 }
 
-function TableView({ rows, labels }: { rows: Row[]; labels: string[] }) {
+function TableView({ rows, labels, sparseNote }: { rows: Row[]; labels: string[]; sparseNote: string }) {
   return (
     <div style={{ background: T.bg, border: `1px solid ${T.border}`, overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -217,6 +243,14 @@ function TableView({ rows, labels }: { rows: Row[]; labels: string[] }) {
           })}
         </tbody>
       </table>
+      {sparseNote && (
+        <div style={{
+          padding: '9px 16px', borderTop: `1px solid ${T.borderFaint}`,
+          fontFamily: MONO, fontSize: 10, color: T.muted,
+        }}>
+          {sparseNote}
+        </div>
+      )}
     </div>
   )
 }

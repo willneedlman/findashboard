@@ -83,9 +83,16 @@ export default function ValuationTab({ ticker }: { ticker: string }) {
               // sector median is the expensive side, and that is what the colour
               // says. The delta is printed beside it either way.
               const rich = delta != null && delta > 0
-              const lo = Math.min(stat?.p25 ?? med ?? 0, r.value ?? med ?? 0)
-              const hi = Math.max(stat?.p75 ?? med ?? 1, r.value ?? med ?? 1)
-              const span = hi - lo || 1
+              // The scale spans the sector's interquartile range, widened to hold
+              // this name when it sits outside. Padding the ends keeps a value
+              // that defines a bound off the rail: without it every name below
+              // p25 drew an empty bar and every name above p75 drew a full one,
+              // which is the same picture for a small miss and a huge one.
+              const rawLo = Math.min(stat?.p25 ?? med ?? 0, r.value ?? med ?? 0)
+              const rawHi = Math.max(stat?.p75 ?? med ?? 1, r.value ?? med ?? 1)
+              const pad = (rawHi - rawLo) * 0.12 || Math.abs(med ?? 1) * 0.12 || 1
+              const lo = rawLo - pad
+              const span = (rawHi + pad) - lo || 1
               const at = (v: number | null) => (v == null ? null : Math.max(0, Math.min(100, ((v - lo) / span) * 100)))
 
               return (

@@ -25,6 +25,30 @@ interface Filing {
   items?: string | string[]
 }
 
+const FORM_LABEL: Record<string, string> = {
+  '10-K': 'Annual report',
+  '10-Q': 'Quarterly report',
+  '8-K': 'Current report',
+  '4': 'Insider transaction',
+  '3': 'Initial insider holdings',
+  '5': 'Annual insider statement',
+  'DEF 14A': 'Proxy statement',
+  'S-8': 'Employee benefit registration',
+  'SC 13G': 'Passive stake',
+  'SC 13D': 'Activist stake',
+  '144': 'Proposed insider sale',
+}
+
+/** What the row says about the filing. Item codes when the form carries them,
+ *  otherwise what the form IS. The accession number is an internal identifier
+ *  and was the only thing most rows showed. */
+function describe(f: Filing): string {
+  const items = Array.isArray(f.items) ? f.items.join(', ') : f.items
+  const label = FORM_LABEL[(f.form ?? '').trim()]
+  if (items) return label ? `${label} \u00b7 items ${items}` : `Items ${items}`
+  return label ?? f.accession ?? DASH
+}
+
 /** "4h ago" / "3d ago". A wall-clock timestamp makes a reader do the
  *  subtraction; a headline feed is read by recency. */
 function age(iso?: string): string {
@@ -100,7 +124,11 @@ export default function NewsTab({ ticker }: { ticker: string }) {
           </div>
         )}
         {rows.length ? (
-          <div style={{ maxHeight: LIST_MAX_HEIGHT, overflowY: 'auto' }}>
+          <div style={{
+            maxHeight: LIST_MAX_HEIGHT, overflowY: 'auto',
+            maskImage: 'linear-gradient(to bottom, #000 calc(100% - 26px), transparent)',
+            WebkitMaskImage: 'linear-gradient(to bottom, #000 calc(100% - 26px), transparent)',
+          }}>
           {rows.map((f, i) => (
             <a
               key={`${f.form}-${f.date}-${i}`}
@@ -126,7 +154,7 @@ export default function NewsTab({ ticker }: { ticker: string }) {
                 flex: 1, fontFamily: SANS, fontSize: 12, color: T.text, minWidth: 0,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
-                {Array.isArray(f.items) ? f.items.join(', ') : (f.items || f.accession || DASH)}
+                {describe(f)}
               </span>
               <span style={{ fontFamily: MONO, fontSize: 11, color: T.muted }}>{shortDate(f.date)}</span>
               <span style={{ color: T.gold }}>›</span>
@@ -146,7 +174,11 @@ export default function NewsTab({ ticker }: { ticker: string }) {
 
       <Panel title="Headline feed" meta={items.length ? `${items.length} stories` : undefined}>
         {items.length ? (
-          <div style={{ maxHeight: LIST_MAX_HEIGHT, overflowY: 'auto' }}>
+          <div style={{
+            maxHeight: LIST_MAX_HEIGHT, overflowY: 'auto',
+            maskImage: 'linear-gradient(to bottom, #000 calc(100% - 26px), transparent)',
+            WebkitMaskImage: 'linear-gradient(to bottom, #000 calc(100% - 26px), transparent)',
+          }}>
           {items.map((n, i) => {
             const c = n.content ?? {}
             const url = c.clickThroughUrl?.url || c.canonicalUrl?.url

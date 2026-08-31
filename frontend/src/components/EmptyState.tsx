@@ -128,8 +128,13 @@ export default function EmptyState({ title, hint, variant = 'empty', size = 'def
   }
 
   // ── Empty (pre-run) ──────────────────────────────────────────────────────
+  // `compact` is documented as no min-height and no panel chrome, but only the
+  // loader honoured it. Nested inside a Panel the fill height inflated the cell
+  // to ~670px of empty box around two lines of text.
   return (
-    <div style={{ ...SHELL, minHeight: FILL_HEIGHT }}>
+    <div style={size === 'compact'
+      ? { ...SHELL, padding: '30px 22px', minHeight: 0, background: 'transparent', border: 'none' }
+      : { ...SHELL, minHeight: FILL_HEIGHT }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
         <div style={{ ...TITLE_STYLE, color: TXT }}>{title}</div>
         <div style={HINT_STYLE}>{hint}</div>

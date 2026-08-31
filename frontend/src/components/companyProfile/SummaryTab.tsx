@@ -111,7 +111,7 @@ export default function SummaryTab({ ticker }: { ticker: string }) {
         </div>
       </Panel>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, alignItems: 'start' }}>
         <SegmentPanel title="Revenue by segment" block={p.product_segments} />
         <SegmentPanel title="Revenue by geography" block={p.geo_segments} />
       </div>

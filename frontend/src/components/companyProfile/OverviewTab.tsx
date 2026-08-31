@@ -52,6 +52,7 @@ interface Quote {
   targetMeanPrice?: number | null; marketCapBasis?: number | null
   dividendRate?: number | null; dividendYield?: number | null
   exchange?: string | null
+  earningsDate?: string | null; earningsHorizon?: string | null
 }
 
 interface Profile {
@@ -344,7 +345,12 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
             ? `Built on ${compact(q.marketCapBasis)} diluted shares via yfinance.`
             : undefined}
         />
-        <Stat label="Earnings date (est.)" value={DASH} />
+        <Stat
+          label="Earnings date (est.)"
+          value={q.earningsDate
+            ? `${shortDate(q.earningsDate)}${q.earningsHorizon ? ` ${q.earningsHorizon}` : ''}`
+            : DASH}
+        />
 
         <Stat label="Open" value={price(q.regularMarketOpen)} />
         <Stat label="52 week range" value={range(q.fiftyTwoWeekLow, q.fiftyTwoWeekHigh)} />

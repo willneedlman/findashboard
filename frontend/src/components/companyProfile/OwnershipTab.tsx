@@ -4,7 +4,7 @@ import axios from 'axios'
 import { T } from '../../lib/theme'
 import EmptyState from '../EmptyState'
 import { Panel, DataTable, MONO, SANS, BRIGHT, DIM } from './ui'
-import { DASH, compact, count, pct, ratePct, tone } from './format'
+import { DASH, compact, count, pct, tone } from './format'
 
 interface Holder {
   holder?: string; shares?: number | null; value?: number | null
@@ -123,8 +123,11 @@ export default function OwnershipTab({ ticker }: { ticker: string }) {
               h.holder ?? DASH,
               count(h.shares),
               compact(h.value),
-              ratePct(h.pct_out, 2),
-              <span key="c" style={{ color: tone(h.pct_change) }}>{ratePct(h.pct_change, 2, true)}</span>,
+              // This source sends the top-level mix as fractions but the
+              // per-holder figures already as percents, so these two must not
+              // be scaled again. They were reading 806% of shares outstanding.
+              pct(h.pct_out, 2),
+              <span key="c" style={{ color: tone(h.pct_change) }}>{pct(h.pct_change, 2, true)}</span>,
             ])}
           />
         ) : (
