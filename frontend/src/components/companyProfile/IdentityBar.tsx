@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { T } from '../../lib/theme'
 import TickerLogo from '../TickerLogo'
+import ShellActions from '../ShellActions'
 import { MONO, SANS, BRIGHT } from './ui'
 
 /** The page's single title. The route used to carry both a "Company Profile"
@@ -37,7 +38,14 @@ export default function IdentityBar({ ticker, right }: {
         {p.sector && <Tag>{p.sector}</Tag>}
         {p.industry && <Tag>{p.industry}</Tag>}
       </div>
-      {right && <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>{right}</div>}
+      {/* The shell cluster rides here rather than in a PageHeader. Dropping the
+          page header to remove the duplicate title also dropped Settings and
+          Send to Report with it, which are page chrome and belong on every
+          view, ticker loaded or not. */}
+      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+        {right}
+        <ShellActions />
+      </div>
     </div>
   )
 }

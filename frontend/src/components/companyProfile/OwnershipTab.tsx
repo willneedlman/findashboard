@@ -98,16 +98,29 @@ export default function OwnershipTab({ ticker }: { ticker: string }) {
       </Panel>
 
       {d.changes && (
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-          gap: 1, background: T.borderFaint, border: `1px solid ${T.border}`,
-        }}>
-          <Flow label="Added" value={count(d.changes.added)} tone="var(--theme-positive)" />
-          <Flow label="Trimmed" value={count(d.changes.trimmed)} tone="var(--theme-negative)" />
-          <Flow label="Unchanged" value={count(d.changes.unchanged)} />
-          <Flow label="Net share change" value={compact(d.changes.net_share_change)}
-            tone={tone(d.changes.net_share_change)} />
-        </div>
+        <Panel
+          title="Position changes this quarter"
+          meta={d.changes.filed
+            ? `Across the ${rows.length || 'reported'} holders on file, ${d.changes.filed}`
+            : undefined}
+        >
+          {/* One row of value-then-label pairs rather than four tiles. The
+              counts are over the holders this source reports, not over every
+              institution on file, so the panel meta says which. */}
+          <div style={{
+            display: 'flex', alignItems: 'baseline', gap: 34, flexWrap: 'wrap',
+            padding: '15px 18px',
+          }}>
+            <Flow label="Added" value={count(d.changes.added)} tone="var(--theme-positive)" />
+            <Flow label="Trimmed" value={count(d.changes.trimmed)} tone="var(--theme-negative)" />
+            <Flow label="Unchanged" value={count(d.changes.unchanged)} />
+            <Flow
+              label="Net share change"
+              value={compact(d.changes.net_share_change)}
+              tone={tone(d.changes.net_share_change)}
+            />
+          </div>
+        </Panel>
       )}
 
       <Panel
@@ -175,14 +188,19 @@ function Legend({ swatch, label, value, note, dim }: {
 
 function Flow({ label, value, tone: t }: { label: string; value: string; tone?: string }) {
   return (
-    <div style={{ background: T.surface, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 9 }}>
       <span style={{
-        fontFamily: SANS, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.14em',
-        textTransform: 'uppercase', color: DIM,
+        fontFamily: MONO, fontSize: 21, fontWeight: 700,
+        fontVariantNumeric: 'tabular-nums', color: t ?? BRIGHT,
+      }}>
+        {value}
+      </span>
+      <span style={{
+        fontFamily: SANS, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.14em',
+        textTransform: 'uppercase', color: T.muted, whiteSpace: 'nowrap',
       }}>
         {label}
       </span>
-      <span style={{ fontFamily: MONO, fontSize: 19, fontWeight: 700, color: t ?? BRIGHT }}>{value}</span>
-    </div>
+    </span>
   )
 }

@@ -73,7 +73,11 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
     queryFn: () => axios.get(`/api/corporate/supply-chain?ticker=${encodeURIComponent(ticker)}`).then(r => r.data),
     staleTime: 300_000, retry: 0, enabled: !!ticker,
   })
-  const analyst = useQuery<{ target_mean?: number | null; total_analysts?: number | null }>({
+  const analyst = useQuery<{
+    target_mean?: number | null; total_analysts?: number | null
+    recommendation_key?: string | null; recommendation_mean?: number | null
+    distribution?: { strongBuy?: number; buy?: number; hold?: number; sell?: number; strongSell?: number }
+  }>({
     queryKey: ['cp-analyst', ticker],
     queryFn: () => axios.get(`/api/corporate/hub/analyst?ticker=${encodeURIComponent(ticker)}`).then(r => r.data),
     staleTime: 300_000, retry: 0, enabled: !!ticker,
@@ -211,6 +215,29 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
               return `${up > 0 ? '+' : ''}${up.toFixed(1)}% implied upside${n ? `, n=${n}` : ''}`
             })()}
           </div>
+          {/* The call already carries the consensus and the full vote spread.
+              A mean target without the rating behind it hides who set it. */}
+          {analyst.data?.recommendation_key && (
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 7,
+            }}>
+              <span style={{
+                fontFamily: SANS, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.1em',
+                textTransform: 'uppercase', padding: '2px 7px',
+                border: `1px solid ${T.border}`, color: T.gold, whiteSpace: 'nowrap',
+              }}>
+                {analyst.data.recommendation_key.replace(/_/g, ' ')}
+              </span>
+              <span style={{ fontFamily: MONO, fontSize: 10.5, color: T.muted, whiteSpace: 'nowrap' }}>
+                {(() => {
+                  const b = analyst.data.distribution ?? {}
+                  const buy = (b.strongBuy ?? 0) + (b.buy ?? 0)
+                  const sell = (b.sell ?? 0) + (b.strongSell ?? 0)
+                  return `${buy} buy / ${b.hold ?? 0} hold / ${sell} sell`
+                })()}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 

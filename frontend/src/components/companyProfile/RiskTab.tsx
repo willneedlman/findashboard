@@ -21,7 +21,7 @@ interface ShortInterest {
   exchange?: string; current_short_position?: number | null
   previous_short_position?: number | null; avg_daily_volume?: number | null
   days_to_cover?: number | null; change_pct?: number | null
-  settlement_date?: string; percent_of_float?: number | null
+  settlement_date?: string
 }
 interface Deal {
   date_announced?: string; deal_status?: string; role?: string
@@ -39,6 +39,15 @@ export default function RiskTab({ ticker }: { ticker: string }) {
   const debt = useQuery<DebtMaturity>(get<DebtMaturity>('debt-maturity'))
   const short = useQuery<ShortInterest>(get<ShortInterest>('short-interest'))
   const deals = useQuery<{ deals?: Deal[] }>(get<{ deals?: Deal[] }>('deals'))
+
+  // FINRA reports the short position but not the float it sits against, so the
+  // percent has to be derived. Same query key as the ownership tab, so this is
+  // a cache read whenever that tab has already loaded.
+  const own = useQuery<{ float_shares?: number | null }>({
+    queryKey: ['cp-institutional', ticker],
+    queryFn: () => axios.get(`/api/corporate/institutional?ticker=${encodeURIComponent(ticker)}`).then(r => r.data),
+    staleTime: 300_000, retry: 0, enabled: !!ticker,
+  })
 
   // Market risk, regressed rather than vendor-supplied. This is the analysis the
   // retired Market Performance tab carried; the redesign has no such tab, and
@@ -140,7 +149,7 @@ export default function RiskTab({ ticker }: { ticker: string }) {
           ) : (
             <EmptyState
               title="Debt maturity"
-              hint="No maturity schedule filed for this name. It resolves for US filers that tag a debt schedule, and returns nothing for foreign filers, ETFs and thin names."
+              hint="No maturity schedule resolved for this name. It reads the debt-schedule tags in the annual filing, which many filers, including large US ones, do not tag in a machine-readable form."
             />
           )}
         </Panel>
@@ -151,7 +160,14 @@ export default function RiskTab({ ticker }: { ticker: string }) {
               <Row label="Shares short" value={count(short.data.current_short_position)} />
               <Row label="Previous settlement" value={count(short.data.previous_short_position)} />
               <Row label="Change" value={pct(short.data.change_pct, 2, true)} tone={tone(short.data.change_pct)} />
-              <Row label="Short percent of float" value={pct(short.data.percent_of_float, 2)} />
+              <Row
+                label="Short percent of float"
+                value={(() => {
+                  const f = own.data?.float_shares
+                  const sh = short.data?.current_short_position
+                  return f && sh != null ? pct((sh / f) * 100, 2) : DASH
+                })()}
+              />
               <Row label="Average daily volume" value={count(short.data.avg_daily_volume)} />
               <Row label="Days to cover" value={multiple(short.data.days_to_cover, 1)} />
               <Row label="Exchange" value={short.data.exchange ?? DASH} last />
