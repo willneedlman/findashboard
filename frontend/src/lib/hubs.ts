@@ -114,7 +114,7 @@ export const HUBS: Hub[] = [
     masthead: 'Put any series the terminal knows on one timeline, overlay the assets you care about, and run the correlation, regression, and seasonality behind the picture.',
     icon: CandlestickChart,
     tools: [
-      { title: 'Chart Studio',       chip: 'Chart Studio',    desc: 'One instrument in candlesticks, with macro and fundamental feeds in synced lanes below', route: '/chart-studio', icon: CandlestickChart },
+      { title: 'Chart Studio',       chip: 'Chart Studio',    desc: 'One instrument in candlesticks, with macro and fundamental feeds in synced lanes below', route: '/chart-studio', tickerParam: true, icon: CandlestickChart },
       { title: 'Asset Overlay',      chip: 'Asset Overlay',   desc: 'Several assets rebased onto one axis for relative performance, plus any fundamental metric over time',                route: '/asset-overlay',      icon: GitCompare },
       { title: 'Fundamental Overlay', chip: 'Fundamental Overlay', desc: 'Reported line items for several companies on one timeline, plus your own multiples built with arithmetic', route: '/fundamental-overlay', tickerParam: true, icon: LineChart },
       { title: 'Correlation',        chip: 'Correlation',     desc: 'Correlation matrix, rolling drift, and beta',                route: '/correlation',        icon: Waves },

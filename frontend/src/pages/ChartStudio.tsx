@@ -8,6 +8,7 @@ import {
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import { readToken } from '../lib/theme'
+import { TICKER_SYM_RE } from '../lib/tickerLink'
 import { smaArr, emaArr, bollinger, vwapArr, rsiArr, macdArr, hvArr } from '../lib/indicators'
 import { formatLocalTime } from '../lib/time'
 import type { ClipDraft } from '../lib/reportCreator'
@@ -264,12 +265,23 @@ function reducer(s: State, a: Action): State {
   }
 }
 
+/** A symbol handed in by another tool wins over the restored session. Without
+ *  this the page dropped ?ticker= on the floor and opened on the stored symbol,
+ *  so "open AMD in Chart Studio" reliably showed something else. */
+const urlTicker = (): string | null => {
+  try {
+    const t = (new URLSearchParams(window.location.search).get('ticker') || '').trim().toUpperCase()
+    return TICKER_SYM_RE.test(t) ? t : null
+  } catch { return null }
+}
+
 const load = (): State => {
+  const injected = urlTicker()
   try {
     // v2 key: earlier keys carried the old default-on overlay set, and the
     // tool now starts clean for everyone.
     const { candleWidth: _dropped, ...raw } = JSON.parse(localStorage.getItem('unifiedOverlay2') || 'null') ?? {}
-    if (!raw.ticker) return DEFAULT
+    if (!raw.ticker) return injected ? { ...DEFAULT, ticker: injected } : DEFAULT
     // Range replaced the old free-form window selector; anything unrecognised
     // (including a stored 'custom') opens on the default span.
     const range = RANGES.some(r => r.key === raw.range) ? raw.range : DEFAULT.range
@@ -280,8 +292,8 @@ const load = (): State => {
     const lanes = { ...DEFAULT.lanes, ...(raw.lanes ?? {}), ...(raw.ind?.rsi != null ? { rsi: raw.ind.rsi } : {}), ...(raw.ind?.macd != null ? { macd: raw.ind.macd } : {}), ...(raw.ind?.volume != null ? { volume: raw.ind.volume } : {}) }
     const ind = { ...DEFAULT.ind, ...(raw.ind?.bb != null ? { bb: raw.ind.bb } : {}), ...(raw.ind?.vwap != null ? { vwap: raw.ind.vwap } : {}), ...(raw.ind?.gflip != null ? { gflip: raw.ind.gflip } : {}), ...(raw.ind?.gexProfile != null ? { gexProfile: raw.ind.gexProfile } : {}) }
     const chartType: ChartType = raw.chartType === 'line' ? 'line' : DEFAULT.chartType
-    return { ...DEFAULT, ...raw, range, mas, ind, lanes, laneOrder, chartType, events: { ...DEFAULT.events, ...raw.events }, params: { ...DEFAULT.params, ...raw.params } }
-  } catch { return DEFAULT }
+    return { ...DEFAULT, ...raw, ...(injected ? { ticker: injected } : {}), range, mas, ind, lanes, laneOrder, chartType, events: { ...DEFAULT.events, ...raw.events }, params: { ...DEFAULT.params, ...raw.params } }
+  } catch { return injected ? { ...DEFAULT, ticker: injected } : DEFAULT }
 }
 
 // ── Theme (concrete values — canvas cannot read CSS vars) ───────────────────

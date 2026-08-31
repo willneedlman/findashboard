@@ -14,9 +14,10 @@ interface PageWrapperProps {
   children: React.ReactNode
   title?: string
   meta?: React.ReactNode
+  actions?: React.ReactNode
 }
 
-export default function PageWrapper({ children, title, meta }: PageWrapperProps) {
+export default function PageWrapper({ children, title, meta, actions }: PageWrapperProps) {
   // Reduced motion renders the final state directly rather than running the
   // rise at 0.01ms, which reads as a flash.
   const reduced = useReducedMotion()
@@ -26,7 +27,7 @@ export default function PageWrapper({ children, title, meta }: PageWrapperProps)
       initial={reduced ? false : 'initial'}
       animate={reduced ? false : 'animate'}
       exit={reduced ? undefined : 'exit'}>
-      {title && <PageHeader title={title} meta={meta} />}
+      {title && <PageHeader title={title} meta={meta} actions={actions} />}
       {children}
     </motion.div>
   )

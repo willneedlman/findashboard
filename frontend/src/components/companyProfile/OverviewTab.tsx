@@ -51,6 +51,12 @@ const ET_CLOCK = new Intl.DateTimeFormat('en-US', {
 const ET_WEEKDAY = new Intl.DateTimeFormat('en-US', {
   timeZone: 'America/New_York', weekday: 'short',
 })
+const ET_STAMP_DAY = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York', month: 'long', day: 'numeric',
+})
+const ET_STAMP_TIME = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+})
 const ET_DATE = new Intl.DateTimeFormat('en-US', {
   timeZone: 'America/New_York', month: 'short', day: 'numeric',
 })
@@ -151,6 +157,19 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
 
   // The candle feed lags by up to a minute. This is the tick that keeps the
   // printed price current between bars, and it stops when the tape does.
+  // regular_close and current_price are two different prints. Showing only one
+  // of them means either the close is wrong after 16:00 or the extended move is
+  // invisible, and the header needs both.
+  const tape = useQuery<{
+    current_price?: number | null; regular_close?: number | null
+    extended_pct?: number | null; session?: string; basis?: string; as_of?: string
+  }>({
+    queryKey: ['cp-tape', ticker],
+    queryFn: () => axios.get(`/api/market/quote/${encodeURIComponent(ticker)}`).then(r => r.data),
+    staleTime: 30_000, retry: 0, enabled: !!ticker,
+    refetchInterval: session.open ? 20_000 : false,
+  })
+
   const live = useQuery<{ last?: number | null; prior_close?: number | null }>({
     queryKey: ['cp-live', ticker],
     queryFn: () => axios.get(`/api/market/live-quote?ticker=${encodeURIComponent(ticker)}`).then(r => r.data),
@@ -168,7 +187,13 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
 
   const q = quote.data ?? {}
   const p = profile.data ?? {}
-  const last = live.data?.last ?? p.price ?? null
+  const t = tape.data ?? {}
+  // The headline price is the regular-session close. The extended print gets
+  // its own block beside it rather than overwriting this one.
+  const last = t.regular_close ?? live.data?.last ?? p.price ?? null
+  const ext = t.current_price != null && t.regular_close != null
+    && Math.abs(t.current_price - t.regular_close) > 1e-9
+    ? t.current_price : null
   // The baseline is the close of the session BEFORE the prints on screen, and
   // the vendor field is that in every phase. The live endpoint derives its own
   // prior close relative to now, which over a weekend is Friday's close, so it
@@ -275,6 +300,23 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
     ]
   }, [windowStats, computedBeta])
 
+  const stampDay = (iso?: string) => {
+    if (!iso) return null
+    const d = new Date(iso)
+    return Number.isNaN(d.getTime()) ? null : ET_STAMP_DAY.format(d)
+  }
+  const stampTime = (iso?: string) => {
+    if (!iso) return null
+    const d = new Date(iso)
+    return Number.isNaN(d.getTime()) ? null : ET_STAMP_TIME.format(d)
+  }
+  const day = stampDay(t.as_of) ?? (sessionDay ? stampDay(`${sessionDay}T16:00:00-04:00`) : null)
+  const closeStamp = day ? `At close ${day}` : 'At close'
+  const extLabel = t.session === 'pre' ? 'Pre-market' : 'After hours'
+  const extStamp = day
+    ? `${extLabel} ${day}${stampTime(t.as_of) ? `, ${stampTime(t.as_of)}` : ''}`
+    : extLabel
+
   const loading = quote.isLoading || profile.isLoading
 
   return (
@@ -304,6 +346,7 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
             fontFamily: SANS, fontSize: 10, letterSpacing: '0.1em',
             textTransform: 'uppercase', color: 'var(--theme-text-dim, rgba(255,255,255,0.35))',
           }}>
+            <span>{closeStamp}</span>
             <span>Previous close {price(prev)}</span>
             {/* What the printed price MEANS: a live regular-hours print, an
                 extended-hours print, or Friday's close sitting over a weekend.
@@ -326,6 +369,31 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
             </span>
           </div>
         </div>
+
+        {ext != null && (
+          <div style={{ paddingBottom: 2 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{
+                fontFamily: MONO, fontSize: 28, fontWeight: 700,
+                color: 'var(--theme-text)', lineHeight: 1,
+              }}>
+                {price(ext)}
+              </span>
+              <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: tone(t.extended_pct) }}>
+                {change(
+                  last != null ? ext - last : null,
+                  t.extended_pct ?? (last ? (ext / last - 1) * 100 : null),
+                )}
+              </span>
+            </div>
+            <div style={{
+              marginTop: 9, fontFamily: SANS, fontSize: 10, letterSpacing: '0.1em',
+              textTransform: 'uppercase', color: 'var(--theme-text-dim, rgba(255,255,255,0.35))',
+            }}>
+              {extStamp}
+            </div>
+          </div>
+        )}
 
         {/* The header ran a price block against a target block with a very wide
             gap between them. These two meters earn that space: the stat grid

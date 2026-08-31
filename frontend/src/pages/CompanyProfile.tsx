@@ -86,9 +86,10 @@ export default function CompanyProfile() {
   }, [ticker])
 
   return (
-    <PageWrapper title={ticker ? undefined : 'Company Profile'}>
-      {!ticker ? (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+    <PageWrapper
+      title="Company Profile"
+      actions={
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <TickerInput
             value={input}
             onChange={setInput}
@@ -97,9 +98,26 @@ export default function CompanyProfile() {
             placeholder="Ticker or company"
             style={{ width: 186 }}
           />
+          <button
+            type="button"
+            onClick={() => load()}
+            disabled={!input.trim()}
+            style={{
+              fontFamily: 'var(--theme-sans)', fontSize: 9.5, fontWeight: 700,
+              letterSpacing: '0.12em', textTransform: 'uppercase',
+              padding: '7px 13px', whiteSpace: 'nowrap',
+              cursor: input.trim() ? 'pointer' : 'not-allowed',
+              opacity: input.trim() ? 1 : 0.4,
+              color: 'var(--theme-primary)',
+              background: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--theme-primary) 45%, transparent)',
+            }}
+          >
+            Load ticker
+          </button>
         </div>
-      ) : null}
-
+      }
+    >
       {!ticker ? (
         <EmptyState
           title="Company Profile"
@@ -107,19 +125,7 @@ export default function CompanyProfile() {
         />
       ) : (
         <>
-          <IdentityBar
-            ticker={ticker}
-            right={
-              <TickerInput
-                value={input}
-                onChange={setInput}
-                onEnter={() => load()}
-                onSelect={sym => load(sym)}
-                placeholder="Ticker or company"
-                style={{ width: 186 }}
-              />
-            }
-          />
+          <IdentityBar ticker={ticker} />
 
           <div ref={stripRef} style={{ marginBottom: 20, scrollMarginTop: 12 }}>
             <ToolTabs tabs={TABS} value={tab} onChange={setTab} />
