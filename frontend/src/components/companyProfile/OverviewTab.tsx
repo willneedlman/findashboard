@@ -324,16 +324,12 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
         <Stat label="Enterprise value" value={compact(q.enterpriseValue)} />
         <Stat label="P/E ratio (TTM)" value={multiple(q.trailingPE ?? p.pe_ratio)} />
 
-        <Stat label="Bid" value={quoteWithSize(q.bid, q.bidSize)} tip="Last quote, not live." />
+        <Stat label="Bid" value={quoteWithSize(q.bid, q.bidSize)} />
         <Stat label="Volume" value={count(q.volume)} />
-        <Stat
-          label="Beta (5Y monthly)"
-          value={multiple(q.beta)}
-          tip="Vendor beta, methodology undisclosed. The computed figure over the selected window sits in the chart header."
-        />
+        <Stat label="Beta (5Y monthly)" value={multiple(q.beta)} />
         <Stat label="EPS (TTM)" value={price(q.trailingEps ?? p.eps_ttm)} />
 
-        <Stat label="Ask" value={quoteWithSize(q.ask, q.askSize)} tip="Last quote, not live." />
+        <Stat label="Ask" value={quoteWithSize(q.ask, q.askSize)} />
         <Stat label="Avg volume (3M)" value={count(q.averageVolume)} />
         <Stat label="Forward dividend & yield" value={dividend(q.dividendRate, q.dividendYield)} />
         <Stat label="1Y target estimate" value={price(analyst.data?.target_mean ?? q.targetMeanPrice)} />
