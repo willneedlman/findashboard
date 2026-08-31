@@ -4,6 +4,7 @@ import axios from 'axios'
 import { T } from '../../lib/theme'
 import { Panel, MONO, SANS, BRIGHT, DIM, ROW_LINE } from './ui'
 import { DASH, shortDate } from './format'
+import { Skel } from '../Skeleton'
 
 interface NewsItem {
   id?: string
@@ -162,13 +163,28 @@ export default function NewsTab({ ticker }: { ticker: string }) {
           ))}
           </div>
         ) : (
-          <Note>
-            {filings.isLoading
-              ? 'Loading filings.'
-              : allFilings.length
+          filings.isLoading ? (
+            // Bones in the shape of the loaded row, so the panel holds its size
+            // and nothing jumps when the data lands.
+            <div>
+              {Array.from({ length: 7 }).map((_, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '12px 18px', borderBottom: i === 6 ? 'none' : ROW_LINE,
+                }}>
+                  <Skel w={66} h={19} r={0} />
+                  <Skel w={`${44 + (i * 11) % 34}%`} h={11} r={0} />
+                  <Skel w={64} h={10} r={0} style={{ marginLeft: 'auto' }} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Note>
+              {allFilings.length
                 ? `No ${form} filings in this window.`
                 : 'No filings indexed for this symbol. Expected for a security that does not file with the SEC.'}
-          </Note>
+            </Note>
+          )
         )}
       </Panel>
 
@@ -214,9 +230,22 @@ export default function NewsTab({ ticker }: { ticker: string }) {
           })}
           </div>
         ) : (
-          <Note>
-            {news.isLoading ? 'Loading headlines.' : 'No headlines published for this symbol.'}
-          </Note>
+          news.isLoading ? (
+            <div>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} style={{ padding: '14px 18px', borderBottom: i === 5 ? 'none' : ROW_LINE }}>
+                  <Skel w={`${78 + (i * 5) % 20}%`} h={12} r={0} />
+                  <Skel w={`${40 + (i * 9) % 30}%`} h={12} r={0} style={{ marginTop: 7 }} />
+                  <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                    <Skel w={82} h={9} r={0} />
+                    <Skel w={44} h={9} r={0} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Note>No headlines published for this symbol.</Note>
+          )
         )}
       </Panel>
     </div>

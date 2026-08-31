@@ -11,10 +11,10 @@ import SummaryTab from '../components/companyProfile/SummaryTab'
 import FinancialsTab from '../components/companyProfile/FinancialsTab'
 import ValuationTab from '../components/companyProfile/ValuationTab'
 import RiskTab from '../components/companyProfile/RiskTab'
+import EstimatesTab from '../components/companyProfile/EstimatesTab'
 import OwnershipTab from '../components/companyProfile/OwnershipTab'
 import PeersTab from '../components/companyProfile/PeersTab'
 import NewsTab from '../components/companyProfile/NewsTab'
-import CompanyOutlook from '../components/CompanyOutlook'
 
 // Eight sections, in the order the handoff fixes. Risk and Ownership are split
 // apart here; they were one tab on the page this replaces.
@@ -140,7 +140,7 @@ export default function CompanyProfile() {
             <Panel show={tab === 'financials'}><FinancialsTab ticker={ticker} /></Panel>
           )}
           {visited.has('estimates') && (
-            <Panel show={tab === 'estimates'}><CompanyOutlook ticker={ticker} /></Panel>
+            <Panel show={tab === 'estimates'}><EstimatesTab ticker={ticker} /></Panel>
           )}
           {visited.has('risk') && (
             <Panel show={tab === 'risk'}><RiskTab ticker={ticker} /></Panel>

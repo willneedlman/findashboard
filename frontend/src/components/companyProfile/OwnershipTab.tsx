@@ -14,7 +14,6 @@ interface Institutional {
   pct_institutions?: number | null
   pct_insiders?: number | null
   float_shares?: number | null
-  passive_pct?: number | null
   holders?: Holder[]
   funds?: Holder[]
   changes?: { filed?: string }
@@ -79,13 +78,11 @@ export default function OwnershipTab({ ticker }: { ticker: string }) {
           </div>
 
           <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+            display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
             gap: 18, marginTop: 16,
           }}>
             <Legend swatch={GOLD} label="Institutions" value={pct(inst)}
               note={d.float_shares ? `${compact((d.pct_institutions ?? 0) * d.float_shares)} shares held` : undefined} />
-            <Legend swatch={GOLD} label="Passive share" value={pct(d.passive_pct)}
-              note="Subset of institutions" dim />
             <Legend swatch={GREEN} label="Insiders" value={pct(insiders)}
               note={d.float_shares ? `${compact((d.pct_insiders ?? 0) * d.float_shares)} shares held` : undefined} />
             <Legend swatch={NEUTRAL} label="Retail and other" value={pct(retail)}

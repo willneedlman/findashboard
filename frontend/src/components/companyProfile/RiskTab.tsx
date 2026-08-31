@@ -182,10 +182,13 @@ export default function RiskTab({ ticker }: { ticker: string }) {
 
       <Panel title="Deal history" meta="M&A, via SDC">
         {deals.data?.deals?.length ? (
+          // Capped and scrolled. An acquisitive name carries decades of
+          // transactions, and the table was running the length of the page.
+          <div style={{ maxHeight: 340, overflowY: 'auto' }}>
           <DataTable
             head={['Date', 'Role', 'Counterparty', 'Value', 'Status']}
             align={['left', 'left', 'left', 'right', 'left']}
-            rows={deals.data.deals.slice(0, 25).map(d => [
+            rows={deals.data.deals.map(d => [
               shortDate(d.date_announced),
               d.role ?? DASH,
               // The counterparty is whichever side is not this company.
@@ -199,6 +202,7 @@ export default function RiskTab({ ticker }: { ticker: string }) {
               d.deal_status ?? DASH,
             ])}
           />
+          </div>
         ) : (
           <EmptyState size="compact" title="Deal history" hint="No transactions recorded for this name." />
         )}

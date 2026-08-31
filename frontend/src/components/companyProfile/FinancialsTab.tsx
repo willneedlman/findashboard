@@ -15,9 +15,9 @@ interface Resp {
 }
 
 const STATEMENTS = [
-  { key: 'income', label: 'Income' },
-  { key: 'balance', label: 'Balance' },
-  { key: 'cashflow', label: 'Cash flow' },
+  { key: 'income', label: 'Income Statement' },
+  { key: 'balance', label: 'Balance Sheet' },
+  { key: 'cashflow', label: 'Cash Flow Statement' },
 ] as const
 
 const FREQUENCIES = [
