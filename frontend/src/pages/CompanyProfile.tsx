@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import PageWrapper from '../components/PageWrapper'
 import TickerInput from '../components/TickerInput'
 import ToolTabs, { type ToolTab } from '../components/ToolTabs'
@@ -52,6 +52,33 @@ export default function CompanyProfile() {
     setVisited(prev => (prev.has(tab) ? prev : new Set(prev).add(tab)))
   }, [tab])
 
+  // Switching tabs used to move the page under the reader. A hidden tab is
+  // display:none and contributes no height, so leaving a long tab for a short
+  // one collapses the document and the browser clamps the scroll position,
+  // which lands you somewhere you did not ask to be.
+  //
+  // Two things fix it together: the panel region holds a floor height so the
+  // document cannot collapse, and if the tab strip has been scrolled off the
+  // top, the switch brings it back to the top. Both are deterministic, which
+  // is the point: a predictable move beats an arbitrary one.
+  const stripRef = useRef<HTMLDivElement>(null)
+  const firstRender = useRef(true)
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false
+      return
+    }
+    const el = stripRef.current
+    if (!el) return
+    const top = el.getBoundingClientRect().top
+    if (top < 0) {
+      el.scrollIntoView({
+        block: 'start',
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      })
+    }
+  }, [tab])
+
   useEffect(() => {
     if (ticker) recordRecentTicker(ticker)
   }, [ticker])
@@ -78,9 +105,11 @@ export default function CompanyProfile() {
         <>
           <OverviewHeader ticker={ticker} />
 
-          <div style={{ marginBottom: 20 }}>
+          <div ref={stripRef} style={{ marginBottom: 20, scrollMarginTop: 12 }}>
             <ToolTabs tabs={TABS} value={tab} onChange={setTab} />
           </div>
+
+          <div style={{ minHeight: '60vh' }}>
 
           {visited.has('summary') && (
             <Panel show={tab === 'summary'}><SummaryTab ticker={ticker} /></Panel>
@@ -106,6 +135,7 @@ export default function CompanyProfile() {
           {visited.has('news') && (
             <Panel show={tab === 'news'}><NewsTab ticker={ticker} /></Panel>
           )}
+          </div>
         </>
       )}
     </PageWrapper>
