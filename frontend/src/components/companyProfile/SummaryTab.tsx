@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { T } from '../../lib/theme'
 import { Panel, MONO, SANS, BRIGHT, DIM } from './ui'
-import { DASH, compact, count, pct, ratePct, tone } from './format'
+import { DASH, compact, count, pct } from './format'
 
 // `pct` is already computed by the endpoint. Recomputing it from the values
 // would disagree with the source whenever a segment is netted or eliminated.
@@ -88,10 +88,15 @@ export default function SummaryTab({ ticker }: { ticker: string }) {
 
       <Panel
         title="Profitability against the sector median"
-        meta={p.sector ? `${p.sector}${sectorMed ? '' : ', medians unavailable'}` : undefined}
+        meta={(() => {
+          if (!p.sector) return undefined
+          if (!sectorMed) return `${p.sector}, medians unavailable`
+          const n = sectorMed[METRICS[0].medianKey]?.n
+          return n ? `${p.sector}, n=${n}` : p.sector
+        })()}
       >
         <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+          display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
           gap: 1, background: T.borderFaint,
         }}>
           {METRICS.map(m => (
@@ -160,13 +165,22 @@ function MedianRow({ label, value, stat, isRatio }: {
         }}>
           {label}
         </span>
-        <span style={{ fontFamily: MONO, fontSize: 15, fontWeight: 700, color: BRIGHT }}>
-          {shown == null ? DASH : fmt(shown)}
+        <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8 }}>
+          <span style={{ fontFamily: MONO, fontSize: 15, fontWeight: 700, color: BRIGHT }}>
+            {shown == null ? DASH : fmt(shown)}
+          </span>
+          <span style={{
+            fontFamily: MONO, fontSize: 11, fontWeight: 700, minWidth: 46, textAlign: 'right',
+            color: delta == null ? T.muted
+              : delta >= 0 ? 'var(--theme-positive)' : 'var(--theme-negative)',
+          }}>
+            {delta == null ? DASH : `${delta >= 0 ? '+' : ''}${isRatio ? delta.toFixed(2) : delta.toFixed(1)}`}
+          </span>
         </span>
       </div>
 
       <div style={{
-        position: 'relative', height: 6, marginTop: 10,
+        position: 'relative', height: 6, marginTop: 11,
         background: 'rgba(255,255,255,0.05)', border: `1px solid ${T.borderFaint}`,
       }}>
         <div style={{
@@ -179,12 +193,6 @@ function MedianRow({ label, value, stat, isRatio }: {
             width: 2, background: BRIGHT,
           }} />
         )}
-      </div>
-
-      <div style={{ marginTop: 6, fontFamily: MONO, fontSize: 10, color: T.muted }}>
-        {med == null
-          ? 'No sector median available'
-          : `Median ${fmt(med)}${stat?.n ? `, n=${stat.n}` : ''}, this name ${delta! >= 0 ? '+' : ''}${isRatio ? delta!.toFixed(2) : delta!.toFixed(1)} ${delta! >= 0 ? 'above' : 'below'}`}
       </div>
     </div>
   )

@@ -36,12 +36,16 @@ export default function PeersTab({ ticker }: { ticker: string }) {
     )
   }
 
+  // The subject is excluded from its own comparison. A median that includes the
+  // name being measured against it is self-referential, and on a short list it
+  // pulls the median toward the very number the reader is checking.
+  const comps = peers.filter(p => !p.is_target)
   const med = {
-    pe: median(peers.map(p => p.pe)),
-    forward_pe: median(peers.map(p => p.forward_pe)),
-    ev_ebitda: median(peers.map(p => p.ev_ebitda)),
-    ps: median(peers.map(p => p.ps)),
-    revenue_growth: median(peers.map(p => p.revenue_growth)),
+    pe: median(comps.map(p => p.pe)),
+    forward_pe: median(comps.map(p => p.forward_pe)),
+    ev_ebitda: median(comps.map(p => p.ev_ebitda)),
+    ps: median(comps.map(p => p.ps)),
+    revenue_growth: median(comps.map(p => p.revenue_growth)),
   }
 
   const cols = ['Trailing P/E', 'Forward P/E', 'EV / EBITDA', 'Price / sales', 'Revenue growth']
@@ -49,7 +53,7 @@ export default function PeersTab({ ticker }: { ticker: string }) {
   return (
     <Panel
       title="Peers and comps"
-      meta={`Same industry classification, ${peers.length} names`}
+      meta={`Same industry classification, ${comps.length} peers`}
     >
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -66,7 +70,7 @@ export default function PeersTab({ ticker }: { ticker: string }) {
             <tr style={{ borderBottom: ROW_LINE, background: 'rgba(255,255,255,0.022)' }}>
               <td style={{ ...td, textAlign: 'left' }}>
                 <span style={{ fontFamily: SANS, fontSize: 11.5, fontWeight: 600, color: T.muted }}>
-                  Peer median, n={peers.length}
+                  Peer median, n={comps.length}
                 </span>
               </td>
               <td style={{ ...td, color: T.muted }}>{multiple(med.pe, 1)}</td>

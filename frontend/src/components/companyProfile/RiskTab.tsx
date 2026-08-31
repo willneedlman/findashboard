@@ -4,7 +4,7 @@ import { T } from '../../lib/theme'
 import EmptyState from '../EmptyState'
 import { Panel, Cell, DataTable, MONO, SANS } from './ui'
 import { fetchBetaSuite } from '../../hooks/useApi'
-import { DASH, compact, count, multiple, pct, price, shortDate, tone } from './format'
+import { DASH, compact, count, multiple, pct, shortDate, tone } from './format'
 
 interface Credit {
   synthetic_rating?: string; rating_basis?: string

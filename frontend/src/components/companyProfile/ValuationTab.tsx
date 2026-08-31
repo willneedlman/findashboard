@@ -3,7 +3,7 @@ import axios from 'axios'
 import { T } from '../../lib/theme'
 import EmptyState from '../EmptyState'
 import { Panel, MONO, SANS, BRIGHT, ROW_LINE, STRIP } from './ui'
-import { DASH, compact, multiple, pct } from './format'
+import { DASH, compact, multiple } from './format'
 
 interface ValRow { key: string; label: string; unit: string; value: number | null }
 interface Valuation { available?: boolean; reason?: string; rows?: ValRow[]; source?: string }

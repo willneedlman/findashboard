@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { T } from '../../lib/theme'
@@ -37,7 +38,15 @@ function age(iso?: string): string {
   return `${Math.round(hours / 24)}d ago`
 }
 
+const LIST_MAX_HEIGHT = 520
+
+/** Forms in the order a reader looks for them, not the order they were filed.
+ *  Anything the issuer files that is not in this list still gets a chip, after
+ *  these. */
+const FORM_ORDER = ['10-K', '10-Q', '8-K', 'DEF 14A', '4']
+
 export default function NewsTab({ ticker }: { ticker: string }) {
+  const [form, setForm] = useState<string>('all')
   const news = useQuery<{ news?: NewsItem[] }>({
     queryKey: ['cp-news', ticker],
     queryFn: () => axios.get(`/api/market/news?ticker=${encodeURIComponent(ticker)}`).then(r => r.data),
@@ -50,13 +59,49 @@ export default function NewsTab({ ticker }: { ticker: string }) {
   })
 
   const items = news.data?.news ?? []
-  const rows = filings.data?.filings ?? []
+  const allFilings = filings.data?.filings ?? []
+
+  const forms = useMemo(() => {
+    const present = new Set(allFilings.map(f => f.form).filter((f): f is string => !!f))
+    const known = FORM_ORDER.filter(f => present.has(f))
+    const rest = [...present].filter(f => !FORM_ORDER.includes(f)).sort()
+    return [...known, ...rest]
+  }, [allFilings])
+
+  const rows = form === 'all' ? allFilings : allFilings.filter(f => f.form === form)
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20, alignItems: 'start' }}>
-      <Panel title="SEC filings" meta={rows.length ? `${rows.length} most recent` : undefined}>
+      <Panel
+        title="SEC filings"
+        meta={allFilings.length
+          ? (form === 'all' ? `${allFilings.length} most recent` : `${rows.length} of ${allFilings.length}`)
+          : undefined}
+      >
+        {forms.length > 1 && (
+          <div style={{
+            display: 'flex', gap: 2, flexWrap: 'wrap',
+            padding: '9px 14px', borderBottom: `1px solid ${T.borderFaint}`,
+          }}>
+            {['all', ...forms].map(f => {
+              const on = f === form
+              return (
+                <button key={f} onClick={() => setForm(f)} style={{
+                  fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
+                  padding: '3px 8px', cursor: 'pointer', background: 'transparent',
+                  border: `1px solid ${on ? 'color-mix(in srgb, var(--theme-primary) 40%, transparent)' : 'transparent'}`,
+                  color: on ? T.gold : T.muted,
+                  transition: 'color 120ms cubic-bezier(0.23,1,0.32,1), border-color 120ms cubic-bezier(0.23,1,0.32,1)',
+                }}>
+                  {f === 'all' ? 'All' : f}
+                </button>
+              )
+            })}
+          </div>
+        )}
         {rows.length ? (
-          rows.map((f, i) => (
+          <div style={{ maxHeight: LIST_MAX_HEIGHT, overflowY: 'auto' }}>
+          {rows.map((f, i) => (
             <a
               key={`${f.form}-${f.date}-${i}`}
               href={f.url}
@@ -86,19 +131,23 @@ export default function NewsTab({ ticker }: { ticker: string }) {
               <span style={{ fontFamily: MONO, fontSize: 11, color: T.muted }}>{shortDate(f.date)}</span>
               <span style={{ color: T.gold }}>›</span>
             </a>
-          ))
+          ))}
+          </div>
         ) : (
           <Note>
             {filings.isLoading
               ? 'Loading filings.'
-              : 'No filings indexed for this symbol. Expected for a security that does not file with the SEC.'}
+              : allFilings.length
+                ? `No ${form} filings in this window.`
+                : 'No filings indexed for this symbol. Expected for a security that does not file with the SEC.'}
           </Note>
         )}
       </Panel>
 
       <Panel title="Headline feed" meta={items.length ? `${items.length} stories` : undefined}>
         {items.length ? (
-          items.map((n, i) => {
+          <div style={{ maxHeight: LIST_MAX_HEIGHT, overflowY: 'auto' }}>
+          {items.map((n, i) => {
             const c = n.content ?? {}
             const url = c.clickThroughUrl?.url || c.canonicalUrl?.url
             const body = (
@@ -130,7 +179,8 @@ export default function NewsTab({ ticker }: { ticker: string }) {
             return url
               ? <a key={n.id ?? i} href={url} target="_blank" rel="noreferrer" style={style}>{body}</a>
               : <div key={n.id ?? i} style={style}>{body}</div>
-          })
+          })}
+          </div>
         ) : (
           <Note>
             {news.isLoading ? 'Loading headlines.' : 'No headlines published for this symbol.'}
