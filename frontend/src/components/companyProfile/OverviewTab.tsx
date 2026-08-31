@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import {
@@ -9,6 +9,8 @@ import HelpTip from '../HelpTip'
 import { MONO, SANS, BRIGHT } from './ui'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../ChartTooltip'
 import { fetchBetaSuite, fetchMarketHistory } from '../../hooks/useApi'
+import { stableValueDomain } from '../../lib/chartDomain'
+import { MARKETS, marketStatus, PHASE_COLOR, PHASE_LABEL } from '../../lib/marketHours'
 import {
   DASH, change, compact, count, dividend, multiple, price, quoteWithSize, range, shortDate, tone,
 } from './format'
@@ -26,6 +28,40 @@ const RANGES = [
   { key: '5Y', days: 1826 },
   { key: 'ALL', days: 10_950 },
 ] as const
+
+/** 1D and 5D are session windows, not calendar windows. Daily bars cannot draw
+ *  them: on a Sunday a one-calendar-day lookback contains no trading at all,
+ *  which is what left the chart empty. These read intraday candles instead and
+ *  take the last sessions PRESENT in the data, so the window follows the market
+ *  rather than the clock. */
+const SESSION_RANGES: Record<string, number> = { '1D': 1, '5D': 5 }
+
+const NASDAQ = MARKETS.find(m => m.id === 'nasdaq')!
+
+interface Candle { time: number; close: number }
+
+/** The exchange's own calendar date for a bar. Bucketing on the local date puts
+ *  a 16:00 ET print on the following day for anyone east of London. */
+const ET_DAY = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
+})
+const ET_CLOCK = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hour12: false,
+})
+const ET_WEEKDAY = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York', weekday: 'short',
+})
+const ET_DATE = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York', month: 'short', day: 'numeric',
+})
+
+/** /market/history switches format with the window: long lookbacks return daily
+ *  bars dated "2026-08-28", short ones return intraday bars dated in epoch
+ *  seconds. Unformatted, the short windows printed "1785776400" as axis ticks. */
+function historyLabel(date: unknown): string {
+  const raw = String(date ?? '')
+  return /^\d{9,}$/.test(raw) ? ET_DATE.format(Number(raw) * 1000) : raw
+}
 
 const iso = (d: Date) => d.toISOString().slice(0, 10)
 
@@ -84,11 +120,42 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
     staleTime: 300_000, retry: 0, enabled: !!ticker,
   })
 
+  const sessions = SESSION_RANGES[rangeKey]
+
+  // Re-read the clock rather than the calendar: the phase label and the polling
+  // decision both go stale on their own, with no data change to trigger them.
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30_000)
+    return () => clearInterval(id)
+  }, [])
+  const session = marketStatus(NASDAQ, now)
+
   const start = startFor(rangeKey)
   const history = useQuery({
     queryKey: ['cp-history', ticker, start],
     queryFn: () => fetchMarketHistory(ticker, start, iso(new Date())),
-    staleTime: 300_000, retry: 1, enabled: !!ticker,
+    staleTime: 300_000, retry: 1, enabled: !!ticker && !sessions,
+  })
+
+  // prepost=true is what makes this 24/5 rather than 9:30-to-4: the same
+  // extended-hours coverage the live cockpit charts.
+  const intraday = useQuery<{ candles?: Candle[] }>({
+    queryKey: ['cp-intraday', ticker],
+    queryFn: () => axios
+      .get(`/api/market/ohlcv?ticker=${encodeURIComponent(ticker)}&tf=5m&prepost=true`)
+      .then(r => r.data),
+    staleTime: 60_000, retry: 0, enabled: !!ticker && !!sessions,
+    refetchInterval: session.open ? 60_000 : false,
+  })
+
+  // The candle feed lags by up to a minute. This is the tick that keeps the
+  // printed price current between bars, and it stops when the tape does.
+  const live = useQuery<{ last?: number | null; prior_close?: number | null }>({
+    queryKey: ['cp-live', ticker],
+    queryFn: () => axios.get(`/api/market/live-quote?ticker=${encodeURIComponent(ticker)}`).then(r => r.data),
+    staleTime: 10_000, retry: 0, enabled: !!ticker && session.open,
+    refetchInterval: session.open ? 15_000 : false,
   })
   // Recomputed over the SELECTED window. This is the honest counterpart to the
   // vendor beta in the stat grid below, whose methodology is undisclosed, so
@@ -101,27 +168,67 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
 
   const q = quote.data ?? {}
   const p = profile.data ?? {}
-  const last = p.price ?? null
-  const prev = q.regularMarketPreviousClose ?? null
+  const last = live.data?.last ?? p.price ?? null
+  // The baseline is the close of the session BEFORE the prints on screen, and
+  // the vendor field is that in every phase. The live endpoint derives its own
+  // prior close relative to now, which over a weekend is Friday's close, so it
+  // measured Friday's price against itself and reported a 0.07% day.
+  const prev = q.regularMarketPreviousClose ?? live.data?.prior_close ?? null
   const absChange = last != null && prev != null ? last - prev : null
   const pctChange = absChange != null && prev ? (absChange / prev) * 100 : null
 
-  const series = useMemo(() => {
+  const { series, sessionDay } = useMemo(() => {
+    if (sessions) {
+      const candles = (intraday.data?.candles ?? [])
+        .filter(c => Number.isFinite(c?.close) && Number.isFinite(c?.time))
+      if (!candles.length) return { series: [], sessionDay: null as string | null }
+
+      // Take the last N session dates PRESENT in the feed. On a Sunday that is
+      // Friday, over a holiday week it is whatever actually traded, and neither
+      // case needs a market calendar here.
+      const days = [...new Set(candles.map(c => ET_DAY.format(c.time * 1000)))].sort()
+      const keep = new Set(days.slice(-sessions))
+      const rows = candles.filter(c => keep.has(ET_DAY.format(c.time * 1000)))
+
+      return {
+        series: rows.map(c => {
+          const ms = c.time * 1000
+          const clock = ET_CLOCK.format(ms)
+          return {
+            // A category axis keeps the sessions adjacent. On a time axis the
+            // overnight gap is 17 hours of empty chart between two days.
+            date: sessions > 1 ? `${ET_WEEKDAY.format(ms)} ${clock}` : clock,
+            close: c.close,
+          }
+        }),
+        sessionDay: days[days.length - 1] ?? null,
+      }
+    }
+
     // /market/history returns { ticker, metrics, price: [{ date, value }] }.
     // Guessing `history[].close` cost a silently empty chart: the request
     // succeeded, the array was simply never found.
     const rows = (history.data?.price ?? []) as { date?: string; value?: number }[]
-    return rows
-      .filter(r => typeof r.value === 'number')
-      .map(r => ({ date: String(r.date ?? ''), close: r.value as number }))
-  }, [history.data])
+    return {
+      series: rows
+        .filter(r => typeof r.value === 'number')
+        .map(r => ({ date: historyLabel(r.date), close: r.value as number })),
+      sessionDay: null as string | null,
+    }
+  }, [history.data, intraday.data, sessions])
 
   // The reference is the previous close on an intraday window and the window's
   // own first point on every other, because "up" means something different over
   // a day than over five years.
-  const reference = rangeKey === '1D'
+  const reference = sessions
     ? prev ?? series[0]?.close ?? null
     : series[0]?.close ?? null
+  // Ladder-snapped so a tick that moves the extreme by a cent does not redraw
+  // the whole axis under the reader.
+  const yDomain = useMemo(
+    () => stableValueDomain(series.map(d => d.close), reference),
+    [series, reference],
+  )
   const endsUp = series.length > 0 && reference != null
     ? series[series.length - 1].close >= reference
     : true
@@ -193,10 +300,30 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
             </span>
           </div>
           <div style={{
-            marginTop: 9, fontFamily: SANS, fontSize: 10, letterSpacing: '0.1em',
+            marginTop: 9, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+            fontFamily: SANS, fontSize: 10, letterSpacing: '0.1em',
             textTransform: 'uppercase', color: 'var(--theme-text-dim, rgba(255,255,255,0.35))',
           }}>
-            Previous close {price(prev)}
+            <span>Previous close {price(prev)}</span>
+            {/* What the printed price MEANS: a live regular-hours print, an
+                extended-hours print, or Friday's close sitting over a weekend.
+                Without it the reader cannot tell a stale number from a moving
+                one. */}
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span
+                className={session.open ? 'ft-live-dot' : undefined}
+                style={{
+                  width: 6, height: 6, borderRadius: '50%',
+                  background: PHASE_COLOR[session.phase],
+                }}
+              />
+              <span style={{ color: PHASE_COLOR[session.phase] }}>
+                {session.phase === 'regular' ? 'Live' : PHASE_LABEL[session.phase]}
+              </span>
+              {!session.open && sessionDay && (
+                <span>· Session {sessionDay}</span>
+              )}
+            </span>
           </div>
         </div>
 
@@ -300,7 +427,7 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
                   tickLine={false} axisLine={false} minTickGap={48}
                 />
                 <YAxis
-                  orientation="right" domain={['auto', 'auto']} width={64}
+                  orientation="right" domain={yDomain} width={64} allowDataOverflow
                   tick={{ fontFamily: MONO, fontSize: 11, fill: 'rgba(255,255,255,0.35)' }}
                   tickLine={false} axisLine={false} tickCount={4}
                   tickFormatter={(v: number) => v.toFixed(2)}
@@ -322,7 +449,9 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
               height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontFamily: MONO, fontSize: 11, color: T.muted,
             }}>
-              {history.isLoading ? 'Loading price history' : 'No price history for this window'}
+              {(sessions ? intraday.isLoading : history.isLoading)
+                ? 'Loading price history'
+                : 'No price history for this window'}
             </div>
           )}
         </div>
