@@ -5,16 +5,13 @@ import {
   Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
 import { T } from '../../lib/theme'
-import TickerLogo from '../TickerLogo'
 import HelpTip from '../HelpTip'
+import { MONO, SANS, BRIGHT } from './ui'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../ChartTooltip'
 import { fetchBetaSuite, fetchMarketHistory } from '../../hooks/useApi'
 import {
   DASH, change, compact, count, dividend, multiple, price, quoteWithSize, range, shortDate, tone,
 } from './format'
-
-const MONO = 'var(--theme-mono)'
-const SANS = 'var(--theme-sans)'
 
 /** Windows the chart offers, with the lookback each one asks the API for.
  *  ALL is expressed as a very long lookback rather than a null, so one code
@@ -63,7 +60,7 @@ interface Profile {
   market_cap?: number | null
 }
 
-export default function OverviewHeader({ ticker }: { ticker: string }) {
+export default function OverviewTab({ ticker }: { ticker: string }) {
   const [rangeKey, setRangeKey] = useState<string>('1Y')
 
   const quote = useQuery<Quote>({
@@ -172,32 +169,11 @@ export default function OverviewHeader({ ticker }: { ticker: string }) {
     <div style={{
       background: T.surface,
       border: `1px solid ${T.border}`,
-      boxShadow: '0 1px 4px rgba(0,0,0,0.18)',
-      marginBottom: 20,
     }}>
-      {/* ── Row 1: identity ─────────────────────────────────────────────── */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
-        padding: '17px 22px 15px',
-      }}>
-        <TickerLogo ticker={ticker} size={40} />
-        <span style={{ fontFamily: MONO, fontSize: 25, fontWeight: 700, letterSpacing: '0.02em', color: T.gold }}>
-          {ticker}
-        </span>
-        <span style={{ fontFamily: SANS, fontSize: 15, fontWeight: 600, color: 'var(--theme-text-bright, #dce3ed)' }}>
-          {p.name ?? (loading ? '' : DASH)}
-        </span>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {q.exchange && <Tag tone="gold">{q.exchange}</Tag>}
-          {p.sector && <Tag>{p.sector}</Tag>}
-          {p.industry && <Tag>{p.industry}</Tag>}
-        </div>
-      </div>
-
       {/* ── Row 2: price block ──────────────────────────────────────────── */}
       <div style={{
         display: 'flex', alignItems: 'flex-end', gap: 40, flexWrap: 'wrap',
-        padding: '18px 22px 16px', borderTop: `1px solid ${T.borderFaint}`,
+        padding: '18px 22px 16px',
       }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
@@ -324,9 +300,12 @@ export default function OverviewHeader({ ticker }: { ticker: string }) {
         </div>
       </div>
 
-      {/* ── Row 4: key stat grid ────────────────────────────────────────── */}
+      {/* ── Key stats. Four columns of dense label/value rows rather than
+              sixteen padded tiles: this is a quote brief, and a brief is read
+              by scanning down a column, not by looking at boxes. ── */}
       <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
+        columnGap: 30, padding: '12px 22px 6px',
         borderTop: `1px solid ${T.borderFaint}`,
       }}>
         <Stat label="Previous close" value={price(prev)} />
@@ -389,18 +368,22 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
 function Stat({ label, value, tip }: { label: string; value: string; tip?: string }) {
   return (
     <div style={{
-      padding: '13px 22px',
-      borderRight: '1px solid rgba(255,255,255,0.04)',
-      borderBottom: '1px solid rgba(255,255,255,0.04)',
-      display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0,
+      display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 14,
+      padding: '7px 0',
+      borderBottom: '1px dashed rgba(255,255,255,0.10)',
+      minWidth: 0,
     }}>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-        <Eyebrow>{label}</Eyebrow>
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        fontFamily: SANS, fontSize: 12, color: T.muted, whiteSpace: 'nowrap',
+      }}>
+        {label}
         {tip && <HelpTip text={tip} width={240} position="bottom" />}
       </span>
       <span style={{
-        fontFamily: MONO, fontSize: 13.5, fontVariantNumeric: 'tabular-nums',
-        color: T.text, overflowWrap: 'anywhere',
+        fontFamily: MONO, fontSize: 12, fontWeight: 700,
+        fontVariantNumeric: 'tabular-nums', color: BRIGHT,
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
       }}>
         {value}
       </span>
@@ -414,19 +397,5 @@ function Source({ label, value }: { label: string; value: string }) {
       <Eyebrow>{label}</Eyebrow>
       <span style={{ fontFamily: MONO, fontSize: 10.5, color: T.muted }}>{value}</span>
     </div>
-  )
-}
-
-function Tag({ children, tone: t }: { children: React.ReactNode; tone?: 'gold' }) {
-  const gold = t === 'gold'
-  return (
-    <span style={{
-      fontFamily: MONO, fontSize: 10, padding: '2px 7px',
-      border: `1px solid ${gold ? 'color-mix(in srgb, var(--theme-primary) 45%, transparent)' : T.border}`,
-      color: gold ? T.gold : T.muted,
-      whiteSpace: 'nowrap',
-    }}>
-      {children}
-    </span>
   )
 }

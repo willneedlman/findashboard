@@ -5,7 +5,8 @@ import ToolTabs, { type ToolTab } from '../components/ToolTabs'
 import EmptyState from '../components/EmptyState'
 import { useTickerParam } from '../hooks/useTickerParam'
 import { recordRecentTicker } from '../lib/recentTickers'
-import OverviewHeader from '../components/companyProfile/OverviewHeader'
+import IdentityBar from '../components/companyProfile/IdentityBar'
+import OverviewTab from '../components/companyProfile/OverviewTab'
 import SummaryTab from '../components/companyProfile/SummaryTab'
 import FinancialsTab from '../components/companyProfile/FinancialsTab'
 import ValuationTab from '../components/companyProfile/ValuationTab'
@@ -18,6 +19,7 @@ import CompanyOutlook from '../components/CompanyOutlook'
 // Eight sections, in the order the handoff fixes. Risk and Ownership are split
 // apart here; they were one tab on the page this replaces.
 const TABS: ToolTab[] = [
+  { key: 'overview', label: 'Overview' },
   { key: 'summary', label: 'Summary' },
   { key: 'valuation', label: 'Valuation' },
   { key: 'financials', label: 'Financials' },
@@ -34,7 +36,7 @@ export default function CompanyProfile() {
   // symbol never fires eight queries.
   const [input, setInput] = useState('')
   const [ticker, setTicker] = useState('')
-  const [tab, setTab] = useState<string>('summary')
+  const [tab, setTab] = useState<string>('overview')
 
   const load = (sym?: string) => {
     const next = (sym ?? input).trim().toUpperCase()
@@ -47,7 +49,7 @@ export default function CompanyProfile() {
   // Each tab mounts on first visit and then stays mounted but hidden, so
   // switching never refetches or flashes a spinner. Carried over from the page
   // this replaces, where it was already the behaviour.
-  const [visited, setVisited] = useState<Set<string>>(() => new Set(['summary']))
+  const [visited, setVisited] = useState<Set<string>>(() => new Set(['overview']))
   useEffect(() => {
     setVisited(prev => (prev.has(tab) ? prev : new Set(prev).add(tab)))
   }, [tab])
@@ -84,17 +86,19 @@ export default function CompanyProfile() {
   }, [ticker])
 
   return (
-    <PageWrapper title="Company Profile">
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-        <TickerInput
-          value={input}
-          onChange={setInput}
-          onEnter={() => load()}
-          onSelect={sym => load(sym)}
-          placeholder="Ticker or company"
-          style={{ width: 186 }}
-        />
-      </div>
+    <PageWrapper title={ticker ? undefined : 'Company Profile'}>
+      {!ticker ? (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+          <TickerInput
+            value={input}
+            onChange={setInput}
+            onEnter={() => load()}
+            onSelect={sym => load(sym)}
+            placeholder="Ticker or company"
+            style={{ width: 186 }}
+          />
+        </div>
+      ) : null}
 
       {!ticker ? (
         <EmptyState
@@ -103,7 +107,19 @@ export default function CompanyProfile() {
         />
       ) : (
         <>
-          <OverviewHeader ticker={ticker} />
+          <IdentityBar
+            ticker={ticker}
+            right={
+              <TickerInput
+                value={input}
+                onChange={setInput}
+                onEnter={() => load()}
+                onSelect={sym => load(sym)}
+                placeholder="Ticker or company"
+                style={{ width: 186 }}
+              />
+            }
+          />
 
           <div ref={stripRef} style={{ marginBottom: 20, scrollMarginTop: 12 }}>
             <ToolTabs tabs={TABS} value={tab} onChange={setTab} />
@@ -111,6 +127,9 @@ export default function CompanyProfile() {
 
           <div style={{ minHeight: '60vh' }}>
 
+          {visited.has('overview') && (
+            <Panel show={tab === 'overview'}><OverviewTab ticker={ticker} /></Panel>
+          )}
           {visited.has('summary') && (
             <Panel show={tab === 'summary'}><SummaryTab ticker={ticker} /></Panel>
           )}
