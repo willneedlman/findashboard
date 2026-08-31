@@ -3,7 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { T } from '../../lib/theme'
 import EmptyState from '../EmptyState'
-import { Panel, DataTable, MONO, SANS, BRIGHT, DIM } from './ui'
+import { Panel, DataTable, MONO, SANS, BRIGHT, DIM, ROW_LINE } from './ui'
+import { Skel } from '../Skeleton'
 import { DASH, compact, count, pct, tone } from './format'
 
 interface Holder {
@@ -40,7 +41,49 @@ export default function OwnershipTab({ ticker }: { ticker: string }) {
   const rows = (view === 'holders' ? d.holders : d.funds) ?? []
   const hasMix = d.pct_institutions != null || d.pct_insiders != null
 
-  if (!q.isLoading && !hasMix && !rows.length) {
+  // While the 13F request is in flight every derived figure is zero, and the
+  // retail residual is 100 minus zero. That rendered as a confident "no
+  // institutions hold this name" on a stock that is two thirds institutional.
+  if (q.isLoading) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <Panel title="Ownership mix" meta="13F">
+          <div style={{ padding: '18px 18px 16px' }}>
+            <Skel w="100%" h={26} r={0} />
+            <div style={{
+              display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+              gap: 18, marginTop: 16,
+            }}>
+              {[0, 1, 2].map(i => (
+                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  <Skel w={92} h={9} r={0} />
+                  <Skel w={68} h={17} r={0} />
+                  <Skel w={110} h={10} r={0} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </Panel>
+        <Panel title="Top institutional holders" meta="13F">
+          <div>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', gap: 14,
+                padding: '11px 16px', borderBottom: i === 7 ? 'none' : ROW_LINE,
+              }}>
+                <Skel w={`${30 + (i * 9) % 26}%`} h={11} r={0} />
+                <Skel w={92} h={11} r={0} style={{ marginLeft: 'auto' }} />
+                <Skel w={64} h={11} r={0} />
+                <Skel w={52} h={11} r={0} />
+              </div>
+            ))}
+          </div>
+        </Panel>
+      </div>
+    )
+  }
+
+  if (!hasMix && !rows.length) {
     return (
       <EmptyState
         title="Ownership"

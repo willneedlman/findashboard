@@ -297,23 +297,6 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
     ? `${extLabel} ${day}${stampTime(t.as_of) ? `, ${stampTime(t.as_of)}` : ''}`
     : extLabel
 
-  // Shares the key the valuation tab uses, so this is a cache read once either
-  // has loaded rather than a second trip.
-  const medians = useQuery<{ sectors?: Record<string, Record<string, { median?: number | null; n?: number | null }>> }>({
-    queryKey: ['cp-sector-medians'],
-    queryFn: () => axios.get('/api/screener/sector-medians').then(r => r.data),
-    staleTime: Infinity, retry: 0,
-  })
-  const peerPeTip = (() => {
-    const stat = p.sector ? medians.data?.sectors?.[p.sector]?.peRatio : undefined
-    const pe = q.trailingPE ?? p.pe_ratio
-    if (stat?.median == null || pe == null) return undefined
-    const d = pe - stat.median
-    return `${p.sector} median ${stat.median.toFixed(1)}`
-      + `${stat.n ? ` (n=${stat.n})` : ''}. This name is `
-      + `${d >= 0 ? '+' : ''}${d.toFixed(1)} against it.`
-  })()
-
   const target = analyst.data?.target_mean ?? q.targetMeanPrice ?? null
   const upside = target != null && last ? (target / last - 1) * 100 : null
   const nAnalysts = analyst.data?.total_analysts ?? null
@@ -543,13 +526,7 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
       }}>
         <Stat label="Previous close" value={price(prev)} />
         <Stat label="Day's range" value={range(q.dayLow, q.dayHigh)} />
-        <Stat
-          label="Market cap (intraday)"
-          value={compact(q.marketCap ?? p.market_cap)}
-          tip={q.marketCapBasis
-            ? `Built on ${compact(q.marketCapBasis)} diluted shares via yfinance.`
-            : undefined}
-        />
+        <Stat label="Market cap (intraday)" value={compact(q.marketCap ?? p.market_cap)} />
         <Stat
           label="Earnings date (est.)"
           value={q.earningsDate
@@ -560,11 +537,7 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
         <Stat label="Open" value={price(q.regularMarketOpen)} />
         <Stat label="52 week range" value={range(q.fiftyTwoWeekLow, q.fiftyTwoWeekHigh)} />
         <Stat label="Enterprise value" value={compact(q.enterpriseValue)} />
-        <Stat
-          label="P/E ratio (TTM)"
-          value={multiple(q.trailingPE ?? p.pe_ratio)}
-          tip={peerPeTip}
-        />
+        <Stat label="P/E ratio (TTM)" value={multiple(q.trailingPE ?? p.pe_ratio)} />
 
         <Stat label="Bid" value={quoteWithSize(q.bid, q.bidSize)} />
         <Stat label="Volume" value={count(q.volume)} />

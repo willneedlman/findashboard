@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { Star } from 'lucide-react'
 import { T } from '../../lib/theme'
@@ -19,7 +18,6 @@ const EXCHANGE_LABEL: Record<string, string> = {
  *  the company the page is currently showing, which is a different thing and
  *  belongs under the title rather than replacing it. */
 export default function IdentityBar({ ticker }: { ticker: string }) {
-  const navigate = useNavigate()
   const [watched, setWatched] = useState(() => readWatchlist().includes(ticker.toUpperCase()))
 
   const profile = useQuery<{ name?: string; sector?: string; industry?: string }>({
@@ -72,46 +70,7 @@ export default function IdentityBar({ ticker }: { ticker: string }) {
         {p.industry && <Tag>{p.industry}</Tag>}
       </div>
 
-      {/* Where this name goes next. Each opens the tool already loaded with it,
-          rather than making the reader retype the symbol they are looking at. */}
-      <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        <Action onClick={() => navigate(`/chart-studio?ticker=${encodeURIComponent(ticker)}`)}>
-          Open in Chart Studio
-        </Action>
-        <Action onClick={() => navigate(`/master-valuation?ticker=${encodeURIComponent(ticker)}`)}>
-          Run DCF
-        </Action>
-        <Action onClick={() => navigate(`/peer-comparison?ticker=${encodeURIComponent(ticker)}`)}>
-          Compare peers
-        </Action>
-      </div>
     </div>
-  )
-}
-
-function Action({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em',
-        textTransform: 'uppercase', padding: '6px 10px', whiteSpace: 'nowrap',
-        cursor: 'pointer', color: T.muted, background: 'transparent',
-        border: `1px solid ${T.border}`,
-        transition: 'color 120ms cubic-bezier(0.23,1,0.32,1), border-color 120ms cubic-bezier(0.23,1,0.32,1)',
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.color = T.gold
-        e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--theme-primary) 45%, transparent)'
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.color = T.muted
-        e.currentTarget.style.borderColor = T.border
-      }}
-    >
-      {children}
-    </button>
   )
 }
 
