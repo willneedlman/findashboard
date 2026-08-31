@@ -8,7 +8,7 @@ import { T } from '../../lib/theme'
 import TickerLogo from '../TickerLogo'
 import HelpTip from '../HelpTip'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../ChartTooltip'
-import { fetchMarketHistory } from '../../hooks/useApi'
+import { fetchBetaSuite, fetchMarketHistory } from '../../hooks/useApi'
 import {
   DASH, change, compact, count, dividend, multiple, price, quoteWithSize, range, shortDate, tone,
 } from './format'
@@ -88,6 +88,14 @@ export default function OverviewHeader({ ticker }: { ticker: string }) {
     queryFn: () => fetchMarketHistory(ticker, start, iso(new Date())),
     staleTime: 300_000, retry: 1, enabled: !!ticker,
   })
+  // Recomputed over the SELECTED window. This is the honest counterpart to the
+  // vendor beta in the stat grid below, whose methodology is undisclosed, so
+  // both are shown and each says which it is.
+  const beta = useQuery({
+    queryKey: ['cp-beta', ticker, start],
+    queryFn: () => fetchBetaSuite(ticker, start, iso(new Date()), 'ff3'),
+    staleTime: 300_000, retry: 0, enabled: !!ticker,
+  })
 
   const q = quote.data ?? {}
   const p = profile.data ?? {}
@@ -144,6 +152,19 @@ export default function OverviewHeader({ ticker }: { ticker: string }) {
       { label: 'Max drawdown', value: `${(maxDd * 100).toFixed(1)}%`, tone: 'var(--theme-negative)' },
     ]
   }, [series])
+
+  const computedBeta = beta.data?.capm?.betas?.mktrf
+  const stats = useMemo(() => {
+    if (!windowStats.length) return windowStats
+    const b = typeof computedBeta === 'number' ? computedBeta.toFixed(2) : DASH
+    // Inserted second, beside the change it helps explain, rather than appended
+    // after the drawdown.
+    return [
+      windowStats[0],
+      { label: 'Computed CAPM beta', value: b, tone: 'var(--theme-text)' },
+      ...windowStats.slice(1),
+    ]
+  }, [windowStats, computedBeta])
 
   const loading = quote.isLoading || profile.isLoading
 
@@ -244,7 +265,7 @@ export default function OverviewHeader({ ticker }: { ticker: string }) {
             })}
           </div>
           <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap' }}>
-            {windowStats.map(s => (
+            {stats.map(s => (
               <div key={s.label} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 <Eyebrow>{s.label}</Eyebrow>
                 <span style={{

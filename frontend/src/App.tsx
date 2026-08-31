@@ -360,8 +360,11 @@ export default function App() {
                   produces an intrinsic value. */}
               <Route path="/relative-valuation"  element={<KeepQuery to="/peer-comparison" />} />
               <Route path="/mover-radar"          element={<MoverRadar />} />
-              <Route path="/company-profile"     element={<SupplyChain />} />
-              <Route path="/company-profile-next" element={<CompanyProfileNext />} />
+              <Route path="/company-profile"     element={<CompanyProfileNext />} />
+              {/* The page the rebuild replaces. Kept reachable for one release
+                  so the two can be compared on the same ticker, and so a gap
+                  found in the new one has somewhere to fall back to. */}
+              <Route path="/company-profile-legacy" element={<SupplyChain />} />
               <Route path="/supply-chain"        element={<RedirectWithSearch to="/company-profile" />} />
               {/* Retired from the Trade Routes hub 2026-08-19: the "verified" tier is a
                   10-record hand-curated ledger covering AAPL and MSFT, so the board could

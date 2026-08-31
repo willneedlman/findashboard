@@ -3,6 +3,7 @@ import axios from 'axios'
 import { T } from '../../lib/theme'
 import EmptyState from '../EmptyState'
 import { Panel, Cell, DataTable, MONO, SANS } from './ui'
+import { fetchBetaSuite } from '../../hooks/useApi'
 import { DASH, compact, count, multiple, pct, price, shortDate, tone } from './format'
 
 interface Credit {
@@ -38,6 +39,18 @@ export default function RiskTab({ ticker }: { ticker: string }) {
   const debt = useQuery<DebtMaturity>(get<DebtMaturity>('debt-maturity'))
   const short = useQuery<ShortInterest>(get<ShortInterest>('short-interest'))
   const deals = useQuery<{ deals?: Deal[] }>(get<{ deals?: Deal[] }>('deals'))
+
+  // Market risk, regressed rather than vendor-supplied. This is the analysis the
+  // retired Market Performance tab carried; the redesign has no such tab, and
+  // dropping a real regression silently would be a regression of its own.
+  const iso = (d: Date) => d.toISOString().slice(0, 10)
+  const since = new Date()
+  since.setFullYear(since.getFullYear() - 1)
+  const beta = useQuery({
+    queryKey: ['cp-risk-beta', ticker],
+    queryFn: () => fetchBetaSuite(ticker, iso(since), iso(new Date()), 'ff3'),
+    staleTime: 300_000, retry: 0, enabled: !!ticker,
+  })
 
   const c = credit.data ?? {}
   const hasCredit = c.synthetic_rating != null || c.interest_coverage != null
@@ -75,6 +88,44 @@ export default function RiskTab({ ticker }: { ticker: string }) {
           />
         )}
       </Panel>
+
+      {beta.data?.available && (
+        <Panel
+          title="Market risk"
+          meta={`Regressed on one year of daily returns${beta.data.ff3?.observations ? `, n=${beta.data.ff3.observations}` : ''}`}
+        >
+          <div style={{
+            display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+            gap: 1, background: T.borderFaint,
+          }}>
+            <Cell
+              label="CAPM beta"
+              value={multiple(beta.data.capm?.betas?.mktrf, 2)}
+              note={beta.data.capm?.r_squared != null
+                ? `R² ${beta.data.capm.r_squared.toFixed(2)}, computed not vendor`
+                : 'Computed, not vendor'}
+            />
+            <Cell
+              label="Scholes-Williams beta"
+              value={multiple(beta.data.scholes_williams?.beta, 2)}
+              note={beta.data.thin_trading_flag ? 'Thin trading detected' : 'Corrects for stale prices'}
+            />
+            <Cell label="Market factor" value={multiple(beta.data.ff3?.betas?.mktrf, 2)}
+              note={`t ${multiple(beta.data.ff3?.t_stats?.mktrf, 1)}`} />
+            <Cell label="Size factor (SMB)" value={multiple(beta.data.ff3?.betas?.smb, 2)}
+              note={`t ${multiple(beta.data.ff3?.t_stats?.smb, 1)}`} />
+            <Cell label="Value factor (HML)" value={multiple(beta.data.ff3?.betas?.hml, 2)}
+              note={`t ${multiple(beta.data.ff3?.t_stats?.hml, 1)}`} />
+            <Cell
+              label="Idiosyncratic share"
+              value={pct(beta.data.ivol_tvol?.idiosyncratic_pct)}
+              note={beta.data.ivol_tvol?.ivol_annualized_pct != null
+                ? `IVOL ${pct(beta.data.ivol_tvol.ivol_annualized_pct)} of TVOL ${pct(beta.data.ivol_tvol.tvol_annualized_pct)}`
+                : 'Name-specific share of total variance'}
+            />
+          </div>
+        </Panel>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 1fr)', gap: 20 }}>
         <Panel
