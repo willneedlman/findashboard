@@ -1,4 +1,5 @@
 import { T } from '../../lib/theme'
+import HelpTip from '../HelpTip'
 
 export const MONO = 'var(--theme-mono)'
 export const SANS = 'var(--theme-sans)'
@@ -50,12 +51,15 @@ export function Panel({ title, meta, children, style }: {
 
 /** A labelled figure with the basis it was computed on. The note is not
  *  decoration: a metric without its basis is a number nobody can check. */
-export function Cell({ label, value, note, tone: t, size = 19 }: {
+export function Cell({ label, value, note, tone: t, size = 19, tip }: {
   label: string
   value: string
   note?: string
   tone?: string
   size?: number
+  /** How the figure is derived. A modelled number that does not say what it is
+   *  modelled from is a number the reader has to take on faith. */
+  tip?: string
 }) {
   return (
     <div style={{ background: T.bg, padding: '15px 18px', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
@@ -64,6 +68,7 @@ export function Cell({ label, value, note, tone: t, size = 19 }: {
         textTransform: 'uppercase', color: DIM,
       }}>
         {label}
+        {tip && <HelpTip text={tip} width={280} />}
       </span>
       <span style={{
         fontFamily: MONO, fontSize: size, fontWeight: 700,

@@ -74,8 +74,27 @@ export default function RiskTab({ ticker }: { ticker: string }) {
             display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
             gap: 1, background: T.borderFaint,
           }}>
-            <Cell label="Synthetic rating" value={c.synthetic_rating ?? DASH} note="Interest-coverage basis" tone={T.gold} />
-            <Cell label="Default spread" value={pct(c.default_spread_pct, 2)} note="Over the risk-free rate" />
+            <Cell
+              label="Synthetic rating"
+              value={c.synthetic_rating ?? DASH}
+              note={c.rating_basis ? `${c.rating_basis} basis` : 'Modelled, not agency-issued'}
+              tone={T.gold}
+              tip={'Not an agency rating. EBIT over interest expense is read off a '
+                + 'Damodaran coverage table that maps a coverage ratio to a letter '
+                + 'grade and its default spread: above 12.5x reads AAA, under 0.2x '
+                + 'reads D. When interest expense is not broken out it falls back '
+                + 'to total debt over EBITDA, and failing that to the Altman Z '
+                + 'zone. The basis in use is named under the grade.'}
+            />
+            <Cell
+              label="Default spread"
+              value={pct(c.default_spread_pct, 2)}
+              note="Over the risk-free rate"
+              tip={'The spread paired with the synthetic grade on the same '
+                + 'Damodaran table, not a traded spread on this issuer. It is '
+                + 'what the model charges a name of this grade over the '
+                + 'risk-free rate.'}
+            />
             <Cell label="Interest coverage" value={c.interest_coverage == null ? DASH : `${multiple(c.interest_coverage, 1)}x`} note="EBIT over interest expense" />
             <Cell label="Debt to EBITDA" value={c.debt_to_ebitda == null ? DASH : `${multiple(c.debt_to_ebitda, 2)}x`} note="Total debt basis" />
             <Cell
@@ -87,7 +106,18 @@ export default function RiskTab({ ticker }: { ticker: string }) {
             <Cell
               label="Altman Z"
               value={multiple(c.altman_z, 1)}
-              note={c.altman_zone === 'safe' ? 'Above the 2.99 safe threshold' : `Zone: ${c.altman_zone ?? DASH}`}
+              note={c.altman_zone === 'safe'
+                ? 'Above the 2.99 safe threshold'
+                : c.altman_zone
+                  ? `${c.altman_zone} zone`
+                  : 'No zone'}
+              tip={'Z = 1.2A + 1.4B + 3.3C + 0.6D + 1.0E, where A is working '
+                + 'capital over total assets, B retained earnings over total '
+                + 'assets, C EBIT over total assets, D market cap over total '
+                + 'liabilities, and E revenue over total assets. Above 2.99 is '
+                + 'the safe zone, 1.81 to 2.99 the grey zone, below 1.81 '
+                + 'distress. Built for public manufacturers, so it reads poorly '
+                + 'on banks and asset-light names.'}
             />
           </div>
         ) : (

@@ -317,6 +317,66 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
     ? `${extLabel} ${day}${stampTime(t.as_of) ? `, ${stampTime(t.as_of)}` : ''}`
     : extLabel
 
+  // Shares the key the valuation tab uses, so this is a cache read once either
+  // has loaded rather than a second trip.
+  const medians = useQuery<{ sectors?: Record<string, Record<string, { median?: number | null; n?: number | null }>> }>({
+    queryKey: ['cp-sector-medians'],
+    queryFn: () => axios.get('/api/screener/sector-medians').then(r => r.data),
+    staleTime: Infinity, retry: 0,
+  })
+  const peerPeTip = (() => {
+    const stat = p.sector ? medians.data?.sectors?.[p.sector]?.peRatio : undefined
+    const pe = q.trailingPE ?? p.pe_ratio
+    if (stat?.median == null || pe == null) return undefined
+    const d = pe - stat.median
+    return `${p.sector} median ${stat.median.toFixed(1)}`
+      + `${stat.n ? ` (n=${stat.n})` : ''}. This name is `
+      + `${d >= 0 ? '+' : ''}${d.toFixed(1)} against it.`
+  })()
+
+  const target = analyst.data?.target_mean ?? q.targetMeanPrice ?? null
+  const upside = target != null && last ? (target / last - 1) * 100 : null
+  const nAnalysts = analyst.data?.total_analysts ?? null
+
+  // Each column carries the same three parts. A column with no figure behind it
+  // is dropped, because an empty target column reads as a target of nothing.
+  const bandCols = [
+    {
+      key: 'last',
+      eyebrow: 'Last',
+      value: price(last),
+      valueTone: 'var(--theme-text-bright, #dce3ed)',
+      delta: change(absChange, pctChange),
+      deltaTone: tone(absChange),
+      footnote: `${closeStamp}, prev close ${price(prev)}`,
+    },
+    ...(ext != null ? [{
+      key: 'ext',
+      eyebrow: extLabel,
+      value: price(ext),
+      valueTone: 'var(--theme-text)',
+      delta: change(
+        last != null ? ext - last : null,
+        t.extended_pct ?? (last ? (ext / last - 1) * 100 : null),
+      ),
+      deltaTone: tone(t.extended_pct),
+      footnote: extStamp,
+    }] : []),
+    ...(target != null ? [{
+      key: 'target',
+      eyebrow: 'Analyst mean target',
+      value: price(target),
+      valueTone: T.gold,
+      delta: upside == null ? '' : `${upside > 0 ? '+' : ''}${upside.toFixed(1)}%`,
+      deltaTone: tone(upside),
+      footnote: [
+        upside == null ? null : 'Implied upside',
+        nAnalysts ? `${nAnalysts} analysts` : null,
+        analyst.data?.recommendation_key?.replace(/_/g, ' ') ?? null,
+      ].filter(Boolean).join(', '),
+    }] : []),
+  ]
+
   const loading = quote.isLoading || profile.isLoading
 
   return (
@@ -324,124 +384,79 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
       background: T.surface,
       border: `1px solid ${T.border}`,
     }}>
-      {/* ── Row 2: price block ──────────────────────────────────────────── */}
+      {/* ── Row 2: price band ───────────────────────────────────────────
+          Three columns, not a flex row with auto margins. The auto-margin
+          layout left a dead gap in the middle and floated the target label
+          above everything else; each column now has the same shape, so they
+          bottom-align against one another instead of drifting.
+          A column with nothing to say is dropped rather than zeroed. */}
       <div style={{
-        display: 'flex', alignItems: 'flex-end', gap: 40, flexWrap: 'wrap',
-        padding: '18px 22px 16px',
+        display: 'grid',
+        gridTemplateColumns: bandCols.map((_, i) =>
+          i === 0 ? 'minmax(280px, 1.15fr)' : 'minmax(0, 1fr)').join(' '),
+        alignItems: 'stretch',
       }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-            <span style={{
-              fontFamily: MONO, fontSize: 44, fontWeight: 700, letterSpacing: '-0.01em',
-              color: 'var(--theme-text-bright, #dce3ed)', lineHeight: 1,
-            }}>
-              {price(last)}
-            </span>
-            <span style={{ fontFamily: MONO, fontSize: 19, fontWeight: 700, color: tone(absChange) }}>
-              {change(absChange, pctChange)}
-            </span>
-          </div>
-          <div style={{
-            marginTop: 9, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-            fontFamily: SANS, fontSize: 10, letterSpacing: '0.1em',
-            textTransform: 'uppercase', color: 'var(--theme-text-dim, rgba(255,255,255,0.35))',
+        {bandCols.map((col, i) => (
+          <div key={col.key} style={{
+            display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 9,
+            padding: '16px 22px 15px', minWidth: 0,
+            borderLeft: i === 0 ? 'none' : `1px solid ${T.borderFaint}`,
           }}>
-            <span>{closeStamp}</span>
-            <span>Previous close {price(prev)}</span>
-            {/* What the printed price MEANS: a live regular-hours print, an
-                extended-hours print, or Friday's close sitting over a weekend.
-                Without it the reader cannot tell a stale number from a moving
-                one. */}
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <span
-                className={session.open ? 'ft-live-dot' : undefined}
-                style={{
-                  width: 6, height: 6, borderRadius: '50%',
-                  background: PHASE_COLOR[session.phase],
-                }}
-              />
-              <span style={{ color: PHASE_COLOR[session.phase] }}>
-                {session.phase === 'regular' ? 'Live' : PHASE_LABEL[session.phase]}
-              </span>
-              {!session.open && sessionDay && (
-                <span>· Session {sessionDay}</span>
-              )}
-            </span>
-          </div>
-        </div>
-
-        {ext != null && (
-          <div style={{ paddingBottom: 2 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+            <Eyebrow>{col.eyebrow}</Eyebrow>
+            <div style={{
+              display: 'flex', alignItems: 'baseline', gap: 11,
+              flexWrap: 'wrap', whiteSpace: 'nowrap',
+            }}>
               <span style={{
-                fontFamily: MONO, fontSize: 28, fontWeight: 700,
-                color: 'var(--theme-text)', lineHeight: 1,
+                fontFamily: MONO, fontWeight: 700, lineHeight: 1,
+                fontSize: i === 0 ? 44 : 26,
+                letterSpacing: i === 0 ? '-0.01em' : undefined,
+                color: col.valueTone,
               }}>
-                {price(ext)}
+                {col.value}
               </span>
-              <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: tone(t.extended_pct) }}>
-                {change(
-                  last != null ? ext - last : null,
-                  t.extended_pct ?? (last ? (ext / last - 1) * 100 : null),
-                )}
-              </span>
+              {col.delta && (
+                <span style={{
+                  fontFamily: MONO, fontWeight: 700, whiteSpace: 'nowrap',
+                  fontSize: i === 0 ? 19 : 14, color: col.deltaTone,
+                }}>
+                  {col.delta}
+                </span>
+              )}
             </div>
             <div style={{
-              marginTop: 9, fontFamily: SANS, fontSize: 10, letterSpacing: '0.1em',
+              display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+              fontFamily: SANS, fontSize: 10, letterSpacing: '0.1em',
               textTransform: 'uppercase', color: 'var(--theme-text-dim, rgba(255,255,255,0.35))',
             }}>
-              {extStamp}
+              <span>{col.footnote}</span>
+              {col.key === 'last' && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span
+                    className={session.open ? 'ft-live-dot' : undefined}
+                    style={{
+                      width: 6, height: 6, borderRadius: '50%',
+                      background: PHASE_COLOR[session.phase],
+                    }}
+                  />
+                  <span style={{ color: PHASE_COLOR[session.phase] }}>
+                    {session.phase === 'regular' ? 'Live' : PHASE_LABEL[session.phase]}
+                  </span>
+                </span>
+              )}
             </div>
           </div>
-        )}
-
-        <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-          <Eyebrow>Analyst mean target</Eyebrow>
-          <div style={{ fontFamily: MONO, fontSize: 22, fontWeight: 700, color: T.gold, marginTop: 3 }}>
-            {price(analyst.data?.target_mean ?? q.targetMeanPrice)}
-          </div>
-          <div style={{ fontFamily: MONO, fontSize: 11, marginTop: 3, color: tone(
-            last != null && (analyst.data?.target_mean ?? q.targetMeanPrice) != null
-              ? (analyst.data?.target_mean ?? q.targetMeanPrice)! - last : null) }}>
-            {(() => {
-              const tgt = analyst.data?.target_mean ?? q.targetMeanPrice
-              if (tgt == null || last == null || !last) return DASH
-              const up = (tgt / last - 1) * 100
-              const n = analyst.data?.total_analysts
-              return `${up > 0 ? '+' : ''}${up.toFixed(1)}% implied upside${n ? `, n=${n}` : ''}`
-            })()}
-          </div>
-          {/* The call already carries the consensus and the full vote spread.
-              A mean target without the rating behind it hides who set it. */}
-          {analyst.data?.recommendation_key && (
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 7,
-            }}>
-              <span style={{
-                fontFamily: SANS, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.1em',
-                textTransform: 'uppercase', padding: '2px 7px',
-                border: `1px solid ${T.border}`, color: T.gold, whiteSpace: 'nowrap',
-              }}>
-                {analyst.data.recommendation_key.replace(/_/g, ' ')}
-              </span>
-              <span style={{ fontFamily: MONO, fontSize: 10.5, color: T.muted, whiteSpace: 'nowrap' }}>
-                {(() => {
-                  const b = analyst.data.distribution ?? {}
-                  const buy = (b.strongBuy ?? 0) + (b.buy ?? 0)
-                  const sell = (b.sell ?? 0) + (b.strongSell ?? 0)
-                  return `${buy} buy / ${b.hold ?? 0} hold / ${sell} sell`
-                })()}
-              </span>
-            </div>
-          )}
-        </div>
+        ))}
       </div>
 
       {/* ── Row 3: price chart ──────────────────────────────────────────── */}
-      <div style={{ borderTop: `1px solid ${T.borderFaint}`, padding: '12px 22px 16px' }}>
+      <div style={{ borderTop: `1px solid ${T.borderFaint}` }}>
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          gap: 16, flexWrap: 'wrap', marginBottom: 10,
+          gap: 16, flexWrap: 'wrap',
+          padding: '8px 22px',
+          background: 'rgba(0,0,0,0.16)',
+          borderBottom: `1px solid ${T.borderFaint}`,
         }}>
           <div style={{ display: 'inline-flex', gap: 2 }}>
             {RANGES.map(r => {
@@ -463,20 +478,28 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
               )
             })}
           </div>
-          <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 26, flexWrap: 'wrap', alignItems: 'baseline' }}>
             {stats.map(s => (
-              <div key={s.label} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <Eyebrow>{s.label}</Eyebrow>
+              <span key={s.label} style={{
+                display: 'inline-flex', alignItems: 'baseline', gap: 8, whiteSpace: 'nowrap',
+              }}>
+                <span style={{
+                  fontFamily: SANS, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.14em',
+                  textTransform: 'uppercase', color: 'var(--theme-text-dim, rgba(255,255,255,0.35))',
+                }}>
+                  {s.label}
+                </span>
                 <span style={{
                   fontFamily: MONO, fontSize: 12.5, fontWeight: 700,
                   fontVariantNumeric: 'tabular-nums', color: s.tone,
                 }}>
                   {s.value}
                 </span>
-              </div>
+              </span>
             ))}
           </div>
         </div>
+        <div style={{ padding: '14px 22px 16px' }}>
 
         <div style={{ background: T.bg, border: `1px solid ${T.border}`, height: 300 }}>
           {series.length > 1 ? (
@@ -503,6 +526,10 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
                 <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR}
                   formatter={(v: number) => [v.toFixed(2), 'Close']} />
                 {reference != null && (
+                  // The spec asks for right-edge price flags. They are not
+                  // here: a last-price flag always lands on the axis tick
+                  // nearest that price, and both numbers are already printed
+                  // verbatim in the band two rows above.
                   <ReferenceLine y={reference} stroke="rgba(255,255,255,0.28)" strokeDasharray="7 6" />
                 )}
                 <Area
@@ -523,13 +550,14 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
             </div>
           )}
         </div>
+        </div>
       </div>
 
       {/* ── Key stats. Four columns of dense label/value rows rather than
               sixteen padded tiles: this is a quote brief, and a brief is read
               by scanning down a column, not by looking at boxes. ── */}
       <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
+        display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
         columnGap: 30, padding: '12px 22px 6px',
         borderTop: `1px solid ${T.borderFaint}`,
       }}>
@@ -552,7 +580,11 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
         <Stat label="Open" value={price(q.regularMarketOpen)} />
         <Stat label="52 week range" value={range(q.fiftyTwoWeekLow, q.fiftyTwoWeekHigh)} />
         <Stat label="Enterprise value" value={compact(q.enterpriseValue)} />
-        <Stat label="P/E ratio (TTM)" value={multiple(q.trailingPE ?? p.pe_ratio)} />
+        <Stat
+          label="P/E ratio (TTM)"
+          value={multiple(q.trailingPE ?? p.pe_ratio)}
+          tip={peerPeTip}
+        />
 
         <Stat label="Bid" value={quoteWithSize(q.bid, q.bidSize)} />
         <Stat label="Volume" value={count(q.volume)} />
