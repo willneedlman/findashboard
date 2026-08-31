@@ -327,6 +327,19 @@ export default function OverviewTab({ ticker }: { ticker: string }) {
           </div>
         </div>
 
+        {/* The header ran a price block against a target block with a very wide
+            gap between them. These two meters earn that space: the stat grid
+            below prints both ranges as text, but neither says where the price
+            actually sits inside them. */}
+        <div style={{
+          flex: '1 1 320px', maxWidth: 640, minWidth: 200,
+          display: 'flex', flexDirection: 'column', gap: 13,
+          paddingBottom: 2,
+        }}>
+          <RangeMeter label="Day range" lo={q.dayLow} hi={q.dayHigh} at={last} />
+          <RangeMeter label="52 week range" lo={q.fiftyTwoWeekLow} hi={q.fiftyTwoWeekHigh} at={last} />
+        </div>
+
         <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
           <Eyebrow>Analyst mean target</Eyebrow>
           <div style={{ fontFamily: MONO, fontSize: 22, fontWeight: 700, color: T.gold, marginTop: 3 }}>
@@ -520,6 +533,43 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
     }}>
       {children}
     </span>
+  )
+}
+
+/** Where the price sits between two bounds. Absent unless both bounds and the
+ *  price are known, because a track with no marker is a decoration. */
+function RangeMeter({ label, lo, hi, at }: {
+  label: string; lo?: number | null; hi?: number | null; at?: number | null
+}) {
+  const ok = typeof lo === 'number' && typeof hi === 'number' && typeof at === 'number' && hi > lo
+  const pos = ok ? Math.max(0, Math.min(100, ((at! - lo!) / (hi! - lo!)) * 100)) : null
+
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10,
+        fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
+        textTransform: 'uppercase', color: 'var(--theme-text-dim, rgba(255,255,255,0.35))',
+        marginBottom: 6,
+      }}>
+        <span>{label}</span>
+        <span style={{ fontFamily: MONO, letterSpacing: 0, textTransform: 'none', color: T.muted }}>
+          {ok ? `${price(lo)} - ${price(hi)}` : DASH}
+        </span>
+      </div>
+      <div style={{
+        position: 'relative', height: 5,
+        background: 'rgba(255,255,255,0.07)',
+        border: `1px solid ${T.borderFaint}`,
+      }}>
+        {pos != null && (
+          <div style={{
+            position: 'absolute', left: `${pos}%`, top: -3, bottom: -3,
+            width: 2, background: T.gold, transform: 'translateX(-1px)',
+          }} />
+        )}
+      </div>
+    </div>
   )
 }
 
