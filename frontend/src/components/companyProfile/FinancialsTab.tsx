@@ -52,6 +52,22 @@ const TREND: Record<string, string[]> = {
              'Stock Based Compensation', 'Repurchase Of Capital Stock', 'End Cash Position'],
 }
 
+/** Bar heights for one trend card, scaled to the largest ABSOLUTE value in the
+ *  set so a series that crosses zero still reads.
+ *
+ *  Returned as a list rather than computed per bar, because the scale has to be
+ *  shared: computing it inside the loop is how a bar ends up sized against
+ *  something other than its own row.
+ */
+export function barHeights(values: (number | null)[], cap = 68, floor = 3): number[] {
+  const finite = values.filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
+  const max = finite.length ? Math.max(...finite.map(Math.abs)) : 0
+  return values.map(v => {
+    if (typeof v !== 'number' || !Number.isFinite(v) || max <= 0) return floor
+    return Math.max(floor, (Math.abs(v) / max) * cap)
+  })
+}
+
 /** Statement money, at the magnitude a filing is read in. Anything at or above
  *  a billion reads as billions; below that, millions. */
 function money(v: number | null, unit: string): string {
@@ -231,7 +247,7 @@ function TrendCard({ row, labels }: { row: Row; labels: string[] }) {
   // order: a table is read most-recent-first, a trend is read as time passing.
   const values = [...row.values].reverse()
   const periods = [...labels].reverse()
-  const max = Math.max(...values.map(v => Math.abs(v ?? 0)), 1)
+  const heights = barHeights(values)
   const latest = row.values[0]
   const prev = row.values[1]
   const growth = latest != null && prev != null && prev !== 0
@@ -262,7 +278,7 @@ function TrendCard({ row, labels }: { row: Row; labels: string[] }) {
       <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', height: 92, marginTop: 12 }}>
         {values.map((v, i) => {
           const newest = i === values.length - 1
-          const h = v == null ? 3 : Math.max(3, (Math.abs(v) / max) * 68)
+          const h = heights[i]
           const fill = v != null && v < 0
             ? 'color-mix(in srgb, var(--theme-negative) 55%, transparent)'
             : newest
